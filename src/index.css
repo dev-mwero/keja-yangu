@@ -2,95 +2,104 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* Keja design system — warm editorial real-estate aesthetic. All colors HSL. */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,800&family=Inter:wght@300;400;500;600;700&display=swap');
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Canvas — warm cream */
+    --background: 36 33% 97%;
+    --foreground: 20 14% 12%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 20 14% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 20 14% 12%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Primary — deep clay/terracotta */
+    --primary: 14 62% 42%;
+    --primary-foreground: 36 33% 97%;
+    --primary-glow: 18 78% 58%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Secondary — warm ink */
+    --secondary: 24 12% 18%;
+    --secondary-foreground: 36 33% 97%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 30 18% 92%;
+    --muted-foreground: 24 8% 40%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 38 65% 55%;
+    --accent-foreground: 20 14% 12%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 72% 50%;
+    --destructive-foreground: 36 33% 97%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --success: 145 45% 38%;
+    --warning: 38 85% 50%;
 
-    --radius: 0.5rem;
+    --border: 30 18% 88%;
+    --input: 30 18% 88%;
+    --ring: 14 62% 42%;
 
-    --sidebar-background: 0 0% 98%;
+    --radius: 0.875rem;
 
-    --sidebar-foreground: 240 5.3% 26.1%;
+    /* Gradients */
+    --gradient-warm: linear-gradient(135deg, hsl(14 62% 42%), hsl(24 78% 58%));
+    --gradient-sunset: linear-gradient(180deg, hsl(36 33% 97%) 0%, hsl(30 40% 92%) 100%);
+    --gradient-ink: linear-gradient(135deg, hsl(24 12% 18%), hsl(20 14% 12%));
 
-    --sidebar-primary: 240 5.9% 10%;
+    /* Shadows */
+    --shadow-soft: 0 1px 2px hsl(20 14% 12% / 0.04), 0 4px 16px hsl(20 14% 12% / 0.06);
+    --shadow-elevated: 0 8px 30px -8px hsl(14 62% 42% / 0.18), 0 2px 8px hsl(20 14% 12% / 0.06);
+    --shadow-glow: 0 0 60px hsl(18 78% 58% / 0.35);
 
-    --sidebar-primary-foreground: 0 0% 98%;
+    /* Motion */
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 36 33% 97%;
+    --sidebar-foreground: 20 14% 22%;
+    --sidebar-primary: 14 62% 42%;
+    --sidebar-primary-foreground: 36 33% 97%;
+    --sidebar-accent: 30 18% 92%;
+    --sidebar-accent-foreground: 20 14% 12%;
+    --sidebar-border: 30 18% 88%;
+    --sidebar-ring: 14 62% 42%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --background: 22 16% 8%;
+    --foreground: 36 25% 94%;
+    --card: 22 16% 11%;
+    --card-foreground: 36 25% 94%;
+    --popover: 22 16% 11%;
+    --popover-foreground: 36 25% 94%;
+    --primary: 18 78% 58%;
+    --primary-foreground: 22 16% 8%;
+    --primary-glow: 18 78% 58%;
+    --secondary: 30 12% 18%;
+    --secondary-foreground: 36 25% 94%;
+    --muted: 24 10% 16%;
+    --muted-foreground: 30 12% 62%;
+    --accent: 38 65% 55%;
+    --accent-foreground: 22 16% 8%;
+    --destructive: 0 72% 50%;
+    --destructive-foreground: 36 25% 94%;
+    --border: 24 10% 20%;
+    --input: 24 10% 20%;
+    --ring: 18 78% 58%;
+    --gradient-warm: linear-gradient(135deg, hsl(14 62% 42%), hsl(24 78% 58%));
+    --gradient-sunset: linear-gradient(180deg, hsl(22 16% 8%) 0%, hsl(24 16% 12%) 100%);
+    --shadow-soft: 0 1px 2px hsl(0 0% 0% / 0.3), 0 4px 16px hsl(0 0% 0% / 0.4);
+    --shadow-elevated: 0 8px 30px -8px hsl(18 78% 58% / 0.25), 0 2px 8px hsl(0 0% 0% / 0.4);
+    --sidebar-background: 22 16% 10%;
+    --sidebar-foreground: 36 25% 88%;
+    --sidebar-primary: 18 78% 58%;
+    --sidebar-primary-foreground: 22 16% 8%;
+    --sidebar-accent: 24 10% 16%;
+    --sidebar-accent-foreground: 36 25% 94%;
+    --sidebar-border: 24 10% 18%;
+    --sidebar-ring: 18 78% 58%;
   }
 }
 
@@ -100,6 +109,20 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "ss01", "cv11";
   }
+
+  h1, h2, h3, h4 {
+    @apply font-display tracking-tight;
+  }
+}
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+  .gradient-warm { background-image: var(--gradient-warm); }
+  .gradient-ink { background-image: var(--gradient-ink); }
+  .shadow-soft { box-shadow: var(--shadow-soft); }
+  .shadow-elevated { box-shadow: var(--shadow-elevated); }
+  .shadow-glow { box-shadow: var(--shadow-glow); }
 }
