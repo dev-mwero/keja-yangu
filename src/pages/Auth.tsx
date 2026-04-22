@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import hero from "@/assets/hero-building.jpg";
 
 const signInSchema = z.object({
@@ -38,7 +39,9 @@ const roleRoute = {
 
 const Auth = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
+  const { signIn: signInUser } = useAuth();
   const [tab, setTab] = useState<"signin" | "signup">("signin");
   const [submitting, setSubmitting] = useState(false);
 
@@ -60,20 +63,18 @@ const Auth = () => {
         : values.email.startsWith("care")
         ? "caretaker"
         : "tenant";
-      localStorage.setItem("keja-user", JSON.stringify({ email: values.email, role }));
+      signInUser({ email: values.email, role });
       toast({ title: "Welcome back", description: `Signed in as ${role}.` });
       setSubmitting(false);
-      navigate(roleRoute[role]);
+      const from = (location.state as { from?: string } | null)?.from;
+      navigate(from && from.startsWith(`/dashboard/${role}`) ? from : roleRoute[role]);
     }, 600);
   };
 
   const onSignUp = (values: SignUpValues) => {
     setSubmitting(true);
     setTimeout(() => {
-      localStorage.setItem(
-        "keja-user",
-        JSON.stringify({ email: values.email, name: values.name, role: values.role }),
-      );
+      signInUser({ email: values.email, name: values.name, role: values.role });
       toast({ title: "Account created", description: `Welcome to Keja, ${values.name}.` });
       setSubmitting(false);
       navigate(roleRoute[values.role]);
