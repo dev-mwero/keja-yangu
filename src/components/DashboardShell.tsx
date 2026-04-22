@@ -1,12 +1,13 @@
 import { ReactNode } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Logo } from "./Logo";
 import { cn } from "@/lib/utils";
-import { LucideIcon, Menu } from "lucide-react";
+import { LogOut, LucideIcon, Menu } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./ThemeToggle";
 import { useState } from "react";
+import { useAuth } from "@/hooks/use-auth";
 
 export interface DashNavItem {
   to: string;
@@ -24,7 +25,14 @@ interface Props {
 
 export const DashboardShell = ({ role, nav, title, subtitle, children }: Props) => {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const { signOut } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const handleSignOut = () => {
+    signOut();
+    navigate("/auth", { replace: true });
+  };
 
   const navList = (onNavigate?: () => void) => (
     <nav className="flex flex-col gap-1">
@@ -96,9 +104,23 @@ export const DashboardShell = ({ role, nav, title, subtitle, children }: Props) 
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <ThemeToggle />
-              <Link to="/" className="hidden text-sm text-muted-foreground hover:text-foreground sm:inline-block">
-                ← Back home
-              </Link>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleSignOut}
+                className="hidden sm:inline-flex"
+              >
+                <LogOut className="mr-1.5 h-4 w-4" /> Sign out
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleSignOut}
+                className="sm:hidden"
+                aria-label="Sign out"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
             </div>
           </div>
           {children}
