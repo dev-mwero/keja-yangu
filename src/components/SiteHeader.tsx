@@ -2,6 +2,8 @@ import { Link, useLocation } from "react-router-dom";
 import { Logo } from "./Logo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ThemeToggle } from "./ThemeToggle";
+import { MobileNav } from "./MobileNav";
 
 const links = [
   { to: "/", label: "Home" },
@@ -32,12 +34,14 @@ export const SiteHeader = () => {
           ))}
         </nav>
         <div className="flex items-center gap-2">
+          <ThemeToggle className="hidden sm:inline-flex" />
           <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
-            <Link to="/dashboard/tenant">Sign in</Link>
+            <Link to="/auth">Sign in</Link>
           </Button>
-          <Button asChild size="sm" className="rounded-full">
+          <Button asChild size="sm" className="hidden rounded-full sm:inline-flex">
             <Link to="/properties">Find a Home</Link>
           </Button>
+          <MobileNav links={links} />
         </div>
       </div>
     </header>
