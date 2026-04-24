@@ -31,11 +31,19 @@ export const DashboardShell = ({ role, nav, title, subtitle, children }: Props) 
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleSignOut = () => {
-    signOut();
-    toast.success("Signed out successfully", {
-      description: "Your session has ended.",
-    });
-    navigate("/", { replace: true });
+    try {
+      signOut();
+      toast.success("Signed out successfully", {
+        description: "Your session has ended.",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "An unexpected error occurred";
+      toast.error("Sign out failed", {
+        description: message,
+      });
+    } finally {
+      navigate("/", { replace: true });
+    }
   };
 
   const navList = (onNavigate?: () => void) => (
