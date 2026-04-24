@@ -26,7 +26,8 @@ export const ProtectedRoute = ({ allow, children }: Props) => {
   }
 
   if (!user) {
-    return <Navigate to="/auth" replace state={{ from: location.pathname }} />;
+    // Store the intended destination so we can redirect back after login
+    return <Navigate to="/auth" replace state={{ from: location.pathname + location.search }} />;
   }
 
   if (user.role !== allow) {
