@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./ThemeToggle";
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { toast } from "sonner";
 
 export interface DashNavItem {
   to: string;
@@ -31,6 +32,9 @@ export const DashboardShell = ({ role, nav, title, subtitle, children }: Props) 
 
   const handleSignOut = () => {
     signOut();
+    toast.success("Signed out successfully", {
+      description: "Your session has ended.",
+    });
     navigate("/", { replace: true });
   };
 
