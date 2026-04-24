@@ -66,8 +66,10 @@ const Auth = () => {
       signInUser({ email: values.email, role });
       toast({ title: "Welcome back", description: `Signed in as ${role}.` });
       setSubmitting(false);
+      // Redirect to intended destination if it matches user's role, otherwise to default dashboard
       const from = (location.state as { from?: string } | null)?.from;
-      navigate(from && from.startsWith(`/dashboard/${role}`) ? from : roleRoute[role]);
+      const rolePrefix = `/dashboard/${role}`;
+      navigate(from && from.startsWith(rolePrefix) ? from : roleRoute[role]);
     }, 600);
   };
 
