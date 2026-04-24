@@ -31,7 +31,7 @@ export const DashboardShell = ({ role, nav, title, subtitle, children }: Props) 
 
   const handleSignOut = () => {
     signOut();
-    navigate("/auth", { replace: true });
+    navigate("/", { replace: true });
   };
 
   const navList = (onNavigate?: () => void) => (
