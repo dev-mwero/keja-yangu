@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./ThemeToggle";
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { toast } from "sonner";
 
 export interface DashNavItem {
   to: string;
