@@ -32,6 +32,9 @@ export const DashboardShell = ({ role, nav, title, subtitle, children }: Props) 
 
   const handleSignOut = () => {
     signOut();
+    toast.success("Signed out successfully", {
+      description: "Your session has ended.",
+    });
     navigate("/", { replace: true });
   };
 
