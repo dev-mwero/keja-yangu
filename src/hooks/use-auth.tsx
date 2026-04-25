@@ -46,6 +46,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const refresh = useCallback((opts?: { signalFailureIfMissing?: boolean }) => {
     const result = readStored();
     if (!result.ok) {
+      const errorMessage = result.error;
       setUser(null);
       setRefreshFailed(true);
       try {
@@ -54,7 +55,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         /* ignore */
       }
       toast.error("Session refresh failed", {
-        description: `${result.error} Please sign in again.`,
+        description: `${errorMessage} Please sign in again.`,
       });
       return;
     }
