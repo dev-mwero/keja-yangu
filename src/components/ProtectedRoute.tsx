@@ -14,7 +14,7 @@ interface Props {
 }
 
 export const ProtectedRoute = ({ allow, children }: Props) => {
-  const { user, loading } = useAuth();
+  const { user, loading, refreshFailed } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -25,7 +25,7 @@ export const ProtectedRoute = ({ allow, children }: Props) => {
     );
   }
 
-  if (!user) {
+  if (refreshFailed || !user) {
     // Store the intended destination so we can redirect back after login
     return <Navigate to="/auth" replace state={{ from: location.pathname + location.search }} />;
   }
