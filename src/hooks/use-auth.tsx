@@ -20,21 +20,23 @@ interface AuthContextValue {
 const STORAGE_KEY = "keja-user";
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-type ReadResult =
-  | { ok: true; user: KejaUser | null }
-  | { ok: false; error: string };
+interface ReadResult {
+  ok: boolean;
+  user: KejaUser | null;
+  error: string | null;
+}
 
 const readStored = (): ReadResult => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ok: true, user: null };
+    if (!raw) return { ok: true, user: null, error: null };
     const parsed = JSON.parse(raw) as KejaUser;
     if (!parsed?.email || !["tenant", "caretaker", "owner"].includes(parsed.role)) {
-      return { ok: false, error: "Stored session is invalid or corrupted." };
+      return { ok: false, user: null, error: "Stored session is invalid or corrupted." };
     }
-    return { ok: true, user: parsed };
+    return { ok: true, user: parsed, error: null };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Unable to read session." };
+    return { ok: false, user: null, error: e instanceof Error ? e.message : "Unable to read session." };
   }
 };
 
@@ -46,7 +48,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const refresh = useCallback((opts?: { signalFailureIfMissing?: boolean }) => {
     const result = readStored();
     if (!result.ok) {
-      const errorMessage = result.error;
+      const errorMessage = result.error ?? "Unable to read session.";
       setUser(null);
       setRefreshFailed(true);
       try {
