@@ -37,6 +37,18 @@ const roleRoute = {
   owner: "/dashboard/owner",
 } as const;
 
+// Allowed dashboard routes per role for return-to validation
+const allowedRoutesByRole: Record<SignUpValues["role"], string[]> = {
+  tenant: ["/dashboard/tenant"],
+  caretaker: ["/dashboard/caretaker"],
+  owner: ["/dashboard/owner"],
+};
+
+const isRouteAllowedForRole = (route: string, role: SignUpValues["role"]): boolean => {
+  const allowedRoutes = allowedRoutesByRole[role];
+  return allowedRoutes.some((allowed) => route === allowed || route.startsWith(`${allowed}/`));
+};
+
 const RETURN_TO_KEY = "keja-return-to";
 
 const consumeReturnTo = (stateFrom?: string): string | null => {
