@@ -37,6 +37,18 @@ const roleRoute = {
   owner: "/dashboard/owner",
 } as const;
 
+// Allowed dashboard routes per role for return-to validation
+const allowedRoutesByRole: Record<SignUpValues["role"], string[]> = {
+  tenant: ["/dashboard/tenant"],
+  caretaker: ["/dashboard/caretaker"],
+  owner: ["/dashboard/owner"],
+};
+
+const isRouteAllowedForRole = (route: string, role: SignUpValues["role"]): boolean => {
+  const allowedRoutes = allowedRoutesByRole[role];
+  return allowedRoutes.some((allowed) => route === allowed || route.startsWith(`${allowed}/`));
+};
+
 const RETURN_TO_KEY = "keja-return-to";
 
 const consumeReturnTo = (stateFrom?: string): string | null => {
@@ -81,8 +93,7 @@ const Auth = () => {
       setSubmitting(false);
       // Redirect to intended destination if it matches user's role, otherwise to default dashboard
       const from = consumeReturnTo((location.state as { from?: string } | null)?.from);
-      const rolePrefix = `/dashboard/${role}`;
-      navigate(from && from.startsWith(rolePrefix) ? from : roleRoute[role]);
+      navigate(from && isRouteAllowedForRole(from, role) ? from : roleRoute[role]);
     }, 600);
   };
 
@@ -93,8 +104,7 @@ const Auth = () => {
       toast({ title: "Account created", description: `Welcome to Keja, ${values.name}.` });
       setSubmitting(false);
       const from = consumeReturnTo((location.state as { from?: string } | null)?.from);
-      const rolePrefix = `/dashboard/${values.role}`;
-      navigate(from && from.startsWith(rolePrefix) ? from : roleRoute[values.role]);
+      navigate(from && isRouteAllowedForRole(from, values.role) ? from : roleRoute[values.role]);
     }, 700);
   };
 
