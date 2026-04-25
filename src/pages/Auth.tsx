@@ -37,6 +37,19 @@ const roleRoute = {
   owner: "/dashboard/owner",
 } as const;
 
+const RETURN_TO_KEY = "keja-return-to";
+
+const consumeReturnTo = (stateFrom?: string): string | null => {
+  let stored: string | null = null;
+  try {
+    stored = sessionStorage.getItem(RETURN_TO_KEY);
+    sessionStorage.removeItem(RETURN_TO_KEY);
+  } catch {
+    /* ignore */
+  }
+  return stateFrom ?? stored;
+};
+
 const Auth = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -67,7 +80,7 @@ const Auth = () => {
       toast({ title: "Welcome back", description: `Signed in as ${role}.` });
       setSubmitting(false);
       // Redirect to intended destination if it matches user's role, otherwise to default dashboard
-      const from = (location.state as { from?: string } | null)?.from;
+      const from = consumeReturnTo((location.state as { from?: string } | null)?.from);
       const rolePrefix = `/dashboard/${role}`;
       navigate(from && from.startsWith(rolePrefix) ? from : roleRoute[role]);
     }, 600);
@@ -79,7 +92,7 @@ const Auth = () => {
       signInUser({ email: values.email, name: values.name, role: values.role });
       toast({ title: "Account created", description: `Welcome to Keja, ${values.name}.` });
       setSubmitting(false);
-      const from = (location.state as { from?: string } | null)?.from;
+      const from = consumeReturnTo((location.state as { from?: string } | null)?.from);
       const rolePrefix = `/dashboard/${values.role}`;
       navigate(from && from.startsWith(rolePrefix) ? from : roleRoute[values.role]);
     }, 700);

@@ -31,6 +31,12 @@ export const DashboardShell = ({ role, nav, title, subtitle, children }: Props) 
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleSignOut = () => {
+    // Remember where the user was so we can return them here after re-auth
+    try {
+      sessionStorage.setItem("keja-return-to", pathname);
+    } catch {
+      /* ignore */
+    }
     try {
       signOut();
       toast.success("Signed out successfully", {
