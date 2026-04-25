@@ -93,8 +93,7 @@ const Auth = () => {
       setSubmitting(false);
       // Redirect to intended destination if it matches user's role, otherwise to default dashboard
       const from = consumeReturnTo((location.state as { from?: string } | null)?.from);
-      const rolePrefix = `/dashboard/${role}`;
-      navigate(from && from.startsWith(rolePrefix) ? from : roleRoute[role]);
+      navigate(from && isRouteAllowedForRole(from, role) ? from : roleRoute[role]);
     }, 600);
   };
 
@@ -105,8 +104,7 @@ const Auth = () => {
       toast({ title: "Account created", description: `Welcome to Keja, ${values.name}.` });
       setSubmitting(false);
       const from = consumeReturnTo((location.state as { from?: string } | null)?.from);
-      const rolePrefix = `/dashboard/${values.role}`;
-      navigate(from && from.startsWith(rolePrefix) ? from : roleRoute[values.role]);
+      navigate(from && isRouteAllowedForRole(from, values.role) ? from : roleRoute[values.role]);
     }, 700);
   };
 
