@@ -79,7 +79,9 @@ const Auth = () => {
       signInUser({ email: values.email, name: values.name, role: values.role });
       toast({ title: "Account created", description: `Welcome to Keja, ${values.name}.` });
       setSubmitting(false);
-      navigate(roleRoute[values.role]);
+      const from = (location.state as { from?: string } | null)?.from;
+      const rolePrefix = `/dashboard/${values.role}`;
+      navigate(from && from.startsWith(rolePrefix) ? from : roleRoute[values.role]);
     }, 700);
   };
 
