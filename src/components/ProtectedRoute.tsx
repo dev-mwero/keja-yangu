@@ -8,6 +8,8 @@ const roleRoute: Record<Role, string> = {
   owner: "/dashboard/owner",
 };
 
+const RETURN_TO_KEY = "keja-return-to";
+
 interface Props {
   allow: Role;
   children: ReactNode;
@@ -26,8 +28,15 @@ export const ProtectedRoute = ({ allow, children }: Props) => {
   }
 
   if (refreshFailed || !user) {
-    // Store the intended destination so we can redirect back after login
-    return <Navigate to="/auth" replace state={{ from: location.pathname + location.search }} />;
+    // Persist the intended destination so we can redirect back after login,
+    // even if the user navigates away from /auth and comes back via a link.
+    const from = location.pathname + location.search;
+    try {
+      sessionStorage.setItem(RETURN_TO_KEY, from);
+    } catch {
+      /* ignore */
+    }
+    return <Navigate to="/auth" replace state={{ from }} />;
   }
 
   if (user.role !== allow) {
