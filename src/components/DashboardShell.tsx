@@ -55,7 +55,15 @@ export const DashboardShell = ({ role, nav, title, subtitle, children }: Props) 
   const navList = (onNavigate?: () => void) => (
     <nav className="flex flex-col gap-1">
       {nav.map((item) => {
-        const active = pathname === item.to;
+        // The "Overview" entry points to a role's root dashboard route
+        // (e.g. /dashboard/owner). Other entries are nested sub-routes
+        // (e.g. /dashboard/owner/portfolio). Active match must be exact for
+        // root entries, and prefix-based for sub-routes so deep paths still
+        // highlight the right item.
+        const isRoot = /^\/dashboard\/[^/]+$/.test(item.to);
+        const active = isRoot
+          ? pathname === item.to
+          : pathname === item.to || pathname.startsWith(`${item.to}/`);
         const Icon = item.icon;
         return (
           <Link
