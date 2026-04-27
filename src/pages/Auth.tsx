@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { roleRoute, isRouteAllowedForRole } from "@/config/roleRoutes";
 import hero from "@/assets/hero-building.jpg";
 
 const signInSchema = z.object({
@@ -30,24 +31,6 @@ const signUpSchema = z.object({
 
 type SignInValues = z.infer<typeof signInSchema>;
 type SignUpValues = z.infer<typeof signUpSchema>;
-
-const roleRoute = {
-  tenant: "/dashboard/tenant",
-  caretaker: "/dashboard/caretaker",
-  owner: "/dashboard/owner",
-} as const;
-
-// Allowed dashboard routes per role for return-to validation
-const allowedRoutesByRole: Record<SignUpValues["role"], string[]> = {
-  tenant: ["/dashboard/tenant"],
-  caretaker: ["/dashboard/caretaker"],
-  owner: ["/dashboard/owner"],
-};
-
-const isRouteAllowedForRole = (route: string, role: SignUpValues["role"]): boolean => {
-  const allowedRoutes = allowedRoutesByRole[role];
-  return allowedRoutes.some((allowed) => route === allowed || route.startsWith(`${allowed}/`));
-};
 
 const RETURN_TO_KEY = "keja-return-to";
 
