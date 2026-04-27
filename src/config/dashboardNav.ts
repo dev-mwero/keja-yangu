@@ -52,9 +52,17 @@ export const caretakerNav = buildDashboardNav("caretaker");
  * manage portfolios. They focus on their own home, payments, and requests.
  * Order is intentional: most-used items first.
  */
-const tenantSections = [
+interface TenantSection {
+  slug: string;
+  label: string;
+  icon: LucideIcon;
+  /** When set, the link points outside the tenant dashboard tree. */
+  external?: string;
+}
+
+const tenantSections: TenantSection[] = [
   { slug: "", label: "Overview", icon: Home },
-  { slug: "/browse", label: "Browse homes", icon: Search, external: "/properties" as const },
+  { slug: "/browse", label: "Browse homes", icon: Search, external: "/properties" },
   { slug: "/applications", label: "Applications", icon: FileText },
   { slug: "/payments", label: "Payments", icon: CreditCard },
   { slug: "/complaints", label: "Complaints", icon: AlertTriangle },
@@ -63,7 +71,7 @@ const tenantSections = [
   { slug: "/reports", label: "Reports", icon: FileBarChart },
   { slug: "/documents", label: "Documents", icon: FileText },
   { slug: "/settings", label: "Settings", icon: Settings },
-] as const;
+];
 
 export const tenantNav: DashNavItem[] = tenantSections.map((s) => ({
   to: s.external ?? `/dashboard/tenant${s.slug}`,
