@@ -1,12 +1,7 @@
 import { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { Role, useAuth } from "@/hooks/use-auth";
-
-const roleRoute: Record<Role, string> = {
-  tenant: "/dashboard/tenant",
-  caretaker: "/dashboard/caretaker",
-  owner: "/dashboard/owner",
-};
+import { roleRoute } from "@/config/roleRoutes";
 
 const RETURN_TO_KEY = "keja-return-to";
 
