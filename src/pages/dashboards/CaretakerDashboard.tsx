@@ -1,5 +1,17 @@
 import { useState } from "react";
-import { Home, Building2, Users, Wrench, CheckCircle2, XCircle, Clock } from "lucide-react";
+import {
+  Home,
+  Building2,
+  Wrench,
+  Calculator,
+  FileBarChart,
+  MessagesSquare,
+  Settings,
+  Users,
+  CheckCircle2,
+  XCircle,
+  Clock,
+} from "lucide-react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
@@ -10,10 +22,13 @@ import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const nav = [
-  { to: "/dashboard/caretaker", label: "Overview", icon: Home },
-  { to: "/dashboard/caretaker", label: "Properties", icon: Building2 },
-  { to: "/dashboard/caretaker", label: "Tenants", icon: Users },
-  { to: "/dashboard/caretaker", label: "Maintenance", icon: Wrench },
+  { to: "/dashboard/caretaker#overview", label: "Overview", icon: Home },
+  { to: "/dashboard/caretaker#portfolio", label: "Portfolio", icon: Building2 },
+  { to: "/dashboard/caretaker#tasks", label: "Tasks & Maintenance", icon: Wrench },
+  { to: "/dashboard/caretaker#accounting", label: "Accounting", icon: Calculator },
+  { to: "/dashboard/caretaker#reports", label: "Reports", icon: FileBarChart },
+  { to: "/dashboard/caretaker#communications", label: "Communications", icon: MessagesSquare },
+  { to: "/dashboard/caretaker#settings", label: "Settings", icon: Settings },
 ];
 
 const CaretakerDashboard = () => {
