@@ -1,17 +1,11 @@
-import { Home, Search, FileText, Settings, Clock, CheckCircle2, XCircle } from "lucide-react";
+import { FileText, Clock, CheckCircle2, XCircle } from "lucide-react";
 import { DashboardShell } from "@/components/DashboardShell";
+import { tenantNav } from "@/config/dashboardNav";
 import { StatCard } from "@/components/StatCard";
 import { PropertyCard } from "@/components/PropertyCard";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { properties } from "@/data/properties";
-
-const nav = [
-  { to: "/dashboard/tenant", label: "Overview", icon: Home },
-  { to: "/properties", label: "Browse", icon: Search },
-  { to: "/dashboard/tenant", label: "My requests", icon: FileText },
-  { to: "/dashboard/tenant", label: "Settings", icon: Settings },
-];
 
 const myRequests = [
   { id: "r1", property: "Sunlit Studio in Kilimani", date: "2025-03-20", status: "approved" },
@@ -35,7 +29,7 @@ const TenantDashboard = () => {
   const recommended = properties.filter((p) => p.status === "available").slice(0, 3);
 
   return (
-    <DashboardShell role="Tenant" nav={nav} title="Welcome back, Amina" subtitle="Track your applications and discover new homes.">
+    <DashboardShell role="Tenant" nav={tenantNav} title="Welcome back, Amina" subtitle="Track your applications and discover new homes.">
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard label="Active applications" value={1} icon={FileText} delay={0} />
         <StatCard label="Pending review" value={1} icon={Clock} delay={0.05} hint="Avg. response 18h" />

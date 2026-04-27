@@ -1,3 +1,5 @@
+import { tenantSubRoutes } from "@/config/dashboardNav";
+
 export type Role = "tenant" | "caretaker" | "owner";
 
 /**
@@ -17,7 +19,7 @@ export const roleRoute: Record<Role, string> = {
 };
 
 export const allowedRoutesByRole: Record<Role, string[]> = {
-  tenant: [roleRoute.tenant],
+  tenant: [roleRoute.tenant, ...tenantSubRoutes],
   caretaker: [roleRoute.caretaker],
   owner: [roleRoute.owner],
 };

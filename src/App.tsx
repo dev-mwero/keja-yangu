@@ -30,6 +30,16 @@ import {
   CaretakerCommunicationsPage,
   CaretakerSettingsPage,
 } from "./pages/dashboards/caretaker/CaretakerSections.tsx";
+import {
+  TenantApplicationsPage,
+  TenantPaymentsPage,
+  TenantComplaintsPage,
+  TenantChatPage,
+  TenantAnnouncementsPage,
+  TenantReportsPage,
+  TenantDocumentsPage,
+  TenantSettingsPage,
+} from "./pages/dashboards/tenant/TenantSections.tsx";
 import Auth from "./pages/Auth.tsx";
 
 const queryClient = new QueryClient();
@@ -55,6 +65,14 @@ const App = () => (
                   </ProtectedRoute>
                 }
               />
+              <Route path="/dashboard/tenant/applications" element={<ProtectedRoute allow="tenant"><TenantApplicationsPage /></ProtectedRoute>} />
+              <Route path="/dashboard/tenant/payments" element={<ProtectedRoute allow="tenant"><TenantPaymentsPage /></ProtectedRoute>} />
+              <Route path="/dashboard/tenant/complaints" element={<ProtectedRoute allow="tenant"><TenantComplaintsPage /></ProtectedRoute>} />
+              <Route path="/dashboard/tenant/chat" element={<ProtectedRoute allow="tenant"><TenantChatPage /></ProtectedRoute>} />
+              <Route path="/dashboard/tenant/announcements" element={<ProtectedRoute allow="tenant"><TenantAnnouncementsPage /></ProtectedRoute>} />
+              <Route path="/dashboard/tenant/reports" element={<ProtectedRoute allow="tenant"><TenantReportsPage /></ProtectedRoute>} />
+              <Route path="/dashboard/tenant/documents" element={<ProtectedRoute allow="tenant"><TenantDocumentsPage /></ProtectedRoute>} />
+              <Route path="/dashboard/tenant/settings" element={<ProtectedRoute allow="tenant"><TenantSettingsPage /></ProtectedRoute>} />
               <Route
                 path="/dashboard/caretaker"
                 element={
