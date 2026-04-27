@@ -14,6 +14,22 @@ import PropertyDetails from "./pages/PropertyDetails.tsx";
 import TenantDashboard from "./pages/dashboards/TenantDashboard.tsx";
 import CaretakerDashboard from "./pages/dashboards/CaretakerDashboard.tsx";
 import OwnerDashboard from "./pages/dashboards/OwnerDashboard.tsx";
+import {
+  OwnerPortfolioPage,
+  OwnerTasksPage,
+  OwnerAccountingPage,
+  OwnerReportsPage,
+  OwnerCommunicationsPage,
+  OwnerSettingsPage,
+} from "./pages/dashboards/owner/OwnerSections.tsx";
+import {
+  CaretakerPortfolioPage,
+  CaretakerTasksPage,
+  CaretakerAccountingPage,
+  CaretakerReportsPage,
+  CaretakerCommunicationsPage,
+  CaretakerSettingsPage,
+} from "./pages/dashboards/caretaker/CaretakerSections.tsx";
 import Auth from "./pages/Auth.tsx";
 
 const queryClient = new QueryClient();
@@ -47,6 +63,12 @@ const App = () => (
                   </ProtectedRoute>
                 }
               />
+              <Route path="/dashboard/caretaker/portfolio" element={<ProtectedRoute allow="caretaker"><CaretakerPortfolioPage /></ProtectedRoute>} />
+              <Route path="/dashboard/caretaker/tasks" element={<ProtectedRoute allow="caretaker"><CaretakerTasksPage /></ProtectedRoute>} />
+              <Route path="/dashboard/caretaker/accounting" element={<ProtectedRoute allow="caretaker"><CaretakerAccountingPage /></ProtectedRoute>} />
+              <Route path="/dashboard/caretaker/reports" element={<ProtectedRoute allow="caretaker"><CaretakerReportsPage /></ProtectedRoute>} />
+              <Route path="/dashboard/caretaker/communications" element={<ProtectedRoute allow="caretaker"><CaretakerCommunicationsPage /></ProtectedRoute>} />
+              <Route path="/dashboard/caretaker/settings" element={<ProtectedRoute allow="caretaker"><CaretakerSettingsPage /></ProtectedRoute>} />
               <Route
                 path="/dashboard/owner"
                 element={
@@ -55,6 +77,12 @@ const App = () => (
                   </ProtectedRoute>
                 }
               />
+              <Route path="/dashboard/owner/portfolio" element={<ProtectedRoute allow="owner"><OwnerPortfolioPage /></ProtectedRoute>} />
+              <Route path="/dashboard/owner/tasks" element={<ProtectedRoute allow="owner"><OwnerTasksPage /></ProtectedRoute>} />
+              <Route path="/dashboard/owner/accounting" element={<ProtectedRoute allow="owner"><OwnerAccountingPage /></ProtectedRoute>} />
+              <Route path="/dashboard/owner/reports" element={<ProtectedRoute allow="owner"><OwnerReportsPage /></ProtectedRoute>} />
+              <Route path="/dashboard/owner/communications" element={<ProtectedRoute allow="owner"><OwnerCommunicationsPage /></ProtectedRoute>} />
+              <Route path="/dashboard/owner/settings" element={<ProtectedRoute allow="owner"><OwnerSettingsPage /></ProtectedRoute>} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
