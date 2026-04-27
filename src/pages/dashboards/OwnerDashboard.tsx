@@ -1,15 +1,4 @@
-import {
-  Home,
-  Building2,
-  Wrench,
-  Calculator,
-  FileBarChart,
-  MessagesSquare,
-  Settings,
-  Plus,
-  TrendingUp,
-  Users,
-} from "lucide-react";
+import { Plus, TrendingUp, Users, Building2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { DashboardShell } from "@/components/DashboardShell";
 import { StatCard } from "@/components/StatCard";
@@ -17,16 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { properties, tenants, caretakers } from "@/data/properties";
-
-const nav = [
-  { to: "/dashboard/owner#overview", label: "Overview", icon: Home },
-  { to: "/dashboard/owner#portfolio", label: "Portfolio", icon: Building2 },
-  { to: "/dashboard/owner#tasks", label: "Tasks & Maintenance", icon: Wrench },
-  { to: "/dashboard/owner#accounting", label: "Accounting", icon: Calculator },
-  { to: "/dashboard/owner#reports", label: "Reports", icon: FileBarChart },
-  { to: "/dashboard/owner#communications", label: "Communications", icon: MessagesSquare },
-  { to: "/dashboard/owner#settings", label: "Settings", icon: Settings },
-];
+import { ownerNav as nav } from "@/config/dashboardNav";
 
 const OwnerDashboard = () => {
   const total = properties.length;

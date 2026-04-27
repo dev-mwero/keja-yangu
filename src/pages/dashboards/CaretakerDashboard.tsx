@@ -1,17 +1,5 @@
 import { useState } from "react";
-import {
-  Home,
-  Building2,
-  Wrench,
-  Calculator,
-  FileBarChart,
-  MessagesSquare,
-  Settings,
-  Users,
-  CheckCircle2,
-  XCircle,
-  Clock,
-} from "lucide-react";
+import { Building2, Users, CheckCircle2, XCircle, Clock } from "lucide-react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
@@ -20,16 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { properties as initialProps, tenants } from "@/data/properties";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-const nav = [
-  { to: "/dashboard/caretaker#overview", label: "Overview", icon: Home },
-  { to: "/dashboard/caretaker#portfolio", label: "Portfolio", icon: Building2 },
-  { to: "/dashboard/caretaker#tasks", label: "Tasks & Maintenance", icon: Wrench },
-  { to: "/dashboard/caretaker#accounting", label: "Accounting", icon: Calculator },
-  { to: "/dashboard/caretaker#reports", label: "Reports", icon: FileBarChart },
-  { to: "/dashboard/caretaker#communications", label: "Communications", icon: MessagesSquare },
-  { to: "/dashboard/caretaker#settings", label: "Settings", icon: Settings },
-];
+import { caretakerNav as nav } from "@/config/dashboardNav";
 
 const CaretakerDashboard = () => {
   const [props, setProps] = useState(initialProps.filter((p) => p.caretakerIds.includes("c1")));
