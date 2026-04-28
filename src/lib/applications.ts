@@ -12,6 +12,10 @@ export interface Application {
   message?: string;
   status: ApplicationStatus;
   submittedAt: string; // ISO
+  /** Set when an admin/owner approves or rejects the application. */
+  decidedAt?: string;
+  /** Optional note left by the admin alongside the decision. */
+  decisionNote?: string;
 }
 
 const STORAGE_KEY = "keja-applications";
@@ -46,6 +50,9 @@ export const listApplicationsForTenant = (tenantEmail: string): Application[] =>
   readAll()
     .filter((a) => a.tenantEmail.toLowerCase() === tenantEmail.toLowerCase())
     .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+
+export const getApplicationById = (id: string): Application | undefined =>
+  readAll().find((a) => a.id === id);
 
 export const hasPendingApplication = (tenantEmail: string, propertyId: string): boolean =>
   readAll().some(
