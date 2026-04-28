@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowLeft, MapPin, BedDouble, Bath, Maximize2, Check, Send } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -14,12 +14,24 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { properties } from "@/data/properties";
+import { useAuth } from "@/hooks/use-auth";
+import {
+  applicationInputSchema,
+  createApplication,
+  hasPendingApplication,
+} from "@/lib/applications";
 
 const PropertyDetails = () => {
   const { id } = useParams();
   const property = properties.find((p) => p.id === id);
   const [active, setActive] = useState(0);
   const { toast } = useToast();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [form, setForm] = useState({ name: "", email: "", message: "" });
+  const [errors, setErrors] = useState<{ name?: string; email?: string; message?: string }>({});
 
   if (!property) {
     return (
@@ -33,12 +45,70 @@ const PropertyDetails = () => {
     );
   }
 
+  const alreadyPending =
+    user?.role === "tenant" && property
+      ? hasPendingApplication(user.email, property.id)
+      : false;
+
   const handleApply = (e: React.FormEvent) => {
     e.preventDefault();
-    toast({
-      title: "Request submitted",
-      description: `Your application for ${property.title} is pending review.`,
-    });
+    if (!property) return;
+
+    if (!user) {
+      toast({
+        title: "Please sign in",
+        description: "You need a tenant account to submit an application.",
+      });
+      sessionStorage.setItem("keja-redirect", `/properties/${property.id}`);
+      navigate("/auth");
+      return;
+    }
+    if (user.role !== "tenant") {
+      toast({
+        title: "Tenants only",
+        description: "Only tenant accounts can apply for a home.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (alreadyPending) {
+      toast({
+        title: "Already submitted",
+        description: "You already have a pending application for this home.",
+      });
+      return;
+    }
+
+    const result = applicationInputSchema.safeParse(form);
+    if (!result.success) {
+      const fieldErrors: typeof errors = {};
+      result.error.issues.forEach((iss) => {
+        const key = iss.path[0] as keyof typeof errors;
+        if (key && !fieldErrors[key]) fieldErrors[key] = iss.message;
+      });
+      setErrors(fieldErrors);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      createApplication({
+        tenantEmail: user.email,
+        propertyId: property.id,
+        propertyTitle: property.title,
+        input: result.data,
+      });
+      toast({
+        title: "Application submitted",
+        description: `Your request for ${property.title} is now pending.`,
+      });
+      setOpen(false);
+      setForm({ name: "", email: "", message: "" });
+      setErrors({});
+      navigate("/dashboard/tenant/applications");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -147,11 +217,28 @@ const PropertyDetails = () => {
                 </Badge>
               </div>
 
-              <Dialog>
+              <Dialog open={open} onOpenChange={(o) => {
+                setOpen(o);
+                if (o && user?.role === "tenant") {
+                  setForm((f) => ({
+                    ...f,
+                    name: f.name || user.name || "",
+                    email: f.email || user.email || "",
+                  }));
+                }
+              }}>
                 <DialogTrigger asChild>
-                  <Button className="mt-6 w-full rounded-full" size="lg" disabled={property.status !== "available"}>
+                  <Button
+                    className="mt-6 w-full rounded-full"
+                    size="lg"
+                    disabled={property.status !== "available" || alreadyPending}
+                  >
                     <Send className="mr-2 h-4 w-4" />
-                    {property.status === "available" ? "Apply for this home" : "Not available"}
+                    {property.status !== "available"
+                      ? "Not available"
+                      : alreadyPending
+                      ? "Application pending"
+                      : "Apply for this home"}
                   </Button>
                 </DialogTrigger>
                 <DialogContent>
@@ -164,18 +251,44 @@ const PropertyDetails = () => {
                   <form onSubmit={handleApply} className="space-y-4">
                     <div>
                       <Label htmlFor="name">Full name</Label>
-                      <Input id="name" required maxLength={100} placeholder="Your name" />
+                      <Input
+                        id="name"
+                        required
+                        maxLength={100}
+                        placeholder="Your name"
+                        value={form.name}
+                        onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                      />
+                      {errors.name && <p className="mt-1 text-xs text-destructive">{errors.name}</p>}
                     </div>
                     <div>
                       <Label htmlFor="email">Email</Label>
-                      <Input id="email" type="email" required maxLength={255} placeholder="you@example.com" />
+                      <Input
+                        id="email"
+                        type="email"
+                        required
+                        maxLength={255}
+                        placeholder="you@example.com"
+                        value={form.email}
+                        onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                      />
+                      {errors.email && <p className="mt-1 text-xs text-destructive">{errors.email}</p>}
                     </div>
                     <div>
                       <Label htmlFor="msg">Message</Label>
-                      <Textarea id="msg" maxLength={500} placeholder="Move-in date, questions…" />
+                      <Textarea
+                        id="msg"
+                        maxLength={500}
+                        placeholder="Move-in date, questions…"
+                        value={form.message}
+                        onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))}
+                      />
+                      {errors.message && <p className="mt-1 text-xs text-destructive">{errors.message}</p>}
                     </div>
                     <DialogFooter>
-                      <Button type="submit" className="w-full rounded-full">Submit request</Button>
+                      <Button type="submit" className="w-full rounded-full" disabled={submitting}>
+                        {submitting ? "Submitting…" : "Submit request"}
+                      </Button>
                     </DialogFooter>
                   </form>
                 </DialogContent>

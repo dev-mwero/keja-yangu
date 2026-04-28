@@ -1,48 +1,116 @@
-import { CheckCircle2, Clock, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, XCircle, FileText, Trash2 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { useTenantApplications } from "@/hooks/use-applications";
+import { cancelApplication, ApplicationStatus } from "@/lib/applications";
 
-const rows = [
-  { id: "r1", property: "Sunlit Studio in Kilimani", date: "2025-03-20", status: "approved" },
-  { id: "r2", property: "Terracotta Loft, Westlands", date: "2025-04-02", status: "pending" },
-  { id: "r3", property: "Skyline Penthouse", date: "2025-04-10", status: "rejected" },
-] as const;
-
-const statusIcon = {
+const statusIcon: Record<ApplicationStatus, JSX.Element> = {
   approved: <CheckCircle2 className="h-3.5 w-3.5" />,
   pending: <Clock className="h-3.5 w-3.5" />,
   rejected: <XCircle className="h-3.5 w-3.5" />,
-} as const;
+};
 
-const statusClass = {
+const statusClass: Record<ApplicationStatus, string> = {
   approved: "bg-success/15 text-success",
   pending: "bg-warning/15 text-warning",
   rejected: "bg-destructive/15 text-destructive",
-} as const;
+};
 
-export const ApplicationsSection = () => (
-  <div className="overflow-hidden rounded-xl border border-border">
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Property</TableHead>
-          <TableHead>Submitted</TableHead>
-          <TableHead className="text-right">Status</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map((r) => (
-          <TableRow key={r.id}>
-            <TableCell className="font-medium">{r.property}</TableCell>
-            <TableCell className="text-muted-foreground">{r.date}</TableCell>
-            <TableCell className="text-right">
-              <Badge className={`${statusClass[r.status]} gap-1 capitalize hover:opacity-100`}>
-                {statusIcon[r.status]}{r.status}
-              </Badge>
-            </TableCell>
+const formatDate = (iso: string) => {
+  try {
+    return new Date(iso).toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return iso;
+  }
+};
+
+export const ApplicationsSection = () => {
+  const { user } = useAuth();
+  const { applications, refresh } = useTenantApplications(user?.email);
+  const { toast } = useToast();
+
+  if (!applications.length) {
+    return (
+      <div className="rounded-xl border border-dashed border-border bg-card/50 p-10 text-center">
+        <FileText className="mx-auto h-8 w-8 text-muted-foreground" />
+        <h3 className="mt-3 font-display text-xl">No applications yet</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Browse available homes and apply — your status will appear here.
+        </p>
+        <Button asChild className="mt-5 rounded-full">
+          <Link to="/properties">Browse properties</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  const handleCancel = (id: string) => {
+    if (!user) return;
+    if (cancelApplication(id, user.email)) {
+      toast({ title: "Application withdrawn" });
+      refresh();
+    }
+  };
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-border">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Property</TableHead>
+            <TableHead>Submitted</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead className="text-right">Action</TableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  </div>
-);
+        </TableHeader>
+        <TableBody>
+          {applications.map((a) => (
+            <TableRow key={a.id}>
+              <TableCell className="font-medium">
+                <Link to={`/properties/${a.propertyId}`} className="hover:underline">
+                  {a.propertyTitle}
+                </Link>
+              </TableCell>
+              <TableCell className="text-muted-foreground">{formatDate(a.submittedAt)}</TableCell>
+              <TableCell>
+                <Badge className={`${statusClass[a.status]} gap-1 capitalize hover:opacity-100`}>
+                  {statusIcon[a.status]}
+                  {a.status}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-right">
+                {a.status === "pending" ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground hover:text-destructive"
+                    onClick={() => handleCancel(a.id)}
+                  >
+                    <Trash2 className="mr-1 h-3.5 w-3.5" /> Withdraw
+                  </Button>
+                ) : (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+};
