@@ -6,6 +6,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PropertyMap } from "@/components/PropertyMap";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
@@ -184,13 +185,7 @@ const PropertyDetails = () => {
                   </div>
                 </TabsContent>
                 <TabsContent value="location" className="mt-6">
-                  <div className="flex aspect-[16/9] items-center justify-center rounded-2xl bg-muted text-muted-foreground">
-                    <div className="text-center">
-                      <MapPin className="mx-auto h-8 w-8 text-primary" />
-                      <p className="mt-2 font-medium text-foreground">{property.location}</p>
-                      <p className="text-sm">Interactive map coming soon</p>
-                    </div>
-                  </div>
+                  <PropertyMap address={property.location} title={property.title} />
                 </TabsContent>
               </Tabs>
             </div>
