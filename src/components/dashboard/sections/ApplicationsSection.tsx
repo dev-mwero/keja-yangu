@@ -1,4 +1,4 @@
-import { CheckCircle2, Clock, XCircle, FileText, Trash2 } from "lucide-react";
+import { CheckCircle2, Clock, XCircle, FileText, Trash2, ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -94,18 +94,23 @@ export const ApplicationsSection = () => {
                 </Badge>
               </TableCell>
               <TableCell className="text-right">
-                {a.status === "pending" ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-muted-foreground hover:text-destructive"
-                    onClick={() => handleCancel(a.id)}
-                  >
-                    <Trash2 className="mr-1 h-3.5 w-3.5" /> Withdraw
+                <div className="flex justify-end gap-1">
+                  {a.status === "pending" && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => handleCancel(a.id)}
+                    >
+                      <Trash2 className="mr-1 h-3.5 w-3.5" /> Withdraw
+                    </Button>
+                  )}
+                  <Button asChild variant="ghost" size="sm">
+                    <Link to={`/dashboard/tenant/applications/${a.id}`}>
+                      Details <ChevronRight className="ml-1 h-3.5 w-3.5" />
+                    </Link>
                   </Button>
-                ) : (
-                  <span className="text-xs text-muted-foreground">—</span>
-                )}
+                </div>
               </TableCell>
             </TableRow>
           ))}

@@ -40,6 +40,7 @@ import {
   TenantDocumentsPage,
   TenantSettingsPage,
 } from "./pages/dashboards/tenant/TenantSections.tsx";
+import TenantApplicationDetails from "./pages/dashboards/tenant/TenantApplicationDetails.tsx";
 import Auth from "./pages/Auth.tsx";
 
 const queryClient = new QueryClient();
@@ -66,6 +67,7 @@ const App = () => (
                 }
               />
               <Route path="/dashboard/tenant/applications" element={<ProtectedRoute allow="tenant"><TenantApplicationsPage /></ProtectedRoute>} />
+              <Route path="/dashboard/tenant/applications/:id" element={<ProtectedRoute allow="tenant"><TenantApplicationDetails /></ProtectedRoute>} />
               <Route path="/dashboard/tenant/payments" element={<ProtectedRoute allow="tenant"><TenantPaymentsPage /></ProtectedRoute>} />
               <Route path="/dashboard/tenant/complaints" element={<ProtectedRoute allow="tenant"><TenantComplaintsPage /></ProtectedRoute>} />
               <Route path="/dashboard/tenant/chat" element={<ProtectedRoute allow="tenant"><TenantChatPage /></ProtectedRoute>} />
