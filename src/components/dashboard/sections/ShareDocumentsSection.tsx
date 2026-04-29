@@ -20,7 +20,11 @@ import {
   listDocumentsSharedBy,
   MAX_DOCUMENT_BYTES,
   type TenantDocument,
+  type DocumentCategory,
+  DOCUMENT_CATEGORIES,
+  DOCUMENT_CATEGORY_LABELS,
 } from "@/lib/tenantDocuments";
+import { Badge } from "@/components/ui/badge";
 
 interface KnownTenant {
   email: string;
@@ -63,6 +67,7 @@ export const ShareDocumentsSection = ({ source }: Props) => {
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [shared, setShared] = useState<TenantDocument[]>([]);
+  const [category, setCategory] = useState<DocumentCategory>("lease");
 
   const refresh = () => {
     setTenants(readKnownTenants());
@@ -121,10 +126,12 @@ export const ShareDocumentsSection = ({ source }: Props) => {
         sharedByName: user.name,
         sharedByEmail: user.email,
         note,
+        category,
       });
       toast({ title: "Shared", description: `${file.name} sent to ${targetEmail}.` });
       setFile(null);
       setNote("");
+      setCategory("lease");
       if (selected === "__manual__") setManualEmail("");
     } catch (err) {
       toast({
@@ -206,6 +213,22 @@ export const ShareDocumentsSection = ({ source }: Props) => {
         </div>
 
         <div className="space-y-2">
+          <Label>Category</Label>
+          <Select value={category} onValueChange={(v) => setCategory(v as DocumentCategory)}>
+            <SelectTrigger className="sm:w-[240px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {DOCUMENT_CATEGORIES.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {DOCUMENT_CATEGORY_LABELS[c]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
           <Label>Note (optional)</Label>
           <Textarea
             value={note}
@@ -243,7 +266,12 @@ export const ShareDocumentsSection = ({ source }: Props) => {
                     <FileText className="h-5 w-5" />
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate font-medium">{d.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="truncate font-medium">{d.name}</p>
+                      <Badge variant="secondary" className="shrink-0">
+                        {DOCUMENT_CATEGORY_LABELS[(d.category ?? "other") as DocumentCategory]}
+                      </Badge>
+                    </div>
                     <p className="text-xs text-muted-foreground">
                       To {d.tenantEmail} · {formatBytes(d.size)} ·{" "}
                       {new Date(d.uploadedAt).toLocaleDateString()}
