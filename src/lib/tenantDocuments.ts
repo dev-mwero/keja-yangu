@@ -9,6 +9,13 @@ export interface TenantDocument {
   /** Data URL — fine for the local-only demo; do NOT use this approach for real backends. */
   dataUrl: string;
   uploadedAt: string;
+  /** Who uploaded the document. Defaults to the tenant for self-uploads. */
+  source?: "tenant" | "caretaker" | "owner";
+  /** Display name / email of the person who shared it (for shared docs). */
+  sharedByName?: string;
+  sharedByEmail?: string;
+  /** Optional note from the sharer. */
+  note?: string;
 }
 
 const STORAGE_KEY = "keja-tenant-documents";
@@ -43,6 +50,20 @@ export const listDocumentsForTenant = (tenantEmail: string): TenantDocument[] =>
     .filter((d) => d.tenantEmail.toLowerCase() === tenantEmail.toLowerCase())
     .sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
 
+/** Documents the tenant uploaded themselves. */
+export const listOwnDocuments = (tenantEmail: string): TenantDocument[] =>
+  listDocumentsForTenant(tenantEmail).filter((d) => !d.source || d.source === "tenant");
+
+/** Documents shared *to* the tenant by a caretaker/owner. */
+export const listSharedDocuments = (tenantEmail: string): TenantDocument[] =>
+  listDocumentsForTenant(tenantEmail).filter((d) => d.source === "caretaker" || d.source === "owner");
+
+/** Documents shared *by* a given user (caretaker/owner) across tenants. */
+export const listDocumentsSharedBy = (sharerEmail: string): TenantDocument[] =>
+  readAll()
+    .filter((d) => d.sharedByEmail?.toLowerCase() === sharerEmail.toLowerCase())
+    .sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
+
 export const deleteDocument = (id: string) => {
   writeAll(readAll().filter((d) => d.id !== id));
 };
@@ -52,6 +73,12 @@ export const MAX_DOCUMENT_BYTES = MAX_FILE_BYTES;
 export const addDocumentFromFile = async (
   tenantEmail: string,
   file: File,
+  options?: {
+    source?: "tenant" | "caretaker" | "owner";
+    sharedByName?: string;
+    sharedByEmail?: string;
+    note?: string;
+  },
 ): Promise<TenantDocument> => {
   const meta = documentMetaSchema.parse({
     name: file.name,
@@ -74,6 +101,10 @@ export const addDocumentFromFile = async (
     mimeType: meta.mimeType,
     dataUrl,
     uploadedAt: new Date().toISOString(),
+    source: options?.source ?? "tenant",
+    sharedByName: options?.sharedByName,
+    sharedByEmail: options?.sharedByEmail,
+    note: options?.note?.trim() || undefined,
   };
 
   writeAll([doc, ...readAll()]);

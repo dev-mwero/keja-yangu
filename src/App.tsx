@@ -20,6 +20,7 @@ import {
   OwnerAccountingPage,
   OwnerReportsPage,
   OwnerCommunicationsPage,
+  OwnerDocumentsPage,
   OwnerSettingsPage,
 } from "./pages/dashboards/owner/OwnerSections.tsx";
 import {
@@ -28,6 +29,7 @@ import {
   CaretakerAccountingPage,
   CaretakerReportsPage,
   CaretakerCommunicationsPage,
+  CaretakerDocumentsPage,
   CaretakerSettingsPage,
 } from "./pages/dashboards/caretaker/CaretakerSections.tsx";
 import {
@@ -88,6 +90,7 @@ const App = () => (
               <Route path="/dashboard/caretaker/accounting" element={<ProtectedRoute allow="caretaker"><CaretakerAccountingPage /></ProtectedRoute>} />
               <Route path="/dashboard/caretaker/reports" element={<ProtectedRoute allow="caretaker"><CaretakerReportsPage /></ProtectedRoute>} />
               <Route path="/dashboard/caretaker/communications" element={<ProtectedRoute allow="caretaker"><CaretakerCommunicationsPage /></ProtectedRoute>} />
+              <Route path="/dashboard/caretaker/documents" element={<ProtectedRoute allow="caretaker"><CaretakerDocumentsPage /></ProtectedRoute>} />
               <Route path="/dashboard/caretaker/settings" element={<ProtectedRoute allow="caretaker"><CaretakerSettingsPage /></ProtectedRoute>} />
               <Route
                 path="/dashboard/owner"
@@ -102,6 +105,7 @@ const App = () => (
               <Route path="/dashboard/owner/accounting" element={<ProtectedRoute allow="owner"><OwnerAccountingPage /></ProtectedRoute>} />
               <Route path="/dashboard/owner/reports" element={<ProtectedRoute allow="owner"><OwnerReportsPage /></ProtectedRoute>} />
               <Route path="/dashboard/owner/communications" element={<ProtectedRoute allow="owner"><OwnerCommunicationsPage /></ProtectedRoute>} />
+              <Route path="/dashboard/owner/documents" element={<ProtectedRoute allow="owner"><OwnerDocumentsPage /></ProtectedRoute>} />
               <Route path="/dashboard/owner/settings" element={<ProtectedRoute allow="owner"><OwnerSettingsPage /></ProtectedRoute>} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />

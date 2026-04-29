@@ -7,26 +7,25 @@ import {
   addDocumentFromFile,
   deleteDocument,
   formatBytes,
-  listDocumentsForTenant,
+  listOwnDocuments,
+  listSharedDocuments,
   MAX_DOCUMENT_BYTES,
   type TenantDocument,
 } from "@/lib/tenantDocuments";
-
-const seed: { id: string; name: string; date: string }[] = [
-  { id: "d1", name: "Lease agreement", date: "Signed Jan 12, 2025" },
-  { id: "d2", name: "Move-in inspection", date: "Jan 14, 2025" },
-  { id: "d3", name: "House rules", date: "Updated Mar 2025" },
-];
 
 export const DocumentsSection = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const [docs, setDocs] = useState<TenantDocument[]>([]);
+  const [shared, setShared] = useState<TenantDocument[]>([]);
   const [uploading, setUploading] = useState(false);
 
   const refresh = () => {
-    if (user?.email) setDocs(listDocumentsForTenant(user.email));
+    if (user?.email) {
+      setDocs(listOwnDocuments(user.email));
+      setShared(listSharedDocuments(user.email));
+    }
   };
 
   useEffect(() => {
@@ -144,27 +143,42 @@ export const DocumentsSection = () => {
         <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
           Shared with you
         </p>
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {seed.map((d) => (
-            <li
-              key={d.id}
-              className="flex items-center justify-between gap-3 rounded-xl border border-border bg-muted/40 p-4"
-            >
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <FileText className="h-5 w-5" />
+        {shared.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border bg-muted/30 p-6 text-center text-sm text-muted-foreground">
+            Nothing shared with you yet. Documents from your caretaker or owner will appear here.
+          </div>
+        ) : (
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {shared.map((d) => (
+              <li
+                key={d.id}
+                className="flex items-start justify-between gap-3 rounded-xl border border-border bg-muted/40 p-4"
+              >
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <FileText className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{d.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      From {d.sharedByName || d.sharedByEmail || (d.source === "owner" ? "Owner" : "Caretaker")}
+                      {" · "}
+                      {new Date(d.uploadedAt).toLocaleDateString()}
+                    </p>
+                    {d.note && (
+                      <p className="mt-1 text-xs italic text-muted-foreground">"{d.note}"</p>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <p className="font-medium">{d.name}</p>
-                  <p className="text-xs text-muted-foreground">{d.date}</p>
-                </div>
-              </div>
-              <Button size="sm" variant="outline" disabled>
-                <Download className="mr-1.5 h-4 w-4" />Download
-              </Button>
-            </li>
-          ))}
-        </ul>
+                <Button asChild size="sm" variant="outline">
+                  <a href={d.dataUrl} download={d.name}>
+                    <Download className="mr-1.5 h-4 w-4" />Download
+                  </a>
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );
