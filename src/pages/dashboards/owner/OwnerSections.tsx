@@ -1,4 +1,4 @@
-import { Building2, Wrench, Calculator, FileBarChart, MessagesSquare, Settings as SettingsIcon } from "lucide-react";
+import { Building2, Wrench, Calculator, FileBarChart, MessagesSquare, Settings as SettingsIcon, FileText } from "lucide-react";
 import { SectionPage } from "@/components/dashboard/SectionPage";
 import { ownerNav } from "@/config/dashboardNav";
 import { PortfolioSection } from "@/components/dashboard/sections/PortfolioSection";
@@ -7,6 +7,7 @@ import { AccountingSection } from "@/components/dashboard/sections/AccountingSec
 import { ReportsSection } from "@/components/dashboard/sections/ReportsSection";
 import { CommunicationsSection } from "@/components/dashboard/sections/CommunicationsSection";
 import { SettingsSection } from "@/components/dashboard/sections/SettingsSection";
+import { ShareDocumentsSection } from "@/components/dashboard/sections/ShareDocumentsSection";
 
 const role = "Owner";
 
@@ -42,6 +43,13 @@ export const OwnerCommunicationsPage = () => (
   <SectionPage role={role} nav={ownerNav} title="Communications" subtitle="Chats and announcements."
     icon={MessagesSquare} tagline="Stay in touch with tenants and broadcast building-wide updates.">
     <CommunicationsSection />
+  </SectionPage>
+);
+
+export const OwnerDocumentsPage = () => (
+  <SectionPage role={role} nav={ownerNav} title="Tenant Documents" subtitle="Share files with your tenants."
+    icon={FileText} tagline="Send leases, receipts and notices straight to a tenant's dashboard.">
+    <ShareDocumentsSection source="owner" />
   </SectionPage>
 );
 

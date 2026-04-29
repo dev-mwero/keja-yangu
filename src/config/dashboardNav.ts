@@ -28,6 +28,7 @@ const sections = [
   { slug: "/accounting", label: "Accounting", icon: Calculator },
   { slug: "/reports", label: "Reports", icon: FileBarChart },
   { slug: "/communications", label: "Communications", icon: MessagesSquare },
+  { slug: "/documents", label: "Tenant Documents", icon: FileText },
   { slug: "/settings", label: "Settings", icon: Settings },
 ] as const;
 

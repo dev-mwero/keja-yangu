@@ -1,4 +1,4 @@
-import { Building2, Wrench, Calculator, FileBarChart, MessagesSquare, Settings as SettingsIcon } from "lucide-react";
+import { Building2, Wrench, Calculator, FileBarChart, MessagesSquare, Settings as SettingsIcon, FileText } from "lucide-react";
 import { SectionPage } from "@/components/dashboard/SectionPage";
 import { caretakerNav } from "@/config/dashboardNav";
 import { PortfolioSection } from "@/components/dashboard/sections/PortfolioSection";
@@ -7,6 +7,7 @@ import { AccountingSection } from "@/components/dashboard/sections/AccountingSec
 import { ReportsSection } from "@/components/dashboard/sections/ReportsSection";
 import { CommunicationsSection } from "@/components/dashboard/sections/CommunicationsSection";
 import { SettingsSection } from "@/components/dashboard/sections/SettingsSection";
+import { ShareDocumentsSection } from "@/components/dashboard/sections/ShareDocumentsSection";
 
 const role = "Caretaker";
 const CARETAKER_ID = "c1";
@@ -43,6 +44,13 @@ export const CaretakerCommunicationsPage = () => (
   <SectionPage role={role} nav={caretakerNav} title="Communications" subtitle="Tenant chats and announcements."
     icon={MessagesSquare} tagline="Reply to tenant messages and post building-wide notices.">
     <CommunicationsSection />
+  </SectionPage>
+);
+
+export const CaretakerDocumentsPage = () => (
+  <SectionPage role={role} nav={caretakerNav} title="Tenant Documents" subtitle="Share files with your tenants."
+    icon={FileText} tagline="Send leases, receipts and notices straight to a tenant's dashboard.">
+    <ShareDocumentsSection source="caretaker" />
   </SectionPage>
 );
 
