@@ -1,5 +1,16 @@
 import { z } from "zod";
 
+export const DOCUMENT_CATEGORIES = ["lease", "receipt", "notice", "inspection", "other"] as const;
+export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number];
+
+export const DOCUMENT_CATEGORY_LABELS: Record<DocumentCategory, string> = {
+  lease: "Lease",
+  receipt: "Receipt",
+  notice: "Notice",
+  inspection: "Inspection",
+  other: "Other",
+};
+
 export interface TenantDocument {
   id: string;
   tenantEmail: string;
@@ -16,6 +27,8 @@ export interface TenantDocument {
   sharedByEmail?: string;
   /** Optional note from the sharer. */
   note?: string;
+  /** Category for filtering on the tenant dashboard. */
+  category?: DocumentCategory;
 }
 
 const STORAGE_KEY = "keja-tenant-documents";
@@ -78,6 +91,7 @@ export const addDocumentFromFile = async (
     sharedByName?: string;
     sharedByEmail?: string;
     note?: string;
+    category?: DocumentCategory;
   },
 ): Promise<TenantDocument> => {
   const meta = documentMetaSchema.parse({
@@ -105,6 +119,7 @@ export const addDocumentFromFile = async (
     sharedByName: options?.sharedByName,
     sharedByEmail: options?.sharedByEmail,
     note: options?.note?.trim() || undefined,
+    category: options?.category ?? "other",
   };
 
   writeAll([doc, ...readAll()]);
