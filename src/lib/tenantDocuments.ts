@@ -29,6 +29,8 @@ export interface TenantDocument {
   note?: string;
   /** Category for filtering on the tenant dashboard. */
   category?: DocumentCategory;
+  /** Optional due date (ISO string) for action-required documents like inspections, notices, or lease renewals. */
+  dueDate?: string;
 }
 
 const STORAGE_KEY = "keja-tenant-documents";
@@ -92,6 +94,7 @@ export const addDocumentFromFile = async (
     sharedByEmail?: string;
     note?: string;
     category?: DocumentCategory;
+    dueDate?: string;
   },
 ): Promise<TenantDocument> => {
   const meta = documentMetaSchema.parse({
@@ -120,6 +123,7 @@ export const addDocumentFromFile = async (
     sharedByEmail: options?.sharedByEmail,
     note: options?.note?.trim() || undefined,
     category: options?.category ?? "other",
+    dueDate: options?.dueDate?.trim() || undefined,
   };
 
   writeAll([doc, ...readAll()]);
