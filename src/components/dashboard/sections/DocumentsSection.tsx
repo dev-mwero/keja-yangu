@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FileText, Download, Upload, Trash2 } from "lucide-react";
+import { FileText, Download, Upload, Trash2, CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -13,6 +20,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { cn } from "@/lib/utils";
 import {
   addDocumentFromFile,
   deleteDocument,
@@ -26,6 +34,23 @@ import {
   DOCUMENT_CATEGORY_LABELS,
 } from "@/lib/tenantDocuments";
 
+function isOverdue(dueDate?: string) {
+  if (!dueDate) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return new Date(dueDate) < today;
+}
+
+function DueDateBadge({ dueDate }: { dueDate?: string }) {
+  if (!dueDate) return null;
+  const overdue = isOverdue(dueDate);
+  return (
+    <Badge variant={overdue ? "destructive" : "outline"} className="shrink-0 text-[10px]">
+      {overdue ? "Overdue" : "Due"} {format(new Date(dueDate), "MMM d, yyyy")}
+    </Badge>
+  );
+}
+
 export const DocumentsSection = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -34,6 +59,7 @@ export const DocumentsSection = () => {
   const [shared, setShared] = useState<TenantDocument[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadCategory, setUploadCategory] = useState<DocumentCategory>("other");
+  const [uploadDueDate, setUploadDueDate] = useState<Date | undefined>(undefined);
   const [filter, setFilter] = useState<DocumentCategory | "all">("all");
 
   const refresh = () => {
@@ -69,8 +95,12 @@ export const DocumentsSection = () => {
     }
     setUploading(true);
     try {
-      await addDocumentFromFile(user.email, file, { category: uploadCategory });
+      await addDocumentFromFile(user.email, file, {
+        category: uploadCategory,
+        dueDate: uploadDueDate ? uploadDueDate.toISOString() : undefined,
+      });
       toast({ title: "Uploaded", description: `${file.name} added to your documents.` });
+      setUploadDueDate(undefined);
     } catch (err) {
       toast({
         title: "Upload failed",
@@ -95,7 +125,7 @@ export const DocumentsSection = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 rounded-xl border border-dashed border-border bg-muted/30 p-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 rounded-xl border border-dashed border-border bg-muted/30 p-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="font-medium">Upload a document</p>
           <p className="text-xs text-muted-foreground">
@@ -117,6 +147,32 @@ export const DocumentsSection = () => {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Due date (optional)</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-[160px] justify-start text-left font-normal",
+                    !uploadDueDate && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {uploadDueDate ? format(uploadDueDate, "PPP") : <span>Pick a date</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={uploadDueDate}
+                  onSelect={setUploadDueDate}
+                  initialFocus
+                  className={cn("p-3 pointer-events-auto")}
+                />
+              </PopoverContent>
+            </Popover>
           </div>
           <input
             ref={inputRef}
@@ -159,11 +215,12 @@ export const DocumentsSection = () => {
                     <FileText className="h-5 w-5" />
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <p className="truncate font-medium">{d.name}</p>
                       <Badge variant="secondary" className="shrink-0">
                         {DOCUMENT_CATEGORY_LABELS[(d.category ?? "other") as DocumentCategory]}
                       </Badge>
+                      <DueDateBadge dueDate={d.dueDate} />
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {formatBytes(d.size)} · {new Date(d.uploadedAt).toLocaleDateString()}
@@ -213,11 +270,12 @@ export const DocumentsSection = () => {
                     <FileText className="h-5 w-5" />
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <p className="truncate font-medium">{d.name}</p>
                       <Badge variant="secondary" className="shrink-0">
                         {DOCUMENT_CATEGORY_LABELS[(d.category ?? "other") as DocumentCategory]}
                       </Badge>
+                      <DueDateBadge dueDate={d.dueDate} />
                     </div>
                     <p className="text-xs text-muted-foreground">
                       From {d.sharedByName || d.sharedByEmail || (d.source === "owner" ? "Owner" : "Caretaker")}

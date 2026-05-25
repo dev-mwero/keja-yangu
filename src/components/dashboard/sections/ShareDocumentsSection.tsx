@@ -1,9 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FileText, Upload, Trash2, Send, Users } from "lucide-react";
+import { FileText, Upload, Trash2, Send, Users, CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -13,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { cn } from "@/lib/utils";
 import {
   addDocumentFromFile,
   deleteDocument,
@@ -55,6 +63,13 @@ interface Props {
   source: "caretaker" | "owner";
 }
 
+function isOverdue(dueDate?: string) {
+  if (!dueDate) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return new Date(dueDate) < today;
+}
+
 export const ShareDocumentsSection = ({ source }: Props) => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -68,6 +83,7 @@ export const ShareDocumentsSection = ({ source }: Props) => {
   const [busy, setBusy] = useState(false);
   const [shared, setShared] = useState<TenantDocument[]>([]);
   const [category, setCategory] = useState<DocumentCategory>("lease");
+  const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
 
   const refresh = () => {
     setTenants(readKnownTenants());
@@ -127,11 +143,13 @@ export const ShareDocumentsSection = ({ source }: Props) => {
         sharedByEmail: user.email,
         note,
         category,
+        dueDate: dueDate ? dueDate.toISOString() : undefined,
       });
       toast({ title: "Shared", description: `${file.name} sent to ${targetEmail}.` });
       setFile(null);
       setNote("");
       setCategory("lease");
+      setDueDate(undefined);
       if (selected === "__manual__") setManualEmail("");
     } catch (err) {
       toast({
@@ -212,20 +230,49 @@ export const ShareDocumentsSection = ({ source }: Props) => {
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label>Category</Label>
-          <Select value={category} onValueChange={(v) => setCategory(v as DocumentCategory)}>
-            <SelectTrigger className="sm:w-[240px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {DOCUMENT_CATEGORIES.map((c) => (
-                <SelectItem key={c} value={c}>
-                  {DOCUMENT_CATEGORY_LABELS[c]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Category</Label>
+            <Select value={category} onValueChange={(v) => setCategory(v as DocumentCategory)}>
+              <SelectTrigger className="sm:w-[240px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DOCUMENT_CATEGORIES.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {DOCUMENT_CATEGORY_LABELS[c]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Due date (optional)</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-[240px] justify-start text-left font-normal",
+                    !dueDate && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {dueDate ? format(dueDate, "PPP") : <span>Pick a date</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={dueDate}
+                  onSelect={setDueDate}
+                  initialFocus
+                  className={cn("p-3 pointer-events-auto")}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -266,11 +313,19 @@ export const ShareDocumentsSection = ({ source }: Props) => {
                     <FileText className="h-5 w-5" />
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <p className="truncate font-medium">{d.name}</p>
                       <Badge variant="secondary" className="shrink-0">
                         {DOCUMENT_CATEGORY_LABELS[(d.category ?? "other") as DocumentCategory]}
                       </Badge>
+                      {d.dueDate && (
+                        <Badge
+                          variant={isOverdue(d.dueDate) ? "destructive" : "outline"}
+                          className="shrink-0 text-[10px]"
+                        >
+                          {isOverdue(d.dueDate) ? "Overdue" : "Due"} {format(new Date(d.dueDate), "MMM d, yyyy")}
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       To {d.tenantEmail} · {formatBytes(d.size)} ·{" "}
