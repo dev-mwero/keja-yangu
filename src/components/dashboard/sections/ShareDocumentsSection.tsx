@@ -85,7 +85,6 @@ export const ShareDocumentsSection = ({ source }: Props) => {
       window.removeEventListener("keja-applications:changed", handler);
       window.removeEventListener("storage", handler);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.email]);
 
   const targetEmail = useMemo(() => {

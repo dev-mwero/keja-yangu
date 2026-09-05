@@ -52,7 +52,6 @@ export const DocumentsSection = () => {
       window.removeEventListener("keja-documents-changed", handler);
       window.removeEventListener("storage", handler);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.email]);
 
   const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
