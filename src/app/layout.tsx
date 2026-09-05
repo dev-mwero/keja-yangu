@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import "@/index.css";
+import "@/app/globals.css";
 
 export const metadata: Metadata = {
   title: "Keja Yangu",
