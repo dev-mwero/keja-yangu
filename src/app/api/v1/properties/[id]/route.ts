@@ -27,6 +27,8 @@ function notFound() {
   return NextResponse.json({ error: "Property not found" }, { status: 404 });
 }
 
+const PropertyModel = Property as any;
+
 export async function GET(_request: Request, context: RouteContext) {
   const { id } = await context.params;
 
@@ -35,7 +37,7 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 
   await connectToDatabase();
-  const property = await Property.findById(id).lean();
+  const property = await PropertyModel.findOne({ _id: id }).lean();
 
   if (!property) {
     return notFound();
@@ -62,7 +64,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   await connectToDatabase();
-  const property = await Property.findByIdAndUpdate(id, parsed.data, {
+  const property = await PropertyModel.findOneAndUpdate({ _id: id }, parsed.data, {
     new: true,
     runValidators: true,
   }).lean();
@@ -82,7 +84,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
   }
 
   await connectToDatabase();
-  const property = await Property.findByIdAndDelete(id).lean();
+  const property = await PropertyModel.findOneAndDelete({ _id: id }).lean();
 
   if (!property) {
     return notFound();
