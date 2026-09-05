@@ -1,3 +1,5 @@
+"use client";
+
 import { createContext, ReactNode, useContext, useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 
