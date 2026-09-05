@@ -7,6 +7,8 @@ import { PropertyCard } from "@/components/PropertyCard";
 import { properties } from "@/data/properties";
 import hero from "@/assets/hero-building.jpg";
 
+const heroSrc = typeof hero === "string" ? hero : hero.src;
+
 const Index = () => {
   const featured = properties.filter((p) => p.status === "available").slice(0, 3);
 
@@ -96,7 +98,7 @@ const Index = () => {
           >
             <div className="relative aspect-[4/5] overflow-hidden rounded-3xl shadow-elevated">
               <img
-                src={hero}
+                src={heroSrc}
                 alt="Modern terracotta apartment building at golden hour"
                 width={1600}
                 height={1200}

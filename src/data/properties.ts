@@ -5,6 +5,9 @@ import p4 from "@/assets/property-4.jpg";
 import p5 from "@/assets/property-5.jpg";
 import p6 from "@/assets/property-6.jpg";
 
+const imageUrl = (image: string | { src: string }) =>
+  typeof image === "string" ? image : image.src;
+
 export type PropertyType = "room" | "apartment" | "building";
 export type PropertyStatus = "available" | "occupied" | "maintenance";
 
@@ -34,7 +37,7 @@ export const properties: Property[] = [
     price: 45000,
     description:
       "An airy studio bathed in golden light, finished with warm oak floors and curated minimalist furniture. Steps from cafés and the Yaya Centre.",
-    images: [p1, p2, p4],
+    images: [imageUrl(p1), imageUrl(p2), imageUrl(p4)],
     amenities: ["Wi-Fi", "Parking", "Backup Water", "Security 24/7", "Gym"],
     status: "available",
     ownerId: "o1",
@@ -51,7 +54,7 @@ export const properties: Property[] = [
     price: 78000,
     description:
       "A warm one-bedroom loft with a view of the city skyline. Designer touches throughout, with a private balcony for slow mornings.",
-    images: [p2, p1, p6],
+    images: [imageUrl(p2), imageUrl(p1), imageUrl(p6)],
     amenities: ["Balcony", "Lift", "Wi-Fi", "Backup Power", "Pool"],
     status: "available",
     ownerId: "o1",
@@ -68,7 +71,7 @@ export const properties: Property[] = [
     price: 120000,
     description:
       "A coastal residence with palm-lined balconies, sea breeze, and walking distance to the beach. Limestone facade and spacious layouts.",
-    images: [p3, p4, p1],
+    images: [imageUrl(p3), imageUrl(p4), imageUrl(p1)],
     amenities: ["Pool", "Gym", "Garden", "Security", "CCTV", "Beach Access"],
     status: "occupied",
     ownerId: "o1",
@@ -85,7 +88,7 @@ export const properties: Property[] = [
     price: 220000,
     description:
       "Floor-to-ceiling windows wrap a serene living room with panoramic city views. Designed for those who appreciate scale and light.",
-    images: [p4, p2, p6],
+    images: [imageUrl(p4), imageUrl(p2), imageUrl(p6)],
     amenities: ["Concierge", "Pool", "Gym", "Lift", "Smart Home", "Parking"],
     status: "available",
     ownerId: "o1",
@@ -102,7 +105,7 @@ export const properties: Property[] = [
     price: 18000,
     description:
       "A cozy single room clad in warm cedar, surrounded by greenery. A retreat for students or remote workers.",
-    images: [p5, p1],
+    images: [imageUrl(p5), imageUrl(p1)],
     amenities: ["Wi-Fi", "Shared Kitchen", "Garden", "Quiet Zone"],
     status: "available",
     ownerId: "o1",
@@ -119,7 +122,7 @@ export const properties: Property[] = [
     price: 95000,
     description:
       "A glowing residential block with generous balconies, communal gardens, and a thoughtful concierge service.",
-    images: [p6, p3, p4],
+    images: [imageUrl(p6), imageUrl(p3), imageUrl(p4)],
     amenities: ["Concierge", "Lift", "Parking", "Gym", "Backup Power"],
     status: "maintenance",
     ownerId: "o1",

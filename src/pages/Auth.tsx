@@ -17,6 +17,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { roleRoute, isRouteAllowedForRole } from "@/config/roleRoutes";
 import hero from "@/assets/hero-building.jpg";
 
+const heroSrc = typeof hero === "string" ? hero : hero.src;
+
 const signInSchema = z.object({
   email: z.string().email("Enter a valid email"),
   password: z.string().min(6, "At least 6 characters"),
@@ -95,7 +97,7 @@ const Auth = () => {
     <div className="min-h-screen bg-background lg:grid lg:grid-cols-2">
       {/* Left — visual */}
       <div className="relative hidden overflow-hidden lg:block">
-        <img src={hero} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        <img src={heroSrc} alt="" className="absolute inset-0 h-full w-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-br from-secondary/80 via-secondary/40 to-transparent" />
         <div className="relative flex h-full flex-col justify-between p-10 text-secondary-foreground">
           <Logo className="text-secondary-foreground" />
