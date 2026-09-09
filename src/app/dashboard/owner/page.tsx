@@ -1,6 +1,7 @@
 "use client";
 
 import { Plus, TrendingUp, Users, Building2 } from "lucide-react";
+import Link from "next/link";
 import { DashboardShell } from "@/components/DashboardShell";
 import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,7 @@ const OwnerDashboard = () => {
   return (
     <DashboardShell role="Owner" nav={nav} title="Portfolio overview" subtitle="Your buildings, people, and performance at a glance.">
       <div className="mb-6 flex justify-end">
-        <Button className="rounded-full"><Plus className="mr-2 h-4 w-4" />New property</Button>
+        <Button asChild className="rounded-full"><Link href="/properties"><Plus className="mr-2 h-4 w-4" />New property</Link></Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">

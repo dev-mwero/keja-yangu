@@ -56,11 +56,6 @@ const TenantDashboard = () => {
       <div className="mt-10">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-display text-2xl font-semibold tracking-tight">Your requests</h2>
-          {applications.length > 0 && (
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/dashboard/tenant/applications">View all</Link>
-            </Button>
-          )}
         </div>
         {recent.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border bg-card/50 p-10 text-center">

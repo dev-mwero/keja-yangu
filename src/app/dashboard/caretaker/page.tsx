@@ -1,19 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Building2, Users, CheckCircle2, XCircle, Clock } from "lucide-react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { properties as initialProps, tenants } from "@/data/properties";
+import { properties as initialProps, tenants, caretakers } from "@/data/properties";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { caretakerNav as nav } from "@/config/dashboardNav";
 
 const CaretakerDashboard = () => {
-  const [props, setProps] = useState(initialProps.filter((p) => p.caretakerIds.includes("c1")));
+  const { user } = useAuth();
+  const caretaker = useMemo(() => caretakers.find((c) => c.email === user?.email), [user?.email]);
+  const caretakerId = caretaker?.id ?? "c1";
+
+  const [props, setProps] = useState(initialProps.filter((p) => p.caretakerIds.includes(caretakerId)));
   const [reqs, setReqs] = useState(tenants.filter((t) => t.status === "pending"));
   const { toast } = useToast();
 
@@ -29,12 +34,15 @@ const CaretakerDashboard = () => {
 
   const occupied = props.filter((p) => p.status === "occupied").length;
   const vacant = props.filter((p) => p.status === "available").length;
+  const assignedTenants = tenants.filter((t) => props.some((p) => p.id === t.propertyId) && t.status === "active").length;
+
+  const displayName = user?.name?.split(" ")[0] ?? "Caretaker";
 
   return (
-    <DashboardShell role="Caretaker" nav={nav} title="Hello, John" subtitle="Manage your properties and tenant requests.">
+    <DashboardShell role="Caretaker" nav={nav} title={`Hello, ${displayName}`} subtitle="Manage your properties and tenant requests.">
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard label="Assigned properties" value={props.length} icon={Building2} />
-        <StatCard label="Tenants" value={3} icon={Users} />
+        <StatCard label="Tenants" value={assignedTenants} icon={Users} />
         <StatCard label="Occupied" value={occupied} icon={CheckCircle2} />
         <StatCard label="Vacant" value={vacant} icon={Clock} />
       </div>
