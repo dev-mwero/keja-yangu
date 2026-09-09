@@ -9,7 +9,7 @@ import { PropertyCard } from "@/components/PropertyCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { properties } from "@/data/properties";
+import { useProperties } from "@/hooks/use-properties";
 import { useAuth } from "@/hooks/use-auth";
 import { useTenantApplications } from "@/hooks/use-applications";
 import { ApplicationStatus } from "@/lib/applications";
@@ -37,6 +37,7 @@ const formatDate = (iso: string) => {
 const TenantDashboard = () => {
   const { user } = useAuth();
   const { applications } = useTenantApplications(user?.email);
+  const { properties, loading } = useProperties();
   const recommended = properties.filter((p) => p.status === "available").slice(0, 3);
 
   const pendingCount = applications.filter((a) => a.status === "pending").length;
@@ -97,7 +98,30 @@ const TenantDashboard = () => {
       <div className="mt-12">
         <h2 className="mb-4 font-display text-2xl font-semibold tracking-tight">Recommended for you</h2>
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {recommended.map((p, i) => <PropertyCard key={p.id} property={p} index={i} />)}
+          {loading ? (
+            <p className="text-muted-foreground">Loading properties...</p>
+          ) : recommended.map((p, i) => (
+            <PropertyCard
+              key={p._id}
+              property={{
+                id: p._id,
+                title: p.title,
+                type: p.type,
+                location: p.location,
+                price: p.price,
+                description: p.description,
+                images: p.images.length > 0 ? p.images : ["/images/property-1.jpg"],
+                amenities: p.amenities,
+                status: p.status,
+                ownerId: p.ownerId,
+                caretakerIds: p.caretakerIds,
+                beds: p.beds,
+                baths: p.baths,
+                area: p.area,
+              }}
+              index={i}
+            />
+          ))}
         </div>
       </div>
     </DashboardShell>

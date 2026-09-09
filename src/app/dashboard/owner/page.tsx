@@ -7,20 +7,22 @@ import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { properties, tenants, caretakers } from "@/data/properties";
+import { tenants, caretakers } from "@/data/properties";
+import { useProperties } from "@/hooks/use-properties";
 import { ownerNav as nav } from "@/config/dashboardNav";
 
 const OwnerDashboard = () => {
+  const { properties, loading } = useProperties();
   const total = properties.length;
   const occupied = properties.filter((p) => p.status === "occupied").length;
-  const occupancy = Math.round((occupied / total) * 100);
+  const occupancy = total > 0 ? Math.round((occupied / total) * 100) : 0;
 
   const distribution = [
     { type: "Apartment", count: properties.filter((p) => p.type === "apartment").length },
     { type: "Building", count: properties.filter((p) => p.type === "building").length },
     { type: "Room", count: properties.filter((p) => p.type === "room").length },
   ];
-  const max = Math.max(...distribution.map((d) => d.count));
+  const max = Math.max(...distribution.map((d) => d.count), 1);
 
   return (
     <DashboardShell role="Owner" nav={nav} title="Portfolio overview" subtitle="Your buildings, people, and performance at a glance.">
@@ -29,10 +31,10 @@ const OwnerDashboard = () => {
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <StatCard label="Total properties" value={total} icon={Building2} />
+        <StatCard label="Total properties" value={loading ? "..." : total} icon={Building2} />
         <StatCard label="Tenants" value={tenants.length} icon={Users} />
         <StatCard label="Caretakers" value={caretakers.length} icon={Users} />
-        <StatCard label="Occupancy" value={`${occupancy}%`} icon={TrendingUp} hint="vs 62% last quarter" />
+        <StatCard label="Occupancy" value={loading ? "..." : `${occupancy}%`} icon={TrendingUp} hint="vs 62% last quarter" />
       </div>
 
       <div className="mt-10 grid gap-6 lg:grid-cols-3">
@@ -89,8 +91,12 @@ const OwnerDashboard = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {properties.map((p) => (
-                <TableRow key={p.id}>
+              {loading ? (
+                <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">Loading properties...</TableCell></TableRow>
+              ) : properties.length === 0 ? (
+                <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">No properties found.</TableCell></TableRow>
+              ) : properties.map((p) => (
+                <TableRow key={p._id}>
                   <TableCell className="font-medium">{p.title}</TableCell>
                   <TableCell className="capitalize text-muted-foreground">{p.type}</TableCell>
                   <TableCell className="text-muted-foreground">{p.location}</TableCell>

@@ -6,13 +6,18 @@ import { Property } from "@/models/Property";
 
 const propertyUpdate = z.object({
   title: z.string().trim().min(1).optional(),
+  type: z.enum(["room", "apartment", "building"]).optional(),
   location: z.string().trim().min(1).optional(),
   price: z.coerce.number().nonnegative().optional(),
-  bedrooms: z.coerce.number().int().nonnegative().optional(),
-  bathrooms: z.coerce.number().int().nonnegative().optional(),
-  imageUrl: z.string().url().optional().or(z.literal("")),
+  beds: z.coerce.number().int().nonnegative().optional(),
+  baths: z.coerce.number().int().nonnegative().optional(),
+  area: z.coerce.number().nonnegative().optional(),
+  images: z.array(z.string()).optional(),
+  amenities: z.array(z.string()).optional(),
+  status: z.enum(["available", "occupied", "maintenance"]).optional(),
+  ownerId: z.string().optional(),
+  caretakerIds: z.array(z.string()).optional(),
   description: z.string().optional(),
-  available: z.boolean().optional(),
 });
 
 type RouteContext = {

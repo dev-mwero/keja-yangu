@@ -5,13 +5,18 @@ import { Property } from "@/models/Property";
 
 const propertyInput = z.object({
   title: z.string().trim().min(1),
+  type: z.enum(["room", "apartment", "building"]).optional(),
   location: z.string().trim().min(1),
   price: z.coerce.number().nonnegative(),
-  bedrooms: z.coerce.number().int().nonnegative(),
-  bathrooms: z.coerce.number().int().nonnegative(),
-  imageUrl: z.string().url().optional().or(z.literal("")),
+  beds: z.coerce.number().int().nonnegative(),
+  baths: z.coerce.number().int().nonnegative(),
+  area: z.coerce.number().nonnegative().optional(),
+  images: z.array(z.string()).optional(),
+  amenities: z.array(z.string()).optional(),
+  status: z.enum(["available", "occupied", "maintenance"]).optional(),
+  ownerId: z.string().optional(),
+  caretakerIds: z.array(z.string()).optional(),
   description: z.string().optional(),
-  available: z.boolean().optional(),
 });
 
 export async function GET() {

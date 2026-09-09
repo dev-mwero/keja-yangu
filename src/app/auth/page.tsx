@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { tenants, caretakers } from "@/data/properties";
 
 const signInSchema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -64,7 +65,22 @@ const AuthForm = () => {
         : values.email.startsWith("care")
         ? "caretaker"
         : "tenant";
-      signInUser({ email: values.email, role });
+
+      const existingUser =
+        role === "caretaker"
+          ? caretakers.find((c) => c.email === values.email)
+          : role === "tenant"
+          ? tenants.find((t) => t.email === values.email)
+          : null;
+
+      if (role !== "owner" && !existingUser) {
+        toast({ title: "Account not found", description: "No account found with this email. Please sign up first." });
+        setSubmitting(false);
+        return;
+      }
+
+      const name = existingUser?.name;
+      signInUser({ email: values.email, name, role });
       toast({ title: "Welcome back", description: `Signed in as ${role}.` });
       setSubmitting(false);
       const returnTo = searchParams.get("from") || roleRoute[role];
