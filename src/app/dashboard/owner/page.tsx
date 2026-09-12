@@ -63,7 +63,7 @@ const OwnerDashboard = () => {
 
         <div className="rounded-2xl border border-border bg-secondary p-6 text-secondary-foreground shadow-elevated">
           <p className="text-xs uppercase tracking-widest text-primary-glow">Monthly revenue</p>
-          <p className="mt-2 font-display text-4xl font-semibold">KES 1.84M</p>
+          <p className="mt-2 font-display text-4xl font-semibold">KES 240K</p>
           <p className="mt-1 text-sm text-secondary-foreground/70">+12% vs last month</p>
           <div className="mt-6 flex h-20 items-end gap-1.5">
             {[40, 55, 48, 70, 62, 80, 72, 90, 78, 95, 88, 100].map((h, i) => (

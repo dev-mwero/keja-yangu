@@ -51,8 +51,8 @@ const Index = () => {
 
             <div className="mt-12 grid grid-cols-3 gap-6 border-t border-border pt-8">
               {[
-                { k: "1.2k+", v: "Listings" },
-                { k: "98%", v: "Happy tenants" },
+                { k: "40+", v: "Listings" },
+                { k: "95%", v: "Happy tenants" },
                 { k: "24/7", v: "Care support" },
               ].map((s) => (
                 <div key={s.v}>
