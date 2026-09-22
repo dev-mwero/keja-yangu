@@ -1,10 +1,3 @@
-import p1 from "@/assets/property-1.jpg";
-import p2 from "@/assets/property-2.jpg";
-import p3 from "@/assets/property-3.jpg";
-import p4 from "@/assets/property-4.jpg";
-import p5 from "@/assets/property-5.jpg";
-import p6 from "@/assets/property-6.jpg";
-
 export type PropertyType = "room" | "apartment" | "building";
 export type PropertyStatus = "available" | "occupied" | "maintenance";
 
@@ -34,7 +27,7 @@ export const properties: Property[] = [
     price: 45000,
     description:
       "An airy studio bathed in golden light, finished with warm oak floors and curated minimalist furniture. Steps from cafés and the Yaya Centre.",
-    images: [p1, p2, p4],
+    images: ["/images/property-1.jpg", "/images/property-2.jpg", "/images/property-4.jpg"],
     amenities: ["Wi-Fi", "Parking", "Backup Water", "Security 24/7", "Gym"],
     status: "available",
     ownerId: "o1",
@@ -51,7 +44,7 @@ export const properties: Property[] = [
     price: 78000,
     description:
       "A warm one-bedroom loft with a view of the city skyline. Designer touches throughout, with a private balcony for slow mornings.",
-    images: [p2, p1, p6],
+    images: ["/images/property-2.jpg", "/images/property-1.jpg", "/images/property-6.jpg"],
     amenities: ["Balcony", "Lift", "Wi-Fi", "Backup Power", "Pool"],
     status: "available",
     ownerId: "o1",
@@ -68,7 +61,7 @@ export const properties: Property[] = [
     price: 120000,
     description:
       "A coastal residence with palm-lined balconies, sea breeze, and walking distance to the beach. Limestone facade and spacious layouts.",
-    images: [p3, p4, p1],
+    images: ["/images/property-3.jpg", "/images/property-4.jpg", "/images/property-1.jpg"],
     amenities: ["Pool", "Gym", "Garden", "Security", "CCTV", "Beach Access"],
     status: "occupied",
     ownerId: "o1",
@@ -85,7 +78,7 @@ export const properties: Property[] = [
     price: 220000,
     description:
       "Floor-to-ceiling windows wrap a serene living room with panoramic city views. Designed for those who appreciate scale and light.",
-    images: [p4, p2, p6],
+    images: ["/images/property-4.jpg", "/images/property-2.jpg", "/images/property-6.jpg"],
     amenities: ["Concierge", "Pool", "Gym", "Lift", "Smart Home", "Parking"],
     status: "available",
     ownerId: "o1",
@@ -102,7 +95,7 @@ export const properties: Property[] = [
     price: 18000,
     description:
       "A cozy single room clad in warm cedar, surrounded by greenery. A retreat for students or remote workers.",
-    images: [p5, p1],
+    images: ["/images/property-5.jpg", "/images/property-1.jpg"],
     amenities: ["Wi-Fi", "Shared Kitchen", "Garden", "Quiet Zone"],
     status: "available",
     ownerId: "o1",
@@ -119,7 +112,7 @@ export const properties: Property[] = [
     price: 95000,
     description:
       "A glowing residential block with generous balconies, communal gardens, and a thoughtful concierge service.",
-    images: [p6, p3, p4],
+    images: ["/images/property-6.jpg", "/images/property-3.jpg", "/images/property-4.jpg"],
     amenities: ["Concierge", "Lift", "Parking", "Gym", "Backup Power"],
     status: "maintenance",
     ownerId: "o1",
@@ -140,11 +133,39 @@ export interface Tenant {
 }
 
 export const tenants: Tenant[] = [
-  { id: "t1", name: "Amina Otieno", email: "amina@kj.co", propertyId: "p3", status: "active", joined: "2024-08-12" },
-  { id: "t2", name: "Brian Kamau", email: "brian@kj.co", propertyId: "p2", status: "pending", joined: "2025-02-01" },
-  { id: "t3", name: "Cynthia Wairimu", email: "cyn@kj.co", propertyId: "p1", status: "active", joined: "2024-11-22" },
+  {
+    id: "t1",
+    name: "Amina Otieno",
+    email: "amina@kj.co",
+    propertyId: "p3",
+    status: "active",
+    joined: "2024-08-12",
+  },
+  {
+    id: "t2",
+    name: "Brian Kamau",
+    email: "brian@kj.co",
+    propertyId: "p2",
+    status: "pending",
+    joined: "2025-02-01",
+  },
+  {
+    id: "t3",
+    name: "Cynthia Wairimu",
+    email: "cyn@kj.co",
+    propertyId: "p1",
+    status: "active",
+    joined: "2024-11-22",
+  },
   { id: "t4", name: "Daniel Mwangi", email: "dan@kj.co", status: "pending", joined: "2025-03-08" },
-  { id: "t5", name: "Esther Njeri", email: "esther@kj.co", propertyId: "p4", status: "rejected", joined: "2025-01-19" },
+  {
+    id: "t5",
+    name: "Esther Njeri",
+    email: "esther@kj.co",
+    propertyId: "p4",
+    status: "rejected",
+    joined: "2025-01-19",
+  },
 ];
 
 export interface Caretaker {

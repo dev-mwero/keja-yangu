@@ -1,14 +1,18 @@
-import { ReactNode } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Logo } from "./Logo";
-import { cn } from "@/lib/utils";
-import { LogOut, LucideIcon, Menu } from "lucide-react";
-import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "./ThemeToggle";
+"use client";
+
+import type { LucideIcon } from "lucide-react";
+import { LogOut, Menu } from "lucide-react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import type { ReactNode } from "react";
 import { useState } from "react";
-import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { useAuth } from "@/hooks/use-auth";
+import { cn } from "@/lib/utils";
+import { Logo } from "./Logo";
+import { ThemeToggle } from "./ThemeToggle";
 
 export interface DashNavItem {
   to: string;
@@ -17,21 +21,20 @@ export interface DashNavItem {
 }
 
 interface Props {
-  role: string;
+  roleName: string;
   nav: DashNavItem[];
   title: string;
   subtitle?: string;
   children: ReactNode;
 }
 
-export const DashboardShell = ({ role, nav, title, subtitle, children }: Props) => {
-  const { pathname } = useLocation();
-  const navigate = useNavigate();
+export const DashboardShell = ({ roleName, nav, title, subtitle, children }: Props) => {
+  const pathname = usePathname();
+  const router = useRouter();
   const { signOut } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleSignOut = () => {
-    // Remember where the user was so we can return them here after re-auth
     try {
       sessionStorage.setItem("keja-return-to", pathname);
     } catch {
@@ -48,18 +51,13 @@ export const DashboardShell = ({ role, nav, title, subtitle, children }: Props) 
         description: message,
       });
     } finally {
-      navigate("/", { replace: true });
+      router.push("/");
     }
   };
 
   const navList = (onNavigate?: () => void) => (
     <nav className="flex flex-col gap-1">
       {nav.map((item) => {
-        // The "Overview" entry points to a role's root dashboard route
-        // (e.g. /dashboard/owner). Other entries are nested sub-routes
-        // (e.g. /dashboard/owner/portfolio). Active match must be exact for
-        // root entries, and prefix-based for sub-routes so deep paths still
-        // highlight the right item.
         const isRoot = /^\/dashboard\/[^/]+$/.test(item.to);
         const active = isRoot
           ? pathname === item.to
@@ -68,7 +66,7 @@ export const DashboardShell = ({ role, nav, title, subtitle, children }: Props) 
         return (
           <Link
             key={`${item.to}-${item.label}`}
-            to={item.to}
+            href={item.to}
             onClick={onNavigate}
             className={cn(
               "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
@@ -91,7 +89,7 @@ export const DashboardShell = ({ role, nav, title, subtitle, children }: Props) 
         <aside className="sticky top-6 hidden h-[calc(100vh-3rem)] w-60 shrink-0 flex-col rounded-2xl border border-border bg-card p-4 shadow-soft lg:flex">
           <Logo className="mb-6 px-2" />
           <div className="mb-4 px-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            {role}
+            {roleName}
           </div>
           {navList()}
           <div className="mt-auto rounded-xl bg-muted/60 p-3 text-xs text-muted-foreground">
@@ -105,7 +103,12 @@ export const DashboardShell = ({ role, nav, title, subtitle, children }: Props) 
             <div className="flex items-start gap-3">
               <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
                 <SheetTrigger asChild>
-                  <Button variant="outline" size="icon" className="mt-1 lg:hidden" aria-label="Open menu">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="mt-1 lg:hidden"
+                    aria-label="Open menu"
+                  >
                     <Menu className="h-5 w-5" />
                   </Button>
                 </SheetTrigger>
@@ -117,14 +120,16 @@ export const DashboardShell = ({ role, nav, title, subtitle, children }: Props) 
                   </SheetHeader>
                   <div className="px-3 py-4">
                     <div className="mb-3 px-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
-                      {role}
+                      {roleName}
                     </div>
                     {navList(() => setMobileOpen(false))}
                   </div>
                 </SheetContent>
               </Sheet>
               <div>
-                <h1 className="font-display text-3xl font-semibold tracking-tight md:text-4xl">{title}</h1>
+                <h1 className="font-display text-3xl font-semibold tracking-tight md:text-4xl">
+                  {title}
+                </h1>
                 {subtitle && <p className="mt-1 text-muted-foreground">{subtitle}</p>}
               </div>
             </div>

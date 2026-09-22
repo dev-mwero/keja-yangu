@@ -11,10 +11,8 @@ export interface Application {
   applicantEmail: string;
   message?: string;
   status: ApplicationStatus;
-  submittedAt: string; // ISO
-  /** Set when an admin/owner approves or rejects the application. */
+  submittedAt: string;
   decidedAt?: string;
-  /** Optional note left by the admin alongside the decision. */
   decisionNote?: string;
 }
 
@@ -42,7 +40,6 @@ const readAll = (): Application[] => {
 
 const writeAll = (apps: Application[]) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(apps));
-  // Notify listeners in the same tab
   window.dispatchEvent(new CustomEvent("keja-applications:changed"));
 };
 

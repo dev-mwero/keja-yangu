@@ -1,0 +1,17 @@
+{
+  "name": "Keja Yangu",
+  "short_name": "Keja",
+  "description": "Property rentals and tenant management platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FDF8F2",
+  "theme_color": "#143E6B",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/images/hero-building.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    }
+  ]
+}

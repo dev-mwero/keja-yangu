@@ -1,19 +1,22 @@
-import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+"use client";
+
 import { Menu } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Logo } from "./Logo";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { Logo } from "./Logo";
 
 interface NavItem {
-  to: string;
+  href: string;
   label: string;
 }
 
 export const MobileNav = ({ links }: { links: NavItem[] }) => {
   const [open, setOpen] = useState(false);
-  const { pathname } = useLocation();
+  const pathname = usePathname();
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -30,11 +33,11 @@ export const MobileNav = ({ links }: { links: NavItem[] }) => {
         </SheetHeader>
         <nav className="flex flex-col gap-1 p-4">
           {links.map((l) => {
-            const active = pathname === l.to;
+            const active = pathname === l.href;
             return (
               <Link
-                key={l.to}
-                to={l.to}
+                key={l.href}
+                href={l.href}
                 onClick={() => setOpen(false)}
                 className={cn(
                   "rounded-xl px-4 py-3 text-base font-medium transition-colors",
@@ -50,7 +53,7 @@ export const MobileNav = ({ links }: { links: NavItem[] }) => {
         </nav>
         <div className="mt-4 border-t border-border p-4">
           <Button asChild className="w-full rounded-full" onClick={() => setOpen(false)}>
-            <Link to="/auth">Sign in</Link>
+            <Link href="/auth">Sign in</Link>
           </Button>
         </div>
       </SheetContent>

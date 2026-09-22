@@ -1,3 +1,5 @@
+"use client";
+
 import { MapPin } from "lucide-react";
 
 interface PropertyMapProps {
@@ -6,10 +8,6 @@ interface PropertyMapProps {
   className?: string;
 }
 
-/**
- * Embedded Google Maps view for a property address.
- * Uses the keyless `maps.google.com/maps?output=embed` endpoint so no API key is required.
- */
 export const PropertyMap = ({ address, title, className }: PropertyMapProps) => {
   const query = encodeURIComponent(address);
   const src = `https://maps.google.com/maps?q=${query}&z=15&output=embed`;

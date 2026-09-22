@@ -1,25 +1,26 @@
 import {
-  Home,
-  Building2,
-  Wrench,
-  Calculator,
-  FileBarChart,
-  MessagesSquare,
-  Settings,
-  CreditCard,
   AlertTriangle,
-  Megaphone,
+  Building2,
+  Calculator,
+  CreditCard,
+  FileBarChart,
   FileText,
-  Search,
+  Home,
   type LucideIcon,
+  Megaphone,
+  MessagesSquare,
+  Search,
+  Settings,
+  Wrench,
 } from "lucide-react";
-import type { Role } from "@/config/roleRoutes";
 
 export interface DashNavItem {
   to: string;
   label: string;
   icon: LucideIcon;
 }
+
+type Role = "tenant" | "caretaker" | "owner";
 
 const sections = [
   { slug: "", label: "Overview", icon: Home },
@@ -32,10 +33,6 @@ const sections = [
   { slug: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
-/**
- * Build the sidebar nav for a given role. The "Overview" entry points to the
- * role's root dashboard route; every other entry points to a real sub-route.
- */
 export const buildDashboardNav = (role: Exclude<Role, "tenant">): DashNavItem[] => {
   const base = `/dashboard/${role}`;
   return sections.map((s) => ({
@@ -48,16 +45,10 @@ export const buildDashboardNav = (role: Exclude<Role, "tenant">): DashNavItem[] 
 export const ownerNav = buildDashboardNav("owner");
 export const caretakerNav = buildDashboardNav("caretaker");
 
-/**
- * Tenant sidebar — distinct from owner/caretaker because tenants don't
- * manage portfolios. They focus on their own home, payments, and requests.
- * Order is intentional: most-used items first.
- */
 interface TenantSection {
   slug: string;
   label: string;
   icon: LucideIcon;
-  /** When set, the link points outside the tenant dashboard tree. */
   external?: string;
 }
 
@@ -80,7 +71,6 @@ export const tenantNav: DashNavItem[] = tenantSections.map((s) => ({
   icon: s.icon,
 }));
 
-/** Sub-route slugs owned by the tenant dashboard (used by the role-route guard). */
 export const tenantSubRoutes = tenantSections
   .filter((s) => !s.external && s.slug)
   .map((s) => `/dashboard/tenant${s.slug}`);

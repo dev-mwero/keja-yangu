@@ -1,3 +1,5 @@
+"use client";
+
 import * as React from "react";
 
 import type { ToastActionElement, ToastProps } from "@/components/ui/toast";
@@ -174,7 +176,8 @@ function useToast() {
         listeners.splice(index, 1);
       }
     };
-  }, [state]);
+    // biome-ignore lint/correctness: useExhaustiveDependencies
+  }, [state, listeners]);
 
   return {
     ...state,
@@ -183,4 +186,4 @@ function useToast() {
   };
 }
 
-export { useToast, toast };
+export { toast, useToast };

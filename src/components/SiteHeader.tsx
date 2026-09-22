@@ -1,20 +1,31 @@
-import { Link, useLocation } from "react-router-dom";
-import { Logo } from "./Logo";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { ThemeToggle } from "./ThemeToggle";
-import { MobileNav } from "./MobileNav";
+"use client";
 
-const links = [
-  { to: "/", label: "Home" },
-  { to: "/properties", label: "Properties" },
-  { to: "/dashboard/tenant", label: "Tenant" },
-  { to: "/dashboard/caretaker", label: "Caretaker" },
-  { to: "/dashboard/owner", label: "Owner" },
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/use-auth";
+import { cn } from "@/lib/utils";
+import { Logo } from "./Logo";
+import { MobileNav } from "./MobileNav";
+import { ThemeToggle } from "./ThemeToggle";
+
+const publicLinks = [
+  { href: "/", label: "Home" },
+  { href: "/properties", label: "Properties" },
 ];
 
+const dashboardLinks: Record<string, { href: string; label: string }> = {
+  tenant: { href: "/dashboard/tenant", label: "Dashboard" },
+  caretaker: { href: "/dashboard/caretaker", label: "Dashboard" },
+  owner: { href: "/dashboard/owner", label: "Dashboard" },
+};
+
 export const SiteHeader = () => {
-  const { pathname } = useLocation();
+  const pathname = usePathname();
+  const { user } = useAuth();
+
+  const links = [...publicLinks, ...(user?.role ? [dashboardLinks[user.role]] : [])];
+
   return (
     <header className="sticky top-0 z-40 border-b border-border/50 bg-background/80 backdrop-blur-xl">
       <div className="container flex h-16 items-center justify-between">
@@ -22,11 +33,11 @@ export const SiteHeader = () => {
         <nav className="hidden items-center gap-1 md:flex">
           {links.map((l) => (
             <Link
-              key={l.to}
-              to={l.to}
+              key={l.href}
+              href={l.href}
               className={cn(
                 "rounded-full px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground",
-                pathname === l.to && "bg-muted text-foreground"
+                pathname === l.href && "bg-muted text-foreground",
               )}
             >
               {l.label}
@@ -35,11 +46,17 @@ export const SiteHeader = () => {
         </nav>
         <div className="flex items-center gap-2">
           <ThemeToggle className="hidden sm:inline-flex" />
-          <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
-            <Link to="/auth">Sign in</Link>
-          </Button>
+          {user ? (
+            <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
+              <Link href={dashboardLinks[user.role]?.href ?? "/dashboard/tenant"}>Dashboard</Link>
+            </Button>
+          ) : (
+            <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
+              <Link href="/auth">Sign in</Link>
+            </Button>
+          )}
           <Button asChild size="sm" className="hidden rounded-full sm:inline-flex">
-            <Link to="/properties">Find a Home</Link>
+            <Link href="/properties">Find a Home</Link>
           </Button>
           <MobileNav links={links} />
         </div>
