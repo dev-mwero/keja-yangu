@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
 import jwt from "jsonwebtoken";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { z } from "zod";
 import { connectToDatabase } from "@/lib/mongoose";
+import { buildPaginationResult, parsePagination } from "@/lib/pagination";
 import { Property } from "@/models/Property";
 
 const propertyInput = z.object({
@@ -25,7 +26,10 @@ function getAuthUser(request: NextRequest) {
   const token = request.cookies.get("keja-token")?.value;
   if (!token) return null;
   try {
-    return jwt.verify(token, process.env.JWT_SECRET ?? "fallback-secret") as { userId: string; role: string };
+    return jwt.verify(token, process.env.JWT_SECRET ?? "fallback-secret") as {
+      userId: string;
+      role: string;
+    };
   } catch {
     return null;
   }
@@ -40,10 +44,21 @@ async function requireAuth(request: NextRequest, roles?: string[]) {
   return null;
 }
 
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   await connectToDatabase();
-  const properties = await Property.find().sort({ createdAt: -1 }).lean();
-  return NextResponse.json({ data: properties });
+  const { page, limit } = parsePagination({
+    page: request.nextUrl.searchParams.get("page") ?? undefined,
+    limit: request.nextUrl.searchParams.get("limit") ?? undefined,
+  });
+  const skip = (page - 1) * limit;
+
+  const [properties, total] = await Promise.all([
+    Property.find().sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+    Property.countDocuments(),
+  ]);
+
+  const result = buildPaginationResult(properties, total, page, limit);
+  return NextResponse.json(result);
 }
 
 export async function POST(request: NextRequest) {
@@ -52,17 +67,15 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json();
   const parsed = propertyInput.safeParse(body);
-
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Invalid property payload", issues: parsed.error.flatten() },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
   const user = getAuthUser(request);
   const data = { ...parsed.data, ownerId: user?.userId };
-
   await connectToDatabase();
   const property = await Property.create(data);
   return NextResponse.json({ data: property }, { status: 201 });
