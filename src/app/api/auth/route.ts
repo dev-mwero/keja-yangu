@@ -102,9 +102,18 @@ export async function POST(request: Request) {
         verificationTokenExpiry,
       });
 
+      const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/verify?token=${verificationToken}`;
+
       const emailSent = await sendVerificationEmail(parsed.data.email, verificationToken);
 
       if (!emailSent) {
+        if (process.env.NODE_ENV === "development") {
+          console.warn(`[DEV] Email sending failed. Verification link for ${parsed.data.email}: ${verifyUrl}`);
+          return NextResponse.json({
+            message: "Account created! (Email failed - check server logs for verification link)",
+            devVerifyUrl: verifyUrl,
+          });
+        }
         await User.deleteOne({ _id: createdUser._id });
         return NextResponse.json(
           { error: "Failed to send verification email. Please try again later." },
@@ -164,9 +173,18 @@ export async function POST(request: Request) {
       user.verificationTokenExpiry = verificationTokenExpiry;
       await user.save();
 
+      const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/verify?token=${verificationToken}`;
+
       const emailSent = await sendVerificationEmail(email, verificationToken);
 
       if (!emailSent) {
+        if (process.env.NODE_ENV === "development") {
+          console.warn(`[DEV] Email sending failed. Verification link for ${email}: ${verifyUrl}`);
+          return NextResponse.json({
+            message: "Verification email failed to send - check server logs for verification link",
+            devVerifyUrl: verifyUrl,
+          });
+        }
         return NextResponse.json(
           { error: "Failed to send verification email. Please try again later." },
           { status: 500 },
