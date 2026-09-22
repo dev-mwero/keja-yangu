@@ -1,6 +1,15 @@
 import nodemailer from "nodemailer";
 
+export function isEmailConfigured(): boolean {
+  return Boolean(process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS);
+}
+
 function createTransporter() {
+  if (!isEmailConfigured()) {
+    console.warn("[email] SMTP is not configured. Email delivery is disabled for this environment.");
+    return null;
+  }
+
   const host = process.env.EMAIL_HOST ?? "smtp.gmail.com";
   const port = parseInt(process.env.EMAIL_PORT ?? "587", 10);
   const secure = process.env.EMAIL_SECURE === "true" || port === 465;
@@ -16,10 +25,12 @@ function createTransporter() {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
     },
+    tls: {
+      rejectUnauthorized: false,
+    },
     pool: false,
     maxConnections: 1,
     maxMessages: 1,
-    authMethod: "LOGIN",
     connectionTimeout: 5000,
     greetingTimeout: 5000,
     socketTimeout: 10000,
@@ -27,7 +38,6 @@ function createTransporter() {
 }
 
 function getTransporter() {
-  // Create fresh transporter each time to avoid connection state issues
   return createTransporter();
 }
 
@@ -39,8 +49,15 @@ export interface EmailOptions {
 }
 
 export async function sendEmail(options: EmailOptions): Promise<boolean> {
+  if (!isEmailConfigured()) {
+    console.warn("[email] Skipping send for %s because SMTP is not configured.", options.to);
+    return false;
+  }
+
   try {
     const transporter = getTransporter();
+    if (!transporter) return false;
+
     const info = await transporter.sendMail({
       from: process.env.EMAIL_FROM ?? "Keja Yangu <no-reply@keja.co>",
       to: options.to,
@@ -56,38 +73,179 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
   }
 }
 
-export async function sendVerificationEmail(email: string, token: string): Promise<boolean> {
-  const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/verify?token=${token}`;
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h1 style="color: #143E6B;">Welcome to Keja Yangu</h1>
-      <p>Click the button below to verify your email:</p>
-      <a href="${verifyUrl}" style="display: inline-block; padding: 12px 24px; background: #143E6B; color: white; text-decoration: none; border-radius: 8px;">Verify Email</a>
-      <p style="margin-top: 20px; color: #666;">This link expires in 24 hours.</p>
+const BRAND_COLOR = "#143E6B";
+const BRAND_COLOR_LIGHT = "#1e5a9b";
+const SECONDARY_COLOR = "#64748b";
+const BACKGROUND_COLOR = "#f8fafc";
+const CARD_BACKGROUND = "#ffffff";
+const BORDER_COLOR = "#e2e8f0";
+const TEXT_PRIMARY = "#1e293b";
+const TEXT_SECONDARY = "#475569";
+
+function createEmailTemplate(content: string, preheader?: string): string {
+  const preheaderText = preheader ? `<span style="display: none; max-height: 0; overflow: hidden; color: transparent; mso-hide: all; font-size: 1px; line-height: 1px;">${preheader}</span>` : "";
+  
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>Keja Yangu</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+</head>
+<body style="margin: 0; padding: 0; background-color: ${BACKGROUND_COLOR}; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;">
+  ${preheaderText}
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: ${BACKGROUND_COLOR};">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width: 600px; background-color: ${CARD_BACKGROUND}; border-radius: 12px; border: 1px solid ${BORDER_COLOR}; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);">
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, ${BRAND_COLOR} 0%, ${BRAND_COLOR_LIGHT} 100%); padding: 32px 24px; text-align: center;">
+              <div style="display: inline-block; width: 56px; height: 56px; background-color: rgba(255, 255, 255, 0.2); border-radius: 16px; text-align: center; line-height: 56px;">
+                <span style="font-size: 24px; font-weight: 700; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">KY</span>
+              </div>
+              <h1 style="margin: 16px 0 0; color: #ffffff; font-size: 24px; font-weight: 700; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">Keja Yangu</h1>
+              <p style="margin: 8px 0 0; color: rgba(255, 255, 255, 0.9); font-size: 14px; font-weight: 400;">Where home begins</p>
+            </td>
+          </tr>
+          
+          <!-- Content -->
+          <tr>
+            <td style="padding: 40px 32px;">
+              ${content}
+            </td>
+          </tr>
+          
+          <!-- Divider -->
+          <tr>
+            <td style="padding: 0 32px 24px;">
+              <hr style="border: none; border-top: 1px solid ${BORDER_COLOR}; margin: 0;">
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 0 32px 32px;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="border-top: 1px solid ${BORDER_COLOR}; padding-top: 24px;">
+                <tr>
+                  <td style="text-align: center; padding-bottom: 16px;">
+                    <p style="margin: 0 0 8px; font-size: 13px; color: ${SECONDARY_COLOR}; font-weight: 500;">Keja Yangu</p>
+                    <p style="margin: 0; font-size: 12px; color: ${SECONDARY_COLOR}; line-height: 1.6;">This email was sent to <strong>{{EMAIL}}</strong>. If you didn't request this, please ignore this email or contact support.</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="text-align: center;">
+                    <p style="margin: 0; font-size: 11px; color: ${SECONDARY_COLOR}; opacity: 0.7;">&copy; ${new Date().getFullYear()} Keja Yangu. All rights reserved.</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `.replace('{{EMAIL}}', ''); // Will be replaced per-email
+}
+
+function createVerificationContent(name: string): string {
+  return `
+    <p style="margin: 0 0 16px; font-size: 16px; color: ${TEXT_PRIMARY}; line-height: 1.6;">Hi <strong>${name}</strong>,</p>
+    <p style="margin: 0 0 24px; font-size: 15px; color: ${TEXT_SECONDARY}; line-height: 1.6;">Welcome to Keja Yangu! We're excited to have you on board. To get started, please verify your email address by clicking the button below:</p>
+    <div style="text-align: center; margin: 32px 0;">
+      <a href="{{VERIFY_URL}}" style="display: inline-block; background: linear-gradient(135deg, ${BRAND_COLOR} 0%, ${BRAND_COLOR_LIGHT} 100%); color: #ffffff; text-decoration: none; padding: 16px 32px; border-radius: 10px; font-weight: 600; font-size: 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-shadow: 0 4px 14px 0 rgba(20, 62, 107, 0.4); transition: all 0.2s ease;">Verify Your Email</a>
+    </div>
+    <p style="margin: 24px 0 0; font-size: 14px; color: ${SECONDARY_COLOR}; line-height: 1.6; text-align: center;">Or copy and paste this link into your browser:<br><span style="word-break: break-all; color: ${BRAND_COLOR}; font-size: 13px;">{{VERIFY_URL}}</span></p>
+    <div style="margin-top: 32px; padding: 16px; background-color: ${BACKGROUND_COLOR}; border-radius: 8px; border: 1px solid ${BORDER_COLOR};">
+      <p style="margin: 0; font-size: 13px; color: ${SECONDARY_COLOR}; line-height: 1.6;"><strong>⏱ This link expires in 24 hours.</strong> If it expires, you can request a new verification email from the app.</p>
+    </div>
+    <p style="margin: 24px 0 0; font-size: 14px; color: ${SECONDARY_COLOR}; line-height: 1.6;">If you didn't create an account with Keja Yangu, you can safely ignore this email.</p>
+  `;
+}
+
+function createPasswordResetContent(name: string): string {
+  return `
+    <p style="margin: 0 0 16px; font-size: 16px; color: ${TEXT_PRIMARY}; line-height: 1.6;">Hi <strong>${name}</strong>,</p>
+    <p style="margin: 0 0 24px; font-size: 15px; color: ${TEXT_SECONDARY}; line-height: 1.6;">We received a request to reset your password for your Keja Yangu account. Click the button below to create a new password:</p>
+    <div style="text-align: center; margin: 32px 0;">
+      <a href="{{RESET_URL}}" style="display: inline-block; background: linear-gradient(135deg, ${BRAND_COLOR} 0%, ${BRAND_COLOR_LIGHT} 100%); color: #ffffff; text-decoration: none; padding: 16px 32px; border-radius: 10px; font-weight: 600; font-size: 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-shadow: 0 4px 14px 0 rgba(20, 62, 107, 0.4);">Reset Your Password</a>
+    </div>
+    <p style="margin: 24px 0 0; font-size: 14px; color: ${SECONDARY_COLOR}; line-height: 1.6; text-align: center;">Or copy and paste this link into your browser:<br><span style="word-break: break-all; color: ${BRAND_COLOR}; font-size: 13px;">{{RESET_URL}}</span></p>
+    <div style="margin-top: 32px; padding: 16px; background-color: #fef2f2; border-radius: 8px; border: 1px solid #fecaca;">
+      <p style="margin: 0; font-size: 13px; color: #991b1b; line-height: 1.6;"><strong>⚠ Security notice:</strong> This link expires in 1 hour. If you didn't request a password reset, please ignore this email and your password will remain unchanged.</p>
     </div>
   `;
+}
+
+function createWelcomeContent(name: string, role: string): string {
+  const roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
+  return `
+    <p style="margin: 0 0 16px; font-size: 16px; color: ${TEXT_PRIMARY}; line-height: 1.6;">Hi <strong>${name}</strong>,</p>
+    <p style="margin: 0 0 24px; font-size: 15px; color: ${TEXT_SECONDARY}; line-height: 1.6;">Welcome to Keja Yangu! Your email has been verified and your account is now active as a <strong>${roleLabel}</strong>.</p>
+    <p style="margin: 0 0 24px; font-size: 15px; color: ${TEXT_SECONDARY}; line-height: 1.6;">You can now access your dashboard and start managing your properties, applications, and more.</p>
+    <div style="text-align: center; margin: 32px 0;">
+      <a href="{{APP_URL}}/dashboard" style="display: inline-block; background: linear-gradient(135deg, ${BRAND_COLOR} 0%, ${BRAND_COLOR_LIGHT} 100%); color: #ffffff; text-decoration: none; padding: 16px 32px; border-radius: 10px; font-weight: 600; font-size: 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-shadow: 0 4px 14px 0 rgba(20, 62, 107, 0.4);">Go to Dashboard</a>
+    </div>
+    <p style="margin: 24px 0 0; font-size: 14px; color: ${SECONDARY_COLOR}; line-height: 1.6;">If you have any questions, our support team is here to help.</p>
+  `;
+}
+
+function renderTemplate(content: string, url: string, preheader?: string): string {
+  const filledContent = content.replace(/{{VERIFY_URL}}|{{RESET_URL}}|{{APP_URL}}/g, url);
+  return createEmailTemplate(filledContent, preheader);
+}
+
+export async function sendVerificationEmail(email: string, token: string, name: string): Promise<boolean> {
+  const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/verify?token=${token}`;
+  const content = createVerificationContent(name);
+  const html = renderTemplate(content, verifyUrl, `Verify your email to activate your Keja Yangu account`);
+  const text = `Hi ${name},\n\nWelcome to Keja Yangu! Please verify your email by clicking this link: ${verifyUrl}\n\nThis link expires in 24 hours.\n\nIf you didn't create an account, please ignore this email.`;
+
   return sendEmail({
     to: email,
     subject: "Verify your email - Keja Yangu",
     html,
-    text: `Click here to verify: ${verifyUrl}`,
+    text,
   });
 }
 
-export async function sendPasswordResetEmail(email: string, token: string): Promise<boolean> {
+export async function sendPasswordResetEmail(email: string, token: string, name: string): Promise<boolean> {
   const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/reset-password?token=${token}`;
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h1 style="color: #143E6B;">Password Reset</h1>
-      <p>Click the button below to reset your password:</p>
-      <a href="${resetUrl}" style="display: inline-block; padding: 12px 24px; background: #143E6B; color: white; text-decoration: none; border-radius: 8px;">Reset Password</a>
-      <p style="margin-top: 20px; color: #666;">This link expires in 1 hour.</p>
-    </div>
-  `;
+  const content = createPasswordResetContent(name);
+  const html = renderTemplate(content, resetUrl, `Reset your Keja Yangu password`);
+  const text = `Hi ${name},\n\nWe received a request to reset your password. Click this link to reset: ${resetUrl}\n\nThis link expires in 1 hour.\n\nIf you didn't request this, please ignore this email.`;
+
   return sendEmail({
     to: email,
     subject: "Reset your password - Keja Yangu",
     html,
-    text: `Click here to reset: ${resetUrl}`,
+    text,
+  });
+}
+
+export async function sendWelcomeEmail(email: string, name: string, role: string): Promise<boolean> {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const content = createWelcomeContent(name, role);
+  const html = renderTemplate(content, `${appUrl}/dashboard`, `Welcome to Keja Yangu - Your account is now active`);
+  const text = `Hi ${name},\n\nWelcome to Keja Yangu! Your account is now active as a ${role.charAt(0).toUpperCase() + role.slice(1)}. Access your dashboard at: ${appUrl}/dashboard`;
+
+  return sendEmail({
+    to: email,
+    subject: "Welcome to Keja Yangu - Your account is active",
+    html,
+    text,
   });
 }
