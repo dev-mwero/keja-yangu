@@ -93,7 +93,7 @@ export async function POST(request: Request) {
       const verificationToken = await generateVerificationToken();
       const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-      { await User.create({
+      const _user = await User.create({
         email: parsed.data.email,
         name: parsed.data.name,
         passwordHash,
