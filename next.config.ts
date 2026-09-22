@@ -31,7 +31,11 @@ const nextConfig: NextConfig = {
             value: "DENY",
           },
           {
-            key: "X-Custom-XSS-Protection",
+            key: "Content-Security-Policy",
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:; frame-src https://www.google.com; object-src 'none';",
+          },
+          {
+            key: "X-XSS-Protection",
             value: "1; mode=block",
           },
           {
