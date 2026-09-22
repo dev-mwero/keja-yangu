@@ -93,7 +93,7 @@ export async function POST(request: Request) {
       const verificationToken = await generateVerificationToken();
       const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-      await User.create({
+      const createdUser = await User.create({
         email: parsed.data.email,
         name: parsed.data.name,
         passwordHash,
@@ -102,10 +102,18 @@ export async function POST(request: Request) {
         verificationTokenExpiry,
       });
 
-      await sendVerificationEmail(parsed.data.email, verificationToken);
+      const emailSent = await sendVerificationEmail(parsed.data.email, verificationToken);
+
+      if (!emailSent) {
+        await User.deleteOne({ _id: createdUser._id });
+        return NextResponse.json(
+          { error: "Failed to send verification email. Please try again later." },
+          { status: 500 },
+        );
+      }
 
       return NextResponse.json({
-        message: "Account created. Please verify your email to continue.",
+        message: "Account created successfully! Please check your inbox (and spam folder) for the verification email to activate your account.",
       });
     }
 
@@ -156,8 +164,16 @@ export async function POST(request: Request) {
       user.verificationTokenExpiry = verificationTokenExpiry;
       await user.save();
 
-      await sendVerificationEmail(email, verificationToken);
-      return NextResponse.json({ message: "Verification email resent" });
+      const emailSent = await sendVerificationEmail(email, verificationToken);
+
+      if (!emailSent) {
+        return NextResponse.json(
+          { error: "Failed to send verification email. Please try again later." },
+          { status: 500 },
+        );
+      }
+
+      return NextResponse.json({ message: "Verification email resent. Please check your inbox (and spam folder)." });
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
