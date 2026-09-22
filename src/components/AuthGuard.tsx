@@ -1,11 +1,17 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import type { ReactNode } from "react";
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 
-export const AuthGuard = ({ children, allowedRoles }: { children: ReactNode; allowedRoles?: string[] }) => {
+export const AuthGuard = ({
+  children,
+  allowedRoles,
+}: {
+  children: ReactNode;
+  allowedRoles?: string[];
+}) => {
   const { user, loading } = useAuth();
   const router = useRouter();
 

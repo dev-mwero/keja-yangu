@@ -176,6 +176,7 @@ function useToast() {
         listeners.splice(index, 1);
       }
     };
+    // biome-ignore lint/correctness: useExhaustiveDependencies
   }, [state, listeners]);
 
   return {
@@ -185,4 +186,4 @@ function useToast() {
   };
 }
 
-export { useToast, toast };
+export { toast, useToast };

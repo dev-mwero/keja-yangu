@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
 import jwt from "jsonwebtoken";
 import { isValidObjectId } from "mongoose";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { z } from "zod";
 import { connectToDatabase } from "@/lib/mongoose";
 import { Property } from "@/models/Property";
@@ -22,15 +22,14 @@ const propertyUpdate = z.object({
   description: z.string().optional(),
 });
 
-type RouteContext = {
-  params: Promise<{ id: string }>;
-};
-
 function getAuthUser(request: NextRequest) {
   const token = request.cookies.get("keja-token")?.value;
   if (!token) return null;
   try {
-    return jwt.verify(token, process.env.JWT_SECRET ?? "fallback-secret") as { userId: string; role: string };
+    return jwt.verify(token, process.env.JWT_SECRET ?? "fallback-secret") as {
+      userId: string;
+      role: string;
+    };
   } catch {
     return null;
   }
@@ -45,26 +44,20 @@ async function requireAuth(request: NextRequest, roles?: string[]) {
   return null;
 }
 
-function invalidId() {
-  return NextResponse.json({ error: "Invalid property id" }, { status: 400 });
-}
-
-function notFound() {
-  return NextResponse.json({ error: "Property not found" }, { status: 404 });
-}
-
-export async function GET(_request: NextRequest, context: RouteContext) {
+export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  if (!isValidObjectId(id)) return invalidId();
+  if (!isValidObjectId(id))
+    return NextResponse.json({ error: "Invalid property id" }, { status: 400 });
   await connectToDatabase();
-  const property = await Property.findOne({ _id: id }).lean();
-  if (!property) return notFound();
+  const property = await Property.findById(id).lean();
+  if (!property) return NextResponse.json({ error: "Property not found" }, { status: 404 });
   return NextResponse.json({ data: property });
 }
 
-export async function PATCH(request: NextRequest, context: RouteContext) {
+export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  if (!isValidObjectId(id)) return invalidId();
+  if (!isValidObjectId(id))
+    return NextResponse.json({ error: "Invalid property id" }, { status: 400 });
 
   const authError = await requireAuth(request, ["owner"]);
   if (authError) return authError;
@@ -74,7 +67,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Invalid property payload", issues: parsed.error.flatten() },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -83,19 +76,20 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     new: true,
     runValidators: true,
   }).lean();
-  if (!property) return notFound();
+  if (!property) return NextResponse.json({ error: "Property not found" }, { status: 404 });
   return NextResponse.json({ data: property });
 }
 
-export async function DELETE(request: NextRequest, context: RouteContext) {
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  if (!isValidObjectId(id)) return invalidId();
+  if (!isValidObjectId(id))
+    return NextResponse.json({ error: "Invalid property id" }, { status: 400 });
 
   const authError = await requireAuth(request, ["owner"]);
   if (authError) return authError;
 
   await connectToDatabase();
   const property = await Property.findOneAndDelete({ _id: id }).lean();
-  if (!property) return notFound();
+  if (!property) return NextResponse.json({ error: "Property not found" }, { status: 404 });
   return NextResponse.json({ data: property });
 }

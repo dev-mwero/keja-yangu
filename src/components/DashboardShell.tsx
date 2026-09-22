@@ -1,18 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import type { ReactNode } from "react";
+import type { LucideIcon } from "lucide-react";
+import { LogOut, Menu } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Logo } from "./Logo";
-import { cn } from "@/lib/utils";
-import { LogOut, Menu } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "./ThemeToggle";
-import { useAuth } from "@/hooks/use-auth";
+import type { ReactNode } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { useAuth } from "@/hooks/use-auth";
+import { cn } from "@/lib/utils";
+import { Logo } from "./Logo";
+import { ThemeToggle } from "./ThemeToggle";
 
 export interface DashNavItem {
   to: string;
@@ -88,9 +88,9 @@ export const DashboardShell = ({ roleName, nav, title, subtitle, children }: Pro
       <div className="container flex gap-8 py-6">
         <aside className="sticky top-6 hidden h-[calc(100vh-3rem)] w-60 shrink-0 flex-col rounded-2xl border border-border bg-card p-4 shadow-soft lg:flex">
           <Logo className="mb-6 px-2" />
-<div className="mb-4 px-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
-                      {roleName}
-                    </div>
+          <div className="mb-4 px-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
+            {roleName}
+          </div>
           {navList()}
           <div className="mt-auto rounded-xl bg-muted/60 p-3 text-xs text-muted-foreground">
             <p className="mb-2 font-medium text-foreground">Need help?</p>
@@ -103,7 +103,12 @@ export const DashboardShell = ({ roleName, nav, title, subtitle, children }: Pro
             <div className="flex items-start gap-3">
               <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
                 <SheetTrigger asChild>
-                  <Button variant="outline" size="icon" className="mt-1 lg:hidden" aria-label="Open menu">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="mt-1 lg:hidden"
+                    aria-label="Open menu"
+                  >
                     <Menu className="h-5 w-5" />
                   </Button>
                 </SheetTrigger>
@@ -122,7 +127,9 @@ export const DashboardShell = ({ roleName, nav, title, subtitle, children }: Pro
                 </SheetContent>
               </Sheet>
               <div>
-                <h1 className="font-display text-3xl font-semibold tracking-tight md:text-4xl">{title}</h1>
+                <h1 className="font-display text-3xl font-semibold tracking-tight md:text-4xl">
+                  {title}
+                </h1>
                 {subtitle && <p className="mt-1 text-muted-foreground">{subtitle}</p>}
               </div>
             </div>

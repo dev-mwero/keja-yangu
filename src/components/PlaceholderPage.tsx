@@ -1,9 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react"; // biome-ignore lint/style/useImportType
 import { Construction } from "lucide-react";
+import type { ReactNode } from "react"; // biome-ignore lint/style: useImportType
 import { DashboardShell } from "@/components/DashboardShell";
-import { DashNavItem } from "@/config/dashboardNav";
+import type { DashNavItem } from "@/config/dashboardNav";
 
 interface PlaceholderPageProps {
   roleName: string;

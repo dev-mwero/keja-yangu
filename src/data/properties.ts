@@ -133,11 +133,39 @@ export interface Tenant {
 }
 
 export const tenants: Tenant[] = [
-  { id: "t1", name: "Amina Otieno", email: "amina@kj.co", propertyId: "p3", status: "active", joined: "2024-08-12" },
-  { id: "t2", name: "Brian Kamau", email: "brian@kj.co", propertyId: "p2", status: "pending", joined: "2025-02-01" },
-  { id: "t3", name: "Cynthia Wairimu", email: "cyn@kj.co", propertyId: "p1", status: "active", joined: "2024-11-22" },
+  {
+    id: "t1",
+    name: "Amina Otieno",
+    email: "amina@kj.co",
+    propertyId: "p3",
+    status: "active",
+    joined: "2024-08-12",
+  },
+  {
+    id: "t2",
+    name: "Brian Kamau",
+    email: "brian@kj.co",
+    propertyId: "p2",
+    status: "pending",
+    joined: "2025-02-01",
+  },
+  {
+    id: "t3",
+    name: "Cynthia Wairimu",
+    email: "cyn@kj.co",
+    propertyId: "p1",
+    status: "active",
+    joined: "2024-11-22",
+  },
   { id: "t4", name: "Daniel Mwangi", email: "dan@kj.co", status: "pending", joined: "2025-03-08" },
-  { id: "t5", name: "Esther Njeri", email: "esther@kj.co", propertyId: "p4", status: "rejected", joined: "2025-01-19" },
+  {
+    id: "t5",
+    name: "Esther Njeri",
+    email: "esther@kj.co",
+    propertyId: "p4",
+    status: "rejected",
+    joined: "2025-01-19",
+  },
 ];
 
 export interface Caretaker {

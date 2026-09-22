@@ -1,8 +1,8 @@
 "use client";
 
+import { Bath, BedDouble, MapPin, Maximize2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { MapPin, BedDouble, Bath, Maximize2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { Property } from "@/data/properties";
 import { cn } from "@/lib/utils";
@@ -28,12 +28,19 @@ export const PropertyCard = ({ property }: { property: Property }) => {
           />
         </div>
         <div className="absolute left-4 top-4 flex gap-2">
-          <Badge variant="outline" className={cn("rounded-full border bg-background/90 backdrop-blur capitalize", statusStyles[property.status])}>
+          <Badge
+            variant="outline"
+            className={cn(
+              "rounded-full border bg-background/90 backdrop-blur capitalize",
+              statusStyles[property.status],
+            )}
+          >
             {property.status}
           </Badge>
         </div>
         <div className="absolute bottom-4 right-4 rounded-full bg-background/95 px-3 py-1.5 text-sm font-semibold shadow-soft backdrop-blur">
-          KES {property.price.toLocaleString()}<span className="text-muted-foreground">/mo</span>
+          KES {property.price.toLocaleString()}
+          <span className="text-muted-foreground">/mo</span>
         </div>
       </div>
       <div className="mt-4 space-y-2">
@@ -50,9 +57,18 @@ export const PropertyCard = ({ property }: { property: Property }) => {
           <span>{property.location}</span>
         </div>
         <div className="flex items-center gap-4 pt-1 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1"><BedDouble className="h-3.5 w-3.5" />{property.beds}</span>
-          <span className="flex items-center gap-1"><Bath className="h-3.5 w-3.5" />{property.baths}</span>
-          <span className="flex items-center gap-1"><Maximize2 className="h-3.5 w-3.5" />{property.area}m²</span>
+          <span className="flex items-center gap-1">
+            <BedDouble className="h-3.5 w-3.5" />
+            {property.beds}
+          </span>
+          <span className="flex items-center gap-1">
+            <Bath className="h-3.5 w-3.5" />
+            {property.baths}
+          </span>
+          <span className="flex items-center gap-1">
+            <Maximize2 className="h-3.5 w-3.5" />
+            {property.area}m²
+          </span>
         </div>
       </div>
     </Link>

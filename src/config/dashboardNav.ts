@@ -1,17 +1,17 @@
 import {
-  Home,
-  Building2,
-  Wrench,
-  Calculator,
-  FileBarChart,
-  MessagesSquare,
-  Settings,
-  CreditCard,
   AlertTriangle,
-  Megaphone,
+  Building2,
+  Calculator,
+  CreditCard,
+  FileBarChart,
   FileText,
-  Search,
+  Home,
   type LucideIcon,
+  Megaphone,
+  MessagesSquare,
+  Search,
+  Settings,
+  Wrench,
 } from "lucide-react";
 
 export interface DashNavItem {

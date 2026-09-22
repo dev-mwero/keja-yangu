@@ -1,19 +1,32 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import { Building2, Users, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { Building2, CheckCircle2, Clock, Users, XCircle } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { StatCard } from "@/components/StatCard";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { tenants, caretakers } from "@/data/properties";
-import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/use-auth";
-import { useProperties } from "@/hooks/use-properties";
-import type { Property } from "@/hooks/use-properties";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { caretakerNav as nav } from "@/config/dashboardNav";
+import { caretakers, tenants } from "@/data/properties";
+import { useAuth } from "@/hooks/use-auth";
+import type { Property } from "@/hooks/use-properties";
+import { useProperties } from "@/hooks/use-properties";
+import { useToast } from "@/hooks/use-toast";
 
 const CaretakerDashboard = () => {
   const { user } = useAuth();
@@ -23,7 +36,7 @@ const CaretakerDashboard = () => {
   const { properties: allProperties, loading } = useProperties();
   const myProperties = useMemo(
     () => allProperties.filter((p) => p.caretakerIds.includes(caretakerId)),
-    [allProperties, caretakerId]
+    [allProperties, caretakerId],
   );
 
   const [props, setProps] = useState<Property[]>([]);
@@ -48,21 +61,34 @@ const CaretakerDashboard = () => {
 
   const occupied = props.filter((p) => p.status === "occupied").length;
   const vacant = props.filter((p) => p.status === "available").length;
-  const assignedTenants = tenants.filter((t) => props.some((p) => p._id === t.propertyId) && t.status === "active").length;
+  const assignedTenants = tenants.filter(
+    (t) => props.some((p) => p._id === t.propertyId) && t.status === "active",
+  ).length;
 
   const displayName = user?.name?.split(" ")[0] ?? "Caretaker";
 
   return (
-    <DashboardShell roleName="Caretaker" nav={nav} title={`Hello, ${displayName}`} subtitle="Manage your properties and tenant requests.">
+    <DashboardShell
+      roleName="Caretaker"
+      nav={nav}
+      title={`Hello, ${displayName}`}
+      subtitle="Manage your properties and tenant requests."
+    >
       <div className="grid gap-4 md:grid-cols-4">
-        <StatCard label="Assigned properties" value={loading ? "..." : props.length} icon={Building2} />
+        <StatCard
+          label="Assigned properties"
+          value={loading ? "..." : props.length}
+          icon={Building2}
+        />
         <StatCard label="Tenants" value={assignedTenants} icon={Users} />
         <StatCard label="Occupied" value={occupied} icon={CheckCircle2} />
         <StatCard label="Vacant" value={vacant} icon={Clock} />
       </div>
 
       <div className="mt-10">
-        <h2 className="mb-4 font-display text-2xl font-semibold tracking-tight">Pending requests</h2>
+        <h2 className="mb-4 font-display text-2xl font-semibold tracking-tight">
+          Pending requests
+        </h2>
         <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
           <Table>
             <TableHeader>
@@ -75,18 +101,30 @@ const CaretakerDashboard = () => {
             </TableHeader>
             <TableBody>
               {reqs.length === 0 ? (
-                <TableRow><TableCell colSpan={4} className="py-8 text-center text-muted-foreground">All caught up — no pending requests.</TableCell></TableRow>
-              ) : reqs.map((t) => (
-                <TableRow key={t.id}>
-                  <TableCell className="font-medium">{t.name}</TableCell>
-                  <TableCell className="text-muted-foreground">{t.email}</TableCell>
-                  <TableCell className="text-muted-foreground">{t.joined}</TableCell>
-                  <TableCell className="text-right space-x-2">
-                    <Button size="sm" variant="outline" onClick={() => handle(t.id, "rejected")}><XCircle className="mr-1 h-4 w-4" />Reject</Button>
-                    <Button size="sm" onClick={() => handle(t.id, "approved")}><CheckCircle2 className="mr-1 h-4 w-4" />Approve</Button>
+                <TableRow>
+                  <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                    All caught up — no pending requests.
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                reqs.map((t) => (
+                  <TableRow key={t.id}>
+                    <TableCell className="font-medium">{t.name}</TableCell>
+                    <TableCell className="text-muted-foreground">{t.email}</TableCell>
+                    <TableCell className="text-muted-foreground">{t.joined}</TableCell>
+                    <TableCell className="text-right space-x-2">
+                      <Button size="sm" variant="outline" onClick={() => handle(t.id, "rejected")}>
+                        <XCircle className="mr-1 h-4 w-4" />
+                        Reject
+                      </Button>
+                      <Button size="sm" onClick={() => handle(t.id, "approved")}>
+                        <CheckCircle2 className="mr-1 h-4 w-4" />
+                        Approve
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>
@@ -106,26 +144,45 @@ const CaretakerDashboard = () => {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={4} className="py-8 text-center text-muted-foreground">Loading properties...</TableCell></TableRow>
-              ) : props.length === 0 ? (
-                <TableRow><TableCell colSpan={4} className="py-8 text-center text-muted-foreground">No properties assigned.</TableCell></TableRow>
-              ) : props.map((p) => (
-                <TableRow key={p._id}>
-                  <TableCell className="font-medium">{p.title}</TableCell>
-                  <TableCell className="text-muted-foreground">{p.location}</TableCell>
-                  <TableCell><Badge variant="outline" className="capitalize">{p.status}</Badge></TableCell>
-                  <TableCell className="text-right">
-                    <Select value={p.status} onValueChange={(v) => updateStatus(p._id, v as Property["status"])}>
-                      <SelectTrigger className="ml-auto w-40"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="available">Available</SelectItem>
-                        <SelectItem value="occupied">Occupied</SelectItem>
-                        <SelectItem value="maintenance">Maintenance</SelectItem>
-                      </SelectContent>
-                    </Select>
+                <TableRow>
+                  <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                    Loading properties...
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : props.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                    No properties assigned.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                props.map((p) => (
+                  <TableRow key={p._id}>
+                    <TableCell className="font-medium">{p.title}</TableCell>
+                    <TableCell className="text-muted-foreground">{p.location}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="capitalize">
+                        {p.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Select
+                        value={p.status}
+                        onValueChange={(v) => updateStatus(p._id, v as Property["status"])}
+                      >
+                        <SelectTrigger className="ml-auto w-40">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="available">Available</SelectItem>
+                          <SelectItem value="occupied">Occupied</SelectItem>
+                          <SelectItem value="maintenance">Maintenance</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>

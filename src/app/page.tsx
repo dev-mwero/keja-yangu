@@ -1,11 +1,11 @@
 "use client";
 
+import { ArrowRight, MapPin, Search, ShieldCheck, Sparkles, Users } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Search, ShieldCheck, Users, Sparkles, MapPin } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { SiteHeader } from "@/components/SiteHeader";
 import { PropertyCard } from "@/components/PropertyCard";
+import { SiteHeader } from "@/components/SiteHeader";
+import { Button } from "@/components/ui/button";
 import { properties } from "@/data/properties";
 
 const Index = () => {
@@ -20,8 +20,7 @@ const Index = () => {
         <div className="container grid gap-12 py-12 md:grid-cols-12 md:gap-8 md:py-24">
           <div className="md:col-span-6 lg:col-span-7 flex flex-col justify-center">
             <div className="inline-flex w-fit items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-soft">
-              <Sparkles className="h-3.5 w-3.5 text-primary" />
-              A new way to live, rent and manage
+              <Sparkles className="h-3.5 w-3.5 text-primary" />A new way to live, rent and manage
             </div>
 
             <h1 className="mt-6 font-display text-5xl font-semibold leading-[1.05] tracking-tight text-balance md:text-7xl lg:text-[5.5rem]">
@@ -34,9 +33,8 @@ const Index = () => {
             </h1>
 
             <p className="mt-6 max-w-xl text-lg text-muted-foreground text-balance">
-              Keja brings tenants, caretakers, and owners together on one calm,
-              modern platform. Discover rooms, apartments and entire buildings —
-              and manage them with ease.
+              Keja brings tenants, caretakers, and owners together on one calm, modern platform.
+              Discover rooms, apartments and entire buildings — and manage them with ease.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -66,13 +64,13 @@ const Index = () => {
 
           <div className="md:col-span-6 lg:col-span-5 relative">
             <div className="relative aspect-[4/5] overflow-hidden rounded-3xl shadow-elevated">
-                <Image
-                  src="/images/hero-building.jpg"
-                  alt="Modern terracotta apartment building at golden hour"
-                  fill
-                  sizes="(max-width: 1024px) 100vw, 50vw"
-                  className="h-full w-full object-cover"
-                />
+              <Image
+                src="/images/hero-building.jpg"
+                alt="Modern terracotta apartment building at golden hour"
+                fill
+                sizes="(max-width: 1024px) 100vw, 50vw"
+                className="h-full w-full object-cover"
+              />
               <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-foreground/60 to-transparent" />
               <div className="absolute bottom-5 left-5 right-5 rounded-2xl bg-background/95 p-4 shadow-elevated backdrop-blur">
                 <div className="flex items-center gap-3">
@@ -107,12 +105,17 @@ const Index = () => {
                 Homes worth a closer look
               </h2>
             </div>
-            <Link href="/properties" className="hidden items-center gap-1 text-sm font-medium text-foreground hover:text-primary md:inline-flex">
+            <Link
+              href="/properties"
+              className="hidden items-center gap-1 text-sm font-medium text-foreground hover:text-primary md:inline-flex"
+            >
               View all <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
           <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-            {featured.map((p) => <PropertyCard key={p.id} property={p} />)}
+            {featured.map((p) => (
+              <PropertyCard key={p.id} property={p} />
+            ))}
           </div>
         </div>
       </section>
@@ -121,16 +124,33 @@ const Index = () => {
       <section className="bg-secondary text-secondary-foreground">
         <div className="container py-20">
           <div className="mx-auto max-w-2xl text-center">
-            <p className="text-sm font-medium uppercase tracking-widest text-primary-glow">Built for everyone</p>
+            <p className="text-sm font-medium uppercase tracking-widest text-primary-glow">
+              Built for everyone
+            </p>
             <h2 className="mt-2 font-display text-3xl font-semibold tracking-tight md:text-5xl text-balance">
               One platform. Three roles. Zero friction.
             </h2>
           </div>
           <div className="mt-12 grid gap-6 md:grid-cols-3">
             {[
-              { icon: Search, role: "Tenant", desc: "Discover, apply and track your home in one place.", href: "/dashboard/tenant" },
-              { icon: Users, role: "Caretaker", desc: "Approve requests and keep units moving smoothly.", href: "/dashboard/caretaker" },
-              { icon: ShieldCheck, role: "Owner", desc: "Full hierarchy control, analytics and assignment.", href: "/dashboard/owner" },
+              {
+                icon: Search,
+                role: "Tenant",
+                desc: "Discover, apply and track your home in one place.",
+                href: "/dashboard/tenant",
+              },
+              {
+                icon: Users,
+                role: "Caretaker",
+                desc: "Approve requests and keep units moving smoothly.",
+                href: "/dashboard/caretaker",
+              },
+              {
+                icon: ShieldCheck,
+                role: "Owner",
+                desc: "Full hierarchy control, analytics and assignment.",
+                href: "/dashboard/owner",
+              },
             ].map((c) => (
               <div
                 key={c.role}
@@ -141,7 +161,10 @@ const Index = () => {
                 </div>
                 <h3 className="font-display text-2xl font-semibold tracking-tight">{c.role}</h3>
                 <p className="mt-2 text-sm text-secondary-foreground/70">{c.desc}</p>
-                <Link href={c.href} className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary-glow hover:underline">
+                <Link
+                  href={c.href}
+                  className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary-glow hover:underline"
+                >
                   Open dashboard <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
               </div>

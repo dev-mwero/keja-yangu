@@ -1,13 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import { Search, SlidersHorizontal } from "lucide-react";
-import { SiteHeader } from "@/components/SiteHeader";
+import { useMemo, useState } from "react";
 import { PropertyCard } from "@/components/PropertyCard";
-import { Input } from "@/components/ui/input";
+import { SiteHeader } from "@/components/SiteHeader";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
-import { properties, type PropertyType } from "@/data/properties";
+import { type PropertyType, properties } from "@/data/properties";
 
 const types: ("all" | PropertyType)[] = ["all", "room", "apartment", "building"];
 
@@ -24,7 +24,7 @@ const Properties = () => {
         if (q && !`${p.title} ${p.location}`.toLowerCase().includes(q.toLowerCase())) return false;
         return true;
       }),
-    [q, type, maxPrice]
+    [q, type, maxPrice],
   );
 
   return (
@@ -37,7 +37,8 @@ const Properties = () => {
             Every home, beautifully sorted.
           </h1>
           <p className="mt-3 text-muted-foreground">
-            Use filters to narrow down by type, location, and price. {filtered.length} of {properties.length} match.
+            Use filters to narrow down by type, location, and price. {filtered.length} of{" "}
+            {properties.length} match.
           </p>
         </div>
 
@@ -49,21 +50,30 @@ const Properties = () => {
               </div>
 
               <div>
-                <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-muted-foreground">Search</span>
+                <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Search
+                </span>
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Location or name" className="pl-9" />
+                  <Input
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    placeholder="Location or name"
+                    className="pl-9"
+                  />
                 </div>
               </div>
 
               <div>
-                <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-muted-foreground">Type</span>
+                <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Type
+                </span>
                 <div className="flex flex-wrap gap-2">
                   {types.map((t) => (
-                      <button
-                        type="button"
-                        key={t}
-                        onClick={() => setType(t)}
+                    <button
+                      type="button"
+                      key={t}
+                      onClick={() => setType(t)}
                       className={`rounded-full border px-3 py-1.5 text-xs font-medium capitalize transition-all ${
                         type === t
                           ? "border-primary bg-primary text-primary-foreground"
@@ -78,17 +88,29 @@ const Properties = () => {
 
               <div>
                 <div className="mb-3 flex items-center justify-between">
-                  <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Max price</span>
+                  <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Max price
+                  </span>
                   <span className="text-sm font-semibold">KES {maxPrice.toLocaleString()}</span>
                 </div>
-                <Slider value={[maxPrice]} onValueChange={(v) => setMaxPrice(v[0])} min={10000} max={250000} step={5000} />
+                <Slider
+                  value={[maxPrice]}
+                  onValueChange={(v) => setMaxPrice(v[0])}
+                  min={10000}
+                  max={250000}
+                  step={5000}
+                />
               </div>
 
               <Button
                 variant="outline"
                 type="button"
                 className="w-full rounded-full"
-                onClick={() => { setQ(""); setType("all"); setMaxPrice(250000); }}
+                onClick={() => {
+                  setQ("");
+                  setType("all");
+                  setMaxPrice(250000);
+                }}
               >
                 Reset filters
               </Button>
@@ -103,7 +125,9 @@ const Properties = () => {
               </div>
             ) : (
               <div className="grid gap-8 sm:grid-cols-2 xl:grid-cols-3">
-                {filtered.map((p) => <PropertyCard key={p.id} property={p} />)}
+                {filtered.map((p) => (
+                  <PropertyCard key={p.id} property={p} />
+                ))}
               </div>
             )}
           </div>

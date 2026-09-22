@@ -1,15 +1,22 @@
 "use client";
 
-import { Plus, TrendingUp, Users, Building2 } from "lucide-react";
+import { Building2, Plus, TrendingUp, Users } from "lucide-react";
 import Link from "next/link";
 import { DashboardShell } from "@/components/DashboardShell";
 import { StatCard } from "@/components/StatCard";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { tenants, caretakers } from "@/data/properties";
-import { useProperties } from "@/hooks/use-properties";
+import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { ownerNav as nav } from "@/config/dashboardNav";
+import { caretakers, tenants } from "@/data/properties";
+import { useProperties } from "@/hooks/use-properties";
 
 const OwnerDashboard = () => {
   const { properties, loading } = useProperties();
@@ -25,16 +32,31 @@ const OwnerDashboard = () => {
   const max = Math.max(...distribution.map((d) => d.count), 1);
 
   return (
-    <DashboardShell roleName="Owner" nav={nav} title="Portfolio overview" subtitle="Your buildings, people, and performance at a glance.">
+    <DashboardShell
+      roleName="Owner"
+      nav={nav}
+      title="Portfolio overview"
+      subtitle="Your buildings, people, and performance at a glance."
+    >
       <div className="mb-6 flex justify-end">
-        <Button asChild className="rounded-full"><Link href="/properties"><Plus className="mr-2 h-4 w-4" />New property</Link></Button>
+        <Button asChild className="rounded-full">
+          <Link href="/properties">
+            <Plus className="mr-2 h-4 w-4" />
+            New property
+          </Link>
+        </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard label="Total properties" value={loading ? "..." : total} icon={Building2} />
         <StatCard label="Tenants" value={tenants.length} icon={Users} />
         <StatCard label="Caretakers" value={caretakers.length} icon={Users} />
-        <StatCard label="Occupancy" value={loading ? "..." : `${occupancy}%`} icon={TrendingUp} hint="vs 62% last quarter" />
+        <StatCard
+          label="Occupancy"
+          value={loading ? "..." : `${occupancy}%`}
+          icon={TrendingUp}
+          hint="vs 62% last quarter"
+        />
       </div>
 
       <div className="mt-10 grid gap-6 lg:grid-cols-3">
@@ -92,31 +114,49 @@ const OwnerDashboard = () => {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">Loading properties...</TableCell></TableRow>
-              ) : properties.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">No properties found.</TableCell></TableRow>
-              ) : properties.map((p) => (
-                <TableRow key={p._id}>
-                  <TableCell className="font-medium">{p.title}</TableCell>
-                  <TableCell className="capitalize text-muted-foreground">{p.type}</TableCell>
-                  <TableCell className="text-muted-foreground">{p.location}</TableCell>
-                  <TableCell>
-                    <div className="flex -space-x-2">
-                      {p.caretakerIds.map((id) => {
-                        const c = caretakers.find((x) => x.id === id);
-                        return (
-                          <div key={id} className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-card gradient-warm text-[10px] font-semibold text-primary-foreground">
-                            {c?.name.split(" ").map((n) => n[0]).join("")}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Badge variant="outline" className="capitalize">{p.status}</Badge>
+                <TableRow>
+                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                    Loading properties...
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : properties.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                    No properties found.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                properties.map((p) => (
+                  <TableRow key={p._id}>
+                    <TableCell className="font-medium">{p.title}</TableCell>
+                    <TableCell className="capitalize text-muted-foreground">{p.type}</TableCell>
+                    <TableCell className="text-muted-foreground">{p.location}</TableCell>
+                    <TableCell>
+                      <div className="flex -space-x-2">
+                        {p.caretakerIds.map((id) => {
+                          const c = caretakers.find((x) => x.id === id);
+                          return (
+                            <div
+                              key={id}
+                              className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-card gradient-warm text-[10px] font-semibold text-primary-foreground"
+                            >
+                              {c?.name
+                                .split(" ")
+                                .map((n) => n[0])
+                                .join("")}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Badge variant="outline" className="capitalize">
+                        {p.status}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>

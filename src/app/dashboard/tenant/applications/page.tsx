@@ -4,7 +4,5 @@ import { PlaceholderPage } from "@/components/PlaceholderPage";
 import { tenantNav as nav } from "@/config/dashboardNav";
 
 export default function ApplicationsPage() {
-  return (
-    <PlaceholderPage roleName="Tenant" nav={nav} title="Applications" />
-  );
+  return <PlaceholderPage roleName="Tenant" nav={nav} title="Applications" />;
 }

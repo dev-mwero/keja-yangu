@@ -8,7 +8,8 @@ export const metadata: Metadata = {
     default: "Keja Yangu — Property Rentals & Tenant Management",
     template: "%s | Keja Yangu",
   },
-  description: "Find homes, manage properties, and connect tenants, caretakers, and owners on one platform.",
+  description:
+    "Find homes, manage properties, and connect tenants, caretakers, and owners on one platform.",
   keywords: ["rentals", "property", "tenant management", "Kenya", "housing"],
   authors: [{ name: "Keja Yangu" }],
   creator: "Keja Yangu",
@@ -19,7 +20,8 @@ export const metadata: Metadata = {
     url: "https://keja-yangu.com",
     siteName: "Keja Yangu",
     title: "Keja Yangu — Property Rentals & Tenant Management",
-    description: "Find homes, manage properties, and connect tenants, caretakers, and owners on one platform.",
+    description:
+      "Find homes, manage properties, and connect tenants, caretakers, and owners on one platform.",
     images: [
       {
         url: "/images/hero-building.jpg",
@@ -32,7 +34,8 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Keja Yangu — Property Rentals & Tenant Management",
-    description: "Find homes, manage properties, and connect tenants, caretakers, and owners on one platform.",
+    description:
+      "Find homes, manage properties, and connect tenants, caretakers, and owners on one platform.",
     creator: "@kejayangu",
   },
   robots: {
