@@ -5,6 +5,6 @@ import { ownerNav as nav } from "@/config/dashboardNav";
 
 export default function DocumentsPage() {
   return (
-    <PlaceholderPage role="Owner" nav={nav} title="Tenant Documents" />
+    <PlaceholderPage roleName="Owner" nav={nav} title="Tenant Documents" />
   );
 }

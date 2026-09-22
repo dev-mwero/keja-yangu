@@ -5,6 +5,6 @@ import { caretakerNav as nav } from "@/config/dashboardNav";
 
 export default function PortfolioPage() {
   return (
-    <PlaceholderPage role="Caretaker" nav={nav} title="Portfolio" />
+    <PlaceholderPage roleName="Caretaker" nav={nav} title="Portfolio" />
   );
 }

@@ -10,7 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { tenants, caretakers } from "@/data/properties";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { useProperties, Property } from "@/hooks/use-properties";
+import { useProperties } from "@/hooks/use-properties";
+import type { Property } from "@/hooks/use-properties";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { caretakerNav as nav } from "@/config/dashboardNav";
 
@@ -52,7 +53,7 @@ const CaretakerDashboard = () => {
   const displayName = user?.name?.split(" ")[0] ?? "Caretaker";
 
   return (
-    <DashboardShell role="Caretaker" nav={nav} title={`Hello, ${displayName}`} subtitle="Manage your properties and tenant requests.">
+    <DashboardShell roleName="Caretaker" nav={nav} title={`Hello, ${displayName}`} subtitle="Manage your properties and tenant requests.">
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard label="Assigned properties" value={loading ? "..." : props.length} icon={Building2} />
         <StatCard label="Tenants" value={assignedTenants} icon={Users} />

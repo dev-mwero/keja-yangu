@@ -5,6 +5,6 @@ import { caretakerNav as nav } from "@/config/dashboardNav";
 
 export default function CommunicationsPage() {
   return (
-    <PlaceholderPage role="Caretaker" nav={nav} title="Communications" />
+    <PlaceholderPage roleName="Caretaker" nav={nav} title="Communications" />
   );
 }

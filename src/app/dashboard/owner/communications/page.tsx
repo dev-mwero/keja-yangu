@@ -5,6 +5,6 @@ import { ownerNav as nav } from "@/config/dashboardNav";
 
 export default function CommunicationsPage() {
   return (
-    <PlaceholderPage role="Owner" nav={nav} title="Communications" />
+    <PlaceholderPage roleName="Owner" nav={nav} title="Communications" />
   );
 }

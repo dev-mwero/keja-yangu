@@ -5,6 +5,6 @@ import { ownerNav as nav } from "@/config/dashboardNav";
 
 export default function AccountingPage() {
   return (
-    <PlaceholderPage role="Owner" nav={nav} title="Accounting" />
+    <PlaceholderPage roleName="Owner" nav={nav} title="Accounting" />
   );
 }

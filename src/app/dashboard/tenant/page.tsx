@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useProperties } from "@/hooks/use-properties";
 import { useAuth } from "@/hooks/use-auth";
 import { useTenantApplications } from "@/hooks/use-applications";
-import { ApplicationStatus } from "@/lib/applications";
+import type { ApplicationStatus } from "@/lib/applications";
 
 const statusIcon: Record<ApplicationStatus, React.ReactNode> = {
   approved: <CheckCircle2 className="h-3.5 w-3.5" />,
@@ -47,7 +47,7 @@ const TenantDashboard = () => {
   const recent = applications.slice(0, 5);
 
   return (
-    <DashboardShell role="Tenant" nav={tenantNav} title={`Welcome back${user?.name ? `, ${user.name}` : ""}`} subtitle="Track your applications and discover new homes.">
+    <DashboardShell roleName="Tenant" nav={tenantNav} title={`Welcome back${user?.name ? `, ${user.name}` : ""}`} subtitle="Track your applications and discover new homes.">
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard label="Total applications" value={totalCount} icon={FileText} />
         <StatCard label="Pending review" value={pendingCount} icon={Clock} hint="Avg. response 18h" />
@@ -100,7 +100,7 @@ const TenantDashboard = () => {
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
           {loading ? (
             <p className="text-muted-foreground">Loading properties...</p>
-          ) : recommended.map((p, i) => (
+          ) : recommended.map((p) => (
             <PropertyCard
               key={p._id}
               property={{
@@ -118,9 +118,9 @@ const TenantDashboard = () => {
                 beds: p.beds,
                 baths: p.baths,
                 area: p.area,
-              }}
-              index={i}
+}}
             />
+
           ))}
         </div>
       </div>

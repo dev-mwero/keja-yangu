@@ -25,7 +25,7 @@ const OwnerDashboard = () => {
   const max = Math.max(...distribution.map((d) => d.count), 1);
 
   return (
-    <DashboardShell role="Owner" nav={nav} title="Portfolio overview" subtitle="Your buildings, people, and performance at a glance.">
+    <DashboardShell roleName="Owner" nav={nav} title="Portfolio overview" subtitle="Your buildings, people, and performance at a glance.">
       <div className="mb-6 flex justify-end">
         <Button asChild className="rounded-full"><Link href="/properties"><Plus className="mr-2 h-4 w-4" />New property</Link></Button>
       </div>

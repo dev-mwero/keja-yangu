@@ -5,6 +5,6 @@ import { tenantNav as nav } from "@/config/dashboardNav";
 
 export default function ReportsPage() {
   return (
-    <PlaceholderPage role="Tenant" nav={nav} title="Reports" />
+    <PlaceholderPage roleName="Tenant" nav={nav} title="Reports" />
   );
 }

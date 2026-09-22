@@ -5,6 +5,6 @@ import { ownerNav as nav } from "@/config/dashboardNav";
 
 export default function TasksPage() {
   return (
-    <PlaceholderPage role="Owner" nav={nav} title="Tasks & Maintenance" />
+    <PlaceholderPage roleName="Owner" nav={nav} title="Tasks & Maintenance" />
   );
 }

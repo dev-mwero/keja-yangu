@@ -5,6 +5,6 @@ import { tenantNav as nav } from "@/config/dashboardNav";
 
 export default function PaymentsPage() {
   return (
-    <PlaceholderPage role="Tenant" nav={nav} title="Payments" />
+    <PlaceholderPage roleName="Tenant" nav={nav} title="Payments" />
   );
 }
