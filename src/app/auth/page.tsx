@@ -1,15 +1,14 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, Loader2 } from "lucide-react";
-import Image from "next/image";
+import { Loader2, MailCheck } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
-import { Logo } from "@/components/Logo";
+import AuthLayout from "@/components/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,9 +39,11 @@ const roleRoute: Record<string, string> = {
 
 const AuthForm = () => {
   const router = useRouter();
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, resendVerification } = useAuth();
   const [tab, setTab] = useState<"signin" | "signup">("signin");
   const [submitting, setSubmitting] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
 
   const signInForm = useForm<SignInValues>({
     resolver: zodResolver(signInSchema),
@@ -78,7 +79,7 @@ const AuthForm = () => {
     setSubmitting(true);
     try {
       await signUp(values.name, values.email, values.password, values.role);
-      router.push(roleRoute[values.role]);
+      setPendingEmail(values.email);
     } catch {
       // Error handled by toast in hook
     } finally {
@@ -86,176 +87,184 @@ const AuthForm = () => {
     }
   };
 
+  const onResend = async () => {
+    if (!pendingEmail) return;
+    setResending(true);
+    try {
+      await resendVerification(pendingEmail);
+    } catch {
+      // Error handled by toast in hook
+    } finally {
+      setResending(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-background lg:grid lg:grid-cols-2">
-      <div className="relative hidden overflow-hidden lg:block">
-        <Image
-          src="/images/hero-building.jpg"
-          alt="Modern apartment building"
-          fill
-          sizes="(max-width: 1024px) 100vw, 50vw"
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-        <div className="absolute inset-0 bg-gradient-to-br from-secondary/80 via-secondary/40 to-transparent" />
-        <div className="relative flex h-full flex-col justify-between p-10 text-secondary-foreground">
-          <Logo className="text-secondary-foreground" />
-          <div className="max-w-md">
-            <p className="text-xs font-medium uppercase tracking-widest text-primary-glow">
-              The new way to rent
-            </p>
-            <h2 className="mt-3 font-display text-4xl font-semibold leading-tight tracking-tight">
-              Where home <span className="italic text-primary-glow">begins</span>.
-            </h2>
-            <p className="mt-4 text-sm text-secondary-foreground/70">
-              Sign in to track applications, manage units, or oversee your portfolio — all in one
-              calm, modern space.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="relative flex min-h-screen flex-col px-6 py-8 lg:px-12">
-        <div className="flex items-center justify-between">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" /> Back home
-          </Link>
-          <Logo className="lg:hidden" />
-        </div>
-
-        <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center py-12">
-          <h1 className="font-display text-4xl font-semibold tracking-tight">
-            {tab === "signin" ? "Welcome back" : "Create your account"}
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {tab === "signin"
-              ? "Sign in to continue to Keja."
-              : "Join as a tenant, caretaker, or owner."}
+    <AuthLayout
+      title={
+        pendingEmail
+          ? "Check your inbox"
+          : tab === "signin"
+            ? "Welcome back"
+            : "Create your account"
+      }
+      subtitle={
+        pendingEmail
+          ? "One more step to get you home."
+          : tab === "signin"
+            ? "Sign in to continue to Keja."
+            : "Join as a tenant, caretaker, or owner."
+      }
+    >
+      {pendingEmail ? (
+        <div className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-card p-8 text-center">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+            <MailCheck className="h-6 w-6 text-primary" />
+          </span>
+          <p className="text-sm text-muted-foreground">
+            We sent a verification link to{" "}
+            <strong className="text-foreground">{pendingEmail}</strong>. Open it to activate your
+            account — and check your spam folder if you can't find it.
           </p>
-
-          <Tabs
-            value={tab}
-            onValueChange={(v) => setTab(v as "signin" | "signup")}
-            className="mt-8"
+          <Button
+            variant="outline"
+            className="w-full rounded-full"
+            disabled={resending}
+            onClick={onResend}
           >
-            <TabsList className="grid w-full grid-cols-2 rounded-full bg-muted p-1">
-              <TabsTrigger value="signin" className="rounded-full">
-                Sign in
-              </TabsTrigger>
-              <TabsTrigger value="signup" className="rounded-full">
-                Create account
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="signin" className="mt-6">
-              <form onSubmit={signInForm.handleSubmit(onSignIn)} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="si-email">Email</Label>
-                  <Input
-                    id="si-email"
-                    type="email"
-                    placeholder="you@keja.co"
-                    {...signInForm.register("email")}
-                  />
-                  {signInForm.formState.errors.email && (
-                    <p className="text-xs text-destructive">
-                      {signInForm.formState.errors.email.message}
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="si-pw">Password</Label>
-                  <Input
-                    id="si-pw"
-                    type="password"
-                    placeholder="••••••••"
-                    {...signInForm.register("password")}
-                  />
-                  {signInForm.formState.errors.password && (
-                    <p className="text-xs text-destructive">
-                      {signInForm.formState.errors.password.message}
-                    </p>
-                  )}
-                </div>
-                <Button type="submit" className="w-full rounded-full" disabled={submitting}>
-                  {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Sign in
-                </Button>
-              </form>
-            </TabsContent>
-
-            <TabsContent value="signup" className="mt-6">
-              <form onSubmit={signUpForm.handleSubmit(onSignUp)} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="su-name">Full name</Label>
-                  <Input id="su-name" placeholder="Amina Otieno" {...signUpForm.register("name")} />
-                  {signUpForm.formState.errors.name && (
-                    <p className="text-xs text-destructive">
-                      {signUpForm.formState.errors.name.message}
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="su-email">Email</Label>
-                  <Input
-                    id="su-email"
-                    type="email"
-                    placeholder="you@keja.co"
-                    {...signUpForm.register("email")}
-                  />
-                  {signUpForm.formState.errors.email && (
-                    <p className="text-xs text-destructive">
-                      {signUpForm.formState.errors.email.message}
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="su-pw">Password</Label>
-                  <Input
-                    id="su-pw"
-                    type="password"
-                    placeholder="At least 6 characters"
-                    {...signUpForm.register("password")}
-                  />
-                  {signUpForm.formState.errors.password && (
-                    <p className="text-xs text-destructive">
-                      {signUpForm.formState.errors.password.message}
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label>I am a</Label>
-                  <RadioGroup
-                    value={signUpForm.watch("role")}
-                    onValueChange={(v) => signUpForm.setValue("role", v as SignUpValues["role"])}
-                    className="grid grid-cols-3 gap-2"
-                  >
-                    {(["tenant", "caretaker", "owner"] as const).map((r) => (
-                      <Label
-                        key={r}
-                        htmlFor={`role-${r}`}
-                        className="flex cursor-pointer items-center justify-center rounded-xl border border-border bg-card px-3 py-3 text-sm font-medium capitalize transition-all hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5 has-[:checked]:text-primary"
-                      >
-                        <RadioGroupItem id={`role-${r}`} value={r} className="sr-only" />
-                        {r}
-                      </Label>
-                    ))}
-                  </RadioGroup>
-                </div>
-                <Button type="submit" className="w-full rounded-full" disabled={submitting}>
-                  {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Create account
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
+            {resending && <Loader2 className="h-4 w-4 animate-spin" />} Resend verification email
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full rounded-full"
+            onClick={() => {
+              setPendingEmail(null);
+            }}
+          >
+            Back to sign in
+          </Button>
         </div>
+      ) : (
+        <Tabs value={tab} onValueChange={(v) => setTab(v as "signin" | "signup")} className="mt-8">
+          <TabsList className="grid w-full grid-cols-2 rounded-full bg-muted p-1">
+            <TabsTrigger value="signin" className="rounded-full">
+              Sign in
+            </TabsTrigger>
+            <TabsTrigger value="signup" className="rounded-full">
+              Create account
+            </TabsTrigger>
+          </TabsList>
 
-        <p className="text-center text-xs text-muted-foreground">
-          &copy; {new Date().getFullYear()} Keja
-        </p>
-      </div>
-    </div>
+          <TabsContent value="signin" className="mt-6">
+            <form onSubmit={signInForm.handleSubmit(onSignIn)} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="si-email">Email</Label>
+                <Input
+                  id="si-email"
+                  type="email"
+                  placeholder="you@keja.co"
+                  {...signInForm.register("email")}
+                />
+                {signInForm.formState.errors.email && (
+                  <p className="text-xs text-destructive">
+                    {signInForm.formState.errors.email.message}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="si-pw">Password</Label>
+                  <Link
+                    href="/auth/forgot-password"
+                    className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+                <Input
+                  id="si-pw"
+                  type="password"
+                  placeholder="••••••••"
+                  {...signInForm.register("password")}
+                />
+                {signInForm.formState.errors.password && (
+                  <p className="text-xs text-destructive">
+                    {signInForm.formState.errors.password.message}
+                  </p>
+                )}
+              </div>
+              <Button type="submit" className="w-full rounded-full" disabled={submitting}>
+                {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Sign in
+              </Button>
+            </form>
+          </TabsContent>
+
+          <TabsContent value="signup" className="mt-6">
+            <form onSubmit={signUpForm.handleSubmit(onSignUp)} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="su-name">Full name</Label>
+                <Input id="su-name" placeholder="Amina Otieno" {...signUpForm.register("name")} />
+                {signUpForm.formState.errors.name && (
+                  <p className="text-xs text-destructive">
+                    {signUpForm.formState.errors.name.message}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="su-email">Email</Label>
+                <Input
+                  id="su-email"
+                  type="email"
+                  placeholder="you@keja.co"
+                  {...signUpForm.register("email")}
+                />
+                {signUpForm.formState.errors.email && (
+                  <p className="text-xs text-destructive">
+                    {signUpForm.formState.errors.email.message}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="su-pw">Password</Label>
+                <Input
+                  id="su-pw"
+                  type="password"
+                  placeholder="At least 6 characters"
+                  {...signUpForm.register("password")}
+                />
+                {signUpForm.formState.errors.password && (
+                  <p className="text-xs text-destructive">
+                    {signUpForm.formState.errors.password.message}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label>I am a</Label>
+                <RadioGroup
+                  value={signUpForm.watch("role")}
+                  onValueChange={(v) => signUpForm.setValue("role", v as SignUpValues["role"])}
+                  className="grid grid-cols-3 gap-2"
+                >
+                  {(["tenant", "caretaker", "owner"] as const).map((r) => (
+                    <Label
+                      key={r}
+                      htmlFor={`role-${r}`}
+                      className="flex cursor-pointer items-center justify-center rounded-xl border border-border bg-card px-3 py-3 text-sm font-medium capitalize transition-all hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5 has-[:checked]:text-primary"
+                    >
+                      <RadioGroupItem id={`role-${r}`} value={r} className="sr-only" />
+                      {r}
+                    </Label>
+                  ))}
+                </RadioGroup>
+              </div>
+              <Button type="submit" className="w-full rounded-full" disabled={submitting}>
+                {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Create account
+              </Button>
+            </form>
+          </TabsContent>
+        </Tabs>
+      )}
+    </AuthLayout>
   );
 };
 

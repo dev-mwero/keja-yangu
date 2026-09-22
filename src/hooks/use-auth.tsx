@@ -18,6 +18,7 @@ interface AuthContextValue {
   refreshFailed: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (name: string, email: string, password: string, role: Role) => Promise<void>;
+  resendVerification: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -85,12 +86,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const data = await res.json();
         throw new Error(data.error || "Sign up failed");
       }
-      const data = await res.json();
-      setUser(data.user);
       toast.success("Account created!");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Sign up failed";
       toast.error("Sign up failed", { description: message });
+      throw err;
+    }
+  };
+
+  const resendVerification = async (email: string) => {
+    try {
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "resend-verification", email }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to resend verification email");
+      }
+      toast.success("Verification email sent");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to resend verification email";
+      toast.error("Resend failed", { description: message });
       throw err;
     }
   };
@@ -108,7 +126,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, refreshFailed, signIn, signUp, signOut }}>
+    <AuthContext.Provider
+      value={{ user, loading, refreshFailed, signIn, signUp, resendVerification, signOut }}
+    >
       {children}
     </AuthContext.Provider>
   );
