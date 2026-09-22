@@ -1,7 +1,7 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import type { ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 export type Role = "tenant" | "caretaker" | "owner";
@@ -46,6 +46,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setLoading(false);
     }
+    // biome-ignore lint/correctness: useExhaustiveDependencies
   }, [setUser, setRefreshFailed, setLoading, toast]);
 
   useEffect(() => {

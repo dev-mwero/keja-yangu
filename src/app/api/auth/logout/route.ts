@@ -1,10 +1,13 @@
-import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
+import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
   try {
     const cookieHeader = request.headers.get("cookie");
-    const token = cookieHeader?.split("; ").find((c) => c.startsWith("keja-token="))?.split("=")[1];
+    const token = cookieHeader
+      ?.split("; ")
+      .find((c) => c.startsWith("keja-token="))
+      ?.split("=")[1];
     if (!token) {
       return NextResponse.json({ error: "No token" }, { status: 401 });
     }

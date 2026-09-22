@@ -1,4 +1,4 @@
-import { Schema, model, models, type InferSchemaType } from "mongoose";
+import { type InferSchemaType, model, models, Schema } from "mongoose";
 
 export interface IUser {
   email: string;
@@ -6,6 +6,9 @@ export interface IUser {
   passwordHash: string;
   role: "tenant" | "caretaker" | "owner";
   isActive: boolean;
+  isVerified: boolean;
+  verificationToken?: string;
+  verificationTokenExpiry?: Date;
 }
 
 const userSchema = new Schema<IUser>(
@@ -15,10 +18,13 @@ const userSchema = new Schema<IUser>(
     passwordHash: { type: String, required: true },
     role: { type: String, enum: ["tenant", "caretaker", "owner"], required: true },
     isActive: { type: Boolean, default: true },
+    isVerified: { type: Boolean, default: false },
+    verificationToken: { type: String },
+    verificationTokenExpiry: { type: Date },
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 export type UserDocument = InferSchemaType<IUser>;
