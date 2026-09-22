@@ -1,8 +1,135 @@
 "use client";
 
-import { PlaceholderPage } from "@/components/PlaceholderPage";
+import {
+  Bath,
+  BedDouble,
+  Building2,
+  CheckCircle2,
+  Clock,
+  MapPin,
+  Ruler,
+  Wrench,
+} from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import { useMemo } from "react";
+import { DashboardShell } from "@/components/DashboardShell";
+import { StatCard } from "@/components/StatCard";
+import { Badge } from "@/components/ui/badge";
 import { caretakerNav as nav } from "@/config/dashboardNav";
+import { caretakers } from "@/data/properties";
+import { useAuth } from "@/hooks/use-auth";
+import { useProperties } from "@/hooks/use-properties";
+import { formatKES } from "@/lib/format";
 
-export default function PortfolioPage() {
-  return <PlaceholderPage roleName="Caretaker" nav={nav} title="Portfolio" />;
-}
+const statusClass: Record<string, string> = {
+  available: "bg-success/15 text-success",
+  occupied: "bg-primary/15 text-primary",
+  maintenance: "bg-warning/15 text-warning",
+};
+
+const statusLabel: Record<string, string> = {
+  available: "Vacant",
+  occupied: "Occupied",
+  maintenance: "Maintenance",
+};
+
+const CaretakerPortfolioPage = () => {
+  const { user } = useAuth();
+  const caretaker = useMemo(() => caretakers.find((c) => c.email === user?.email), [user?.email]);
+  const caretakerId = caretaker?.id ?? "c1";
+
+  const { properties, loading, error } = useProperties();
+  const mine = useMemo(
+    () => properties.filter((p) => p.caretakerIds.includes(caretakerId)),
+    [properties, caretakerId],
+  );
+
+  const occupied = mine.filter((p) => p.status === "occupied").length;
+  const vacant = mine.filter((p) => p.status === "available").length;
+  const maintenance = mine.filter((p) => p.status === "maintenance").length;
+
+  return (
+    <DashboardShell
+      roleName="Caretaker"
+      nav={nav}
+      title="My portfolio"
+      subtitle="Every property under your care at a glance."
+    >
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard label="Assigned" value={loading ? "…" : mine.length} icon={Building2} />
+        <StatCard label="Occupied" value={occupied} icon={CheckCircle2} />
+        <StatCard label="Vacant" value={vacant} icon={Clock} />
+        <StatCard label="Maintenance" value={maintenance} icon={Wrench} />
+      </div>
+
+      <div className="mt-8">
+        {loading ? (
+          <p className="text-muted-foreground">Loading properties…</p>
+        ) : error ? (
+          <p className="text-destructive">{error}</p>
+        ) : mine.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border bg-card/50 p-10 text-center">
+            <Building2 className="mx-auto h-8 w-8 text-muted-foreground" />
+            <h3 className="mt-3 font-display text-xl">No properties assigned yet</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              The landlord will assign properties to you from the portfolio.
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {mine.map((p) => (
+              <Link key={p._id} href={`/properties/${p._id}`} className="group">
+                <div className="h-full overflow-hidden rounded-2xl border border-border bg-card shadow-soft transition-all hover:shadow-elevated">
+                  <div className="relative h-40">
+                    <Image
+                      src={p.images[0] ?? "/images/property-1.jpg"}
+                      alt={p.title}
+                      fill
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                      className="object-cover transition-transform duration-300 group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                    <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
+                      <span className="rounded-full bg-background/90 px-3 py-1 text-xs font-medium">
+                        {formatKES(p.price)}/mo
+                      </span>
+                      <Badge className={`${statusClass[p.status]} capitalize hover:opacity-100`}>
+                        {statusLabel[p.status]}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="p-5">
+                    <h3 className="font-display text-lg font-semibold group-hover:underline">
+                      {p.title}
+                    </h3>
+                    <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                      <MapPin className="h-3.5 w-3.5" />
+                      {p.location}
+                    </p>
+                    <div className="mt-4 flex items-center gap-4 border-t border-border pt-3 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <BedDouble className="h-3.5 w-3.5" />
+                        {p.beds} bd
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Bath className="h-3.5 w-3.5" />
+                        {p.baths} ba
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Ruler className="h-3.5 w-3.5" />
+                        {p.area} m²
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    </DashboardShell>
+  );
+};
+
+export default CaretakerPortfolioPage;
