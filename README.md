@@ -13,7 +13,7 @@ A modern property rental and tenant management platform built with Next.js, Type
 - **Form Handling:** React Hook Form + Zod validation
 - **Theme:** next-themes (dark/light mode)
 - **Email:** Nodemailer for verification and password reset
-- **Rate Limiting:** @upstash/ratelimit with Redis
+- **Rate Limiting:** In-memory (no external dependencies)
 - **Testing:** Vitest + React Testing Library
 
 ## Features
@@ -28,7 +28,7 @@ A modern property rental and tenant management platform built with Next.js, Type
 - Email verification with Nodemailer
 - Protected dashboard routes with AuthGuard
 - Property listings with search, filters, and pagination
-- Rate-limited API endpoints
+- Rate-limited API endpoints (in-memory)
 - Responsive design with mobile navigation
 - Dark/light theme support
 
@@ -107,10 +107,6 @@ EMAIL_PORT=587
 EMAIL_USER=your-email@gmail.com
 EMAIL_PASS=your-app-password
 EMAIL_FROM=Keja Yangu <no-reply@keja.co>
-
-# Rate Limiting (Upstash)
-UPSTASH_REST_URL=your-upstash-redis-url
-UPSTASH_REST_TOKEN=your-upstash-token
 ```
 
 ## User Roles
