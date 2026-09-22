@@ -1,14 +1,30 @@
 import nodemailer from "nodemailer";
 
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST ?? "smtp.gmail.com",
-  port: parseInt(process.env.EMAIL_PORT ?? "587", 10),
-  secure: process.env.EMAIL_SECURE === "true",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+function createTransporter() {
+  const host = process.env.EMAIL_HOST ?? "smtp.gmail.com";
+  const port = parseInt(process.env.EMAIL_PORT ?? "587", 10);
+  const secure = process.env.EMAIL_SECURE === "true" || port === 465;
+
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    requireTLS: true,
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+  });
+}
+
+let _transporter: ReturnType<typeof createTransporter> | null = null;
+
+function getTransporter() {
+  if (!_transporter) {
+    _transporter = createTransporter();
+  }
+  return _transporter;
+}
 
 export interface EmailOptions {
   to: string;
@@ -19,6 +35,7 @@ export interface EmailOptions {
 
 export async function sendEmail(options: EmailOptions): Promise<boolean> {
   try {
+    const transporter = getTransporter();
     const info = await transporter.sendMail({
       from: process.env.EMAIL_FROM ?? "Keja Yangu <no-reply@keja.co>",
       to: options.to,
