@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, ReactNode, useContext, useEffect, useState, useCallback } from "react";
+import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import type { ReactNode } from "react";
 import { toast } from "sonner";
 
 export type Role = "tenant" | "caretaker" | "owner";
@@ -15,95 +16,102 @@ interface AuthContextValue {
   user: KejaUser | null;
   loading: boolean;
   refreshFailed: boolean;
-  signIn: (user: KejaUser) => void;
-  signOut: () => void;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (name: string, email: string, password: string, role: Role) => Promise<void>;
+  signOut: () => Promise<void>;
 }
 
-const STORAGE_KEY = "keja-user";
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-
-interface ReadResult {
-  ok: boolean;
-  user: KejaUser | null;
-  error: string | null;
-}
-
-const readStored = (): ReadResult => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ok: true, user: null, error: null };
-    const parsed = JSON.parse(raw) as KejaUser;
-    if (!parsed?.email || !["tenant", "caretaker", "owner"].includes(parsed.role)) {
-      return { ok: false, user: null, error: "Stored session is invalid or corrupted." };
-    }
-    return { ok: true, user: parsed, error: null };
-  } catch (e) {
-    return { ok: false, user: null, error: e instanceof Error ? e.message : "Unable to read session." };
-  }
-};
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<KejaUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshFailed, setRefreshFailed] = useState(false);
 
-  const refresh = useCallback((opts?: { signalFailureIfMissing?: boolean }) => {
-    const result = readStored();
-    if (!result.ok) {
-      const errorMessage = result.error ?? "Unable to read session.";
-      setUser(null);
-      setRefreshFailed(true);
-      try {
-        localStorage.removeItem(STORAGE_KEY);
-      } catch {
-        /* ignore */
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetch("/api/auth/me");
+      if (!res.ok) {
+        setUser(null);
+        setRefreshFailed(true);
+        toast.error("Session expired", { description: "Please sign in again." });
+        return;
       }
-      toast.error("Session refresh failed", {
-        description: `${errorMessage} Please sign in again.`,
-      });
-      return;
-    }
-    if (!result.user && opts?.signalFailureIfMissing) {
-      // Session disappeared (e.g. cleared in another tab) while we had a user
+      const data = await res.json();
+      setUser(data.user);
+      setRefreshFailed(false);
+    } catch {
       setUser(null);
       setRefreshFailed(true);
-      toast.error("Session refresh failed", {
-        description: "Your session has expired. Please sign in again.",
-      });
-      return;
+    } finally {
+      setLoading(false);
     }
-    setUser(result.user);
-    setRefreshFailed(false);
-  }, []);
+  }, [setUser, setRefreshFailed, setLoading, toast]);
 
   useEffect(() => {
     refresh();
-    setLoading(false);
+  }, [refresh]);
 
-    const onStorage = (e: StorageEvent) => {
-      if (e.key !== STORAGE_KEY) return;
-      // If the value was removed or invalidated externally while we had a user, treat as failure
-      const hadUser = !!user;
-      refresh({ signalFailureIfMissing: hadUser });
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, [refresh, user]);
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
-  const signIn = useCallback((next: KejaUser) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    setUser(next);
-    setRefreshFailed(false);
-  }, []);
+  const signIn = async (email: string, password: string) => {
+    try {
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "signin", email, password }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Sign in failed");
+      }
+      const data = await res.json();
+      setUser(data.user);
+      toast.success("Welcome back!");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Sign in failed";
+      toast.error("Sign in failed", { description: message });
+      throw err;
+    }
+  };
 
-  const signOut = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
-    setUser(null);
-    setRefreshFailed(false);
-  }, []);
+  const signUp = async (name: string, email: string, password: string, role: Role) => {
+    try {
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "signup", name, email, password, role }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Sign up failed");
+      }
+      const data = await res.json();
+      setUser(data.user);
+      toast.success("Account created!");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Sign up failed";
+      toast.error("Sign up failed", { description: message });
+      throw err;
+    }
+  };
+
+  const signOut = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "GET" });
+    } catch {
+      /* ignore */
+    } finally {
+      setUser(null);
+      setRefreshFailed(false);
+      toast.success("Signed out successfully");
+    }
+  };
 
   return (
-    <AuthContext.Provider value={{ user, loading, refreshFailed, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, loading, refreshFailed, signIn, signUp, signOut }}>
       {children}
     </AuthContext.Provider>
   );

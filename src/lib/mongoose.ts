@@ -6,7 +6,6 @@ type MongooseCache = {
 };
 
 declare global {
-  // Required for global type augmentation in Node.js.
   var mongooseCache: MongooseCache | undefined;
 }
 
@@ -30,6 +29,9 @@ export async function connectToDatabase() {
 
   cached.promise ??= mongoose.connect(mongoUri, {
     bufferCommands: false,
+    maxPoolSize: 10,
+    socketTimeoutMS: 45000,
+    connectTimeoutMS: 10000,
   });
 
   cached.conn = await cached.promise;
