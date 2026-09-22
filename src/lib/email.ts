@@ -208,6 +208,15 @@ function renderTemplate(content: string, url: string, preheader?: string): strin
   return createEmailTemplate(filledContent, preheader);
 }
 
+function uniqueSubject(subject: string): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const d = new Date();
+  const stamp = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(
+    d.getUTCHours(),
+  )}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+  return `${subject} [${stamp} UTC]`;
+}
+
 export async function sendVerificationEmail(email: string, token: string, name: string): Promise<boolean> {
   const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/verify?token=${token}`;
   const content = createVerificationContent(name);
@@ -216,7 +225,7 @@ export async function sendVerificationEmail(email: string, token: string, name: 
 
   return sendEmail({
     to: email,
-    subject: "Verify your email - Keja Yangu",
+    subject: uniqueSubject("Verify your email - Keja Yangu"),
     html,
     text,
   });
@@ -230,7 +239,7 @@ export async function sendPasswordResetEmail(email: string, token: string, name:
 
   return sendEmail({
     to: email,
-    subject: "Reset your password - Keja Yangu",
+    subject: uniqueSubject("Reset your password - Keja Yangu"),
     html,
     text,
   });
@@ -244,7 +253,7 @@ export async function sendWelcomeEmail(email: string, name: string, role: string
 
   return sendEmail({
     to: email,
-    subject: "Welcome to Keja Yangu - Your account is active",
+    subject: uniqueSubject("Welcome to Keja Yangu - Your account is active"),
     html,
     text,
   });
