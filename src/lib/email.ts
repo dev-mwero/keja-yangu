@@ -4,6 +4,17 @@ export function isEmailConfigured(): boolean {
   return Boolean(process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASS);
 }
 
+function unquote(value: string): string {
+  if (
+    value.length >= 2 &&
+    ((value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'")))
+  ) {
+    return value.slice(1, -1);
+  }
+  return value;
+}
+
 function createTransporter() {
   if (!isEmailConfigured()) {
     console.warn("[email] SMTP is not configured. Email delivery is disabled for this environment.");
@@ -13,8 +24,10 @@ function createTransporter() {
   const host = process.env.EMAIL_HOST ?? "smtp.gmail.com";
   const port = parseInt(process.env.EMAIL_PORT ?? "587", 10);
   const secure = process.env.EMAIL_SECURE === "true" || port === 465;
+  const user = unquote(process.env.EMAIL_USER ?? "");
+  const pass = unquote(process.env.EMAIL_PASS ?? "");
 
-  console.log("[email] Config:", { host, port, secure, user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS?.slice(0, 3) + "***" });
+  console.log("[email] Config:", { host, port, secure, user, pass: pass.slice(0, 3) + "***" });
 
   return nodemailer.createTransport({
     host,
@@ -22,8 +35,8 @@ function createTransporter() {
     secure,
     requireTLS: false,
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
+      user,
+      pass,
     },
     tls: {
       rejectUnauthorized: false,
@@ -59,7 +72,9 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
     if (!transporter) return false;
 
     const info = await transporter.sendMail({
-      from: process.env.EMAIL_FROM ?? "Keja Yangu <no-reply@keja.co>",
+      from: process.env.EMAIL_FROM
+        ? unquote(process.env.EMAIL_FROM)
+        : "Keja Yangu <no-reply@keja.co>",
       to: options.to,
       subject: options.subject,
       html: options.html,
