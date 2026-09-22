@@ -41,7 +41,7 @@ const TenantDocumentsPage = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = doc.name.replace(/\s+/g, "-").toLowerCase() + ".txt";
+    link.download = `${doc.name.replace(/\s+/g, "-").toLowerCase()}.txt`;
     link.click();
     URL.revokeObjectURL(url);
     toast.success("Document downloaded");
