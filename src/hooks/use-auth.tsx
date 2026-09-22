@@ -53,10 +53,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     refresh();
   }, [refresh]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
   const signIn = async (email: string, password: string) => {
     try {
       const res = await fetch("/api/auth", {

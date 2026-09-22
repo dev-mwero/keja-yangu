@@ -4,6 +4,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/hooks/use-auth";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("http://localhost:3000"),
   title: {
     default: "Keja Yangu — Property Rentals & Tenant Management",
     template: "%s | Keja Yangu",
