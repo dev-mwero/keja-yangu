@@ -14,7 +14,8 @@
       "!coverage",
       "!package-lock.json",
       "!bun.lock",
-      "!bun.lockb"
+      "!bun.lockb",
+      "!src/app/globals.css"
     ]
   },
   "formatter": {
@@ -27,16 +28,13 @@
     "enabled": true,
     "rules": {
       "recommended": true,
-      "a11y": {
-        "noSvgWithoutTitle": "off"
-      },
       "correctness": {
-        "noUnusedImports": "warn",
+        "noUnusedImports": "error",
         "useExhaustiveDependencies": "warn"
       },
       "style": {
-        "noNonNullAssertion": "off",
-        "useImportType": "warn"
+        "noNonNullAssertion": "error",
+        "useImportType": "error"
       },
       "suspicious": {
         "noArrayIndexKey": "off"
