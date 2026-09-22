@@ -93,7 +93,7 @@ export async function POST(request: Request) {
       const verificationToken = await generateVerificationToken();
       const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-      const user = await User.create({
+      { await User.create({
         email: parsed.data.email,
         name: parsed.data.name,
         passwordHash,
@@ -104,23 +104,9 @@ export async function POST(request: Request) {
 
       await sendVerificationEmail(parsed.data.email, verificationToken);
 
-      const token = jwt.sign(
-        { userId: user._id, email: user.email, role: user.role, name: user.name },
-        process.env.JWT_SECRET ?? "fallback-secret",
-        { expiresIn: "7d" },
-      );
-
-      const response = NextResponse.json({
-        user: { email: user.email, name: user.name, role: user.role },
+      return NextResponse.json({
+        message: "Account created. Please verify your email to continue.",
       });
-      response.cookies.set("keja-token", token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 60 * 60 * 24 * 7,
-        path: "/",
-      });
-      return response;
     }
 
     if (action === "verify-email") {
