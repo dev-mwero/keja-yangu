@@ -1,39 +1,50 @@
-import { Ratelimit } from "@upstash/ratelimit";
-import { Redis } from "@upstash/redis";
 import { type NextRequest, NextResponse } from "next/server";
 
-const hasUpstashConfig = process.env.UPSTASH_REST_URL && process.env.UPSTASH_REST_TOKEN;
-
-let ratelimit: Ratelimit | null = null;
-
-if (hasUpstashConfig) {
-  ratelimit = new Ratelimit({
-    redis: Redis.fromEnv(),
-    limiter: Ratelimit.slidingWindow(10, "1 m"),
-    prefix: "@keja-yangu:",
-  });
+interface RateLimitEntry {
+  count: number;
+  resetAt: number;
 }
 
-export async function rateLimit(request: NextRequest) {
-  if (!ratelimit) {
-    return null;
+const memoryStore = new Map<string, RateLimitEntry>();
+
+function cleanupExpired() {
+  const now = Date.now();
+  for (const [key, entry] of memoryStore.entries()) {
+    if (entry.resetAt < now) {
+      memoryStore.delete(key);
+    }
+  }
+}
+
+setInterval(cleanupExpired, 60_000);
+
+export async function rateLimit(request: NextRequest, options: { windowMs?: number; limit?: number } = {}) {
+  const { windowMs = 60_000, limit = 10 } = options;
+  const ip = request.headers.get("x-forwarded-for") ?? "unknown";
+  const key = `ratelimit:${ip}`;
+  const now = Date.now();
+  const resetAt = now + windowMs;
+
+  const entry = memoryStore.get(key);
+
+  if (!entry || entry.resetAt < now) {
+    memoryStore.set(key, { count: 1, resetAt });
+    return { remaining: limit - 1, reset: resetAt };
   }
 
-  const ip = request.headers.get("x-forwarded-for") ?? "unknown";
-  const { success, remaining, reset } = await ratelimit.limit(ip);
-
-  if (!success) {
+  if (entry.count >= limit) {
     return NextResponse.json(
       { error: "Too many requests. Please try again later." },
-      { status: 429, headers: { "Retry-After": `${reset - Date.now()}` } },
+      { status: 429, headers: { "Retry-After": Math.ceil((entry.resetAt - now) / 1000).toString() } },
     );
   }
 
-  return { remaining, reset };
+  entry.count++;
+  return { remaining: limit - entry.count, reset: entry.resetAt };
 }
 
 export function rateLimitHeaders(response: NextResponse, remaining: number, reset: number) {
   response.headers.set("X-RateLimit-Remaining", remaining.toString());
-  response.headers.set("X-RateLimit-Reset", reset.toString());
+  response.headers.set("X-RateLimit-Reset", Math.ceil(reset / 1000).toString());
   return response;
 }
