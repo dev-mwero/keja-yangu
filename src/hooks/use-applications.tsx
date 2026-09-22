@@ -2,10 +2,10 @@
 
 import { useEffect, useState, useCallback } from "react";
 import {
-  Application,
   listApplicationsForTenant,
   subscribeApplications,
 } from "@/lib/applications";
+import type { Application } from "@/lib/applications";
 
 export const useTenantApplications = (tenantEmail: string | undefined) => {
   const [apps, setApps] = useState<Application[]>([]);

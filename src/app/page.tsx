@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Search, ShieldCheck, Users, Sparkles, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -65,13 +66,13 @@ const Index = () => {
 
           <div className="md:col-span-6 lg:col-span-5 relative">
             <div className="relative aspect-[4/5] overflow-hidden rounded-3xl shadow-elevated">
-              <img
-                src="/images/hero-building.jpg"
-                alt="Modern terracotta apartment building at golden hour"
-                width={1600}
-                height={1200}
-                className="h-full w-full object-cover"
-              />
+                <Image
+                  src="/images/hero-building.jpg"
+                  alt="Modern terracotta apartment building at golden hour"
+                  fill
+                  sizes="(max-width: 1024px) 100vw, 50vw"
+                  className="h-full w-full object-cover"
+                />
               <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-foreground/60 to-transparent" />
               <div className="absolute bottom-5 left-5 right-5 rounded-2xl bg-background/95 p-4 shadow-elevated backdrop-blur">
                 <div className="flex items-center gap-3">
@@ -111,7 +112,7 @@ const Index = () => {
             </Link>
           </div>
           <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-            {featured.map((p, i) => <PropertyCard key={p.id} property={p} index={i} />)}
+            {featured.map((p) => <PropertyCard key={p.id} property={p} />)}
           </div>
         </div>
       </section>

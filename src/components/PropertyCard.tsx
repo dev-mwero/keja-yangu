@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { MapPin, BedDouble, Bath, Maximize2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -12,17 +13,17 @@ const statusStyles: Record<Property["status"], string> = {
   maintenance: "bg-warning/15 text-warning border-warning/40",
 };
 
-export const PropertyCard = ({ property, index = 0 }: { property: Property; index?: number }) => {
+export const PropertyCard = ({ property }: { property: Property }) => {
   return (
     <Link href={`/properties/${property.id}`} className="group block">
       <div className="relative overflow-hidden rounded-2xl bg-muted shadow-soft transition-all duration-500 hover:shadow-elevated">
         <div className="aspect-[4/3] overflow-hidden">
-          <img
-            src={property.images[0]}
+          <Image
+            src={property.images[0] || "/images/property-1.jpg"}
             alt={property.title}
+            fill
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             loading="lazy"
-            width={1200}
-            height={900}
             className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
           />
         </div>

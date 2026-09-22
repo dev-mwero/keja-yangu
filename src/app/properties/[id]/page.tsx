@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import Image from "next/image";
 import { ArrowLeft, MapPin, BedDouble, Bath, Maximize2, Check, Send } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Button } from "@/components/ui/button";
@@ -125,24 +126,29 @@ const PropertyDetails = () => {
           {/* Gallery + content */}
           <div className="lg:col-span-8">
             <div className="overflow-hidden rounded-3xl shadow-elevated">
-              <div className="aspect-[16/10] bg-muted">
-                <img
-                  src={property.images[active]}
+              <div className="aspect-[16/10] bg-muted relative">
+                <Image
+                  src={property.images[active] || "/images/property-1.jpg"}
                   alt={property.title}
-                  className="h-full w-full object-cover"
+                  fill
+                  sizes="(max-width: 1024px) 100vw, 66vw"
+                  className="object-cover"
                 />
               </div>
             </div>
             <div className="mt-3 grid grid-cols-3 gap-3">
               {property.images.map((img, i) => (
                 <button
+                  type="button"
                   key={i}
                   onClick={() => setActive(i)}
                   className={`overflow-hidden rounded-xl transition-all ${
                     active === i ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : "opacity-70 hover:opacity-100"
                   }`}
                 >
-                  <img src={img} alt="" className="aspect-[4/3] h-full w-full object-cover" />
+                  <div className="aspect-[4/3] relative">
+                    <Image src={img} alt="" fill className="object-cover" />
+                  </div>
                 </button>
               ))}
             </div>

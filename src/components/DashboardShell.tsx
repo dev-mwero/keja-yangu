@@ -1,11 +1,13 @@
 "use client";
 
-import { ReactNode, useState } from "react";
+import { useState } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Logo } from "./Logo";
 import { cn } from "@/lib/utils";
-import { LogOut, LucideIcon, Menu } from "lucide-react";
+import { LogOut, Menu } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./ThemeToggle";
@@ -19,14 +21,14 @@ export interface DashNavItem {
 }
 
 interface Props {
-  role: string;
+  roleName: string;
   nav: DashNavItem[];
   title: string;
   subtitle?: string;
   children: ReactNode;
 }
 
-export const DashboardShell = ({ role, nav, title, subtitle, children }: Props) => {
+export const DashboardShell = ({ roleName, nav, title, subtitle, children }: Props) => {
   const pathname = usePathname();
   const router = useRouter();
   const { signOut } = useAuth();
@@ -86,9 +88,9 @@ export const DashboardShell = ({ role, nav, title, subtitle, children }: Props) 
       <div className="container flex gap-8 py-6">
         <aside className="sticky top-6 hidden h-[calc(100vh-3rem)] w-60 shrink-0 flex-col rounded-2xl border border-border bg-card p-4 shadow-soft lg:flex">
           <Logo className="mb-6 px-2" />
-          <div className="mb-4 px-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            {role}
-          </div>
+<div className="mb-4 px-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
+                      {roleName}
+                    </div>
           {navList()}
           <div className="mt-auto rounded-xl bg-muted/60 p-3 text-xs text-muted-foreground">
             <p className="mb-2 font-medium text-foreground">Need help?</p>
@@ -113,7 +115,7 @@ export const DashboardShell = ({ role, nav, title, subtitle, children }: Props) 
                   </SheetHeader>
                   <div className="px-3 py-4">
                     <div className="mb-3 px-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
-                      {role}
+                      {roleName}
                     </div>
                     {navList(() => setMobileOpen(false))}
                   </div>
