@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import jwt from "jsonwebtoken";
 import { isValidObjectId } from "mongoose";
 import { z } from "zod";
 import { connectToDatabase } from "@/lib/mongoose";
@@ -24,6 +26,25 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
+function getAuthUser(request: NextRequest) {
+  const token = request.cookies.get("keja-token")?.value;
+  if (!token) return null;
+  try {
+    return jwt.verify(token, process.env.JWT_SECRET ?? "fallback-secret") as { userId: string; role: string };
+  } catch {
+    return null;
+  }
+}
+
+async function requireAuth(request: NextRequest, roles?: string[]) {
+  const user = getAuthUser(request);
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (roles && !roles.includes(user.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  return null;
+}
+
 function invalidId() {
   return NextResponse.json({ error: "Invalid property id" }, { status: 400 });
 }
@@ -32,68 +53,49 @@ function notFound() {
   return NextResponse.json({ error: "Property not found" }, { status: 404 });
 }
 
-const PropertyModel = Property as any;
-
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(_request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
-
-  if (!isValidObjectId(id)) {
-    return invalidId();
-  }
-
+  if (!isValidObjectId(id)) return invalidId();
   await connectToDatabase();
-  const property = await PropertyModel.findOne({ _id: id }).lean();
-
-  if (!property) {
-    return notFound();
-  }
-
+  const property = await Property.findOne({ _id: id }).lean();
+  if (!property) return notFound();
   return NextResponse.json({ data: property });
 }
 
-export async function PATCH(request: Request, context: RouteContext) {
+export async function PATCH(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
+  if (!isValidObjectId(id)) return invalidId();
 
-  if (!isValidObjectId(id)) {
-    return invalidId();
-  }
+  const authError = await requireAuth(request, ["owner"]);
+  if (authError) return authError;
 
   const body = await request.json();
   const parsed = propertyUpdate.safeParse(body);
-
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Invalid property payload", issues: parsed.error.flatten() },
-      { status: 400 },
+      { status: 400 }
     );
   }
 
   await connectToDatabase();
-  const property = await PropertyModel.findOneAndUpdate({ _id: id }, parsed.data, {
+  const property = await Property.findOneAndUpdate({ _id: id }, parsed.data, {
     new: true,
     runValidators: true,
   }).lean();
-
-  if (!property) {
-    return notFound();
-  }
-
+  if (!property) return notFound();
   return NextResponse.json({ data: property });
 }
 
-export async function DELETE(_request: Request, context: RouteContext) {
+export async function DELETE(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
+  if (!isValidObjectId(id)) return invalidId();
 
-  if (!isValidObjectId(id)) {
-    return invalidId();
-  }
+  const authError = await requireAuth(request, ["owner"]);
+  if (authError) return authError;
 
   await connectToDatabase();
-  const property = await PropertyModel.findOneAndDelete({ _id: id }).lean();
-
-  if (!property) {
-    return notFound();
-  }
-
+  const property = await Property.findOneAndDelete({ _id: id }).lean();
+  if (!property) return notFound();
   return NextResponse.json({ data: property });
 }

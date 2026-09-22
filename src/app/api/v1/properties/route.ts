@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { connectToDatabase } from "@/lib/mongoose";
 import { Property } from "@/models/Property";
@@ -19,24 +21,49 @@ const propertyInput = z.object({
   description: z.string().optional(),
 });
 
-export async function GET() {
+function getAuthUser(request: NextRequest) {
+  const token = request.cookies.get("keja-token")?.value;
+  if (!token) return null;
+  try {
+    return jwt.verify(token, process.env.JWT_SECRET ?? "fallback-secret") as { userId: string; role: string };
+  } catch {
+    return null;
+  }
+}
+
+async function requireAuth(request: NextRequest, roles?: string[]) {
+  const user = getAuthUser(request);
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (roles && !roles.includes(user.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  return null;
+}
+
+export async function GET(_request: NextRequest) {
   await connectToDatabase();
   const properties = await Property.find().sort({ createdAt: -1 }).lean();
   return NextResponse.json({ data: properties });
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const authError = await requireAuth(request, ["owner", "caretaker"]);
+  if (authError) return authError;
+
   const body = await request.json();
   const parsed = propertyInput.safeParse(body);
 
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Invalid property payload", issues: parsed.error.flatten() },
-      { status: 400 },
+      { status: 400 }
     );
   }
 
+  const user = getAuthUser(request);
+  const data = { ...parsed.data, ownerId: user?.userId };
+
   await connectToDatabase();
-  const property = await Property.create(parsed.data);
+  const property = await Property.create(data);
   return NextResponse.json({ data: property }, { status: 201 });
 }
