@@ -11,7 +11,7 @@ function createTransporter() {
     host,
     port,
     secure,
-    requireTLS: true,
+    requireTLS: false,
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
@@ -20,16 +20,15 @@ function createTransporter() {
     maxConnections: 1,
     maxMessages: 1,
     authMethod: "LOGIN",
+    connectionTimeout: 5000,
+    greetingTimeout: 5000,
+    socketTimeout: 10000,
   });
 }
 
-let _transporter: ReturnType<typeof createTransporter> | null = null;
-
 function getTransporter() {
-  if (!_transporter) {
-    _transporter = createTransporter();
-  }
-  return _transporter;
+  // Create fresh transporter each time to avoid connection state issues
+  return createTransporter();
 }
 
 export interface EmailOptions {
