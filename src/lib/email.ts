@@ -5,6 +5,8 @@ function createTransporter() {
   const port = parseInt(process.env.EMAIL_PORT ?? "587", 10);
   const secure = process.env.EMAIL_SECURE === "true" || port === 465;
 
+  console.log("[email] Config:", { host, port, secure, user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS?.slice(0, 3) + "***" });
+
   return nodemailer.createTransport({
     host,
     port,
@@ -14,6 +16,10 @@ function createTransporter() {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
     },
+    pool: false,
+    maxConnections: 1,
+    maxMessages: 1,
+    authMethod: "LOGIN",
   });
 }
 
