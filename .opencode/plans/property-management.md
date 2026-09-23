@@ -17,7 +17,8 @@ gated by role + privilege. Persistence is real (MongoDB), never localStorage.
   roleMap, auth redirects). Full control over properties/tenants/caretaker privileges.
 - Caretaker privilege model stored on the `User` doc: `privileges: string[]` +
   `managedByOwnerId`. Privilege set: `create_property`, `edit_property`,
-  `delete_assigned_property`, `manage_tenants`. Default = read-only.
+  `delete_assigned_property`, `manage_tenants`, `manage_invoices`. Default =
+  read-only.
 - Owner-only team/caretaker settings page (`/dashboard/owner/team`) with a privilege
   switch per caretaker. system-admin gets an equivalent management surface.
 - Property create/edit/delete dialogs inside owner + caretaker portfolio pages.
@@ -122,7 +123,7 @@ literal "delete block of 403" the business requires). Absent/invalid id → 404/
    projection (no `ownerId`, `caretakerIds`, `createdById`).
 6. **`src/models/Property.ts`** — add `createdById: string` (default `""`, consistent
    with `ownerId`). Keep `ownerId`/`caretakerIds` as plain 24-hex string ids.
-7. **`src/models/User.ts`** — add `privileges: [{ enum of the 4, default [] }]` and
+7. **`src/models/User.ts`** — add `privileges: [{ enum of the 5, default [] }]` and
    `managedByOwnerId: string default ""`. Index `{ role: 1, managedByOwnerId: 1 }`.
 8. **Caretaker/privileges API** — `GET /api/v1/caretakers?ownerId=` (owner sees
    `managedByOwnerId === self`, system-admin all, others 401/403) returning rows
@@ -161,7 +162,7 @@ literal "delete block of 403" the business requires). Absent/invalid id → 404/
     Default = plain read-only cards. Stop resolving caretaker identity from
     `src/data/properties.ts` (line 39 `caretakers.find(... ?? "c1")`) — use `user.id`.
 14. **Team page** (`src/app/dashboard/owner/team/page.tsx`) — `DashboardShell` + a
-    table of caretakers (ui/table) with four `Switch` controls each initialized from
+    table of caretakers (ui/table) with five `Switch` controls each initialized from
     `GET /api/v1/caretakers`, PUT on toggle, disable while in flight, revert + toast
     on failure. system-admin equivalent under its own nav.
 15. **Tenants pages** — shared `TenantsManager` component consumed by
