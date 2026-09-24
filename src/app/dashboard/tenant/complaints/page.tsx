@@ -26,14 +26,8 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { tenantNav } from "@/config/dashboardNav";
-import {
-  type Complaint,
-  type ComplaintCategory,
-  type ComplaintPriority,
-  type ComplaintStatus,
-  complaintsStore,
-} from "@/data/dashboard";
-import { useLocalStore } from "@/hooks/use-local-store";
+import { useComplaintMutations, useComplaints } from "@/hooks/use-complaints";
+import type { ComplaintCategory, ComplaintPriority, ComplaintStatus } from "@/lib/domain-enums";
 import { relativeTime } from "@/lib/format";
 
 const statusClass: Record<ComplaintStatus, string> = {
@@ -60,7 +54,8 @@ const categories: ComplaintCategory[] = [
 type Filter = "all" | ComplaintStatus;
 
 const TenantComplaintsPage = () => {
-  const { items, addItem } = useLocalStore<Complaint>(complaintsStore);
+  const { items, refetch } = useComplaints();
+  const { createComplaint, pending } = useComplaintMutations();
   const [filter, setFilter] = useState<Filter>("all");
   const [open, setOpen] = useState(false);
   const [subject, setSubject] = useState("");
@@ -73,28 +68,34 @@ const TenantComplaintsPage = () => {
   const resolvedCount = items.filter((c) => c.status === "resolved").length;
   const visible = filter === "all" ? items : items.filter((c) => c.status === filter);
 
-  const submit = () => {
+  // Single-property tenants pin their property server-side; the page only
+  // hints the property when the loaded complaints resolve to exactly one.
+  const knownPropertyIds = [...new Set(items.map((c) => c.propertyId).filter(Boolean))];
+  const propertyId = knownPropertyIds.length === 1 ? knownPropertyIds[0] : undefined;
+
+  const submit = async () => {
     if (!subject.trim()) {
       toast.error("Subject is required");
       return;
     }
-    const now = new Date().toISOString();
-    addItem({
-      id: `cpt-${Date.now()}`,
-      subject: subject.trim(),
-      category,
-      priority,
-      message: message.trim() || "—",
-      status: "open",
-      property: "Sunlit Studio in Kilimani",
-      createdAt: now,
-    });
-    toast.success("Complaint logged", {
-      description: "The caretaker has been notified and will follow up.",
-    });
-    setSubject("");
-    setMessage("");
-    setOpen(false);
+    try {
+      await createComplaint({
+        subject: subject.trim(),
+        category,
+        priority,
+        message: message.trim() || "—",
+        propertyId,
+      });
+      toast.success("Complaint logged", {
+        description: "The caretaker has been notified and will follow up.",
+      });
+      setSubject("");
+      setMessage("");
+      setOpen(false);
+      void refetch();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to submit complaint");
+    }
   };
 
   const counts: Record<Filter, number> = {
@@ -145,7 +146,7 @@ const TenantComplaintsPage = () => {
           </div>
         ) : (
           visible.map((c) => (
-            <div key={c.id} className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+            <div key={c._id} className="rounded-2xl border border-border bg-card p-5 shadow-soft">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                   <Wrench className="h-5 w-5" />
@@ -235,7 +236,7 @@ const TenantComplaintsPage = () => {
             <Button variant="outline" className="rounded-full" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button className="rounded-full" onClick={submit}>
+            <Button className="rounded-full" onClick={() => void submit()} disabled={pending}>
               Submit complaint
             </Button>
           </DialogFooter>

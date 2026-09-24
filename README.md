@@ -89,9 +89,37 @@ Open [http://localhost:3000](http://localhost:3000).
 - `POST /api/v1/invoices/generate` — Generate invoices for the current month (idempotent; rate-limited 20/min)
 - `GET /api/v1/tenant/me/invoices` — Tenant's own invoices (`invoice:read-own`)
 - `POST /api/v1/tenant/me/invoices/[id]` — Tenant marks own invoice paid (honor system, audited)
+- `POST /api/v1/tenant/me/invoices/[id]/pay-initiate` — Start a Paystack checkout for a tenant's pending invoice (`invoice:read-own`; rate-limited 5/min per user; returns `authorizationUrl`)
+- `POST /api/v1/payments/paystack/webhook` — Paystack `charge.success` webhook (HMAC-SHA512 signature verified over the raw body; no cookie auth, no rate limit)
+- `GET /api/v1/tenant/me/payments/status?reference=` — Server-side verify fallback for a lost webhook / callback return (`invoice:read-own`)
+- `GET /api/v1/notifications` — List notifications (`page`, `limit`, `unread`, `type` params; `notification:read-own`)
+- `GET /api/v1/notifications/unread-count` — Unread notification count (`notification:read-own`)
+- `PATCH /api/v1/notifications/[id]` — Mark one notification read (own-scope; rate-limited 20/min)
+- `POST /api/v1/notifications/mark-all-read` — Mark all own notifications read (`notification:read-own`)
+- `GET /api/v1/settings` — Read notification/preference settings (defaults merged with stored values; `settings:read`)
+- `PATCH /api/v1/settings` — Update notification/preference settings (`settings:write`; rate-limited 20/min)
+- `GET /api/v1/complaints` — List complaints scoped per role (`complaint:read-own`; optional `status` filter)
+- `POST /api/v1/complaints` — Submit a complaint (tenant only; single-property tenants auto-pin, multi-property tenants pass `propertyId`; rate-limited 20/min)
+- `PATCH /api/v1/complaints/[id]` — Update complaint status/resolution (`complaint:manage`; caretakers only on assigned properties; rate-limited 20/min)
+- `GET /api/v1/chat/threads` — List chat threads scoped per role with per-thread unread counts (`chat:read-own`)
+- `POST /api/v1/chat/threads` — Create-or-get a thread with a landlord/caretaker (tenant only; rate-limited 20/min)
+- `GET /api/v1/chat/threads/[id]/messages` — Newest 100 messages ascending (`chat:read-own`; participant only)
+- `POST /api/v1/chat/threads/[id]/messages` — Send a message (participant; caretakers need `send_messages`; rate-limited 30/min)
+- `POST /api/v1/chat/threads/[id]/read` — Mark a thread read (participant; idempotent)
+- `GET /api/v1/announcements` — List announcements scoped per role (`announcement:read`; tenant audience/property filters)
+- `POST /api/v1/announcements` — Post an announcement (owner; caretakers with `manage_announcements` for their managed properties; rate-limited 20/min)
+- `GET /api/v1/documents` — List document metadata scoped per role (`document:read-own`; tenants see own + shared property docs)
 - `POST /api/auth` — Auth actions (`signin`, `signup`, `verify-email`, `resend-verification`)
 - `GET /api/auth/me` — Get current user
 - `GET /api/auth/logout` — Sign out
+
+### Paystack webhook registration
+
+Register `https://<your-domain>/api/v1/payments/paystack/webhook` on the Paystack
+dashboard under the **test** secret matching `PAYSTACK_SECRET_KEY`. The webhook
+is authenticated solely by the `x-paystack-signature` HMAC header — it must not
+sit behind any cookie/session auth. Local development requires a public tunnel
+(e.g. ngrok) so Paystack can reach the endpoint.
 
 ## Project Structure
 
@@ -128,6 +156,10 @@ EMAIL_PORT=587
 EMAIL_USER=your-email@gmail.com
 EMAIL_PASS=your-app-password
 EMAIL_FROM=Keja Yangu <no-reply@keja.co>
+
+# Paystack (test keys)
+PAYSTACK_SECRET_KEY=
+PAYSTACK_PUBLIC_KEY=
 ```
 
 ## User Roles

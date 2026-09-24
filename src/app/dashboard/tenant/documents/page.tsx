@@ -14,9 +14,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { tenantNav } from "@/config/dashboardNav";
-import { type DashboardDocument, type DocumentCategory, documentsStore } from "@/data/dashboard";
-import { useLocalStore } from "@/hooks/use-local-store";
+import { useDocuments } from "@/hooks/use-documents";
+import type { DocumentCategory } from "@/lib/domain-enums";
 import { formatDate } from "@/lib/format";
+import type { DashboardDocument } from "@/types/communications";
 
 const categoryClass: Record<DocumentCategory, string> = {
   lease: "bg-primary/15 text-primary",
@@ -28,8 +29,8 @@ const categoryClass: Record<DocumentCategory, string> = {
 };
 
 const TenantDocumentsPage = () => {
-  const { items } = useLocalStore<DashboardDocument>(documentsStore);
-  const sorted = [...items].sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
+  const { items } = useDocuments();
+  const sorted = [...items].sort((a, b) => (b.uploadedAt ?? "").localeCompare(a.uploadedAt ?? ""));
 
   const download = (doc: DashboardDocument) => {
     const blob = new Blob(
@@ -88,7 +89,7 @@ const TenantDocumentsPage = () => {
               </TableHeader>
               <TableBody>
                 {sorted.map((doc) => (
-                  <TableRow key={doc.id}>
+                  <TableRow key={doc._id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">

@@ -1,3 +1,7 @@
+export * from "./announcement";
+export * from "./chat";
+export * from "./complaint";
+export * from "./documents";
 export * from "./invoice";
 export * from "./lease";
 export * from "./notifications";
