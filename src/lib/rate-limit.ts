@@ -20,21 +20,23 @@ setInterval(cleanupExpired, 60_000);
 
 // `x-forwarded-for` is only trustworthy when deployed behind a proxy that
 // overwrites it; IP-less requests fall back to a unique per-request key so they
-// never share (and exhaust) a common throttle bucket.
+// never share (and exhaust) a common throttle bucket. Pass an explicit `key`
+// (e.g. an authenticated userId) to scope the bucket to the actor instead of
+// their IP.
 export async function rateLimit(
   request: NextRequest,
-  options: { windowMs?: number; limit?: number } = {},
+  options: { windowMs?: number; limit?: number; key?: string } = {},
 ) {
-  const { windowMs = 60_000, limit = 10 } = options;
+  const { windowMs = 60_000, limit = 10, key } = options;
   const ip = request.headers.get("x-forwarded-for") ?? crypto.randomUUID();
-  const key = `ratelimit:${ip}`;
+  const rateKey = key ?? `ratelimit:${ip}`;
   const now = Date.now();
   const resetAt = now + windowMs;
 
-  const entry = memoryStore.get(key);
+  const entry = memoryStore.get(rateKey);
 
   if (!entry || entry.resetAt < now) {
-    memoryStore.set(key, { count: 1, resetAt });
+    memoryStore.set(rateKey, { count: 1, resetAt });
     return { remaining: limit - 1, reset: resetAt };
   }
 

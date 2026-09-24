@@ -9,6 +9,32 @@ export interface MyInvoiceFilters {
   period?: string;
 }
 
+/** Result of initiating a Paystack checkout (`POST .../pay-initiate`). */
+export interface PayInitiateResult {
+  paymentId: string;
+  reference: string;
+  authorizationUrl: string;
+  expiresAt: string;
+}
+
+/** Serialized payment ledger row as returned by the tenant status route. */
+export interface PaymentStatusResult {
+  payment: {
+    _id: string;
+    provider: string;
+    providerReference: string;
+    invoiceId: string;
+    amountMinor: number;
+    currency: string;
+    status: string;
+    channel?: string;
+    paidAt?: string;
+    initiatedAt: string;
+    expiresAt: string;
+  };
+  invoice: Invoice | null;
+}
+
 export function useMyInvoices(filters?: MyInvoiceFilters) {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,5 +102,42 @@ export function useMyInvoiceMutations() {
     }
   };
 
-  return { markOwnPaid, pending };
+  const initiatePay = async (id: string): Promise<PayInitiateResult> => {
+    setPending(true);
+    try {
+      const res = await fetch(`/api/v1/tenant/me/invoices/${id}/pay-initiate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || "Could not start online payment");
+      }
+      const data = json.data as PayInitiateResult;
+      // Server-side redirect to the hosted Paystack checkout.
+      window.location.assign(data.authorizationUrl);
+      return data;
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const checkPaymentReference = async (reference: string): Promise<PaymentStatusResult> => {
+    setPending(true);
+    try {
+      const res = await fetch(
+        `/api/v1/tenant/me/payments/status?reference=${encodeURIComponent(reference)}`,
+      );
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || "Could not verify payment");
+      }
+      return json.data as PaymentStatusResult;
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return { markOwnPaid, initiatePay, checkPaymentReference, pending };
 }
