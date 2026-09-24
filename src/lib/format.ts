@@ -1,3 +1,5 @@
+import { PERIOD_REGEX } from "@/lib/invoicing";
+
 export const formatDate = (
   input?: string | number | Date | null,
   options?: Intl.DateTimeFormatOptions,
@@ -46,3 +48,29 @@ export const relativeTime = (input?: string | number | Date | null): string => {
 };
 
 export const toISODate = (date: Date): string => date.toISOString().slice(0, 10);
+
+const PERIOD_MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+/**
+ * Maps a `"YYYY-MM"` period to a short label, e.g. `"2026-09"` -> `"Sep 2026"`.
+ * A manual month array keeps the output identical on every runtime (Intl
+ * short-month output varies by ICU/CLDR version, e.g. "Sep" vs "Sept").
+ */
+export const formatPeriod = (period: string): string => {
+  if (!PERIOD_REGEX.test(period)) return period;
+  const [year, month] = period.split("-").map(Number);
+  return `${PERIOD_MONTHS[month - 1]} ${year}`;
+};

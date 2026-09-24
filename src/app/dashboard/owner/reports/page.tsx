@@ -6,21 +6,26 @@ import { DashboardShell } from "@/components/DashboardShell";
 import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
 import { ownerNav as nav } from "@/config/dashboardNav";
-import { type Invoice, invoicesStore, type MaintenanceTask, tasksStore } from "@/data/dashboard";
+import { type MaintenanceTask, tasksStore } from "@/data/dashboard";
+import { useStaffInvoices } from "@/hooks/use-invoices";
 import { useLocalStore } from "@/hooks/use-local-store";
 import { useProperties } from "@/hooks/use-properties";
 import { formatKES, toISODate } from "@/lib/format";
 
 const OwnerReportsPage = () => {
   const { properties, loading } = useProperties();
-  const { items: invoices } = useLocalStore<Invoice>(invoicesStore);
+  const { invoices } = useStaffInvoices();
   const { items: tasks } = useLocalStore<MaintenanceTask>(tasksStore);
 
   const rentRoll = properties.reduce((sum, p) => sum + p.price, 0);
   const occupied = properties.filter((p) => p.status === "occupied").length;
   const occupancy = properties.length > 0 ? Math.round((occupied / properties.length) * 100) : 0;
-  const collected = invoices.filter((i) => i.status === "paid").reduce((s, i) => s + i.amount, 0);
-  const outstanding = invoices.filter((i) => i.status !== "paid").reduce((s, i) => s + i.amount, 0);
+  const collected = invoices
+    .filter((i) => i.status === "paid")
+    .reduce((s, i) => s + i.amountDue, 0);
+  const outstanding = invoices
+    .filter((i) => i.status === "pending" || i.status === "overdue")
+    .reduce((s, i) => s + i.amountDue, 0);
   const doneTasks = tasks.filter((t) => t.status === "done").length;
 
   const byType: Record<string, number> = {};
