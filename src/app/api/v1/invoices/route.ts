@@ -4,6 +4,7 @@ import { isDuplicateKeyError, readJsonBody, resolveInvoiceActor } from "@/app/ap
 import { nextInvoiceNumber } from "@/lib/invoice-numbering";
 import { computeDueDate, currentPeriod, serializeInvoice } from "@/lib/invoicing";
 import { connectToDatabase } from "@/lib/mongoose";
+import { notifyOverdueInvoices } from "@/lib/notifications";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
 import { requirePermission } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
@@ -53,6 +54,21 @@ export async function GET(request: NextRequest) {
     filter.dueDate = { $lt: now };
   } else if (status) {
     filter.status = status;
+  }
+
+  if (status === "overdue") {
+    // Lazy catch-up sweep: scope follows the actor (not the query filters, so
+    // an owner's `tenantId=` read can't sweep outside their portfolio).
+    let sweepScope: Record<string, unknown> = {};
+    if (actor.role === "caretaker") {
+      sweepScope = {
+        propertyId: { $in: actor.assignedPropertyIds },
+        ownerId: actor.managedByOwnerId,
+      };
+    } else if (actor.role === "owner") {
+      sweepScope = { ownerId: actor.userId };
+    }
+    await notifyOverdueInvoices(now, sweepScope);
   }
 
   const [invoices, total] = await Promise.all([

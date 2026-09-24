@@ -7,13 +7,18 @@ import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-m
 vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("@/lib/notifications", () => ({
+  notifyInvoicePaid: vi.fn().mockResolvedValue(true),
+}));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Invoice", () => ({ Invoice: getModelStubs().invoice }));
 
 import { POST } from "@/app/api/v1/invoices/[id]/mark-paid/route";
+import { notifyInvoicePaid } from "@/lib/notifications";
 
 const { user, property, invoice: invoiceStub } = getModelStubs();
+const notifyInvoicePaidMock = vi.mocked(notifyInvoicePaid);
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
@@ -52,6 +57,7 @@ async function json(res: Response) {
 describe("POST /api/v1/invoices/[id]/mark-paid", () => {
   beforeEach(() => {
     resetModelStubs();
+    notifyInvoicePaidMock.mockClear();
   });
 
   it("403 for a mismatched origin", async () => {
@@ -176,7 +182,7 @@ describe("POST /api/v1/invoices/[id]/mark-paid", () => {
       unknown,
       Record<string, unknown>,
     ];
-    expect(filter).toEqual({ _id: INVOICE_ID });
+    expect(filter).toEqual({ _id: INVOICE_ID, status: { $in: ["pending", "draft"] } });
     expect(updateData.status).toBe("paid");
     expect(updateData.amountPaid).toBe(25000);
     expect(updateData.paidAt).toBeInstanceOf(Date);
@@ -186,6 +192,10 @@ describe("POST /api/v1/invoices/[id]/mark-paid", () => {
     expect(updateData.notes).toBe("paid via M-Pesa");
     const body = await json(res);
     expect((body.data as { status?: string }).status).toBe("paid");
+    expect(notifyInvoicePaidMock).toHaveBeenCalledTimes(1);
+    expect(notifyInvoicePaidMock).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: INVOICE_ID, status: "paid" }),
+    );
   });
 
   it("marks a draft invoice paid", async () => {

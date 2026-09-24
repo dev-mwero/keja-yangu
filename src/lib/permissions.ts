@@ -14,6 +14,10 @@ export const CARETAKER_PRIVILEGES = [
   "delete_assigned_property",
   "manage_tenants",
   "manage_invoices",
+  "manage_complaints",
+  "manage_announcements",
+  "send_messages",
+  "manage_documents",
 ] as const;
 
 export type CaretakerPrivilege = (typeof CARETAKER_PRIVILEGES)[number];
@@ -28,7 +32,21 @@ export type Action =
   | "invoice:manage"
   | "invoice:mark-paid"
   | "invoice:generate"
-  | "invoice:read-own";
+  | "invoice:read-own"
+  | "notification:read-own"
+  | "notification:manage"
+  | "settings:read"
+  | "settings:write"
+  | "complaint:read-own"
+  | "complaint:create"
+  | "complaint:manage"
+  | "chat:read-own"
+  | "chat:send"
+  | "chat:manage"
+  | "announcement:read"
+  | "announcement:manage"
+  | "document:read-own"
+  | "document:manage";
 
 export interface AuthUser {
   userId: string;
@@ -105,7 +123,20 @@ export async function requirePermission(
   const role = user.role;
 
   if (role === "tenant") {
-    return action === "invoice:read-own"
+    const tenantActions: Action[] = [
+      "invoice:read-own",
+      "notification:read-own",
+      "notification:manage",
+      "settings:read",
+      "settings:write",
+      "complaint:read-own",
+      "complaint:create",
+      "chat:read-own",
+      "chat:send",
+      "announcement:read",
+      "document:read-own",
+    ];
+    return tenantActions.includes(action)
       ? null
       : NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -118,7 +149,11 @@ export async function requirePermission(
         action === "property:delete" ||
         action === "lease:manage" ||
         action === "invoice:manage" ||
-        action === "invoice:mark-paid");
+        action === "invoice:mark-paid" ||
+        action === "complaint:manage" ||
+        action === "chat:manage" ||
+        action === "announcement:manage" ||
+        action === "document:manage");
     if (role === "owner" && ownsResource && resource.ownerId !== String(user._id)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -192,6 +227,53 @@ export async function requirePermission(
       return null;
     case "invoice:read-own":
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    case "notification:read-own":
+    case "notification:manage":
+    case "settings:read":
+    case "settings:write":
+    case "complaint:read-own":
+    case "complaint:create":
+    case "chat:read-own":
+    case "chat:send":
+    case "announcement:read":
+    case "document:read-own":
+      return null;
+    case "complaint:manage":
+      if (
+        !privileges.includes("manage_complaints") ||
+        !resource ||
+        resource.ownerId !== managedByOwnerId
+      ) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      return null;
+    case "chat:manage":
+      if (
+        !privileges.includes("send_messages") ||
+        !resource ||
+        resource.ownerId !== managedByOwnerId
+      ) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      return null;
+    case "announcement:manage":
+      if (
+        !privileges.includes("manage_announcements") ||
+        !resource ||
+        resource.ownerId !== managedByOwnerId
+      ) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      return null;
+    case "document:manage":
+      if (
+        !privileges.includes("manage_documents") ||
+        !resource ||
+        resource.ownerId !== managedByOwnerId
+      ) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      return null;
   }
 
   return NextResponse.json({ error: "Forbidden" }, { status: 403 });

@@ -5,6 +5,7 @@ import { generateForPeriod } from "@/lib/invoice-generation";
 import { nextInvoiceNumber } from "@/lib/invoice-numbering";
 import { currentPeriod } from "@/lib/invoicing";
 import { connectToDatabase } from "@/lib/mongoose";
+import { DAY_IN_MS, notifyLeaseExpiry } from "@/lib/notifications";
 import { requirePermission } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { invoiceGenerateInput } from "@/lib/schemas";
@@ -56,6 +57,20 @@ export async function POST(request: NextRequest) {
   const existing = await Invoice.find({ leaseId: { $in: leaseIds }, period })
     .select("leaseId")
     .lean();
+
+  // Lazy lease-expiry seam: notify owners, their caretakers and the tenant
+  // when a lease ends within the next 30 days. Dedupe keeps repeat generations
+  // from re-firing within a lease's lifetime.
+  const expiring = leases.filter(
+    (lease) =>
+      lease.endDate &&
+      lease.endDate.getTime() >= now.getTime() &&
+      lease.endDate.getTime() <= now.getTime() + 30 * DAY_IN_MS,
+  );
+  for (const lease of expiring) {
+    const daysUntil = Math.max(0, Math.ceil((lease.endDate.getTime() - now.getTime()) / DAY_IN_MS));
+    await notifyLeaseExpiry(lease, daysUntil);
+  }
 
   const { toCreate, skipped } = generateForPeriod({ leases, existing, period, now });
 

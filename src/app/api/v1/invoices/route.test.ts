@@ -9,6 +9,9 @@ import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-m
 vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("@/lib/notifications", () => ({
+  notifyOverdueInvoices: vi.fn().mockResolvedValue(true),
+}));
 vi.mock("@/models/User", async () => {
   const { getModelStubs: get } = await import("@/test/utils/model-mocks");
   return { User: get().user };
@@ -31,6 +34,7 @@ vi.mock("@/models/Invoice", async () => {
 });
 
 import { GET, POST } from "@/app/api/v1/invoices/route";
+import { notifyOverdueInvoices } from "@/lib/notifications";
 
 const {
   user,
@@ -39,6 +43,7 @@ const {
   lease: leaseStub,
   invoice: invoiceStub,
 } = getModelStubs();
+const notifyOverdueInvoicesMock = vi.mocked(notifyOverdueInvoices);
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
@@ -82,6 +87,7 @@ async function json(res: Response) {
 describe("GET /api/v1/invoices", () => {
   beforeEach(() => {
     resetModelStubs();
+    notifyOverdueInvoicesMock.mockClear();
   });
 
   it("401 when unauthenticated", async () => {
@@ -161,7 +167,7 @@ describe("GET /api/v1/invoices", () => {
     expect(body.error).toBe("Forbidden");
   });
 
-  it("derives the overdue filter as pending-and-dueDate-past", async () => {
+  it("derives the overdue filter as pending-and-dueDate-past and sweeps the owner scope", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     invoiceStub.find.mockReturnValue(buildQuery([]).sort({ issuedAt: -1 }).skip(0).limit(10));
     invoiceStub.countDocuments.mockResolvedValue(0);
@@ -176,6 +182,24 @@ describe("GET /api/v1/invoices", () => {
     };
     expect(filter.status).toBe("pending");
     expect(filter.dueDate.$lt).toBeInstanceOf(Date);
+    expect(notifyOverdueInvoicesMock).toHaveBeenCalledTimes(1);
+    expect(notifyOverdueInvoicesMock).toHaveBeenCalledWith(expect.any(Date), { ownerId: OWNER_ID });
+  });
+
+  it("sweeps a caretaker's assigned-property scope on overdue reads", async () => {
+    user.findById.mockReturnValue(buildQuery(caretakerDoc()));
+    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID }]));
+    invoiceStub.find.mockReturnValue(buildQuery([]).sort({ issuedAt: -1 }).skip(0).limit(10));
+    invoiceStub.countDocuments.mockResolvedValue(0);
+
+    const res = await GET(
+      buildRequest("/api/v1/invoices?status=overdue", { token: signToken(CARETAKER_ID) }),
+    );
+    expect(res.status).toBe(200);
+    expect(notifyOverdueInvoicesMock).toHaveBeenCalledWith(expect.any(Date), {
+      propertyId: { $in: [PROPERTY_ID] },
+      ownerId: MANAGED_OWNER_ID,
+    });
   });
 
   it("appends period, tenantId, propertyId and leaseId filters", async () => {

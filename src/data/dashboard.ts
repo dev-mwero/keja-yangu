@@ -1,4 +1,4 @@
-import { createLocalStore, type LocalStore } from "@/lib/local-store";
+import { createLocalStore } from "@/lib/local-store";
 
 export type PaymentStatus = "paid" | "due" | "overdue";
 export type PaymentMethod = "M-Pesa" | "Card" | "Bank";
@@ -127,17 +127,6 @@ export interface ContactThread {
   unread: number;
   messages: ChatMessage[];
 }
-
-export interface UserSettings {
-  emailNotifications: boolean;
-  smsNotifications: boolean;
-  marketingEmails: boolean;
-  moderationReminders: boolean;
-  language: string;
-  theme: "system" | "light" | "dark";
-}
-
-export type StoredSettings = UserSettings & { id: string };
 
 const fromNow = (days: number, hour = 10): string => {
   const date = new Date(Date.now() + days * 86400000);
@@ -549,15 +538,6 @@ const contactThreadSeed: ContactThread[] = [
   },
 ];
 
-const defaultSettings: UserSettings = {
-  emailNotifications: true,
-  smsNotifications: true,
-  marketingEmails: false,
-  moderationReminders: true,
-  language: "en",
-  theme: "system",
-};
-
 export const paymentsStore = createLocalStore<Payment>("payments", () => paymentSeed);
 export const complaintsStore = createLocalStore<Complaint>("complaints", () => complaintSeed);
 export const chatThreadsStore = createLocalStore<ChatThread>("chat-threads", () => chatThreadSeed);
@@ -575,14 +555,3 @@ export const contactThreadsStore = createLocalStore<ContactThread>(
   "contact-threads",
   () => contactThreadSeed,
 );
-export const settingsStore = createLocalStore<StoredSettings>("settings", () => [
-  { id: "default", ...defaultSettings },
-]);
-
-export const updateSettings = (
-  store: LocalStore<StoredSettings>,
-  patch: Partial<UserSettings>,
-): void => {
-  const current = store.readAll()[0] ?? { id: "default", ...defaultSettings };
-  store.writeAll([{ ...current, ...patch }]);
-};

@@ -1,5 +1,14 @@
 import { type InferSchemaType, model, models, Schema } from "mongoose";
 
+export interface IUserSettings {
+  emailNotifications: boolean;
+  smsNotifications: boolean;
+  marketingEmails: boolean;
+  moderationReminders: boolean;
+  language: string;
+  theme: string;
+}
+
 export interface IUser {
   email: string;
   name: string;
@@ -12,7 +21,20 @@ export interface IUser {
   verificationToken?: string;
   verificationTokenExpiry?: Date;
   invoiceCounters: Record<string, number>;
+  settings: IUserSettings;
 }
+
+const userSettingsSchema = new Schema<IUserSettings>(
+  {
+    emailNotifications: { type: Boolean, default: true },
+    smsNotifications: { type: Boolean, default: true },
+    marketingEmails: { type: Boolean, default: false },
+    moderationReminders: { type: Boolean, default: true },
+    language: { type: String, default: "en" },
+    theme: { type: String, default: "system" },
+  },
+  { _id: false },
+);
 
 const userSchema = new Schema<IUser>(
   {
@@ -32,6 +54,10 @@ const userSchema = new Schema<IUser>(
         "delete_assigned_property",
         "manage_tenants",
         "manage_invoices",
+        "manage_complaints",
+        "manage_announcements",
+        "send_messages",
+        "manage_documents",
       ],
       default: [],
     },
@@ -41,6 +67,7 @@ const userSchema = new Schema<IUser>(
     verificationToken: { type: String },
     verificationTokenExpiry: { type: Date },
     invoiceCounters: { type: Schema.Types.Map, of: Number, default: {} },
+    settings: { type: userSettingsSchema, default: () => ({}) },
   },
   {
     timestamps: true,

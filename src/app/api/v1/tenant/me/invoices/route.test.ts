@@ -7,13 +7,18 @@ import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-m
 vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("@/lib/notifications", () => ({
+  notifyOverdueInvoices: vi.fn().mockResolvedValue(true),
+}));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Invoice", () => ({ Invoice: getModelStubs().invoice }));
 
 import { GET } from "@/app/api/v1/tenant/me/invoices/route";
+import { notifyOverdueInvoices } from "@/lib/notifications";
 
 const { user, tenant: tenantStub, invoice: invoiceStub } = getModelStubs();
+const notifyOverdueInvoicesMock = vi.mocked(notifyOverdueInvoices);
 
 const TENANT_USER_ID = makeObjectId("tenant-user");
 const OWNER_ID = makeObjectId("owner");
@@ -35,6 +40,7 @@ async function json(res: Response) {
 describe("GET /api/v1/tenant/me/invoices", () => {
   beforeEach(() => {
     resetModelStubs();
+    notifyOverdueInvoicesMock.mockClear();
   });
 
   it("401 when unauthenticated", async () => {
@@ -103,7 +109,7 @@ describe("GET /api/v1/tenant/me/invoices", () => {
     });
   });
 
-  it("derives the overdue filter as pending-and-dueDate-past", async () => {
+  it("derives the overdue filter as pending-and-dueDate-past and sweeps the tenant scope", async () => {
     user.findById.mockReturnValue(buildQuery(tenantDoc()));
     tenantStub.find.mockReturnValue(buildQuery([{ _id: TENANT_A }]));
     invoiceStub.find.mockReturnValue(buildQuery([]).sort({ issuedAt: -1 }).skip(0).limit(10));
@@ -118,6 +124,10 @@ describe("GET /api/v1/tenant/me/invoices", () => {
     const filter = invoiceStub.find.mock.calls[0][0] as { status: string; dueDate: { $lt: Date } };
     expect(filter.status).toBe("pending");
     expect(filter.dueDate.$lt).toBeInstanceOf(Date);
+    expect(notifyOverdueInvoicesMock).toHaveBeenCalledTimes(1);
+    expect(notifyOverdueInvoicesMock).toHaveBeenCalledWith(expect.any(Date), {
+      tenantId: { $in: [TENANT_A] },
+    });
   });
 
   it("serializes the derived overdue status into the response", async () => {

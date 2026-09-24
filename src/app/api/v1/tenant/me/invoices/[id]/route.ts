@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { readJsonBody, resolveTenantActor, resolveTenantIds } from "@/app/api/v1/_helpers";
 import { canMarkPaid, serializeInvoice } from "@/lib/invoicing";
 import { connectToDatabase } from "@/lib/mongoose";
+import { notifyInvoicePaid } from "@/lib/notifications";
 import { requirePermission } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { invoiceMarkPaidInput } from "@/lib/schemas";
@@ -85,15 +86,23 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   if (parsed.data.method !== undefined) updateData.method = parsed.data.method;
   if (parsed.data.notes !== undefined) updateData.notes = parsed.data.notes;
 
-  const updated = await Invoice.findOneAndUpdate({ _id: id }, updateData, {
-    new: true,
-    runValidators: true,
-  }).lean();
+  const updated = await Invoice.findOneAndUpdate(
+    { _id: id, status: { $in: ["pending", "draft"] } },
+    updateData,
+    {
+      new: true,
+      runValidators: true,
+    },
+  ).lean();
   if (!updated) {
-    return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+    // A concurrent writer (e.g. the Paystack webhook) settled the invoice
+    // between our read and this conditional update — never overwrite it.
+    return NextResponse.json({ error: "Invoice is already paid or voided" }, { status: 409 });
   }
 
   console.info(`[invoicing] mark-paid actor=${userId} role=tenant invoice=${id}`);
+
+  await notifyInvoicePaid(updated);
 
   return NextResponse.json({ data: serializeInvoice(updated, now) });
 }
