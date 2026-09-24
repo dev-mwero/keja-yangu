@@ -5,14 +5,15 @@ import { useMemo, useState } from "react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { caretakerNav as nav } from "@/config/dashboardNav";
 import { type ChatMessage, type ContactThread, contactThreadsStore } from "@/data/dashboard";
+import { useCaretakerNav } from "@/hooks/use-caretaker-nav";
 import { useLocalStore } from "@/hooks/use-local-store";
 import { formatKES, relativeTime } from "@/lib/format";
 
 const initial = (name: string) => name.slice(0, 1).toUpperCase();
 
 const CaretakerCommunicationsPage = () => {
+  const nav = useCaretakerNav();
   const { items, updateItem } = useLocalStore<ContactThread>(contactThreadsStore);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");

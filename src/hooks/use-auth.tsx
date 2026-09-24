@@ -4,19 +4,22 @@ import type { ReactNode } from "react";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { toast } from "sonner";
 
-export type Role = "tenant" | "caretaker" | "owner";
+export type Role = "tenant" | "caretaker" | "owner" | "system-admin";
 
 export interface KejaUser {
+  id: string;
   email: string;
   name?: string;
   role: Role;
+  privileges?: string[];
+  managedByOwnerId?: string;
 }
 
 interface AuthContextValue {
   user: KejaUser | null;
   loading: boolean;
   refreshFailed: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<KejaUser>;
   signUp: (name: string, email: string, password: string, role: Role) => Promise<void>;
   resendVerification: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -54,7 +57,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     refresh();
   }, [refresh]);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string): Promise<KejaUser> => {
     try {
       const res = await fetch("/api/auth", {
         method: "POST",
@@ -66,8 +69,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         throw new Error(data.error || "Sign in failed");
       }
       const data = await res.json();
-      setUser(data.user);
+      const signedInUser = data.user as KejaUser;
+      setUser(signedInUser);
       toast.success("Welcome back!");
+      return signedInUser;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Sign in failed";
       toast.error("Sign in failed", { description: message });

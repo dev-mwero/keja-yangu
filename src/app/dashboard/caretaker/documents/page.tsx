@@ -7,8 +7,8 @@ import { DashboardShell } from "@/components/DashboardShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { caretakerNav as nav } from "@/config/dashboardNav";
 import { tenants } from "@/data/properties";
+import { useCaretakerNav } from "@/hooks/use-caretaker-nav";
 import { formatKES } from "@/lib/format";
 
 const docs: Record<string, { label: string; present: boolean }[]> = {
@@ -45,6 +45,7 @@ const docs: Record<string, { label: string; present: boolean }[]> = {
 };
 
 const CaretakerDocumentsPage = () => {
+  const nav = useCaretakerNav();
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {

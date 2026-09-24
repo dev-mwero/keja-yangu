@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useAuth } from "@/hooks/use-auth";
+import { type Role, useAuth } from "@/hooks/use-auth";
 
 const signInSchema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -31,10 +31,11 @@ const signUpSchema = z.object({
 type SignInValues = z.infer<typeof signInSchema>;
 type SignUpValues = z.infer<typeof signUpSchema>;
 
-const roleRoute: Record<string, string> = {
+const roleRoute: Record<Role, string> = {
   tenant: "/dashboard/tenant",
   caretaker: "/dashboard/caretaker",
   owner: "/dashboard/owner",
+  "system-admin": "/dashboard/system-admin",
 };
 
 const AuthForm = () => {
@@ -58,16 +59,8 @@ const AuthForm = () => {
   const onSignIn = async (values: SignInValues) => {
     setSubmitting(true);
     try {
-      await signIn(values.email, values.password);
-      router.push(
-        roleRoute[
-          values.email.startsWith("owner")
-            ? "owner"
-            : values.email.startsWith("care")
-              ? "caretaker"
-              : "tenant"
-        ],
-      );
+      const signedInUser = await signIn(values.email, values.password);
+      router.push(roleRoute[signedInUser.role]);
     } catch {
       // Error handled by toast in hook
     } finally {
