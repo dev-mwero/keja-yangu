@@ -5,9 +5,10 @@ import type { ReactNode } from "react";
 import { AuthGuard } from "@/components/AuthGuard";
 
 const roleMap: Record<string, string[]> = {
-  "/dashboard/owner": ["owner"],
+  "/dashboard/owner": ["owner", "system-admin"],
   "/dashboard/tenant": ["tenant"],
-  "/dashboard/caretaker": ["caretaker"],
+  "/dashboard/caretaker": ["caretaker", "system-admin"],
+  "/dashboard/system-admin": ["system-admin"],
 };
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {

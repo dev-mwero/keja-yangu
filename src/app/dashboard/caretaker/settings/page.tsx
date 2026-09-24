@@ -15,7 +15,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { caretakerNav as nav } from "@/config/dashboardNav";
 import {
   type StoredSettings,
   settingsStore,
@@ -23,6 +22,7 @@ import {
   updateSettings,
 } from "@/data/dashboard";
 import { useAuth } from "@/hooks/use-auth";
+import { useCaretakerNav } from "@/hooks/use-caretaker-nav";
 import { useLocalStore } from "@/hooks/use-local-store";
 
 interface SettingsItem {
@@ -58,6 +58,7 @@ const notificationItems: SettingsItem[] = [
 ];
 
 const CaretakerSettingsPage = () => {
+  const nav = useCaretakerNav();
   const { user, signOut } = useAuth();
   const { items, setItems } = useLocalStore<StoredSettings>(settingsStore);
   const prefs = items[0] ?? settingsStore.readAll()[0];

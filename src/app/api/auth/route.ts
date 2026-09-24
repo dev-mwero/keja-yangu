@@ -2,8 +2,10 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { isEmailConfigured, sendVerificationEmail, sendPasswordResetEmail } from "@/lib/email";
+import { isEmailConfigured, sendPasswordResetEmail, sendVerificationEmail } from "@/lib/email";
+import { getJwtSecret } from "@/lib/jwt";
 import { connectToDatabase } from "@/lib/mongoose";
+import { Tenant } from "@/models/Tenant";
 import { User } from "@/models/User";
 
 const signInSchema = z.object({
@@ -57,7 +59,7 @@ export async function POST(request: Request) {
 
       const token = jwt.sign(
         { userId: user._id, email: user.email, role: user.role, name: user.name },
-        process.env.JWT_SECRET ?? "fallback-secret",
+        getJwtSecret(),
         { expiresIn: "7d" },
       );
 
@@ -111,7 +113,9 @@ export async function POST(request: Request) {
 
       if (!emailSent) {
         if (process.env.NODE_ENV === "development") {
-          console.warn(`[DEV] Email sending failed. Verification link for ${parsed.data.email}: ${verifyUrl}`);
+          console.warn(
+            `[DEV] Email sending failed. Verification link for ${parsed.data.email}: ${verifyUrl}`,
+          );
         }
         await User.deleteOne({ _id: createdUser._id });
         return NextResponse.json(
@@ -121,7 +125,8 @@ export async function POST(request: Request) {
       }
 
       return NextResponse.json({
-        message: "Account created successfully! Please check your inbox (and spam folder) for the verification email to activate your account.",
+        message:
+          "Account created successfully! Please check your inbox (and spam folder) for the verification email to activate your account.",
       });
     }
 
@@ -147,6 +152,16 @@ export async function POST(request: Request) {
       user.verificationToken = undefined;
       user.verificationTokenExpiry = undefined;
       await user.save();
+
+      // Bind tenant signups to any unbound Tenant rows carrying the same
+      // verified email (lowercased to match signup normalization).
+      if (user.role === "tenant") {
+        const userId = user._id?.toString() ?? user.id ?? "";
+        await Tenant.updateMany(
+          { email: user.email.trim().toLowerCase(), userId: "" },
+          { $set: { userId } },
+        );
+      }
 
       return NextResponse.json({ message: "Email verified successfully" });
     }
@@ -175,7 +190,9 @@ export async function POST(request: Request) {
       const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
       const verifyUrl = `${appBaseUrl}/auth/verify?token=${verificationToken}`;
 
-      const emailSent = isEmailConfigured() ? await sendVerificationEmail(email, verificationToken, user.name || "User") : false;
+      const emailSent = isEmailConfigured()
+        ? await sendVerificationEmail(email, verificationToken, user.name || "User")
+        : false;
 
       if (!emailSent) {
         if (process.env.NODE_ENV === "development") {
@@ -187,7 +204,9 @@ export async function POST(request: Request) {
         );
       }
 
-      return NextResponse.json({ message: "Verification email resent. Please check your inbox (and spam folder)." });
+      return NextResponse.json({
+        message: "Verification email resent. Please check your inbox (and spam folder).",
+      });
     }
 
     if (action === "forgot-password") {
@@ -200,7 +219,9 @@ export async function POST(request: Request) {
       const user = await User.findOne({ email });
       if (!user) {
         // Don't reveal if user exists
-        return NextResponse.json({ message: "If the email exists, a password reset link has been sent." });
+        return NextResponse.json({
+          message: "If the email exists, a password reset link has been sent.",
+        });
       }
 
       const resetToken = await generateVerificationToken();
@@ -210,7 +231,9 @@ export async function POST(request: Request) {
       await user.save();
 
       const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/reset-password?token=${resetToken}`;
-      const emailSent = isEmailConfigured() ? await sendPasswordResetEmail(user.email, resetToken, user.name || "User") : false;
+      const emailSent = isEmailConfigured()
+        ? await sendPasswordResetEmail(user.email, resetToken, user.name || "User")
+        : false;
 
       if (!emailSent) {
         if (process.env.NODE_ENV === "development") {
@@ -222,7 +245,9 @@ export async function POST(request: Request) {
         );
       }
 
-      return NextResponse.json({ message: "If the email exists, a password reset link has been sent." });
+      return NextResponse.json({
+        message: "If the email exists, a password reset link has been sent.",
+      });
     }
 
     if (action === "reset-password") {
@@ -231,7 +256,10 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Token and new password required" }, { status: 400 });
       }
       if (password.length < 6) {
-        return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 });
+        return NextResponse.json(
+          { error: "Password must be at least 6 characters" },
+          { status: 400 },
+        );
       }
 
       await connectToDatabase();

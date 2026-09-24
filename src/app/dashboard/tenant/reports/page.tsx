@@ -8,10 +8,11 @@ import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { tenantNav } from "@/config/dashboardNav";
-import { type Complaint, complaintsStore, type Payment, paymentsStore } from "@/data/dashboard";
+import { type Complaint, complaintsStore } from "@/data/dashboard";
 import { useTenantApplications } from "@/hooks/use-applications";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocalStore } from "@/hooks/use-local-store";
+import { useMyInvoices } from "@/hooks/use-my-invoices";
 import { formatKES, toISODate } from "@/lib/format";
 
 const withinRange = (date?: string, from?: string, to?: string): boolean => {
@@ -25,30 +26,31 @@ const withinRange = (date?: string, from?: string, to?: string): boolean => {
 const TenantReportsPage = () => {
   const { user } = useAuth();
   const { applications } = useTenantApplications(user?.email);
-  const { items: payments } = useLocalStore<Payment>(paymentsStore);
+  const { invoices } = useMyInvoices();
   const { items: complaints } = useLocalStore<Complaint>(complaintsStore);
 
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
-  const inRangePayments = payments.filter(
-    (p) => p.status === "paid" && withinRange(p.paidDate, from, to),
+  const inRangePaid = invoices.filter(
+    (i) => i.status === "paid" && withinRange(i.paidAt, from, to),
   );
   const inRangeComplaints = complaints.filter((c) => withinRange(c.createdAt, from, to));
   const withinRangeApplications = applications.filter((a) => withinRange(a.submittedAt, from, to));
 
-  const paidTotal = inRangePayments.reduce((sum, p) => sum + p.amount, 0);
+  const paidTotal = inRangePaid.reduce((sum, i) => sum + i.amountDue, 0);
   const resolvedComplaints = inRangeComplaints.filter((c) => c.status === "resolved").length;
 
   const exportJson = () => {
     const report = {
       generatedAt: new Date().toISOString(),
       range: { from: from || null, to: to || null },
-      payments: inRangePayments.map((p) => ({
-        label: p.label,
-        amount: p.amount,
-        paidDate: p.paidDate,
-        method: p.method,
+      payments: inRangePaid.map((i) => ({
+        period: i.period,
+        invoiceNumber: i.invoiceNumber,
+        amount: i.amountDue,
+        paidAt: i.paidAt,
+        method: i.method,
       })),
       applications: withinRangeApplications.map((a) => ({
         propertyTitle: a.propertyTitle,
@@ -103,7 +105,7 @@ const TenantReportsPage = () => {
         <StatCard
           label="Paid in range"
           value={formatKES(paidTotal)}
-          hint={`${inRangePayments.length} payment${inRangePayments.length === 1 ? "" : "s"}`}
+          hint={`${inRangePaid.length} payment${inRangePaid.length === 1 ? "" : "s"}`}
           icon={Wallet}
         />
         <StatCard label="Applications" value={withinRangeApplications.length} icon={FileText} />
@@ -142,8 +144,8 @@ const TenantReportsPage = () => {
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Average payment</dt>
               <dd className="font-medium">
-                {inRangePayments.length > 0
-                  ? formatKES(Math.round(paidTotal / inRangePayments.length))
+                {inRangePaid.length > 0
+                  ? formatKES(Math.round(paidTotal / inRangePaid.length))
                   : "—"}
               </dd>
             </div>
@@ -153,25 +155,29 @@ const TenantReportsPage = () => {
         <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">
           <div className="flex items-center gap-2">
             <Wallet className="h-4 w-4 text-primary" />
-            <h3 className="font-display text-lg font-semibold">Payments by status</h3>
+            <h3 className="font-display text-lg font-semibold">Invoices by status</h3>
           </div>
           <dl className="mt-4 space-y-3 text-sm">
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Paid</dt>
-              <dd className="font-medium">{payments.filter((p) => p.status === "paid").length}</dd>
+              <dd className="font-medium">{invoices.filter((i) => i.status === "paid").length}</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-muted-foreground">Due soon</dt>
-              <dd className="font-medium">{payments.filter((p) => p.status === "due").length}</dd>
+              <dt className="text-muted-foreground">Pending</dt>
+              <dd className="font-medium">
+                {invoices.filter((i) => i.status === "pending").length}
+              </dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-muted-foreground">Auto-pay enabled</dt>
-              <dd className="font-medium">{payments.filter((p) => p.autoPay).length}</dd>
+              <dt className="text-muted-foreground">Overdue</dt>
+              <dd className="font-medium">
+                {invoices.filter((i) => i.status === "overdue").length}
+              </dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Largest bill</dt>
               <dd className="font-medium">
-                {formatKES(Math.max(0, ...payments.map((p) => p.amount)))}
+                {formatKES(Math.max(0, ...invoices.map((i) => i.amountDue)))}
               </dd>
             </div>
           </dl>

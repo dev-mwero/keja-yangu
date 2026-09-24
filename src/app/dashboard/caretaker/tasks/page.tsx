@@ -25,7 +25,6 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { caretakerNav as nav } from "@/config/dashboardNav";
 import {
   type MaintenanceTask,
   type TaskPriority,
@@ -34,6 +33,7 @@ import {
 } from "@/data/dashboard";
 import { caretakers } from "@/data/properties";
 import { useAuth } from "@/hooks/use-auth";
+import { useCaretakerNav } from "@/hooks/use-caretaker-nav";
 import { useLocalStore } from "@/hooks/use-local-store";
 import { useProperties } from "@/hooks/use-properties";
 import { formatDate } from "@/lib/format";
@@ -53,6 +53,7 @@ const priorityClass: Record<TaskPriority, string> = {
 type Filter = "open" | "in-progress" | "done";
 
 const CaretakerTasksPage = () => {
+  const nav = useCaretakerNav();
   const { user } = useAuth();
   const caretaker = useMemo(() => caretakers.find((c) => c.email === user?.email), [user?.email]);
   const caretakerName = caretaker?.name ?? user?.name ?? "Caretaker";

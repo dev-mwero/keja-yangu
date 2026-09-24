@@ -7,45 +7,45 @@ import { DashboardShell } from "@/components/DashboardShell";
 import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { caretakerNav as nav } from "@/config/dashboardNav";
-import { type Invoice, invoicesStore, type MaintenanceTask, tasksStore } from "@/data/dashboard";
-import { caretakers } from "@/data/properties";
+import { type MaintenanceTask, tasksStore } from "@/data/dashboard";
 import { useAuth } from "@/hooks/use-auth";
+import { useCaretakerNav } from "@/hooks/use-caretaker-nav";
+import { useInvoices } from "@/hooks/use-invoices";
 import { useLocalStore } from "@/hooks/use-local-store";
 import { useProperties } from "@/hooks/use-properties";
 import { formatKES, toISODate } from "@/lib/format";
 
 const CaretakerReportsPage = () => {
+  const nav = useCaretakerNav();
   const { user } = useAuth();
-  const caretaker = useMemo(() => caretakers.find((c) => c.email === user?.email), [user?.email]);
-  const caretakerId = caretaker?.id ?? "c1";
+  const privileged = user?.privileges?.includes("manage_invoices") ?? false;
 
-  const { properties, loading } = useProperties();
+  const { properties, loading } = useProperties({ caretakerId: user?.id });
   const mine = useMemo(
-    () => properties.filter((p) => p.caretakerIds.includes(caretakerId)),
-    [properties, caretakerId],
+    () => (user?.id ? properties.filter((p) => p.caretakerIds.includes(user.id)) : []),
+    [properties, user?.id],
   );
   const { items: tasks } = useLocalStore<MaintenanceTask>(tasksStore);
-  const { items: invoices } = useLocalStore<Invoice>(invoicesStore);
+  const { invoices, error: invoicesError } = useInvoices();
 
   const doneTasks = tasks.filter((t) => t.status === "done").length;
   const openTasks = tasks.filter((t) => t.status !== "done").length;
-  const collected = invoices.filter((i) => i.status === "paid").reduce((s, i) => s + i.amount, 0);
-  const outstanding = invoices.filter((i) => i.status !== "paid").reduce((s, i) => s + i.amount, 0);
+  const collected = invoices
+    .filter((i) => i.status === "paid")
+    .reduce((s, i) => s + i.amountDue, 0);
+  const outstanding = invoices
+    .filter((i) => i.status === "pending" || i.status === "overdue")
+    .reduce((s, i) => s + i.amountDue, 0);
   const occupiedUnits = mine.filter((p) => p.status === "occupied").length;
   const occupancy = mine.length > 0 ? Math.round((occupiedUnits / mine.length) * 100) : 0;
 
   const exportJson = () => {
     const report = {
       generatedAt: new Date().toISOString(),
-      caretaker: caretaker?.name ?? user?.name ?? "Caretaker",
+      caretaker: user?.name ?? "Caretaker",
       portfolio: mine.map((p) => ({ title: p.title, status: p.status })),
       tasks: { completed: doneTasks, open: openTasks, total: tasks.length },
-      rent: {
-        collected: collected,
-        outstanding: outstanding,
-        invoices: invoices.length,
-      },
+      ...(privileged ? { rent: { collected, outstanding, invoices: invoices.length } } : {}),
       occupancyPercent: occupancy,
     };
     const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
@@ -73,15 +73,19 @@ const CaretakerReportsPage = () => {
         </Button>
       </div>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-4">
+      <div className={`mt-6 grid gap-4 ${privileged ? "md:grid-cols-4" : "md:grid-cols-2"}`}>
         <StatCard
           label="Tasks completed"
           value={doneTasks}
           hint={`${openTasks} still open`}
           icon={CheckCircle2}
         />
-        <StatCard label="Rent collected" value={formatKES(collected)} icon={Banknote} />
-        <StatCard label="Outstanding" value={formatKES(outstanding)} icon={Wrench} />
+        {privileged && (
+          <>
+            <StatCard label="Rent collected" value={formatKES(collected)} icon={Banknote} />
+            <StatCard label="Outstanding" value={formatKES(outstanding)} icon={Wrench} />
+          </>
+        )}
         <StatCard
           label="Occupancy"
           value={`${occupancy}%`}
@@ -120,38 +124,41 @@ const CaretakerReportsPage = () => {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-border bg-card p-6 shadow-soft">
-          <h3 className="font-display text-lg font-semibold">Rent position</h3>
-          <div className="mt-4 space-y-3 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Collected</span>
-              <span className="font-medium">{formatKES(collected)}</span>
+        {privileged && (
+          <section className="rounded-2xl border border-border bg-card p-6 shadow-soft">
+            <h3 className="font-display text-lg font-semibold">Rent position</h3>
+            {invoicesError && <p className="mt-2 text-xs text-destructive">{invoicesError}</p>}
+            <div className="mt-4 space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Collected</span>
+                <span className="font-medium">{formatKES(collected)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Outstanding</span>
+                <span className="font-medium">{formatKES(outstanding)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Collection rate</span>
+                <span className="font-medium">
+                  {collected + outstanding > 0
+                    ? `${Math.round((collected / (collected + outstanding)) * 100)}%`
+                    : "—"}
+                </span>
+              </div>
+              <div className="relative h-2 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-primary"
+                  style={{
+                    width:
+                      collected + outstanding > 0
+                        ? `${Math.round((collected / (collected + outstanding)) * 100)}%`
+                        : "0%",
+                  }}
+                />
+              </div>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Outstanding</span>
-              <span className="font-medium">{formatKES(outstanding)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Collection rate</span>
-              <span className="font-medium">
-                {collected + outstanding > 0
-                  ? `${Math.round((collected / (collected + outstanding)) * 100)}%`
-                  : "—"}
-              </span>
-            </div>
-            <div className="relative h-2 overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-primary"
-                style={{
-                  width:
-                    collected + outstanding > 0
-                      ? `${Math.round((collected / (collected + outstanding)) * 100)}%`
-                      : "0%",
-                }}
-              />
-            </div>
-          </div>
-        </section>
+          </section>
+        )}
       </div>
 
       <section className="mt-8 rounded-2xl border border-border bg-card p-6 shadow-soft">

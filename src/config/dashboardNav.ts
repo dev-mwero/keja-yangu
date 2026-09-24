@@ -11,6 +11,8 @@ import {
   MessagesSquare,
   Search,
   Settings,
+  UserCog,
+  Users,
   Wrench,
 } from "lucide-react";
 
@@ -20,22 +22,36 @@ export interface DashNavItem {
   icon: LucideIcon;
 }
 
-type Role = "tenant" | "caretaker" | "owner";
+type Role = "tenant" | "caretaker" | "owner" | "system-admin";
 
-const sections = [
+interface Section {
+  slug: string;
+  label: string;
+  icon: LucideIcon;
+}
+
+const baseSections = [
   { slug: "", label: "Overview", icon: Home },
   { slug: "/portfolio", label: "Portfolio", icon: Building2 },
+  { slug: "/tenants", label: "Tenants", icon: Users },
+  { slug: "/team", label: "Team", icon: UserCog },
   { slug: "/tasks", label: "Tasks & Maintenance", icon: Wrench },
   { slug: "/accounting", label: "Accounting", icon: Calculator },
   { slug: "/reports", label: "Reports", icon: FileBarChart },
   { slug: "/communications", label: "Communications", icon: MessagesSquare },
   { slug: "/documents", label: "Tenant Documents", icon: FileText },
   { slug: "/settings", label: "Settings", icon: Settings },
-] as const;
+] satisfies readonly Section[];
+
+const caretakerSections = baseSections.filter((s) => s.slug !== "/tenants" && s.slug !== "/team");
+const systemAdminSections = baseSections.filter((s) => s.slug !== "/team");
 
 export const buildDashboardNav = (role: Exclude<Role, "tenant">): DashNavItem[] => {
   const base = `/dashboard/${role}`;
-  return sections.map((s) => ({
+  let sectionsToUse = baseSections;
+  if (role === "caretaker") sectionsToUse = caretakerSections;
+  if (role === "system-admin") sectionsToUse = systemAdminSections;
+  return sectionsToUse.map((s) => ({
     to: `${base}${s.slug}`,
     label: s.label,
     icon: s.icon,
@@ -44,6 +60,16 @@ export const buildDashboardNav = (role: Exclude<Role, "tenant">): DashNavItem[] 
 
 export const ownerNav = buildDashboardNav("owner");
 export const caretakerNav = buildDashboardNav("caretaker");
+
+export const caretakerNavWithTenants: DashNavItem[] = [
+  ...caretakerNav,
+  { to: "/dashboard/caretaker/tenants", label: "Tenants", icon: Users },
+];
+
+export const systemAdminNav: DashNavItem[] = [
+  ...buildDashboardNav("system-admin"),
+  { to: "/dashboard/system-admin/caretakers", label: "Caretakers", icon: UserCog },
+];
 
 interface TenantSection {
   slug: string;

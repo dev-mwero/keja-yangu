@@ -21,14 +21,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { caretakerNav as nav } from "@/config/dashboardNav";
 import { caretakers, tenants } from "@/data/properties";
 import { useAuth } from "@/hooks/use-auth";
+import { useCaretakerNav } from "@/hooks/use-caretaker-nav";
 import type { Property } from "@/hooks/use-properties";
 import { useProperties } from "@/hooks/use-properties";
 import { useToast } from "@/hooks/use-toast";
 
 const CaretakerDashboard = () => {
+  const nav = useCaretakerNav();
   const { user } = useAuth();
   const caretaker = useMemo(() => caretakers.find((c) => c.email === user?.email), [user?.email]);
   const caretakerId = caretaker?.id ?? "c1";

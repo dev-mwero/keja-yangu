@@ -1,9 +1,10 @@
 "use client";
 
-import { CheckCircle2, CreditCard, Download, Repeat, Wallet } from "lucide-react";
-import { useState } from "react";
+import { CheckCircle2, CreditCard, Download, Wallet } from "lucide-react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { DashboardShell } from "@/components/DashboardShell";
+import { ReceiptDialog } from "@/components/invoices/ReceiptDialog";
 import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,80 +33,72 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { tenantNav } from "@/config/dashboardNav";
-import { type Payment, type PaymentMethod, paymentsStore } from "@/data/dashboard";
-import { useLocalStore } from "@/hooks/use-local-store";
-import { formatKES } from "@/lib/format";
+import { useMyInvoiceMutations, useMyInvoices } from "@/hooks/use-my-invoices";
+import { formatKES, formatPeriod } from "@/lib/format";
+import type { DerivedInvoiceStatus } from "@/lib/invoicing";
+import { INVOICE_METHODS, type InvoiceMethod } from "@/lib/invoicing";
+import type { Invoice } from "@/types/invoicing";
 
-const statusClass: Record<Payment["status"], string> = {
+const statusClass: Record<DerivedInvoiceStatus, string> = {
   paid: "bg-success/15 text-success",
-  due: "bg-warning/15 text-warning",
+  pending: "bg-warning/15 text-warning",
   overdue: "bg-destructive/15 text-destructive",
+  draft: "bg-muted text-muted-foreground",
+  void: "bg-muted text-muted-foreground",
 };
 
-const methods: PaymentMethod[] = ["M-Pesa", "Card", "Bank"];
-
-type Tab = "upcoming" | "history" | "autopay";
+type Tab = "upcoming" | "history";
 
 const TenantPaymentsPage = () => {
-  const { items, updateItem } = useLocalStore<Payment>(paymentsStore);
+  const { invoices, refetch } = useMyInvoices();
+  const { markOwnPaid, pending } = useMyInvoiceMutations();
   const [tab, setTab] = useState<Tab>("upcoming");
-  const [paying, setPaying] = useState<string | null>(null);
-  const [method, setMethod] = useState<PaymentMethod>("M-Pesa");
+  const [paying, setPaying] = useState<Invoice | null>(null);
+  const [method, setMethod] = useState<InvoiceMethod>("M-Pesa");
+  const [receipt, setReceipt] = useState<Invoice | null>(null);
 
-  const due = items.filter((p) => p.status !== "paid");
-  const history = items.filter((p) => p.status === "paid");
-  const autoPay = items.filter((p) => p.autoPay);
-  const paidTotal = history.reduce((sum, p) => sum + p.amount, 0);
-  const nextDue = items
-    .filter((p) => p.status !== "paid" && p.dueDate)
-    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
+  const upcoming = useMemo(
+    () => invoices.filter((i) => i.status === "pending" || i.status === "overdue"),
+    [invoices],
+  );
+  const history = useMemo(() => invoices.filter((i) => i.status === "paid"), [invoices]);
+  const paidTotal = history.reduce((sum, i) => sum + i.amountDue, 0);
+  const nextDue = upcoming.slice().sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
 
-  const confirmPayment = () => {
-    const payment = items.find((p) => p.id === paying);
-    if (!payment) return;
-    updateItem(payment.id, {
-      status: "paid",
-      paidDate: new Date().toISOString(),
-      method,
-    });
-    toast.success("Payment recorded", {
-      description: `${payment.label} settled via ${method}.`,
-    });
-    setPaying(null);
+  const rows = tab === "history" ? history : upcoming;
+
+  const confirmPayment = async () => {
+    if (!paying) return;
+    try {
+      await markOwnPaid(paying._id, { method });
+      toast.success("Payment recorded", {
+        description: `${paying.invoiceNumber} settled via ${method}.`,
+      });
+      setPaying(null);
+      refetch();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Something went wrong";
+      toast.error("Could not mark invoice as paid", { description: message });
+    }
   };
-
-  const toggleAutopay = (id: string, value: boolean) => {
-    updateItem(id, { autoPay: value });
-    toast.info(value ? "Auto-pay enabled" : "Auto-pay paused", {
-      description: value
-        ? "Upcoming bills will be settled automatically."
-        : "You'll be reminded when bills are due.",
-    });
-  };
-
-  const rows = tab === "autopay" ? autoPay : tab === "history" ? history : due;
 
   return (
     <DashboardShell
       roleName="Tenant"
       nav={tenantNav}
       title="Payments"
-      subtitle="Track rent and bills, and manage auto-pay."
+      subtitle="Track your rent and bills, and settle them offline."
     >
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2">
         <StatCard
           label="Next payment"
-          value={nextDue ? formatKES(nextDue.amount) : "—"}
-          hint={nextDue ? `${nextDue.label} · ${nextDue.property}` : "Nothing due"}
+          value={nextDue ? formatKES(nextDue.amountDue) : "—"}
+          hint={
+            nextDue ? `${formatPeriod(nextDue.period)} · ${nextDue.invoiceNumber}` : "Nothing due"
+          }
           icon={Wallet}
         />
         <StatCard label="Paid to date" value={formatKES(paidTotal)} icon={CheckCircle2} />
-        <StatCard
-          label="Auto-pay"
-          value={autoPay.length}
-          hint={autoPay.length > 0 ? "Bills settle automatically" : "Off for all bills"}
-          icon={Repeat}
-        />
       </div>
 
       <div className="mt-8">
@@ -113,7 +106,6 @@ const TenantPaymentsPage = () => {
           <TabsList>
             <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
-            <TabsTrigger value="autopay">Auto-pay</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
@@ -140,15 +132,15 @@ const TenantPaymentsPage = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((payment) => (
-                  <TableRow key={payment.id}>
+                {rows.map((invoice) => (
+                  <TableRow key={invoice._id}>
                     <TableCell>
-                      <p className="font-medium">{payment.label}</p>
-                      <p className="text-xs text-muted-foreground">{payment.property}</p>
+                      <p className="font-medium">{formatPeriod(invoice.period)}</p>
+                      <p className="text-xs text-muted-foreground">{invoice.invoiceNumber}</p>
                     </TableCell>
-                    <TableCell className="font-medium">{formatKES(payment.amount)}</TableCell>
+                    <TableCell className="font-medium">{formatKES(invoice.amountDue)}</TableCell>
                     <TableCell className="text-muted-foreground">
-                      {new Date(payment.dueDate).toLocaleDateString(undefined, {
+                      {new Date(invoice.dueDate).toLocaleDateString(undefined, {
                         month: "short",
                         day: "numeric",
                         year: "numeric",
@@ -156,26 +148,18 @@ const TenantPaymentsPage = () => {
                     </TableCell>
                     <TableCell>
                       <Badge
-                        className={`${statusClass[payment.status]} capitalize hover:opacity-100`}
+                        className={`${statusClass[invoice.status]} capitalize hover:opacity-100`}
                       >
-                        {payment.status}
+                        {invoice.status}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      {tab === "autopay" ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="rounded-full"
-                          onClick={() => toggleAutopay(payment.id, !payment.autoPay)}
-                        >
-                          {payment.autoPay ? "Pause auto-pay" : "Enable auto-pay"}
-                        </Button>
-                      ) : payment.status === "paid" ? (
+                      {invoice.status === "paid" ? (
                         <Button
                           variant="ghost"
                           size="sm"
                           className="rounded-full text-muted-foreground"
+                          onClick={() => setReceipt(invoice)}
                         >
                           <Download className="h-4 w-4" />
                           Receipt
@@ -184,9 +168,14 @@ const TenantPaymentsPage = () => {
                         <Button
                           size="sm"
                           className="rounded-full"
-                          onClick={() => setPaying(payment.id)}
+                          disabled={pending}
+                          onClick={() => {
+                            setMethod(invoice.method ?? "M-Pesa");
+                            setPaying(invoice);
+                          }}
                         >
-                          Pay now
+                          <CreditCard className="h-4 w-4" />
+                          Mark paid
                         </Button>
                       )}
                     </TableCell>
@@ -203,18 +192,18 @@ const TenantPaymentsPage = () => {
           <DialogHeader>
             <DialogTitle>Settle bill</DialogTitle>
             <DialogDescription>
-              Choose how you want to pay for{" "}
-              {items.find((p) => p.id === paying)?.label ?? "this bill"}.
+              Mark {paying?.invoiceNumber ?? "this bill"} as paid. Your landlord can verify this
+              offline.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
             <div className="text-sm font-medium text-muted-foreground">Payment method</div>
-            <Select value={method} onValueChange={(v) => setMethod(v as PaymentMethod)}>
+            <Select value={method} onValueChange={(v) => setMethod(v as InvoiceMethod)}>
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {methods.map((m) => (
+                {INVOICE_METHODS.map((m) => (
                   <SelectItem key={m} value={m}>
                     {m}
                   </SelectItem>
@@ -223,16 +212,27 @@ const TenantPaymentsPage = () => {
             </Select>
           </div>
           <DialogFooter>
-            <Button variant="outline" className="rounded-full" onClick={() => setPaying(null)}>
+            <Button
+              variant="outline"
+              className="rounded-full"
+              disabled={pending}
+              onClick={() => setPaying(null)}
+            >
               Cancel
             </Button>
-            <Button className="rounded-full" onClick={confirmPayment}>
+            <Button className="rounded-full" disabled={pending} onClick={confirmPayment}>
               <CreditCard className="h-4 w-4" />
               Confirm payment
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ReceiptDialog
+        open={receipt !== null}
+        onOpenChange={(open) => !open && setReceipt(null)}
+        invoice={receipt}
+      />
     </DashboardShell>
   );
 };

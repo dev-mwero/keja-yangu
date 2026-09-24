@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import { NextResponse } from "next/server";
+import { getJwtSecret } from "@/lib/jwt";
 
 export async function GET(request: Request) {
   try {
@@ -12,7 +13,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "No token" }, { status: 401 });
     }
 
-    jwt.verify(token, process.env.JWT_SECRET ?? "fallback-secret");
+    jwt.verify(token, getJwtSecret());
     const response = NextResponse.json({ message: "OK" });
     response.cookies.set("keja-token", "", {
       httpOnly: true,
