@@ -68,6 +68,27 @@ Open [http://localhost:3000](http://localhost:3000).
 - `GET /api/v1/properties/[id]` — Get single property
 - `PATCH /api/v1/properties/[id]` — Update property (owner only)
 - `DELETE /api/v1/properties/[id]` — Delete property (owner only)
+- `GET /api/v1/tenants` — List tenants (owner/system-admin; caretakers with `manage_tenants` privilege)
+- `POST /api/v1/tenants` — Create tenant (owner/system-admin; caretakers with `manage_tenants`; rate-limited 20/min)
+- `GET /api/v1/tenants/[id]` — Get single tenant (same scope as tenant list)
+- `PATCH /api/v1/tenants/[id]` — Update tenant (same scope as tenant list)
+- `DELETE /api/v1/tenants/[id]` — Delete tenant (same scope as tenant list)
+- `GET /api/v1/caretakers` — List caretakers with privileges (owner/system-admin only)
+- `PUT /api/v1/caretakers/[id]/privileges` — Set caretaker privileges (owner/system-admin only; rate-limited 20/min)
+- `GET /api/v1/leases` — List leases (`lease:manage`; owner-scoped)
+- `POST /api/v1/leases` — Create lease (`lease:manage`; validates tenant/property, rate-limited 20/min)
+- `GET /api/v1/leases/[id]` — Get single lease (`lease:manage`)
+- `PATCH /api/v1/leases/[id]` — Update lease (`lease:manage`; `active → ended` stamps `endDate`)
+- `DELETE /api/v1/leases/[id]` — Delete lease (`lease:manage`; 409 while invoices reference it)
+- `GET /api/v1/invoices` — List invoices with filters (`invoice:read`; scoped per role)
+- `POST /api/v1/invoices` — Create manual invoice (`invoice:manage`; rate-limited 20/min)
+- `PATCH /api/v1/invoices/[id]` — Update draft/pending invoice (`invoice:manage`)
+- `DELETE /api/v1/invoices/[id]` — Delete draft invoice only (`invoice:manage`)
+- `POST /api/v1/invoices/[id]/mark-paid` — Mark invoice paid (`invoice:mark-paid`; or tenant for own; rate-limited 20/min)
+- `POST /api/v1/invoices/[id]/void` — Void invoice (`invoice:manage`; paid cannot be voided)
+- `POST /api/v1/invoices/generate` — Generate invoices for the current month (idempotent; rate-limited 20/min)
+- `GET /api/v1/tenant/me/invoices` — Tenant's own invoices (`invoice:read-own`)
+- `POST /api/v1/tenant/me/invoices/[id]` — Tenant marks own invoice paid (honor system, audited)
 - `POST /api/auth` — Auth actions (`signin`, `signup`, `verify-email`, `resend-verification`)
 - `GET /api/auth/me` — Get current user
 - `GET /api/auth/logout` — Sign out
@@ -113,9 +134,15 @@ EMAIL_FROM=Keja Yangu <no-reply@keja.co>
 
 | Role | Dashboard | Access |
 |------|-----------|--------|
-| Owner | `/dashboard/owner` | Portfolio, accounting, reports |
-| Caretaker | `/dashboard/caretaker` | Property management, tenant requests |
+| Owner | `/dashboard/owner` | Portfolio, accounting, reports; manages caretakers and tenants |
+| Caretaker | `/dashboard/caretaker` | Assigned properties, tenant requests; read-only unless granted privileges |
 | Tenant | `/dashboard/tenant` | Applications, payments, complaints |
+| system-admin | `/dashboard/system-admin` | Full control over properties, tenants, and caretaker privileges |
+
+Caretakers are read-only by default. Owners grant granular privileges — create
+property, edit property, delete assigned property, manage tenants, manage
+invoices — from the team page; system-admin applies to all caretakers.
+`system-admin` is invite/seed-only and cannot be selected at public signup.
 
 Email verification is required for all accounts.
 
