@@ -9,6 +9,10 @@ import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-m
 vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("@/lib/notifications", () => ({
+  notifyLeaseExpiry: vi.fn().mockResolvedValue(true),
+  DAY_IN_MS: 86_400_000,
+}));
 vi.mock("@/models/User", async () => {
   const { getModelStubs: get } = await import("@/test/utils/model-mocks");
   return { User: get().user };
@@ -27,8 +31,10 @@ vi.mock("@/models/Invoice", async () => {
 });
 
 import { POST } from "@/app/api/v1/invoices/generate/route";
+import { notifyLeaseExpiry } from "@/lib/notifications";
 
 const { user, property, lease: leaseStub, invoice: invoiceStub } = getModelStubs();
+const notifyLeaseExpiryMock = vi.mocked(notifyLeaseExpiry);
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
@@ -64,6 +70,7 @@ async function json(res: Response) {
 describe("POST /api/v1/invoices/generate", () => {
   beforeEach(() => {
     resetModelStubs();
+    notifyLeaseExpiryMock.mockClear();
   });
 
   it("403 for a mismatched origin", async () => {
@@ -179,6 +186,46 @@ describe("POST /api/v1/invoices/generate", () => {
     expect(secondCreate.leaseId).toBe(LEASE_B);
     const body = await json(res);
     expect(body.data).toEqual({ created: 2, skipped: 0 });
+  });
+
+  it("fires lease-expiry notifications only for leases ending within 30 days", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    const inTenDays = new Date(Date.now() + 10 * 86_400_000);
+    const farAway = new Date(Date.now() + 90 * 86_400_000);
+    leaseStub.find.mockReturnValue(
+      buildQuery([
+        makeLease({
+          _id: LEASE_A,
+          ownerId: OWNER_ID,
+          propertyId: PROPERTY_ID,
+          endDate: inTenDays,
+        }),
+        makeLease({
+          _id: LEASE_B,
+          ownerId: OWNER_ID,
+          propertyId: PROPERTY_ID,
+          endDate: farAway,
+        }),
+      ]),
+    );
+    invoiceStub.find.mockReturnValue(buildQuery([]).select("leaseId"));
+    const period = currentPeriod();
+    user.findOneAndUpdate.mockReturnValue(buildQuery({ invoiceCounters: { [period]: 1 } }));
+    invoiceStub.create.mockResolvedValue({});
+
+    const res = await POST(
+      buildRequest("/api/v1/invoices/generate", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: {},
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(notifyLeaseExpiryMock).toHaveBeenCalledTimes(1);
+    expect(notifyLeaseExpiryMock).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: LEASE_A, endDate: inTenDays }),
+      expect.any(Number),
+    );
   });
 
   it("skips leases that already have an invoice for the period", async () => {

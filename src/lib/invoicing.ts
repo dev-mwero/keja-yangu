@@ -102,6 +102,16 @@ export function canMarkPaid(status: DerivedInvoiceStatus): boolean {
   return status === "draft" || status === "pending" || status === "overdue";
 }
 
+/**
+ * Online payment guard — deliberately narrower than `canMarkPaid`: only a
+ * stored `pending` invoice with zero balance is payable online (drafts are not
+ * payable online, and a partially-paid invoice has no full-settlement charge
+ * path in this round).
+ */
+export function canPayOnline(invoice: { status: string; amountPaid: number }): boolean {
+  return invoice.status === "pending" && invoice.amountPaid === 0;
+}
+
 export function canVoid(status: DerivedInvoiceStatus): boolean {
   return status === "draft" || status === "pending" || status === "overdue";
 }

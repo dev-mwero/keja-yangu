@@ -55,6 +55,7 @@ export interface TestTenant {
   propertyId: string;
   ownerId: string;
   status: "active" | "pending" | "rejected";
+  userId?: string;
   joinedAt?: Date;
   notes?: string;
 }
@@ -167,6 +168,242 @@ export function makeInvoice(overrides: Partial<TestInvoice> = {}): TestInvoice {
     status: "pending",
     dueDate: new Date("2026-10-05T00:00:00.000Z"),
     issuedAt: new Date("2026-09-01T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+export type TestNotificationType =
+  | "invoice:paid"
+  | "invoice:overdue"
+  | "lease:expiring"
+  | "complaint:created"
+  | "complaint:status-changed"
+  | "chat:reply"
+  | "announcement";
+
+export interface TestNotification {
+  _id: string;
+  recipientUserId: string;
+  recipientRole?: string;
+  type: TestNotificationType;
+  title: string;
+  body: string;
+  data: Record<string, unknown>;
+  link: string;
+  channels: string[];
+  readAt?: Date;
+  emailSentAt?: Date;
+  dedupeKey: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export function makeNotification(overrides: Partial<TestNotification> = {}): TestNotification {
+  return {
+    _id: makeObjectId("notification"),
+    recipientUserId: makeObjectId("user"),
+    type: "invoice:paid",
+    title: "Invoice paid",
+    body: "Your payment was received.",
+    data: {},
+    link: "",
+    channels: ["in-app"],
+    dedupeKey: "",
+    createdAt: new Date("2026-09-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-09-01T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+export interface TestPayment {
+  _id: string;
+  provider: string;
+  providerReference: string;
+  invoiceId: string;
+  tenantId: string;
+  ownerId: string;
+  propertyId: string;
+  amountMinor: number;
+  currency: string;
+  status: string;
+  authorizationUrl?: string;
+  channel?: string;
+  paidAt?: Date;
+  initiatedAt: Date;
+  expiresAt: Date;
+  lastEvent?: string;
+  rawEvent?: unknown;
+  notes?: string[];
+}
+
+export function makePayment(overrides: Partial<TestPayment> = {}): TestPayment {
+  return {
+    _id: makeObjectId("payment"),
+    provider: "paystack",
+    providerReference: "KY-abc123-1a2b3c4d",
+    invoiceId: makeObjectId("invoice"),
+    tenantId: makeObjectId("tenant"),
+    ownerId: makeObjectId("user"),
+    propertyId: makeObjectId("prop"),
+    amountMinor: 2500000,
+    currency: "KES",
+    status: "pending",
+    initiatedAt: new Date("2026-09-20T10:00:00.000Z"),
+    expiresAt: new Date("2026-09-20T11:30:00.000Z"),
+    ...overrides,
+  };
+}
+
+export interface TestComplaint {
+  _id: string;
+  tenantId: string;
+  propertyId: string;
+  ownerId: string;
+  subject: string;
+  category: "Maintenance" | "Noise" | "Billing" | "Security" | "Neighbours" | "Other";
+  message: string;
+  status: "open" | "in-progress" | "resolved";
+  priority: "low" | "medium" | "high";
+  resolution?: string;
+  updatedById?: string;
+  updatedByRole?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export function makeComplaint(overrides: Partial<TestComplaint> = {}): TestComplaint {
+  return {
+    _id: makeObjectId("complaint"),
+    tenantId: makeObjectId("tenant"),
+    propertyId: makeObjectId("prop"),
+    ownerId: makeObjectId("user"),
+    subject: "Loose bathroom tap",
+    category: "Maintenance",
+    message: "The bathroom tap is leaking.",
+    status: "open",
+    priority: "medium",
+    createdAt: new Date("2026-09-01T08:00:00.000Z"),
+    updatedAt: new Date("2026-09-01T08:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+export interface TestChatThread {
+  _id: string;
+  tenantId: string;
+  propertyId: string;
+  ownerId: string;
+  agentUserId: string;
+  agentRole: "owner" | "caretaker";
+  lastMessageAt: Date;
+  lastMessageText: string;
+  tenantLastReadAt?: Date;
+  agentLastReadAt?: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export function makeChatThread(overrides: Partial<TestChatThread> = {}): TestChatThread {
+  return {
+    _id: makeObjectId("thread"),
+    tenantId: makeObjectId("tenant"),
+    propertyId: makeObjectId("prop"),
+    ownerId: makeObjectId("user"),
+    agentUserId: makeObjectId("agent"),
+    agentRole: "caretaker",
+    lastMessageAt: new Date("2026-09-02T09:00:00.000Z"),
+    lastMessageText: "Anytime. Water tanks are being cleaned Thursday.",
+    tenantLastReadAt: new Date("2026-09-02T08:00:00.000Z"),
+    agentLastReadAt: new Date("2026-09-02T09:00:00.000Z"),
+    createdAt: new Date("2026-08-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-09-02T09:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+export interface TestChatMessage {
+  _id: string;
+  threadId: string;
+  senderUserId: string;
+  senderRole: "tenant" | "owner" | "caretaker";
+  text: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export function makeChatMessage(overrides: Partial<TestChatMessage> = {}): TestChatMessage {
+  return {
+    _id: makeObjectId("message"),
+    threadId: makeObjectId("thread"),
+    senderUserId: makeObjectId("agent"),
+    senderRole: "caretaker",
+    text: "Anytime. Water tanks are being cleaned Thursday.",
+    createdAt: new Date("2026-09-02T09:00:00.000Z"),
+    updatedAt: new Date("2026-09-02T09:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+export interface TestAnnouncement {
+  _id: string;
+  title: string;
+  body: string;
+  authorId: string;
+  authorName: string;
+  ownerId: string;
+  propertyId: string;
+  pinned: boolean;
+  audience: "all" | "tenants" | "staff";
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export function makeAnnouncement(overrides: Partial<TestAnnouncement> = {}): TestAnnouncement {
+  return {
+    _id: makeObjectId("announcement"),
+    title: "Water tank cleaning — Thursday morning",
+    body: "Water tanks will be cleaned this Thursday from 7:00 AM to 11:00 AM.",
+    authorId: makeObjectId("user"),
+    authorName: "John Kiprono",
+    ownerId: makeObjectId("user"),
+    propertyId: "",
+    pinned: true,
+    audience: "tenants",
+    createdAt: new Date("2026-09-02T08:00:00.000Z"),
+    updatedAt: new Date("2026-09-02T08:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+export interface TestDocument {
+  _id: string;
+  name: string;
+  category: "lease" | "invoice" | "utility" | "notice" | "inspection" | "policy";
+  scope: "tenant" | "landlord" | "property";
+  propertyId: string;
+  tenantId: string;
+  ownerId: string;
+  uploadedById: string;
+  uploadedByName: string;
+  sizeLabel: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export function makeDocument(overrides: Partial<TestDocument> = {}): TestDocument {
+  return {
+    _id: makeObjectId("document"),
+    name: "Lease agreement — Sunlit Studio",
+    category: "lease",
+    scope: "tenant",
+    propertyId: makeObjectId("prop"),
+    tenantId: makeObjectId("tenant"),
+    ownerId: makeObjectId("user"),
+    uploadedById: makeObjectId("user"),
+    uploadedByName: "D8 Property Group",
+    sizeLabel: "1.4 MB",
+    createdAt: new Date("2026-08-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-08-01T00:00:00.000Z"),
     ...overrides,
   };
 }

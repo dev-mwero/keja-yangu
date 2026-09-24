@@ -1,7 +1,7 @@
 "use client";
 
 import { CheckCircle2, CreditCard, Download, Wallet } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { DashboardShell } from "@/components/DashboardShell";
 import { ReceiptDialog } from "@/components/invoices/ReceiptDialog";
@@ -51,11 +51,41 @@ type Tab = "upcoming" | "history";
 
 const TenantPaymentsPage = () => {
   const { invoices, refetch } = useMyInvoices();
-  const { markOwnPaid, pending } = useMyInvoiceMutations();
+  const { markOwnPaid, initiatePay, checkPaymentReference, pending } = useMyInvoiceMutations();
   const [tab, setTab] = useState<Tab>("upcoming");
   const [paying, setPaying] = useState<Invoice | null>(null);
   const [method, setMethod] = useState<InvoiceMethod>("M-Pesa");
   const [receipt, setReceipt] = useState<Invoice | null>(null);
+
+  // Callback return: the "Pay online" flow redirects the browser to Paystack
+  // and back to this page with ?reference=<id>. Verify server-side (the
+  // webhook may have lost the round-trip) and toast the outcome, then strip
+  // the query params so a refresh/re-share does not re-verify.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const reference = params.get("reference");
+    if (!reference) return;
+    void (async () => {
+      try {
+        const result = await checkPaymentReference(reference);
+        if (result.invoice?.status === "paid") {
+          toast.success("Payment confirmed", {
+            description: "Your bill has been settled. Thank you!",
+          });
+          refetch();
+        } else {
+          toast.error("Payment not confirmed yet", {
+            description: "We could not confirm your payment — it may still be processing.",
+          });
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Something went wrong";
+        toast.error("Could not verify payment", { description: message });
+      } finally {
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+    })();
+  }, [checkPaymentReference, refetch]);
 
   const upcoming = useMemo(
     () => invoices.filter((i) => i.status === "pending" || i.status === "overdue"),
@@ -79,6 +109,16 @@ const TenantPaymentsPage = () => {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Something went wrong";
       toast.error("Could not mark invoice as paid", { description: message });
+    }
+  };
+
+  const handlePayOnline = async (invoice: Invoice) => {
+    try {
+      await initiatePay(invoice._id);
+      // initiatePay redirects the browser to the Paystack checkout on success.
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Something went wrong";
+      toast.error("Could not start online payment", { description: message });
     }
   };
 
@@ -164,8 +204,37 @@ const TenantPaymentsPage = () => {
                           <Download className="h-4 w-4" />
                           Receipt
                         </Button>
+                      ) : invoice.amountPaid === 0 &&
+                        (invoice.status === "pending" || invoice.status === "overdue") ? (
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            size="sm"
+                            className="rounded-full"
+                            disabled={pending}
+                            onClick={() => {
+                              void handlePayOnline(invoice);
+                            }}
+                          >
+                            <CreditCard className="h-4 w-4" />
+                            Pay online
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="rounded-full"
+                            disabled={pending}
+                            onClick={() => {
+                              setMethod(invoice.method ?? "M-Pesa");
+                              setPaying(invoice);
+                            }}
+                          >
+                            <Wallet className="h-4 w-4" />
+                            Mark paid
+                          </Button>
+                        </div>
                       ) : (
                         <Button
+                          variant="outline"
                           size="sm"
                           className="rounded-full"
                           disabled={pending}
@@ -174,7 +243,7 @@ const TenantPaymentsPage = () => {
                             setPaying(invoice);
                           }}
                         >
-                          <CreditCard className="h-4 w-4" />
+                          <Wallet className="h-4 w-4" />
                           Mark paid
                         </Button>
                       )}

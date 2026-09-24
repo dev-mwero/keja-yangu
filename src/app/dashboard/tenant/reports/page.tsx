@@ -8,10 +8,9 @@ import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { tenantNav } from "@/config/dashboardNav";
-import { type Complaint, complaintsStore } from "@/data/dashboard";
 import { useTenantApplications } from "@/hooks/use-applications";
 import { useAuth } from "@/hooks/use-auth";
-import { useLocalStore } from "@/hooks/use-local-store";
+import { useComplaints } from "@/hooks/use-complaints";
 import { useMyInvoices } from "@/hooks/use-my-invoices";
 import { formatKES, toISODate } from "@/lib/format";
 
@@ -27,7 +26,7 @@ const TenantReportsPage = () => {
   const { user } = useAuth();
   const { applications } = useTenantApplications(user?.email);
   const { invoices } = useMyInvoices();
-  const { items: complaints } = useLocalStore<Complaint>(complaintsStore);
+  const { items: complaints } = useComplaints();
 
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");

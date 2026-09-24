@@ -7,13 +7,18 @@ import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-m
 vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("@/lib/notifications", () => ({
+  notifyInvoicePaid: vi.fn().mockResolvedValue(true),
+}));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Invoice", () => ({ Invoice: getModelStubs().invoice }));
 
 import { GET, POST } from "@/app/api/v1/tenant/me/invoices/[id]/route";
+import { notifyInvoicePaid } from "@/lib/notifications";
 
 const { user, tenant: tenantStub, invoice: invoiceStub } = getModelStubs();
+const notifyInvoicePaidMock = vi.mocked(notifyInvoicePaid);
 
 const TENANT_USER_ID = makeObjectId("tenant-user");
 const OWNER_ID = makeObjectId("owner");
@@ -45,6 +50,7 @@ async function json(res: Response) {
 describe("GET /api/v1/tenant/me/invoices/[id]", () => {
   beforeEach(() => {
     resetModelStubs();
+    notifyInvoicePaidMock.mockClear();
   });
 
   it("400 for an invalid id", async () => {
@@ -177,6 +183,11 @@ describe("POST /api/v1/tenant/me/invoices/[id]", () => {
       withParams(INVOICE_ID),
     );
     expect(res.status).toBe(200);
+    expect(invoiceStub.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: INVOICE_ID, status: { $in: ["pending", "draft"] } },
+      expect.any(Object),
+      expect.any(Object),
+    );
     const updateData = invoiceStub.findOneAndUpdate.mock.calls[0][1] as Record<string, unknown>;
     expect(updateData.status).toBe("paid");
     expect(updateData.amountPaid).toBe(25000);
@@ -186,6 +197,7 @@ describe("POST /api/v1/tenant/me/invoices/[id]", () => {
     expect(updateData.method).toBe("M-Pesa");
     const body = await json(res);
     expect((body.data as { status?: string }).status).toBe("paid");
+    expect(notifyInvoicePaidMock).toHaveBeenCalledTimes(1);
   });
 
   it("409 for an already-paid invoice", async () => {

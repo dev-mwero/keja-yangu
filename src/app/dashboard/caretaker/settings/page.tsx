@@ -15,15 +15,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import {
-  type StoredSettings,
-  settingsStore,
-  type UserSettings,
-  updateSettings,
-} from "@/data/dashboard";
 import { useAuth } from "@/hooks/use-auth";
 import { useCaretakerNav } from "@/hooks/use-caretaker-nav";
-import { useLocalStore } from "@/hooks/use-local-store";
+import { useSettings } from "@/hooks/use-settings";
+import type { UserSettings } from "@/lib/schemas";
 
 interface SettingsItem {
   key: keyof Pick<
@@ -60,13 +55,11 @@ const notificationItems: SettingsItem[] = [
 const CaretakerSettingsPage = () => {
   const nav = useCaretakerNav();
   const { user, signOut } = useAuth();
-  const { items, setItems } = useLocalStore<StoredSettings>(settingsStore);
-  const prefs = items[0] ?? settingsStore.readAll()[0];
+  const { settings: prefs, update } = useSettings();
 
-  const setPref = (patch: Partial<UserSettings>) => {
-    updateSettings(settingsStore, patch);
-    setItems(settingsStore.readAll());
-    toast.info("Preferences saved");
+  const setPref = async (patch: Partial<UserSettings>) => {
+    const okay = await update(patch);
+    if (okay) toast.info("Preferences saved");
   };
 
   return (
@@ -144,7 +137,7 @@ const CaretakerSettingsPage = () => {
               <div className="text-sm font-medium text-muted-foreground">Language</div>
               <Select
                 value={prefs?.language ?? "en"}
-                onValueChange={(value) => setPref({ language: value })}
+                onValueChange={(value) => setPref({ language: value as UserSettings["language"] })}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue />

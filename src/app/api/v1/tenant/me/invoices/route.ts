@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { resolveTenantActor, resolveTenantIds } from "@/app/api/v1/_helpers";
 import { serializeInvoice } from "@/lib/invoicing";
 import { connectToDatabase } from "@/lib/mongoose";
+import { notifyOverdueInvoices } from "@/lib/notifications";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
 import { requirePermission } from "@/lib/permissions";
 import { Invoice } from "@/models/Invoice";
@@ -38,6 +39,10 @@ export async function GET(request: NextRequest) {
     filter.dueDate = { $lt: now };
   } else if (status) {
     filter.status = status;
+  }
+
+  if (status === "overdue") {
+    await notifyOverdueInvoices(now, { tenantId: { $in: tenantIds } });
   }
 
   const [invoices, total] = await Promise.all([

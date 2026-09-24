@@ -4,17 +4,17 @@ import { Megaphone, Pin } from "lucide-react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { Badge } from "@/components/ui/badge";
 import { tenantNav } from "@/config/dashboardNav";
-import { type Announcement, announcementsStore } from "@/data/dashboard";
-import { useLocalStore } from "@/hooks/use-local-store";
+import { useAnnouncements } from "@/hooks/use-announcements";
 import { formatDate, relativeTime } from "@/lib/format";
+import type { Announcement } from "@/types/communications";
 
 const isRecent = (createdAt: string) => Date.now() - new Date(createdAt).getTime() < 3 * 86400000;
 
 const TenantAnnouncementsPage = () => {
-  const { items } = useLocalStore<Announcement>(announcementsStore);
-  const sorted = [...items].sort((a, b) => {
+  const { items } = useAnnouncements();
+  const sorted = [...items].sort((a: Announcement, b: Announcement) => {
     if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1;
-    return b.createdAt.localeCompare(a.createdAt);
+    return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
   });
 
   return (
@@ -28,7 +28,7 @@ const TenantAnnouncementsPage = () => {
         <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
           <p className="text-sm text-muted-foreground">Recent updates</p>
           <p className="mt-2 font-display text-3xl font-semibold tracking-tight">
-            {items.filter((a) => isRecent(a.createdAt)).length}
+            {items.filter((a) => isRecent(a.createdAt ?? "")).length}
           </p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
@@ -55,7 +55,7 @@ const TenantAnnouncementsPage = () => {
         ) : (
           sorted.map((a) => (
             <article
-              key={a.id}
+              key={a._id}
               className="rounded-2xl border border-border bg-card p-6 shadow-soft"
             >
               <div className="flex flex-wrap items-center gap-2">
@@ -65,7 +65,7 @@ const TenantAnnouncementsPage = () => {
                     Pinned
                   </Badge>
                 )}
-                {isRecent(a.createdAt) && (
+                {isRecent(a.createdAt ?? "") && (
                   <Badge variant="outline" className="text-success">
                     New
                   </Badge>

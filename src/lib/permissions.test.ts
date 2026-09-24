@@ -431,3 +431,139 @@ describe("requirePermission — invoicing actions", () => {
     }
   });
 });
+
+const NOTIFICATION_SETTINGS_ACTIONS: Action[] = [
+  "notification:read-own",
+  "notification:manage",
+  "settings:read",
+  "settings:write",
+];
+
+describe("requirePermission — notification & settings actions", () => {
+  beforeEach(() => {
+    resetModelStubs();
+  });
+
+  it("owner and system-admin pass every notification/settings action", async () => {
+    for (const action of NOTIFICATION_SETTINGS_ACTIONS) {
+      expect(await guard(action, undefined, ownerUser())).toBeNull();
+    }
+    const admin = makeUser({ _id: makeObjectId("admin"), role: "system-admin" });
+    for (const action of NOTIFICATION_SETTINGS_ACTIONS) {
+      expect(await guard(action, undefined, admin)).toBeNull();
+    }
+  });
+
+  it("tenant passes own-scope notification reads and settings access", async () => {
+    const t = tenantUser();
+    for (const action of NOTIFICATION_SETTINGS_ACTIONS) {
+      expect(await guard(action, undefined, t)).toBeNull();
+    }
+    // Sanity: the allow-list does not leak into resource-heavy actions.
+    expect((await guard("invoice:read", undefined, t))?.status).toBe(403);
+  });
+
+  it("caretaker reads own notifications and settings without any privilege", async () => {
+    const mocker = caretakerUser([]);
+    for (const action of NOTIFICATION_SETTINGS_ACTIONS) {
+      expect(await guard(action, undefined, mocker)).toBeNull();
+    }
+  });
+
+  it("orphaned caretaker is denied every notification/settings action", async () => {
+    const mocker = caretakerUser([], { managedByOwnerId: "" });
+    for (const action of NOTIFICATION_SETTINGS_ACTIONS) {
+      expect((await guard(action, undefined, mocker))?.status).toBe(403);
+    }
+  });
+});
+
+const COMMUNICATION_SELF_ACTIONS: Action[] = [
+  "complaint:read-own",
+  "complaint:create",
+  "chat:read-own",
+  "chat:send",
+  "announcement:read",
+  "document:read-own",
+];
+
+const COMMUNICATION_MANAGE_ACTIONS: Action[] = [
+  "complaint:manage",
+  "chat:manage",
+  "announcement:manage",
+  "document:manage",
+];
+
+describe("requirePermission — communication actions", () => {
+  beforeEach(() => {
+    resetModelStubs();
+  });
+
+  it("tenant passes every own-scope communication action", async () => {
+    const t = tenantUser();
+    for (const action of COMMUNICATION_SELF_ACTIONS) {
+      expect(await guard(action, undefined, t)).toBeNull();
+    }
+  });
+
+  it("tenant is denied every communication manage action", async () => {
+    const t = tenantUser();
+    for (const action of COMMUNICATION_MANAGE_ACTIONS) {
+      expect((await guard(action, undefined, t))?.status).toBe(403);
+    }
+  });
+
+  it("owner and system-admin pass every communication action without a resource", async () => {
+    for (const action of [...COMMUNICATION_SELF_ACTIONS, ...COMMUNICATION_MANAGE_ACTIONS]) {
+      expect(await guard(action, undefined, ownerUser())).toBeNull();
+    }
+    const admin = makeUser({ _id: makeObjectId("admin"), role: "system-admin" });
+    for (const action of [...COMMUNICATION_SELF_ACTIONS, ...COMMUNICATION_MANAGE_ACTIONS]) {
+      expect(await guard(action, undefined, admin)).toBeNull();
+    }
+  });
+
+  it("owner fails manage actions on a foreign owner's resource", async () => {
+    const resource = { ownerId: OTHER_OWNER_ID, caretakerIds: [] };
+    for (const action of COMMUNICATION_MANAGE_ACTIONS) {
+      expect((await guard(action, { resource }, ownerUser()))?.status).toBe(403);
+    }
+  });
+
+  it("caretaker passes every own-scope communication action without any privilege", async () => {
+    const mocker = caretakerUser([]);
+    for (const action of COMMUNICATION_SELF_ACTIONS) {
+      expect(await guard(action, undefined, mocker)).toBeNull();
+    }
+  });
+
+  it("caretaker manage actions require the privilege and an in-scope resource", async () => {
+    const privileged: CaretakerPrivilege[] = [
+      "manage_complaints",
+      "manage_announcements",
+      "send_messages",
+      "manage_documents",
+    ];
+    const withPrivileges = caretakerUser([...privileged, "manage_invoices"]);
+    const inScope = { ownerId: OTHER_OWNER_ID, caretakerIds: [CARETAKER_ID] };
+    const foreign = { ownerId: OWNER_ID, caretakerIds: [CARETAKER_ID] };
+    for (const action of COMMUNICATION_MANAGE_ACTIONS) {
+      expect(await guard(action, { resource: inScope }, withPrivileges)).toBeNull();
+      expect((await guard(action, { resource: foreign }, withPrivileges))?.status).toBe(403);
+    }
+  });
+
+  it("caretaker manage actions fail without the matching privilege", async () => {
+    for (const action of COMMUNICATION_MANAGE_ACTIONS) {
+      expect((await guard(action, undefined, caretakerUser([])))?.status).toBe(403);
+      expect((await guard(action, undefined, caretakerUser(["manage_tenants"])))?.status).toBe(403);
+    }
+  });
+
+  it("orphaned caretaker is denied every communication action", async () => {
+    const mocker = caretakerUser([], { managedByOwnerId: "" });
+    for (const action of [...COMMUNICATION_SELF_ACTIONS, ...COMMUNICATION_MANAGE_ACTIONS]) {
+      expect((await guard(action, undefined, mocker))?.status).toBe(403);
+    }
+  });
+});

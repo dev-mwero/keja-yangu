@@ -12,6 +12,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { Logo } from "./Logo";
+import { NotificationsBell } from "./NotificationsBell";
 import { ThemeToggle } from "./ThemeToggle";
 
 export interface DashNavItem {
@@ -134,6 +135,7 @@ export const DashboardShell = ({ roleName, nav, title, subtitle, children }: Pro
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
+              <NotificationsBell />
               <ThemeToggle />
               <Button
                 variant="ghost"

@@ -1,11 +1,32 @@
 import { vi } from "vitest";
 
-const stubs: Record<"user" | "property" | "tenant" | "lease" | "invoice", ModelStub> = {
+const stubs: Record<
+  | "user"
+  | "property"
+  | "tenant"
+  | "lease"
+  | "invoice"
+  | "notification"
+  | "payment"
+  | "complaint"
+  | "chatthread"
+  | "chatmessage"
+  | "announcement"
+  | "propertydocument",
+  ModelStub
+> = {
   user: createModelStub(),
   property: createModelStub(),
   tenant: createModelStub(),
   lease: createModelStub(),
   invoice: createModelStub(),
+  notification: createModelStub(),
+  payment: createModelStub(),
+  complaint: createModelStub(),
+  chatthread: createModelStub(),
+  chatmessage: createModelStub(),
+  announcement: createModelStub(),
+  propertydocument: createModelStub(),
 };
 
 /**
@@ -59,6 +80,7 @@ export interface ModelStub {
   findOneAndDelete: ReturnType<typeof vi.fn>;
   deleteOne: ReturnType<typeof vi.fn>;
   deleteMany: ReturnType<typeof vi.fn>;
+  updateOne: ReturnType<typeof vi.fn>;
   updateMany: ReturnType<typeof vi.fn>;
   exists: ReturnType<typeof vi.fn>;
   aggregate: ReturnType<typeof vi.fn>;
@@ -83,6 +105,7 @@ export function createModelStub(): ModelStub {
     findOneAndDelete: vi.fn(),
     deleteOne: vi.fn(),
     deleteMany: vi.fn(),
+    updateOne: vi.fn(),
     updateMany: vi.fn(),
     exists: vi.fn(),
     aggregate: vi.fn(),
