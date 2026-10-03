@@ -58,8 +58,18 @@ const SystemAdminDashboard = () => {
           value={propertiesLoading ? "..." : total}
           icon={Building2}
         />
-        <StatCard label="Tenants" value={tenantsLoading ? "..." : tenants.length} icon={Users} />
-        <StatCard label="Caretakers" value={caretakers.length} icon={Users} />
+        <StatCard
+          label="Tenants"
+          value={tenantsLoading ? "..." : tenants.length}
+          icon={Users}
+          href="/dashboard/system-admin/tenants"
+        />
+        <StatCard
+          label="Caretakers"
+          value={caretakers.length}
+          icon={Users}
+          href="/dashboard/system-admin/caretakers"
+        />
         <StatCard
           label="Occupancy"
           value={propertiesLoading ? "..." : `${occupancy}%`}
