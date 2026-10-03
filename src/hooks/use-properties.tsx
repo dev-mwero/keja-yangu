@@ -19,6 +19,7 @@ export interface Property {
   beds: number;
   baths: number;
   area: number;
+  published: boolean;
 }
 
 export interface PropertyInput {
@@ -35,6 +36,7 @@ export interface PropertyInput {
   area?: number;
   caretakerIds?: string[];
   targetOwnerId?: string;
+  published?: boolean;
 }
 
 export interface PropertyFilters {
@@ -84,6 +86,12 @@ export function useProperties(filters?: PropertyFilters) {
       cancelled = true;
     };
   }, [query, reload]);
+
+  useEffect(() => {
+    const onFocus = () => setReload((n) => n + 1);
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
 
   const refetch = useCallback(() => setReload((n) => n + 1), []);
 

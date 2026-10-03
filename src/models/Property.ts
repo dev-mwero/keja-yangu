@@ -16,11 +16,14 @@ const propertySchema = new Schema(
     beds: { type: Number, required: true, min: 0 },
     baths: { type: Number, required: true, min: 0 },
     area: { type: Number, default: 0 },
+    published: { type: Boolean, default: false },
   },
   {
     timestamps: true,
   },
 );
+
+propertySchema.index({ status: 1, published: 1 });
 
 export type PropertyDocument = InferSchemaType<typeof propertySchema>;
 

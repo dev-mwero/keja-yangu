@@ -19,6 +19,7 @@ const propertyUpdate = z.object({
   images: z.array(z.string()).optional(),
   amenities: z.array(z.string()).optional(),
   status: z.enum(["available", "occupied", "maintenance"]).optional(),
+  published: z.boolean().optional(),
   caretakerIds: z.array(z.string()).optional(),
   description: z.string().optional(),
 });
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
   let property: { status?: string; _id?: unknown } | null = null;
   if (!actor) {
-    property = await Property.findOne({ _id: id, status: "available" })
+    property = await Property.findOne({ _id: id, status: "available", published: true })
       .select(PUBLIC_PROJECTION)
       .lean();
   } else if (actor.role === "system-admin") {
@@ -59,7 +60,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         : {};
     property = await Property.findOne({ _id: id, caretakerIds: actor._id, ...scope }).lean();
   } else {
-    property = await Property.findOne({ _id: id, status: "available" })
+    property = await Property.findOne({ _id: id, status: "available", published: true })
       .select(PUBLIC_PROJECTION)
       .lean();
   }

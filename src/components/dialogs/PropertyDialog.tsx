@@ -25,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useCaretakers } from "@/hooks/use-caretakers";
 import { type Property, type PropertyInput, usePropertyMutations } from "@/hooks/use-properties";
@@ -46,6 +47,7 @@ const formSchema = z.object({
   status: z.enum(["available", "occupied", "maintenance"]),
   caretakerIds: z.array(z.string()),
   targetOwnerId: z.string(),
+  published: z.boolean(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -116,6 +118,7 @@ export const PropertyDialog = ({
       status: property?.status ?? "available",
       caretakerIds: property?.caretakerIds ?? [],
       targetOwnerId: "",
+      published: property?.published ?? false,
     }),
     [property],
   );
@@ -139,6 +142,7 @@ export const PropertyDialog = ({
   const selectedCaretakerIds = watch("caretakerIds");
   const selectedStatus = watch("status");
   const selectedType = watch("type");
+  const selectedPublished = watch("published");
 
   useEffect(() => {
     if (open) {
@@ -178,6 +182,7 @@ export const PropertyDialog = ({
       baths: values.baths,
     };
     if (values.area > 0) payload.area = values.area;
+    payload.published = values.published;
     if (allowCaretakerIds) payload.caretakerIds = values.caretakerIds;
     if (mode === "edit") payload.status = values.status;
     if (systemAdmin && mode === "create") payload.targetOwnerId = values.targetOwnerId.trim();
@@ -367,6 +372,20 @@ export const PropertyDialog = ({
                 {...register("area", { valueAsNumber: true })}
               />
             </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="property-published">Published (visible on public site)</Label>
+              <p className="text-xs text-muted-foreground">
+                Published properties appear on the public listings.
+              </p>
+            </div>
+            <Switch
+              id="property-published"
+              checked={selectedPublished}
+              onCheckedChange={(v) => setValue("published", v)}
+            />
           </div>
 
           {mode === "edit" && (

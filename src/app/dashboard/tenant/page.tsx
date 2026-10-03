@@ -148,6 +148,7 @@ const TenantDashboard = () => {
                   images: p.images.length > 0 ? p.images : ["/images/property-1.jpg"],
                   amenities: p.amenities,
                   status: p.status,
+                  published: p.published,
                   ownerId: p.ownerId,
                   caretakerIds: p.caretakerIds,
                   beds: p.beds,

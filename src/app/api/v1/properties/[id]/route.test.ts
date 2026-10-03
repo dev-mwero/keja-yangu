@@ -84,7 +84,25 @@ describe("GET /api/v1/properties/[id]", () => {
       withParams(PROPERTY_ID),
     );
     expect(res.status).toBe(404);
-    expect(property.findOne).toHaveBeenCalledWith({ _id: PROPERTY_ID, status: "available" });
+    expect(property.findOne).toHaveBeenCalledWith({
+      _id: PROPERTY_ID,
+      status: "available",
+      published: true,
+    });
+  });
+
+  it("404 for anonymous when the property is unpublished", async () => {
+    property.findOne.mockReturnValue(buildQuery(null));
+    const res = await GET(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}`),
+      withParams(PROPERTY_ID),
+    );
+    expect(res.status).toBe(404);
+    expect(property.findOne).toHaveBeenCalledWith({
+      _id: PROPERTY_ID,
+      status: "available",
+      published: true,
+    });
   });
 
   it("200 for anonymous when the property is available, with the public projection", async () => {
@@ -123,7 +141,7 @@ describe("GET /api/v1/properties/[id]", () => {
     );
     expect(res.status).toBe(404);
     expect(property.findOne).toHaveBeenCalledWith(
-      expect.objectContaining({ _id: PROPERTY_ID, status: "available" }),
+      expect.objectContaining({ _id: PROPERTY_ID, status: "available", published: true }),
     );
   });
 
