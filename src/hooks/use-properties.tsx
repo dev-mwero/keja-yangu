@@ -87,6 +87,12 @@ export function useProperties(filters?: PropertyFilters) {
     };
   }, [query, reload]);
 
+  useEffect(() => {
+    const onFocus = () => setReload((n) => n + 1);
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
+
   const refetch = useCallback(() => setReload((n) => n + 1), []);
 
   return { properties, loading, error, refetch };
