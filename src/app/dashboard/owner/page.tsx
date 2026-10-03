@@ -40,7 +40,7 @@ const OwnerDashboard = () => {
     >
       <div className="mb-6 flex justify-end">
         <Button asChild className="rounded-full">
-          <Link href="/properties">
+          <Link href="/dashboard/owner/portfolio">
             <Plus className="mr-2 h-4 w-4" />
             New property
           </Link>
