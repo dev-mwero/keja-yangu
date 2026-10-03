@@ -19,6 +19,7 @@ export interface Property {
   beds: number;
   baths: number;
   area: number;
+  published: boolean;
 }
 
 export interface PropertyInput {
@@ -35,6 +36,7 @@ export interface PropertyInput {
   area?: number;
   caretakerIds?: string[];
   targetOwnerId?: string;
+  published?: boolean;
 }
 
 export interface PropertyFilters {

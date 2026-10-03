@@ -62,8 +62,8 @@ describe("GET /api/v1/properties", () => {
     expect(res.status).toBe(200);
     const body = await json(res);
 
-    expect(property.find).toHaveBeenCalledWith({ status: "available" });
-    expect(property.countDocuments).toHaveBeenCalledWith({ status: "available" });
+    expect(property.find).toHaveBeenCalledWith({ status: "available", published: true });
+    expect(property.countDocuments).toHaveBeenCalledWith({ status: "available", published: true });
     expect(chain.select).toHaveBeenCalledWith("-ownerId -caretakerIds -createdById -__v");
     expect(chain.sort).toHaveBeenCalledWith({ createdAt: -1 });
     expect(chain.skip).toHaveBeenCalledWith(0);
@@ -79,7 +79,7 @@ describe("GET /api/v1/properties", () => {
     // anonymous requests ignore identity query filters entirely
     property.find.mockClear();
     await GET(buildRequest("/api/v1/properties?ownerId=someone"));
-    expect(property.find).toHaveBeenCalledWith({ status: "available" });
+    expect(property.find).toHaveBeenCalledWith({ status: "available", published: true });
   });
 
   it("returns all properties for an authenticated owner with no filters", async () => {
@@ -92,7 +92,7 @@ describe("GET /api/v1/properties", () => {
     const res = await GET(buildRequest("/api/v1/properties", { token: signToken(OWNER_ID) }));
     expect(res.status).toBe(200);
     const body = await json(res);
-    expect(property.find).toHaveBeenCalledWith({});
+    expect(property.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
     expect(body.data).toHaveLength(1);
   });
 
@@ -108,7 +108,57 @@ describe("GET /api/v1/properties", () => {
       }),
     );
     expect(res.status).toBe(200);
-    expect(property.find).toHaveBeenCalledWith({ status: "available", ownerId: "abc123" });
+    expect(property.find).toHaveBeenCalledWith({ status: "available", ownerId: OWNER_ID });
+  });
+
+  it("treats a signed-in tenant like anonymous (published + available only)", async () => {
+    const tenantActor = makeUser({ _id: makeObjectId("tenant"), role: "tenant" });
+    user.findById.mockReturnValue(buildQuery(tenantActor));
+    property.find.mockReturnValue(buildQuery([]));
+    property.countDocuments.mockResolvedValue(0);
+
+    const res = await GET(
+      buildRequest("/api/v1/properties?ownerId=someone", { token: signToken(tenantActor._id) }),
+    );
+    expect(res.status).toBe(200);
+    expect(property.find).toHaveBeenCalledWith({ status: "available", published: true });
+    expect(property.countDocuments).toHaveBeenCalledWith({ status: "available", published: true });
+  });
+
+  it("scopes a signed-in caretaker to assigned properties only", async () => {
+    const caretaker = makeUser({
+      _id: CARETAKER_ID,
+      role: "caretaker",
+      managedByOwnerId: OTHER_OWNER_ID,
+      privileges: ["edit_property"],
+    });
+    user.findById.mockReturnValue(buildQuery(caretaker));
+    property.find.mockReturnValue(buildQuery([]));
+    property.countDocuments.mockResolvedValue(0);
+
+    const res = await GET(
+      buildRequest("/api/v1/properties?status=available", { token: signToken(CARETAKER_ID) }),
+    );
+    expect(res.status).toBe(200);
+    expect(property.find).toHaveBeenCalledWith({ caretakerIds: CARETAKER_ID, status: "available" });
+    expect(property.countDocuments).toHaveBeenCalledWith({
+      caretakerIds: CARETAKER_ID,
+      status: "available",
+    });
+  });
+
+  it("lets a system-admin see all properties and honor query filters", async () => {
+    const admin = makeUser({ _id: makeObjectId("admin"), role: "system-admin" });
+    user.findById.mockReturnValue(buildQuery(admin));
+    property.find.mockReturnValue(buildQuery([]));
+    property.countDocuments.mockResolvedValue(0);
+
+    await GET(
+      buildRequest("/api/v1/properties?ownerId=abc&status=occupied", {
+        token: signToken(admin._id),
+      }),
+    );
+    expect(property.find).toHaveBeenCalledWith({ ownerId: "abc", status: "occupied" });
   });
 
   it("applies caretakerId filter via the caretakerIds multikey", async () => {
@@ -118,7 +168,7 @@ describe("GET /api/v1/properties", () => {
     property.countDocuments.mockResolvedValue(0);
 
     await GET(buildRequest("/api/v1/properties?caretakerId=c1", { token: signToken(OWNER_ID) }));
-    expect(property.find).toHaveBeenCalledWith({ caretakerIds: "c1" });
+    expect(property.find).toHaveBeenCalledWith({ ownerId: OWNER_ID, caretakerIds: "c1" });
   });
 });
 
@@ -222,7 +272,12 @@ describe("POST /api/v1/properties", () => {
     );
     expect(res.status).toBe(201);
     expect(property.create).toHaveBeenCalledWith(
-      expect.objectContaining({ ownerId: OWNER_ID, createdById: OWNER_ID, caretakerIds: [] }),
+      expect.objectContaining({
+        ownerId: OWNER_ID,
+        createdById: OWNER_ID,
+        caretakerIds: [],
+        published: false,
+      }),
     );
     const body = await json(res);
     expect((body.data as { title?: string }).title).toBe("Sunset Villa");
@@ -241,15 +296,21 @@ describe("POST /api/v1/properties", () => {
       buildRequest("/api/v1/properties", {
         method: "POST",
         token: signToken(OWNER_ID),
-        body: { ...validPropertyBody, ownerId: spoofed, caretakerIds: [CARETAKER_ID] },
+        body: {
+          ...validPropertyBody,
+          ownerId: spoofed,
+          caretakerIds: [CARETAKER_ID],
+          published: true,
+        },
       }),
     );
     expect(res.status).toBe(201);
     expect(property.create).toHaveBeenCalledWith(
       expect.objectContaining({ ownerId: OWNER_ID, createdById: OWNER_ID }),
     );
-    const createArgs = property.create.mock.calls[0][0] as { ownerId: string };
+    const createArgs = property.create.mock.calls[0][0] as { ownerId: string; published: boolean };
     expect(createArgs.ownerId).not.toBe(spoofed);
+    expect(createArgs.published).toBe(false);
   });
 
   it("owner create validates caretakerIds reference caretaker users", async () => {

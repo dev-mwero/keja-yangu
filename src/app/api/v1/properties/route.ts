@@ -36,23 +36,47 @@ export async function GET(request: NextRequest) {
 
   await connectToDatabase();
 
-  if (!authenticate(request)) {
+  const authUser = authenticate(request);
+
+  const publicListing = async () => {
     const available = await Promise.all([
-      Property.find({ status: "available" })
+      Property.find({ status: "available", published: true })
         .select("-ownerId -caretakerIds -createdById -__v")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .lean(),
-      Property.countDocuments({ status: "available" }),
+      Property.countDocuments({ status: "available", published: true }),
     ]);
     return NextResponse.json(buildPaginationResult(available[0], available[1], page, limit));
+  };
+
+  if (!authUser) {
+    return publicListing();
+  }
+
+  const actorDoc = await User.findById(authUser.userId).select("role isActive").lean();
+  if (!actorDoc?.isActive) {
+    return publicListing();
+  }
+
+  if (actorDoc.role === "tenant") {
+    return publicListing();
   }
 
   const filter: Record<string, unknown> = {};
-  if (ownerId) filter.ownerId = ownerId;
-  if (caretakerId) filter.caretakerIds = caretakerId;
-  if (status) filter.status = status;
+  if (actorDoc.role === "owner") {
+    filter.ownerId = authUser.userId;
+    if (caretakerId) filter.caretakerIds = caretakerId;
+    if (status) filter.status = status;
+  } else if (actorDoc.role === "caretaker") {
+    filter.caretakerIds = authUser.userId;
+    if (status) filter.status = status;
+  } else {
+    if (ownerId) filter.ownerId = ownerId;
+    if (caretakerId) filter.caretakerIds = caretakerId;
+    if (status) filter.status = status;
+  }
 
   const [properties, total] = await Promise.all([
     Property.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
@@ -157,6 +181,7 @@ export async function POST(request: NextRequest) {
     ownerId,
     createdById: actorId,
     caretakerIds: uniqueCaretakerIds,
+    published: false,
   });
   return NextResponse.json({ data: property }, { status: 201 });
 }

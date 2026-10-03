@@ -50,6 +50,7 @@ const editProperty: Property = {
   images: [],
   amenities: [],
   status: "available",
+  published: true,
   ownerId: "dce2b032481698ae7cfe04d1",
   caretakerIds: [],
   beds: 2,
@@ -58,6 +59,26 @@ const editProperty: Property = {
 };
 
 describe("PropertyDialog", () => {
+  it("renders a Published switch defaulting to off and submits published:true when toggled", async () => {
+    mocks.createProperty.mockResolvedValue(editProperty);
+    openDialog();
+
+    const toggle = screen.getByRole("switch", { name: /published/i });
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByText("Published (visible on public site)")).toBeInTheDocument();
+
+    await userEvent.click(toggle);
+
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Sunset Villa" } });
+    fireEvent.change(screen.getByLabelText("Location"), { target: { value: "Kilimani, Nairobi" } });
+    fireEvent.change(screen.getByLabelText("Price (KES/month)"), { target: { value: "45000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create property" }));
+
+    await waitFor(() => expect(mocks.createProperty).toHaveBeenCalled());
+    const payload = mocks.createProperty.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload.published).toBe(true);
+  });
+
   it("shows validation errors when required fields are missing", async () => {
     openDialog();
     fireEvent.click(screen.getByRole("button", { name: "Create property" }));
@@ -90,6 +111,7 @@ describe("PropertyDialog", () => {
       beds: 0,
       baths: 0,
       caretakerIds: [],
+      published: false,
     });
     expect(mocks.toast.success).toHaveBeenCalledWith("Property created", expect.any(Object));
     expect(onSuccess).toHaveBeenCalled();
