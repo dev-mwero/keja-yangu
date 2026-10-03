@@ -72,10 +72,15 @@ export const invoiceGenerateInput = z.object({
   period: dateString.optional(),
 });
 
-// Deliberately no `amountPaid`: offline mark-paid always settles the full
-// `amountDue` server-side. The field exists only for the future Paystack path.
+// Client-supplied `amountPaid` is stripped (unknown key): offline mark-paid
+// settles the validated `amount` (defaulting to `amountDue` server-side). The
+// field exists only for the Paystack path.
 export const invoiceMarkPaidInput = z.object({
+  amount: z.coerce.number().min(0).optional(),
   method: z.enum(INVOICE_METHODS).optional(),
+  paidAt: z.iso.datetime().optional(),
+  description: z.string().max(500).optional(),
+  reference: z.string().max(100).optional(),
   notes: z.string().optional(),
 });
 

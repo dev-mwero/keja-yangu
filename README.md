@@ -60,6 +60,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run check` | Lint + format in one pass |
 | `npm run test` | Run tests |
 | `npm run test:coverage` | Run tests with coverage |
+| `npm run typecheck` | Type-check without emitting |
 
 ## API Routes
 
@@ -87,6 +88,8 @@ Open [http://localhost:3000](http://localhost:3000).
 - `POST /api/v1/invoices/[id]/mark-paid` — Mark invoice paid (`invoice:mark-paid`; or tenant for own; rate-limited 20/min)
 - `POST /api/v1/invoices/[id]/void` — Void invoice (`invoice:manage`; paid cannot be voided)
 - `POST /api/v1/invoices/generate` — Generate invoices for the current month (idempotent; rate-limited 20/min)
+
+> Legacy browser localStorage invoice history is not migrated (hard cutover).
 - `GET /api/v1/tenant/me/invoices` — Tenant's own invoices (`invoice:read-own`)
 - `POST /api/v1/tenant/me/invoices/[id]` — Tenant marks own invoice paid (honor system, audited)
 - `POST /api/v1/tenant/me/invoices/[id]/pay-initiate` — Start a Paystack checkout for a tenant's pending invoice (`invoice:read-own`; rate-limited 5/min per user; returns `authorizationUrl`)
