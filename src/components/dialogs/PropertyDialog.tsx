@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -29,7 +29,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useCaretakers } from "@/hooks/use-caretakers";
 import { type Property, type PropertyInput, usePropertyMutations } from "@/hooks/use-properties";
 import { mergeImageUrls } from "@/lib/images";
-import { UploadButton } from "@/lib/uploadthing";
+import { useUploadThing } from "@/lib/uploadthing";
 import { cn } from "@/lib/utils";
 
 const formSchema = z.object({
@@ -83,6 +83,23 @@ export const PropertyDialog = ({
 }: PropertyDialogProps) => {
   const { createProperty, updateProperty, pending } = usePropertyMutations();
   const { caretakers } = useCaretakers();
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { startUpload, isUploading } = useUploadThing("propertyImages", {
+    onUploadProgress: (p) => setUploadProgress(p),
+    onClientUploadComplete: (res) => {
+      const urls = res.map((file) => file.ufsUrl);
+      setValue("images", mergeImageUrls(getValues("images"), urls));
+      setUploadProgress(0);
+      toast.success("Images uploaded", {
+        description: `${urls.length} image${urls.length === 1 ? "" : "s"} added.`,
+      });
+    },
+    onUploadError: (error) => {
+      setUploadProgress(0);
+      toast.error("Image upload failed", { description: error.message });
+    },
+  });
 
   const buildDefaults = useCallback(
     (): FormValues => ({
@@ -276,21 +293,39 @@ export const PropertyDialog = ({
               {...register("images")}
             />
             <p className="text-xs text-muted-foreground">One image URL per line.</p>
-            <div className="pt-1">
-              <UploadButton
-                endpoint="propertyImages"
-                content={{ button: "Upload images" }}
-                onClientUploadComplete={(res) => {
-                  const urls = res.map((file) => file.ufsUrl);
-                  setValue("images", mergeImageUrls(getValues("images"), urls));
-                  toast.success("Images uploaded", {
-                    description: `${urls.length} image${urls.length === 1 ? "" : "s"} added.`,
-                  });
-                }}
-                onUploadError={(error) => {
-                  toast.error("Image upload failed", { description: error.message });
+            <div className="space-y-2 pt-1">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={async (e) => {
+                  const files = e.target.files ? Array.from(e.target.files) : [];
+                  e.target.value = "";
+                  if (files.length === 0) return;
+                  setUploadProgress(0);
+                  await startUpload(files);
                 }}
               />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isUploading}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isUploading ? `Uploading… ${uploadProgress}%` : "Upload images"}
+              </Button>
+              {isUploading && (
+                <div className="h-1.5 w-full rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+              )}
             </div>
           </div>
 
