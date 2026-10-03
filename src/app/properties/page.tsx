@@ -7,7 +7,8 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
-import { type PropertyType, properties } from "@/data/properties";
+import type { Property, PropertyType } from "@/data/properties";
+import { useProperties } from "@/hooks/use-properties";
 
 const types: ("all" | PropertyType)[] = ["all", "room", "apartment", "building"];
 
@@ -15,6 +16,11 @@ const Properties = () => {
   const [q, setQ] = useState("");
   const [type, setType] = useState<(typeof types)[number]>("all");
   const [maxPrice, setMaxPrice] = useState(250000);
+  const { properties: apiProperties } = useProperties();
+  const properties: Property[] = useMemo(
+    () => apiProperties.map((p) => ({ ...p, id: p._id })),
+    [apiProperties],
+  );
 
   const filtered = useMemo(
     () =>
@@ -24,7 +30,7 @@ const Properties = () => {
         if (q && !`${p.title} ${p.location}`.toLowerCase().includes(q.toLowerCase())) return false;
         return true;
       }),
-    [q, type, maxPrice],
+    [properties, q, type, maxPrice],
   );
 
   return (
