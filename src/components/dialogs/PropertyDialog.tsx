@@ -28,6 +28,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useCaretakers } from "@/hooks/use-caretakers";
 import { type Property, type PropertyInput, usePropertyMutations } from "@/hooks/use-properties";
+import { mergeImageUrls } from "@/lib/images";
+import { UploadButton } from "@/lib/uploadthing";
 import { cn } from "@/lib/utils";
 
 const formSchema = z.object({
@@ -108,6 +110,7 @@ export const PropertyDialog = ({
     watch,
     setValue,
     setError,
+    getValues,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -273,6 +276,22 @@ export const PropertyDialog = ({
               {...register("images")}
             />
             <p className="text-xs text-muted-foreground">One image URL per line.</p>
+            <div className="pt-1">
+              <UploadButton
+                endpoint="propertyImages"
+                content={{ button: "Upload images" }}
+                onClientUploadComplete={(res) => {
+                  const urls = res.map((file) => file.ufsUrl);
+                  setValue("images", mergeImageUrls(getValues("images"), urls));
+                  toast.success("Images uploaded", {
+                    description: `${urls.length} image${urls.length === 1 ? "" : "s"} added.`,
+                  });
+                }}
+                onUploadError={(error) => {
+                  toast.error("Image upload failed", { description: error.message });
+                }}
+              />
+            </div>
           </div>
 
           <div className="space-y-2">

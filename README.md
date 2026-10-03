@@ -40,13 +40,16 @@ npm install
 
 # Set up environment variables
 cp .env.example .env.local
-# Edit .env.local with your MongoDB URI, JWT secret, and email config
+# Edit .env.local with your MongoDB URI, JWT secret, email config, and UploadThing token
+
 
 # Run development server
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+`UPLOADTHING_TOKEN` (from https://uploadthing.com/dashboard → API Keys) is required for the property image upload endpoint; without it `/api/uploadthing` responds with a clear configuration error. Property images can also be added as plain URLs in the property form.
 
 ## Scripts
 
@@ -163,6 +166,9 @@ EMAIL_FROM=Keja Yangu <no-reply@keja.co>
 # Paystack (test keys)
 PAYSTACK_SECRET_KEY=
 PAYSTACK_PUBLIC_KEY=
+
+# UploadThing (property image uploads)
+UPLOADTHING_TOKEN=
 ```
 
 ## User Roles
