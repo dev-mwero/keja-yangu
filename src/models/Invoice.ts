@@ -25,6 +25,8 @@ export interface IInvoice {
   paidAt?: Date;
   method?: InvoiceMethod;
   notes?: string;
+  paymentReference?: string;
+  paymentDescription?: string;
   paidBy?: string;
   paidByRole?: string;
 }
@@ -45,6 +47,8 @@ const invoiceSchema = new Schema<IInvoice>(
     paidAt: { type: Date },
     method: { type: String, enum: [...INVOICE_METHODS] },
     notes: { type: String },
+    paymentReference: { type: String, trim: true, default: "" },
+    paymentDescription: { type: String, trim: true, default: "" },
     paidBy: { type: String },
     paidByRole: { type: String },
   },

@@ -50,8 +50,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setLoading(false);
     }
-    // biome-ignore lint/correctness: useExhaustiveDependencies
-  }, [setUser, setRefreshFailed, setLoading, toast]);
+  }, []);
 
   useEffect(() => {
     refresh();

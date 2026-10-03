@@ -72,6 +72,16 @@ export async function POST(request: NextRequest) {
     await notifyLeaseExpiry(lease, daysUntil);
   }
 
+  // Short-circuit: every active lease already has an invoice for this period.
+  // Skip number reservation and invoice creation entirely — idempotent no-op.
+  const existingIds = new Set(existing.map((invoice) => invoice.leaseId));
+  if (leaseIds.length > 0 && leaseIds.every((id) => existingIds.has(id))) {
+    return NextResponse.json({
+      data: { created: 0, skipped: leaseIds.length },
+      message: `Generated 0 invoice(s) for ${period}, ${leaseIds.length} skipped`,
+    });
+  }
+
   const { toCreate, skipped } = generateForPeriod({ leases, existing, period, now });
 
   let created = 0;

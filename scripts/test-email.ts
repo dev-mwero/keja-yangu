@@ -1,11 +1,12 @@
 import dotenv from "dotenv";
+
 dotenv.config({ path: ".env.local" });
 
 import { sendVerificationEmail } from "@/lib/email";
 
 async function main() {
   const testEmail = process.argv[2] || "test@example.com";
-  const testToken = "test-token-" + Date.now();
+  const testToken = `test-token-${Date.now()}`;
 
   console.log(`Sending test verification email to: ${testEmail}`);
   console.log(`EMAIL_HOST: ${process.env.EMAIL_HOST}`);
