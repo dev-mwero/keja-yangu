@@ -421,6 +421,42 @@ export async function sendPasswordResetEmail(
   });
 }
 
+function createInviteContent(name: string, role: string): string {
+  const roleLabel = escapeHtml(role.charAt(0).toUpperCase() + role.slice(1));
+  const roleCopy =
+    role === "caretaker"
+      ? "You've been added as a caretaker on Keja Yangu. You can now help manage properties, tenants, and day-to-day operations once your account is active."
+      : "You've been added as a tenant on Keja Yangu. You can now view your lease, invoices, and announcements once your account is active.";
+  return `
+    <p style="margin: 0 0 16px; font-size: 16px; color: ${TEXT_PRIMARY}; line-height: 1.6;">Hi <strong>${escapeHtml(name)}</strong>,</p>
+    <p style="margin: 0 0 24px; font-size: 15px; color: ${TEXT_SECONDARY}; line-height: 1.6;">${roleCopy}</p>
+    <div style="text-align: center; margin: 32px 0;">
+      <a href="{{APP_URL}}" style="display: inline-block; background: linear-gradient(135deg, ${BRAND_COLOR} 0%, ${BRAND_COLOR_LIGHT} 100%); color: #ffffff; text-decoration: none; padding: 16px 32px; border-radius: 10px; font-weight: 600; font-size: 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-shadow: 0 4px 14px 0 rgba(20, 62, 107, 0.4);">Create Your Account</a>
+    </div>
+    <p style="margin: 0 0 24px; font-size: 15px; color: ${TEXT_SECONDARY}; line-height: 1.6;">To get started, create your account or set your password at <strong>{{APPURLPLACEHOLDER}}</strong> using this same email address — using the same email links your account to this invitation as a <strong>${roleLabel}</strong>.</p>
+    <p style="margin: 24px 0 0; font-size: 14px; color: ${SECONDARY_COLOR}; line-height: 1.6;">If you weren't expecting this invitation, you can safely ignore this email.</p>
+  `;
+}
+
+export async function sendInviteEmail(email: string, name: string, role: string): Promise<boolean> {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const authUrl = `${appUrl}/auth`;
+  const content = createInviteContent(name, role).replace(
+    "{{APPURLPLACEHOLDER}}",
+    escapeHtml(authUrl),
+  );
+  const html = renderTemplate(content, authUrl, `You've been invited to Keja Yangu`);
+  const roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
+  const text = `Hi ${name},\n\nYou've been invited to Keja Yangu as a ${roleLabel}. Create your account or set your password at: ${authUrl}\n\nUse the same email address (${email}) when signing up — it links your account to this invitation.\n\nIf you weren't expecting this invitation, you can safely ignore this email.`;
+
+  return sendEmail({
+    to: email,
+    subject: uniqueSubject("You've been invited to Keja Yangu"),
+    html,
+    text,
+  });
+}
+
 export async function sendWelcomeEmail(
   email: string,
   name: string,
