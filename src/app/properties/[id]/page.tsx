@@ -22,8 +22,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { properties } from "@/data/properties";
 import { useAuth } from "@/hooks/use-auth";
+import { useProperties } from "@/hooks/use-properties";
 import { useToast } from "@/hooks/use-toast";
 import {
   applicationInputSchema,
@@ -33,7 +33,8 @@ import {
 
 const PropertyDetails = () => {
   const { id } = useParams();
-  const property = properties.find((p) => p.id === id);
+  const { properties: apiProperties, loading } = useProperties();
+  const property = apiProperties.map((p) => ({ ...p, id: p._id })).find((p) => p.id === id);
   const [active, setActive] = useState(0);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -42,6 +43,17 @@ const PropertyDetails = () => {
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", message: "" });
   const [errors, setErrors] = useState<{ name?: string; email?: string; message?: string }>({});
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <SiteHeader />
+        <div className="container py-32 text-center">
+          <p className="text-muted-foreground">Loading property…</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!property) {
     return (

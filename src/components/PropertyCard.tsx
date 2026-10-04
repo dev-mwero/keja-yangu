@@ -37,6 +37,14 @@ export const PropertyCard = ({ property }: { property: Property }) => {
           >
             {property.status}
           </Badge>
+          {!property.published && (
+            <Badge
+              variant="outline"
+              className="rounded-full border border-border bg-background/90 text-muted-foreground backdrop-blur"
+            >
+              Unpublished
+            </Badge>
+          )}
         </div>
         <div className="absolute bottom-4 right-4 rounded-full bg-background/95 px-3 py-1.5 text-sm font-semibold shadow-soft backdrop-blur">
           KES {property.price.toLocaleString()}

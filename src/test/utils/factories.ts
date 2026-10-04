@@ -39,6 +39,7 @@ export interface TestProperty {
   images: string[];
   amenities: string[];
   status: "available" | "occupied" | "maintenance";
+  published: boolean;
   ownerId: string;
   caretakerIds: string[];
   createdById: string;
@@ -84,6 +85,7 @@ export function makeProperty(overrides: Partial<TestProperty> = {}): TestPropert
     images: [],
     amenities: [],
     status: "available",
+    published: true,
     ownerId: makeObjectId("user"),
     caretakerIds: [],
     createdById: makeObjectId("user"),

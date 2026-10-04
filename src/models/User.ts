@@ -18,6 +18,7 @@ export interface IUser {
   managedByOwnerId: string;
   isActive: boolean;
   isVerified: boolean;
+  phone: string;
   verificationToken?: string;
   verificationTokenExpiry?: Date;
   invoiceCounters: Record<string, number>;
@@ -64,6 +65,7 @@ const userSchema = new Schema<IUser>(
     managedByOwnerId: { type: String, default: "" },
     isActive: { type: Boolean, default: true },
     isVerified: { type: Boolean, default: false },
+    phone: { type: String, trim: true, default: "" },
     verificationToken: { type: String },
     verificationTokenExpiry: { type: Date },
     invoiceCounters: { type: Schema.Types.Map, of: Number, default: {} },
@@ -75,6 +77,7 @@ const userSchema = new Schema<IUser>(
 );
 
 userSchema.index({ role: 1, managedByOwnerId: 1 });
+userSchema.index({ phone: 1 });
 
 export type UserDocument = InferSchemaType<IUser>;
 

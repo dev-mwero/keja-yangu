@@ -21,6 +21,8 @@ export interface Invoice {
   paidAt?: string;
   method?: InvoiceMethod;
   notes?: string;
+  paymentReference?: string;
+  paymentDescription?: string;
   paidBy?: string;
   paidByRole?: string;
   overdue: boolean;

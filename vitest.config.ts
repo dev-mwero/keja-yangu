@@ -19,6 +19,14 @@ export default defineConfig({
       reporter: ["text", "json", "html"],
       include: ["src/**/*.{ts,tsx}"],
       exclude: ["src/**/*.test.{ts,tsx}", "src/test/**"],
+      // TODO: add per-file coverage thresholds (>=80% lines, >=75% branches) for
+      // src/lib/permissions.ts, src/lib/schemas/**, and the six property route modules
+      // once those files exist. Example shape:
+      // thresholds: {
+      //   "src/lib/permissions.ts": { lines: 80, branches: 75 },
+      //   "src/lib/schemas/**": { lines: 80, branches: 75 },
+      //   "src/app/api/properties/**/route.ts": { lines: 80, branches: 75 },
+      // },
     },
   },
 });

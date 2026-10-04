@@ -198,6 +198,75 @@ describe("POST /api/v1/invoices/[id]/mark-paid", () => {
     );
   });
 
+  it("uses custom amount and explicit paidAt and persists reference/description", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    invoiceStub.findById.mockReturnValue(buildQuery(pendingInvoice()));
+    invoiceStub.findOneAndUpdate.mockReturnValue(
+      buildQuery({ ...pendingInvoice(), status: "paid" }),
+    );
+
+    const res = await POST(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}/mark-paid`, {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: {
+          method: "Bank",
+          amount: 12000,
+          paidAt: "2026-09-15T10:00:00.000Z",
+          reference: "REF123",
+          description: "September rent",
+          amountPaid: 999999,
+        },
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(200);
+    const updateData = invoiceStub.findOneAndUpdate.mock.calls[0][1] as Record<string, unknown>;
+    expect(updateData.amountPaid).toBe(12000);
+    expect(updateData.paidAt).toEqual(new Date("2026-09-15T10:00:00.000Z"));
+    expect(updateData.paymentReference).toBe("REF123");
+    expect(updateData.paymentDescription).toBe("September rent");
+  });
+
+  it("rejects a future paidAt with 400", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    invoiceStub.findById.mockReturnValue(buildQuery(pendingInvoice()));
+    const future = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+    const res = await POST(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}/mark-paid`, {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { paidAt: future },
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(400);
+    expect(invoiceStub.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it("defaults amountPaid to amountDue when amount is omitted", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    invoiceStub.findById.mockReturnValue(buildQuery(pendingInvoice()));
+    invoiceStub.findOneAndUpdate.mockReturnValue(
+      buildQuery({ ...pendingInvoice(), status: "paid" }),
+    );
+
+    const res = await POST(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}/mark-paid`, {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { description: "full payment" },
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(200);
+    const updateData = invoiceStub.findOneAndUpdate.mock.calls[0][1] as Record<string, unknown>;
+    expect(updateData.amountPaid).toBe(25000);
+    expect(updateData.paidAt).toBeInstanceOf(Date);
+    expect(updateData.paymentDescription).toBe("full payment");
+  });
+
   it("marks a draft invoice paid", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     invoiceStub.findById.mockReturnValue(

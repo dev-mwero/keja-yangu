@@ -40,7 +40,7 @@ const OwnerDashboard = () => {
     >
       <div className="mb-6 flex justify-end">
         <Button asChild className="rounded-full">
-          <Link href="/properties">
+          <Link href="/dashboard/owner/portfolio">
             <Plus className="mr-2 h-4 w-4" />
             New property
           </Link>
@@ -48,14 +48,30 @@ const OwnerDashboard = () => {
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <StatCard label="Total properties" value={loading ? "..." : total} icon={Building2} />
-        <StatCard label="Tenants" value={tenants.length} icon={Users} />
-        <StatCard label="Caretakers" value={caretakers.length} icon={Users} />
+        <StatCard
+          label="Total properties"
+          value={loading ? "..." : total}
+          icon={Building2}
+          href="/dashboard/owner/portfolio"
+        />
+        <StatCard
+          label="Tenants"
+          value={tenants.length}
+          icon={Users}
+          href="/dashboard/owner/tenants"
+        />
+        <StatCard
+          label="Caretakers"
+          value={caretakers.length}
+          icon={Users}
+          href="/dashboard/owner/team"
+        />
         <StatCard
           label="Occupancy"
           value={loading ? "..." : `${occupancy}%`}
           icon={TrendingUp}
           hint="vs 62% last quarter"
+          href="/dashboard/owner/reports"
         />
       </div>
 

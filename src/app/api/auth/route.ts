@@ -86,8 +86,56 @@ export async function POST(request: Request) {
       }
 
       await connectToDatabase();
-      const existing = await User.findOne({ email: parsed.data.email });
+      const email = parsed.data.email.trim().toLowerCase();
+      const existing = await User.findOne({ email });
       if (existing) {
+        // Adopt a pre-created, not-yet-onboarded caretaker/tenant account
+        // (created via the invite flow) instead of duplicating it.
+        const adoptable =
+          !existing.isActive &&
+          !existing.isVerified &&
+          existing.managedByOwnerId &&
+          (existing.role === "caretaker" || existing.role === "tenant");
+        if (adoptable) {
+          const passwordHash = await bcrypt.hash(parsed.data.password, 12);
+          const verificationToken = await generateVerificationToken();
+          const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+          existing.name = parsed.data.name;
+          existing.passwordHash = passwordHash;
+          existing.isActive = true;
+          existing.isVerified = false;
+          existing.verificationToken = verificationToken;
+          existing.verificationTokenExpiry = verificationTokenExpiry;
+          if (typeof body.phone === "string" && body.phone) {
+            existing.phone = body.phone;
+          }
+          await existing.save();
+
+          const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+          const verifyUrl = `${appBaseUrl}/auth/verify?token=${verificationToken}`;
+
+          const emailSent = isEmailConfigured()
+            ? await sendVerificationEmail(email, verificationToken, parsed.data.name)
+            : false;
+
+          if (!emailSent) {
+            if (process.env.NODE_ENV === "development") {
+              console.warn(
+                `[DEV] Email sending failed. Verification link for ${email}: ${verifyUrl}`,
+              );
+            }
+            return NextResponse.json(
+              { error: "Failed to send verification email. Please try again later." },
+              { status: 500 },
+            );
+          }
+
+          return NextResponse.json({
+            message:
+              "Account created successfully! Please check your inbox (and spam folder) for the verification email to activate your account.",
+          });
+        }
         return NextResponse.json({ error: "Email already registered" }, { status: 409 });
       }
 

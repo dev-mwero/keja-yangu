@@ -1,12 +1,14 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { sendInviteEmail } from "@/lib/email";
 import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
 import { getTenantScope, requirePermission } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { Property } from "@/models/Property";
 import { TENANT_SAFE_FIELDS, Tenant } from "@/models/Tenant";
+import { User } from "@/models/User";
 
 const tenantInput = z.object({
   name: z.string().trim().min(1),
@@ -119,6 +121,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const existingUser = await User.findOne({
+    email: parsed.data.email,
+    isActive: true,
+    isVerified: true,
+  })
+    .select("_id")
+    .lean();
+
   const tenant = await Tenant.create({
     name: parsed.data.name,
     email: parsed.data.email,
@@ -128,7 +138,13 @@ export async function POST(request: NextRequest) {
     status,
     joinedAt: status === "active" ? new Date() : undefined,
     notes: parsed.data.notes,
+    userId: existingUser ? String(existingUser._id) : "",
   });
+
+  if (!existingUser) {
+    await sendInviteEmail(parsed.data.email, parsed.data.name, "tenant");
+  }
+
   const created = await Tenant.findById(tenant._id).select(TENANT_SAFE_FIELDS).lean();
 
   return NextResponse.json({ data: created }, { status: 201 });
