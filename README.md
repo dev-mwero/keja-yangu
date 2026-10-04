@@ -78,6 +78,8 @@ Open [http://localhost:3000](http://localhost:3000).
 - `PATCH /api/v1/tenants/[id]` — Update tenant (same scope as tenant list)
 - `DELETE /api/v1/tenants/[id]` — Delete tenant (same scope as tenant list)
 - `GET /api/v1/caretakers` — List caretakers with privileges (owner/system-admin only)
+- `GET /api/v1/users/search` — Exact case-insensitive email or exact phone match (owner/system-admin; caretakers with `manage_tenants`; returns `id, name, email, role, isActive, hasVerifiedEmail`)
+- `POST /api/v1/caretakers` — Link an existing active user (`{ linked: true }`) or pre-create an inactive, unverified caretaker account (`{ invited: true }`, rate-limited 20/min)
 - `PUT /api/v1/caretakers/[id]/privileges` — Set caretaker privileges (owner/system-admin only; rate-limited 20/min)
 - `GET /api/v1/leases` — List leases (`lease:manage`; owner-scoped)
 - `POST /api/v1/leases` — Create lease (`lease:manage`; validates tenant/property, rate-limited 20/min)
@@ -118,6 +120,26 @@ Open [http://localhost:3000](http://localhost:3000).
 - `POST /api/auth` — Auth actions (`signin`, `signup`, `verify-email`, `resend-verification`)
 - `GET /api/auth/me` — Get current user
 - `GET /api/auth/logout` — Sign out
+
+### Invite-or-link onboarding
+
+Tenants and caretakers can join by either signing up first (and being linked by
+email) or being invited first:
+
+- `POST /api/v1/tenants` links the tenant to an existing active, verified user
+  by email, otherwise creates the tenant with an empty `userId` and emails an
+  invite to `/auth`. The tenant's later email verification binds `Tenant.userId`.
+- `POST /api/v1/caretakers` links an existing user (binding `managedByOwnerId`,
+  409 if already bound to a different owner) or pre-creates an inactive,
+  unverified caretaker user with a random unguessable password hash plus an
+  invite email. When that person later signs up with the same email, the
+  signup flow adopts the pre-created account instead of duplicating it.
+- `GET /api/v1/users/search?email=|phone=` performs exact, case-insensitive
+  email or phone lookups for owner/system-admin and caretakers with
+  `manage_tenants`.
+
+Invite emails are role-specific and instruct the recipient to create their
+account via `/auth` using the same email address.
 
 ### Paystack webhook registration
 
