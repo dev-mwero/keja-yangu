@@ -1,0 +1,220 @@
+/** @vitest-environment node */
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { buildRequest, signToken, withParams } from "@/test/utils/api-request";
+import { makeObjectId, makeUser } from "@/test/utils/factories";
+import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-mocks";
+
+vi.mock("@/lib/mongoose", () => ({
+  connectToDatabase: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
+vi.mock("@/models/MoveRequest", () => ({ MoveRequest: getModelStubs().moverrequest }));
+vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
+vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
+vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
+vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
+
+import { PATCH } from "@/app/api/v1/move-requests/[id]/route";
+
+const { user, moverrequest, unit, lease, tenant, property } = getModelStubs();
+
+const OWNER_ID = makeObjectId("owner");
+const CUSTODIAN_ID = makeObjectId("custodian");
+const OTHER_OWNER_ID = makeObjectId("other-owner");
+const TENANT_ID = makeObjectId("tenant");
+const TENANT_DOC_ID = makeObjectId("tenantdoc");
+const PROP_ID = makeObjectId("prop");
+const UNIT_ID = makeObjectId("unit");
+const MR_ID = makeObjectId("mr");
+
+function moveRequest(overrides: Record<string, unknown> = {}) {
+  const doc = {
+    _id: MR_ID,
+    type: "move-out",
+    propertyId: PROP_ID,
+    ownerId: OWNER_ID,
+    blockId: "",
+    unitId: UNIT_ID,
+    tenantId: TENANT_DOC_ID,
+    requestedById: TENANT_ID,
+    requestedByRole: "tenant",
+    status: "pending",
+    decidedById: "",
+    decisionNote: "",
+    save: vi.fn<() => Promise<unknown>>(),
+    toObject: vi.fn<() => unknown>(),
+    ...overrides,
+  };
+  doc.save.mockResolvedValue(doc);
+  doc.toObject.mockReturnValue(doc);
+  return doc;
+}
+
+function unitDoc(overrides: Record<string, unknown> = {}) {
+  const doc = {
+    _id: UNIT_ID,
+    tenantId: TENANT_ID,
+    status: "occupied",
+    rent: 30000,
+    save: vi.fn<() => Promise<unknown>>(),
+    ...overrides,
+  };
+  doc.save.mockResolvedValue(doc);
+  return doc;
+}
+
+function authOwner() {
+  user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+}
+
+describe("PATCH /api/v1/move-requests/[id]", () => {
+  beforeEach(() => {
+    resetModelStubs();
+  });
+
+  it("404 when the request does not exist", async () => {
+    authOwner();
+    moverrequest.findById.mockResolvedValue(null);
+    const res = await PATCH(
+      buildRequest(`/api/v1/move-requests/${MR_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { status: "approved" },
+      }),
+      withParams(MR_ID),
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("400 for an invalid decision payload", async () => {
+    authOwner();
+    moverrequest.findById.mockResolvedValue(moveRequest());
+    const res = await PATCH(
+      buildRequest(`/api/v1/move-requests/${MR_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { status: "maybe" },
+      }),
+      withParams(MR_ID),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("403 when a custodian decides a foreign owner's request", async () => {
+    user.findById.mockReturnValue(
+      buildQuery(
+        makeUser({ _id: CUSTODIAN_ID, role: "custodian", managedByOwnerId: OTHER_OWNER_ID }),
+      ),
+    );
+    moverrequest.findById.mockResolvedValue(moveRequest());
+    const res = await PATCH(
+      buildRequest(`/api/v1/move-requests/${MR_ID}`, {
+        method: "PATCH",
+        token: signToken(CUSTODIAN_ID),
+        body: { status: "approved" },
+      }),
+      withParams(MR_ID),
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it("approving a move-out frees the unit and ends the active lease", async () => {
+    authOwner();
+    const mr = moveRequest({ type: "move-out" });
+    moverrequest.findById.mockResolvedValue(mr);
+    const u = unitDoc();
+    unit.findById.mockResolvedValue(u);
+    lease.updateMany.mockResolvedValue({ modifiedCount: 1 });
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/move-requests/${MR_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { status: "approved", decisionNote: "Confirmed" },
+      }),
+      withParams(MR_ID),
+    );
+
+    expect(res.status).toBe(200);
+    expect(mr.status).toBe("approved");
+    expect(mr.decidedById).toBe(OWNER_ID);
+    expect(u.tenantId).toBe("");
+    expect(u.status).toBe("available");
+    expect(u.save).toHaveBeenCalled();
+    expect(lease.updateMany).toHaveBeenCalledWith(
+      { tenantId: TENANT_DOC_ID, status: "active" },
+      expect.objectContaining({ $set: expect.objectContaining({ status: "ended" }) }),
+    );
+  });
+
+  it("approving a move-in occupies the unit, activates the tenant, and opens a lease", async () => {
+    authOwner();
+    const mr = moveRequest({ type: "move-in" });
+    moverrequest.findById.mockResolvedValue(mr);
+    const u = unitDoc({ tenantId: "", status: "available", rent: 30000 });
+    unit.findById.mockResolvedValue(u);
+    tenant.updateOne.mockResolvedValue({ modifiedCount: 1 });
+    property.findById.mockReturnValue(buildQuery({ price: 45000 }));
+    lease.findOne.mockReturnValue(buildQuery(null));
+    lease.create.mockResolvedValue({ _id: makeObjectId("lease") });
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/move-requests/${MR_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { status: "approved" },
+      }),
+      withParams(MR_ID),
+    );
+
+    expect(res.status).toBe(200);
+    expect(u.tenantId).toBe(TENANT_ID);
+    expect(u.status).toBe("occupied");
+    expect(tenant.updateOne).toHaveBeenCalledWith(
+      { _id: TENANT_DOC_ID },
+      expect.objectContaining({ $set: expect.objectContaining({ status: "active" }) }),
+    );
+    expect(lease.create).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: TENANT_DOC_ID, ownerId: OWNER_ID, rentAmount: 30000 }),
+    );
+  });
+
+  it("does not duplicate a lease when the tenant already has an active one", async () => {
+    authOwner();
+    const mr = moveRequest({ type: "move-in" });
+    moverrequest.findById.mockResolvedValue(mr);
+    unit.findById.mockResolvedValue(unitDoc({ tenantId: "", status: "available" }));
+    tenant.updateOne.mockResolvedValue({});
+    property.findById.mockReturnValue(buildQuery({ price: 45000 }));
+    lease.findOne.mockReturnValue(buildQuery({ _id: makeObjectId("lease") }));
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/move-requests/${MR_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { status: "approved" },
+      }),
+      withParams(MR_ID),
+    );
+    expect(res.status).toBe(200);
+    expect(lease.create).not.toHaveBeenCalled();
+  });
+
+  it("does not re-apply occupancy effects when re-approving", async () => {
+    authOwner();
+    const mr = moveRequest({ type: "move-out", status: "approved" });
+    moverrequest.findById.mockResolvedValue(mr);
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/move-requests/${MR_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { status: "approved" },
+      }),
+      withParams(MR_ID),
+    );
+    expect(res.status).toBe(200);
+    expect(unit.findById).not.toHaveBeenCalled();
+    expect(lease.updateMany).not.toHaveBeenCalled();
+  });
+});
