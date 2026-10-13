@@ -8,6 +8,7 @@ import {
   isValidNationalId,
   nationalDigits,
   normalizeNationalId,
+  normalizeStoredPhone,
   parsePhone,
   toE164,
 } from "@/lib/phone";
@@ -46,6 +47,41 @@ describe("isValidE164", () => {
     expect(isValidE164("0712345678")).toBe(false);
     expect(isValidE164("+0123456789")).toBe(false);
     expect(isValidE164("")).toBe(false);
+  });
+});
+
+describe("normalizeStoredPhone", () => {
+  it("round-trips an already-normalised E.164 number", () => {
+    expect(normalizeStoredPhone("+254712345678")).toBe("+254712345678");
+  });
+
+  it("prefixes a local Kenyan number with the default country", () => {
+    expect(normalizeStoredPhone("0712345678")).toBe("+254712345678");
+    expect(normalizeStoredPhone("712345678")).toBe("+254712345678");
+  });
+
+  it("strips separators and preserves an explicit prefix", () => {
+    expect(normalizeStoredPhone("+254 712 345 678")).toBe("+254712345678");
+  });
+
+  it("recovers an international number typed without the plus", () => {
+    expect(normalizeStoredPhone("254712345678")).toBe("+254712345678");
+    expect(normalizeStoredPhone("256712345678")).toBe("+256712345678");
+  });
+
+  it("honours a caller-supplied default country", () => {
+    expect(normalizeStoredPhone("712345678", "+256")).toBe("+256712345678");
+  });
+
+  it("returns an empty string for empty or non-numeric input", () => {
+    expect(normalizeStoredPhone("")).toBe("");
+    expect(normalizeStoredPhone("  ")).toBe("");
+    expect(normalizeStoredPhone("n/a")).toBe("");
+  });
+
+  it("round-trips an already-normalised value unchanged", () => {
+    const value = "+254712345678";
+    expect(normalizeStoredPhone(value)).toBe(value);
   });
 });
 
