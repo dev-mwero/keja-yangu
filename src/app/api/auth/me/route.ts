@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import { NextResponse } from "next/server";
+import { decryptField } from "@/lib/crypto";
 import { getJwtSecret } from "@/lib/jwt";
 import { connectToDatabase } from "@/lib/mongoose";
 import { User } from "@/models/User";
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
         managedByOwnerId: user.managedByOwnerId ?? "",
         phone: user.phone ?? "",
         whatsapp: user.whatsapp ?? "",
-        nationalId: user.nationalId ?? "",
+        nationalId: decryptField(user.nationalId ?? ""),
       },
     });
   } catch (_error) {

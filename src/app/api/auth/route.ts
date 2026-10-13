@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { encryptField } from "@/lib/crypto";
 import { isEmailConfigured, sendPasswordResetEmail, sendVerificationEmail } from "@/lib/email";
 import { getJwtSecret } from "@/lib/jwt";
 import { connectToDatabase } from "@/lib/mongoose";
@@ -118,7 +119,7 @@ export async function POST(request: Request) {
           existing.isActive = true;
           existing.isVerified = false;
           existing.phone = parsed.data.phone;
-          existing.nationalId = normalizeNationalId(parsed.data.nationalId);
+          existing.nationalId = encryptField(normalizeNationalId(parsed.data.nationalId));
           existing.verificationToken = verificationToken;
           existing.verificationTokenExpiry = verificationTokenExpiry;
           await existing.save();
@@ -160,7 +161,7 @@ export async function POST(request: Request) {
         passwordHash,
         role: parsed.data.role,
         phone: parsed.data.phone,
-        nationalId: normalizeNationalId(parsed.data.nationalId),
+        nationalId: encryptField(normalizeNationalId(parsed.data.nationalId)),
         verificationToken,
         verificationTokenExpiry,
       });
