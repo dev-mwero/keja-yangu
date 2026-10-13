@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { PropertyMap } from "@/components/PropertyMap";
+import { PropertyLightbox } from "@/components/property/PropertyLightbox";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ const PropertyDetails = () => {
   const { properties: apiProperties, loading } = useProperties();
   const property = apiProperties.map((p) => ({ ...p, id: p._id })).find((p) => p.id === id);
   const [active, setActive] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
   const router = useRouter();
@@ -71,6 +73,9 @@ const PropertyDetails = () => {
 
   const alreadyPending =
     user?.role === "tenant" && property ? hasPendingApplication(user.email, property.id) : false;
+
+  const gallery = property.images.length > 0 ? property.images : ["/images/property-1.jpg"];
+  const safeActive = Math.min(active, gallery.length - 1);
 
   const handleApply = (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,35 +151,47 @@ const PropertyDetails = () => {
         <div className="mt-6 grid gap-10 lg:grid-cols-12">
           {/* Gallery + content */}
           <div className="lg:col-span-8">
-            <div className="overflow-hidden rounded-3xl shadow-elevated">
+            <button
+              type="button"
+              onClick={() => setLightboxOpen(true)}
+              aria-label="Open photo gallery"
+              className="group block w-full overflow-hidden rounded-3xl shadow-elevated"
+            >
               <div className="aspect-[16/10] bg-muted relative">
                 <Image
-                  src={property.images[active] || "/images/property-1.jpg"}
+                  src={gallery[safeActive]}
                   alt={property.title}
                   fill
                   sizes="(max-width: 1024px) 100vw, 66vw"
-                  className="object-cover"
+                  className="object-cover transition-transform duration-500 group-hover:scale-[1.02]"
                 />
+                {gallery.length > 1 && (
+                  <span className="absolute bottom-3 right-3 rounded-full bg-black/60 px-2.5 py-1 text-xs font-medium text-white tabular-nums backdrop-blur">
+                    {safeActive + 1} / {gallery.length}
+                  </span>
+                )}
               </div>
-            </div>
-            <div className="mt-3 grid grid-cols-3 gap-3">
-              {property.images.map((img, i) => (
-                <button
-                  type="button"
-                  key={i}
-                  onClick={() => setActive(i)}
-                  className={`overflow-hidden rounded-xl transition-all ${
-                    active === i
-                      ? "ring-2 ring-primary ring-offset-2 ring-offset-background"
-                      : "opacity-70 hover:opacity-100"
-                  }`}
-                >
-                  <div className="aspect-[4/3] relative">
-                    <Image src={img} alt="" fill className="object-cover" />
-                  </div>
-                </button>
-              ))}
-            </div>
+            </button>
+            {gallery.length > 1 && (
+              <div className="mt-3 grid grid-cols-3 gap-3">
+                {gallery.map((img, i) => (
+                  <button
+                    type="button"
+                    key={`${img}-${i}`}
+                    onClick={() => setActive(i)}
+                    className={`overflow-hidden rounded-xl transition-all ${
+                      safeActive === i
+                        ? "ring-2 ring-primary ring-offset-2 ring-offset-background"
+                        : "opacity-70 hover:opacity-100"
+                    }`}
+                  >
+                    <div className="aspect-[4/3] relative">
+                      <Image src={img} alt="" fill className="object-cover" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="mt-10">
               <Badge variant="outline" className="rounded-full capitalize">
@@ -369,6 +386,15 @@ const PropertyDetails = () => {
             </div>
           </aside>
         </div>
+
+        <PropertyLightbox
+          open={lightboxOpen}
+          onOpenChange={setLightboxOpen}
+          images={gallery}
+          title={property.title}
+          index={safeActive}
+          onIndexChange={setActive}
+        />
       </div>
     </div>
   );
