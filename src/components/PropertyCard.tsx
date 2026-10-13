@@ -1,8 +1,8 @@
 "use client";
 
 import { Bath, BedDouble, MapPin, Maximize2 } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
+import { PropertyCover } from "@/components/property/PropertyCover";
 import { Badge } from "@/components/ui/badge";
 import type { Property } from "@/data/properties";
 import { cn } from "@/lib/utils";
@@ -17,17 +17,15 @@ export const PropertyCard = ({ property }: { property: Property }) => {
   return (
     <Link href={`/properties/${property.id}`} className="group block">
       <div className="relative overflow-hidden rounded-2xl bg-muted shadow-soft transition-all duration-500 hover:shadow-elevated">
-        <div className="aspect-[4/3] overflow-hidden">
-          <Image
-            src={property.images[0] || "/images/property-1.jpg"}
-            alt={property.title}
-            fill
+        <div className="relative aspect-[4/3] overflow-hidden">
+          <PropertyCover
+            images={property.images}
+            title={property.title}
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-            loading="lazy"
-            className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+            imageClassName="transition-transform duration-700 ease-out group-hover:scale-105"
           />
         </div>
-        <div className="absolute left-4 top-4 flex gap-2">
+        <div className="absolute left-4 top-4 z-10 flex gap-2">
           <Badge
             variant="outline"
             className={cn(
