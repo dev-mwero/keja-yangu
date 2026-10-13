@@ -32,6 +32,9 @@ export async function GET(request: Request) {
         role: user.role,
         privileges: user.privileges ?? [],
         managedByOwnerId: user.managedByOwnerId ?? "",
+        phone: user.phone ?? "",
+        whatsapp: user.whatsapp ?? "",
+        nationalId: user.nationalId ?? "",
       },
     });
   } catch (_error) {
