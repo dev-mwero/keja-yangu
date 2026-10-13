@@ -73,8 +73,9 @@ const userSchema = new Schema<IUser>(
     phone: { type: String, trim: true, default: "" },
     // WhatsApp number in E.164 form. An empty string means "same as phone".
     whatsapp: { type: String, trim: true, default: "" },
-    // Government-issued identity number. Uppercased, no separators. PII.
-    nationalId: { type: String, trim: true, uppercase: true, default: "" },
+    // Government-issued identity number. Stored encrypted at rest (see
+    // src/lib/crypto.ts); callers normalise it before encrypting. PII.
+    nationalId: { type: String, trim: true, default: "" },
     verificationToken: { type: String },
     verificationTokenExpiry: { type: Date },
     invoiceCounters: { type: Schema.Types.Map, of: Number, default: {} },

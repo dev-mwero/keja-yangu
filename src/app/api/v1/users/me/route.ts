@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { readJsonBody } from "@/app/api/v1/_helpers";
+import { decryptField, encryptField } from "@/lib/crypto";
 import { connectToDatabase } from "@/lib/mongoose";
 import { authenticate, requirePermission } from "@/lib/permissions";
 import { normalizeNationalId } from "@/lib/phone";
@@ -28,7 +29,7 @@ function serialize(user: ProfileDoc) {
     role: user.role ?? "",
     phone: user.phone ?? "",
     whatsapp: user.whatsapp ?? "",
-    nationalId: user.nationalId ?? "",
+    nationalId: decryptField(user.nationalId ?? ""),
   };
 }
 
@@ -79,7 +80,7 @@ export async function PATCH(request: NextRequest) {
   if (parsed.data.phone !== undefined) set.phone = parsed.data.phone;
   if (parsed.data.whatsapp !== undefined) set.whatsapp = parsed.data.whatsapp;
   if (parsed.data.nationalId !== undefined) {
-    set.nationalId = normalizeNationalId(parsed.data.nationalId);
+    set.nationalId = encryptField(normalizeNationalId(parsed.data.nationalId));
   }
 
   if (Object.keys(set).length > 0) {

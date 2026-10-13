@@ -16,6 +16,7 @@ vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 
 import { POST } from "@/app/api/auth/route";
+import { decryptField, isEncrypted } from "@/lib/crypto";
 import { isEmailConfigured, sendVerificationEmail } from "@/lib/email";
 
 const { user, tenant: tenantStub } = getModelStubs();
@@ -83,7 +84,8 @@ describe("POST /api/auth — signup merge", () => {
     expect(preCreated.name).toBe("New Name");
     expect(preCreated.role).toBe("caretaker");
     expect(preCreated.phone).toBe("+254712345678");
-    expect(preCreated.nationalId).toBe("12345678");
+    expect(isEncrypted(preCreated.nationalId)).toBe(true);
+    expect(decryptField(preCreated.nationalId)).toBe("12345678");
     expect(preCreated.privileges).toEqual(["manage_tenants"]);
     expect(preCreated.passwordHash).not.toBe("old-hash");
     expect(preCreated.save).toHaveBeenCalledTimes(1);
@@ -164,7 +166,8 @@ describe("POST /api/auth — signup merge", () => {
     expect(user.create).toHaveBeenCalledTimes(1);
     const created = user.create.mock.calls[0][0] as Record<string, unknown>;
     expect(created.phone).toBe("+254712345678");
-    expect(created.nationalId).toBe("AB123456");
+    expect(isEncrypted(created.nationalId as string)).toBe(true);
+    expect(decryptField(created.nationalId as string)).toBe("AB123456");
   });
 });
 
