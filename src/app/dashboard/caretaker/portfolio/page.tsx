@@ -13,7 +13,6 @@ import {
   Trash2,
   Wrench,
 } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -21,6 +20,7 @@ import { toast } from "sonner";
 import { DashboardShell } from "@/components/DashboardShell";
 import { DeletePropertyDialog } from "@/components/dialogs/DeletePropertyDialog";
 import { PropertyDialog } from "@/components/dialogs/PropertyDialog";
+import { PropertyCover } from "@/components/property/PropertyCover";
 import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -125,12 +125,13 @@ const CaretakerPortfolioPage = () => {
                   <Link href={`/properties/${p._id}`} className="group block">
                     <div className="h-full overflow-hidden rounded-2xl border border-border bg-card shadow-soft transition-all hover:shadow-elevated">
                       <div className="relative h-40">
-                        <Image
-                          src={p.images[0] ?? "/images/property-1.jpg"}
-                          alt={p.title}
-                          fill
+                        <PropertyCover
+                          images={p.images}
+                          title={p.title}
                           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                          className="object-cover transition-transform duration-300 group-hover:scale-105"
+                          badgeClassName="left-3 top-3"
+                          showDots={false}
+                          imageClassName="transition-transform duration-300 group-hover:scale-105"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
                         <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">

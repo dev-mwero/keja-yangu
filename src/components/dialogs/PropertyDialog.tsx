@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { AmenityPicker } from "@/components/property/AmenityPicker";
+import { PropertyImageManager } from "@/components/property/PropertyImageManager";
 import {
   PropertyStructureEditor,
   validateBlocks,
@@ -308,14 +309,29 @@ export const PropertyDialog = ({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="property-images">Images</Label>
-            <Textarea
-              id="property-images"
-              rows={2}
-              placeholder={"One image URL per line"}
-              {...register("images")}
+            <div className="flex items-center justify-between">
+              <Label htmlFor="property-images">Images</Label>
+              <span className="text-xs text-muted-foreground">
+                {splitLines(watch("images")).length} selected
+              </span>
+            </div>
+            <PropertyImageManager
+              value={watch("images")}
+              onChange={(next) => setValue("images", next, { shouldDirty: true })}
+              disabled={pending}
             />
-            <p className="text-xs text-muted-foreground">One image URL per line.</p>
+            <details className="rounded-lg border border-border bg-muted/20 px-3 py-2">
+              <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+                Add image URLs manually
+              </summary>
+              <Textarea
+                id="property-images"
+                rows={2}
+                className="mt-2"
+                placeholder={"One image URL per line"}
+                {...register("images")}
+              />
+            </details>
             <div className="space-y-2 pt-1">
               <input
                 ref={fileInputRef}
