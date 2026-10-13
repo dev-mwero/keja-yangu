@@ -14,6 +14,10 @@ export default defineConfig({
     globals: true,
     setupFiles: "./src/test/setup.ts",
     include: ["src/**/*.test.{ts,tsx}"],
+    // Radix + userEvent component tests can exceed the 5s default on loaded or
+    // CI machines even though they pass in isolation. Give them headroom.
+    testTimeout: 30000,
+    hookTimeout: 30000,
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],

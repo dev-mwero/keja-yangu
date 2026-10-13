@@ -64,7 +64,15 @@ function successPayment() {
 }
 
 function pendingInvoice() {
-  return makeInvoice({ _id: INVOICE_ID, tenantId: TENANT_A, status: "pending", amountDue: 25000 });
+  return makeInvoice({
+    _id: INVOICE_ID,
+    tenantId: TENANT_A,
+    status: "pending",
+    amountDue: 25000,
+    // Far-future due date so the derived status stays "pending" regardless of
+    // when the suite runs (avoids a clock-dependent "overdue").
+    dueDate: new Date("2099-01-01T00:00:00.000Z"),
+  });
 }
 
 function paidInvoice() {
