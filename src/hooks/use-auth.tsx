@@ -13,6 +13,19 @@ export interface KejaUser {
   role: Role;
   privileges?: string[];
   managedByOwnerId?: string;
+  /** Mobile number in E.164 form, e.g. "+254712345678". */
+  phone?: string;
+  /** WhatsApp number in E.164 form; empty means "same as phone". */
+  whatsapp?: string;
+  /** National ID number (PII — never exposed outside the owner's own session). */
+  nationalId?: string;
+}
+
+export interface ProfilePatch {
+  name?: string;
+  phone?: string;
+  whatsapp?: string;
+  nationalId?: string;
 }
 
 interface AuthContextValue {
@@ -22,6 +35,7 @@ interface AuthContextValue {
   signIn: (email: string, password: string) => Promise<KejaUser>;
   signUp: (name: string, email: string, password: string, role: Role) => Promise<void>;
   resendVerification: (email: string) => Promise<void>;
+  updateProfile: (patch: ProfilePatch) => Promise<boolean>;
   signOut: () => Promise<void>;
 }
 
@@ -117,6 +131,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const updateProfile = async (patch: ProfilePatch): Promise<boolean> => {
+    try {
+      const res = await fetch("/api/v1/users/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to update profile");
+      }
+      const data = await res.json();
+      setUser((current) =>
+        current ? { ...current, ...(data.data as Partial<KejaUser>) } : data.data,
+      );
+      toast.success("Profile updated");
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to update profile";
+      toast.error("Update failed", { description: message });
+      return false;
+    }
+  };
+
   const signOut = async () => {
     try {
       await fetch("/api/auth/logout", { method: "GET" });
@@ -131,7 +169,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, refreshFailed, signIn, signUp, resendVerification, signOut }}
+      value={{
+        user,
+        loading,
+        refreshFailed,
+        signIn,
+        signUp,
+        resendVerification,
+        updateProfile,
+        signOut,
+      }}
     >
       {children}
     </AuthContext.Provider>

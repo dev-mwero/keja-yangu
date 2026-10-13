@@ -7,6 +7,7 @@ export * from "./lease";
 export * from "./move-request";
 export * from "./notifications";
 export * from "./payments";
+export * from "./profile";
 export * from "./settings";
 export * from "./structure";
 export * from "./unit";
