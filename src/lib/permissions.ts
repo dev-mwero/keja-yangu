@@ -6,13 +6,15 @@ import { connectToDatabase } from "@/lib/mongoose";
 import { Property } from "@/models/Property";
 import { User } from "@/models/User";
 
-export type Role = "tenant" | "caretaker" | "owner" | "system-admin";
+export type Role = "tenant" | "caretaker" | "custodian" | "owner" | "system-admin";
 
 export const CARETAKER_PRIVILEGES = [
   "create_property",
   "edit_property",
   "delete_assigned_property",
+  "manage_units",
   "manage_tenants",
+  "process_move_requests",
   "manage_invoices",
   "manage_complaints",
   "manage_announcements",
@@ -26,7 +28,12 @@ export type Action =
   | "property:create"
   | "property:edit"
   | "property:delete"
+  | "unit:read"
+  | "unit:manage"
+  | "custodian:manage"
   | "tenant:manage"
+  | "move-request:create"
+  | "move-request:manage"
   | "lease:manage"
   | "invoice:read"
   | "invoice:manage"
@@ -86,6 +93,14 @@ export function isFullControlRole(role: Role): boolean {
   return role === "owner" || role === "system-admin";
 }
 
+/**
+ * A role that manages a single owner's portfolio (owner, or an owner-delegate
+ * custodian). Used to scope resource checks by `ownerId`.
+ */
+export function isOwnerScopedRole(role: Role): boolean {
+  return role === "owner" || role === "custodian";
+}
+
 export async function requireAuth(
   request: NextRequest,
   roles?: Role[],
@@ -121,6 +136,7 @@ export async function requirePermission(
   }
 
   const role = user.role;
+  const managedByOwnerId = user.managedByOwnerId ?? "";
 
   if (role === "tenant") {
     const tenantActions: Action[] = [
@@ -135,18 +151,35 @@ export async function requirePermission(
       "chat:send",
       "announcement:read",
       "document:read-own",
+      "unit:read",
+      "move-request:create",
     ];
     return tenantActions.includes(action)
       ? null
       : NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (isFullControlRole(role)) {
+  if (isFullControlRole(role) || role === "custodian") {
     const resource = opts?.resource;
+    // A custodian must be bound to an owner.
+    if (role === "custodian" && !managedByOwnerId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    // Custodians are owner-delegates: only owners and system-admins may manage
+    // custodians (a custodian cannot invite or revoke other custodians).
+    if (action === "custodian:manage" && role === "custodian") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const scopeOwnerId =
+      role === "system-admin" ? null : role === "owner" ? String(user._id) : managedByOwnerId;
     const ownsResource =
       !!resource &&
       (action === "property:edit" ||
         action === "property:delete" ||
+        action === "unit:read" ||
+        action === "unit:manage" ||
+        action === "tenant:manage" ||
+        action === "move-request:manage" ||
         action === "lease:manage" ||
         action === "invoice:manage" ||
         action === "invoice:mark-paid" ||
@@ -154,7 +187,7 @@ export async function requirePermission(
         action === "chat:manage" ||
         action === "announcement:manage" ||
         action === "document:manage");
-    if (role === "owner" && ownsResource && resource.ownerId !== String(user._id)) {
+    if (scopeOwnerId && ownsResource && resource.ownerId !== scopeOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     return null;
@@ -165,7 +198,6 @@ export async function requirePermission(
   }
 
   const actorId = String(user._id);
-  const managedByOwnerId = user.managedByOwnerId ?? "";
   const privileges = (user.privileges ?? []) as CaretakerPrivilege[];
   const resource = opts?.resource;
 
@@ -198,6 +230,30 @@ export async function requirePermission(
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
       return null;
+    case "unit:read":
+      return null;
+    case "unit:manage":
+      if (
+        !privileges.includes("manage_units") ||
+        !resource ||
+        resource.ownerId !== managedByOwnerId
+      ) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      return null;
+    case "move-request:create":
+      return null;
+    case "move-request:manage":
+      if (
+        !privileges.includes("process_move_requests") ||
+        !resource ||
+        resource.ownerId !== managedByOwnerId
+      ) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      return null;
+    case "custodian:manage":
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     case "tenant:manage":
       if (!privileges.includes("manage_tenants")) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -319,6 +375,12 @@ export async function getTenantScope(request: NextRequest): Promise<NextResponse
   if (user.role === "owner") {
     return { filter: { ownerId: userId }, userId, role: user.role, managedByOwnerId };
   }
+  if (user.role === "custodian") {
+    if (!managedByOwnerId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    return { filter: { ownerId: managedByOwnerId }, userId, role: user.role, managedByOwnerId };
+  }
   if (user.role === "system-admin") {
     return { filter: {}, userId, role: user.role, managedByOwnerId };
   }
@@ -346,6 +408,9 @@ export function tenantMatchesScope(
 ): boolean {
   if (scope.role === "owner") {
     return tenant.ownerId === scope.userId;
+  }
+  if (scope.role === "custodian") {
+    return tenant.ownerId === scope.managedByOwnerId;
   }
   if (scope.role === "system-admin") {
     return true;

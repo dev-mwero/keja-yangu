@@ -6,6 +6,7 @@ import { AuthGuard } from "@/components/AuthGuard";
 
 const roleMap: Record<string, string[]> = {
   "/dashboard/owner": ["owner", "system-admin"],
+  "/dashboard/custodian": ["custodian", "owner", "system-admin"],
   "/dashboard/tenant": ["tenant"],
   "/dashboard/caretaker": ["caretaker", "system-admin"],
   "/dashboard/system-admin": ["system-admin"],

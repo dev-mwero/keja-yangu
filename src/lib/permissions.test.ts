@@ -4,6 +4,7 @@ import type { Action, CaretakerPrivilege, Role } from "@/lib/permissions";
 import {
   getTenantScope,
   isFullControlRole,
+  isOwnerScopedRole,
   requirePermission,
   tenantMatchesScope,
 } from "@/lib/permissions";
@@ -29,6 +30,7 @@ const { user, property } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
+const CUSTODIAN_ID = makeObjectId("custodian");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
 
 function ownerUser(overrides: Partial<TestUser> = {}) {
@@ -47,6 +49,15 @@ function caretakerUser(privileges: CaretakerPrivilege[], overrides: Partial<Test
 
 function tenantUser() {
   return makeUser({ _id: makeObjectId("tenant"), role: "tenant" });
+}
+
+function custodianUser(overrides: Partial<TestUser> = {}) {
+  return makeUser({
+    _id: CUSTODIAN_ID,
+    role: "custodian",
+    managedByOwnerId: OTHER_OWNER_ID,
+    ...overrides,
+  });
 }
 
 async function guard(
@@ -205,6 +216,32 @@ describe("requirePermission — caretaker", () => {
     expect((await guard("property:create", undefined, mocker))?.status).toBe(403);
     expect((await guard("property:edit", undefined, mocker))?.status).toBe(403);
     expect((await guard("property:delete", undefined, mocker))?.status).toBe(403);
+  });
+
+  it("C5 — manage_units permits unit:manage only in the managing owner's scope", async () => {
+    const mocker = caretakerUser(["manage_units"]);
+    const inScope = { ownerId: OTHER_OWNER_ID, caretakerIds: [CARETAKER_ID] };
+    const foreign = { ownerId: OWNER_ID, caretakerIds: [CARETAKER_ID] };
+    expect(await guard("unit:manage", { resource: inScope }, mocker)).toBeNull();
+    expect((await guard("unit:manage", { resource: foreign }, mocker))?.status).toBe(403);
+    expect((await guard("unit:manage", undefined, mocker))?.status).toBe(403);
+    const noUnits = caretakerUser(["edit_property"]);
+    expect((await guard("unit:manage", { resource: inScope }, noUnits))?.status).toBe(403);
+  });
+
+  it("C6 — process_move_requests permits move-request:manage only in scope", async () => {
+    const mocker = caretakerUser(["process_move_requests"]);
+    const inScope = { ownerId: OTHER_OWNER_ID, caretakerIds: [CARETAKER_ID] };
+    const foreign = { ownerId: OWNER_ID, caretakerIds: [CARETAKER_ID] };
+    expect(await guard("move-request:manage", { resource: inScope }, mocker)).toBeNull();
+    expect((await guard("move-request:manage", { resource: foreign }, mocker))?.status).toBe(403);
+    const noPriv = caretakerUser(["manage_units"]);
+    expect((await guard("move-request:manage", { resource: inScope }, noPriv))?.status).toBe(403);
+  });
+
+  it("C7 — caretakers cannot manage custodians", async () => {
+    const mocker = caretakerUser(["manage_tenants", "edit_property"]);
+    expect((await guard("custodian:manage", undefined, mocker))?.status).toBe(403);
   });
 });
 
@@ -565,5 +602,99 @@ describe("requirePermission — communication actions", () => {
     for (const action of [...COMMUNICATION_SELF_ACTIONS, ...COMMUNICATION_MANAGE_ACTIONS]) {
       expect((await guard(action, undefined, mocker))?.status).toBe(403);
     }
+  });
+});
+
+describe("isOwnerScopedRole", () => {
+  it("is true for owner and custodian", () => {
+    expect(isOwnerScopedRole("owner")).toBe(true);
+    expect(isOwnerScopedRole("custodian")).toBe(true);
+  });
+
+  it("is false for other roles", () => {
+    expect(isOwnerScopedRole("system-admin")).toBe(false);
+    expect(isOwnerScopedRole("caretaker")).toBe(false);
+    expect(isOwnerScopedRole("tenant")).toBe(false);
+  });
+});
+
+describe("requirePermission — custodian", () => {
+  beforeEach(() => {
+    resetModelStubs();
+  });
+
+  it("acts as an owner-delegate: passes unscoped actions", async () => {
+    expect(await guard("property:create", undefined, custodianUser())).toBeNull();
+    expect(await guard("unit:manage", undefined, custodianUser())).toBeNull();
+  });
+
+  it("passes resource-scoped actions for the managing owner's resources", async () => {
+    const inScope = { ownerId: OTHER_OWNER_ID, caretakerIds: [] };
+    for (const action of [
+      "property:edit",
+      "property:delete",
+      "unit:manage",
+      "tenant:manage",
+      "move-request:manage",
+      "invoice:manage",
+      "complaint:manage",
+    ] as Action[]) {
+      expect(await guard(action, { resource: inScope }, custodianUser())).toBeNull();
+    }
+  });
+
+  it("is denied resource-scoped actions on a foreign owner's resource", async () => {
+    const foreign = { ownerId: OWNER_ID, caretakerIds: [] };
+    expect((await guard("property:edit", { resource: foreign }, custodianUser()))?.status).toBe(403);
+    expect((await guard("unit:manage", { resource: foreign }, custodianUser()))?.status).toBe(403);
+    expect((await guard("invoice:manage", { resource: foreign }, custodianUser()))?.status).toBe(
+      403,
+    );
+  });
+
+  it("403 for an orphaned custodian (no managing owner)", async () => {
+    const mocker = custodianUser({ managedByOwnerId: "" });
+    expect((await guard("property:create", undefined, mocker))?.status).toBe(403);
+    expect((await guard("unit:manage", undefined, mocker))?.status).toBe(403);
+  });
+
+  it("cannot manage other custodians", async () => {
+    expect((await guard("custodian:manage", undefined, custodianUser()))?.status).toBe(403);
+  });
+
+  it("owners and system-admins may manage custodians", async () => {
+    expect(await guard("custodian:manage", undefined, ownerUser())).toBeNull();
+    const admin = makeUser({ _id: makeObjectId("admin"), role: "system-admin" });
+    expect(await guard("custodian:manage", undefined, admin)).toBeNull();
+  });
+
+  it("tenant still cannot manage custodians", async () => {
+    expect((await guard("custodian:manage", undefined, tenantUser()))?.status).toBe(403);
+  });
+});
+
+describe("getTenantScope — custodian", () => {
+  beforeEach(() => {
+    resetModelStubs();
+  });
+
+  it("scopes to the managing owner's id", async () => {
+    user.findById.mockReturnValue(buildQuery(custodianUser()));
+    const res = await getTenantScope(
+      buildRequest("/api/v1/tenants", { token: signToken(CUSTODIAN_ID) }),
+    );
+    expect(res instanceof Response).toBe(false);
+    if (res instanceof Response) return;
+    expect(res.filter).toEqual({ ownerId: OTHER_OWNER_ID });
+    expect(res.role).toBe("custodian");
+    expect(res.managedByOwnerId).toBe(OTHER_OWNER_ID);
+  });
+
+  it("403 for an orphaned custodian", async () => {
+    user.findById.mockReturnValue(buildQuery(custodianUser({ managedByOwnerId: "" })));
+    const res = await getTenantScope(
+      buildRequest("/api/v1/tenants", { token: signToken(CUSTODIAN_ID) }),
+    );
+    expect((res as Response).status).toBe(403);
   });
 });
