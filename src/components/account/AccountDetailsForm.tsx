@@ -3,47 +3,19 @@
 import { KeyRound, LogOut, Save } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-
+import { CountryCodeSelect } from "@/components/account/CountryCodeSelect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import type { KejaUser, ProfilePatch } from "@/hooks/use-auth";
-import { COUNTRIES, DEFAULT_COUNTRY, normalizeNationalId, parsePhone, toE164 } from "@/lib/phone";
+import { DEFAULT_COUNTRY, normalizeNationalId, parsePhone, toE164 } from "@/lib/phone";
 
 interface AccountDetailsFormProps {
   user: KejaUser | null;
   onSave: (patch: ProfilePatch) => Promise<boolean>;
   onSignOut: () => void;
 }
-
-const CountrySelect = ({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (dial: string) => void;
-}) => (
-  <Select value={value} onValueChange={onChange}>
-    <SelectTrigger className="w-32 shrink-0" aria-label="Country code">
-      <SelectValue />
-    </SelectTrigger>
-    <SelectContent>
-      {COUNTRIES.map((country) => (
-        <SelectItem key={country.code} value={country.dial}>
-          {country.code} {country.dial}
-        </SelectItem>
-      ))}
-    </SelectContent>
-  </Select>
-);
 
 /**
  * Editable contact + identity details for the signed-in account: mobile number
@@ -104,7 +76,7 @@ export const AccountDetailsForm = ({ user, onSave, onSignOut }: AccountDetailsFo
       <div className="space-y-1.5">
         <Label htmlFor="profile-mobile">Mobile number</Label>
         <div className="flex gap-2">
-          <CountrySelect value={dial} onChange={setDial} />
+          <CountryCodeSelect value={dial} onChange={setDial} />
           <Input
             id="profile-mobile"
             inputMode="tel"
@@ -125,7 +97,7 @@ export const AccountDetailsForm = ({ user, onSave, onSignOut }: AccountDetailsFo
         </div>
         {!sameWhatsapp && (
           <div className="flex gap-2">
-            <CountrySelect value={waDial} onChange={setWaDial} />
+            <CountryCodeSelect value={waDial} onChange={setWaDial} />
             <Input
               aria-label="WhatsApp number"
               inputMode="tel"

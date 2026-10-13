@@ -66,6 +66,32 @@ export function isValidE164(value: string): boolean {
 }
 
 /**
+ * Coerces a phone number that may have been stored in a legacy/free-text form
+ * into E.164. Handles numbers typed with spaces/dashes, a leading trunk `0`,
+ * an explicit `+`, or an international code typed without the `+`. Numbers that
+ * cannot be interpreted fall back to the default country; an empty input stays
+ * empty. Used by the legacy backfill (and safe to call on already-normalised
+ * values, which round-trip unchanged).
+ */
+export function normalizeStoredPhone(value: string, defaultDial = DEFAULT_COUNTRY.dial): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  const digits = trimmed.replace(/\D/g, "");
+  if (!digits) return "";
+  // Explicit international prefix already present.
+  if (trimmed.startsWith("+")) {
+    return `+${digits}`;
+  }
+  // International number typed without the leading "+", e.g. "254712345678".
+  const match = DIAL_CODES_BY_LENGTH.find((country) => digits.startsWith(country.dial.slice(1)));
+  if (match) {
+    return `+${digits}`;
+  }
+  // Local/national number in the default (or caller-supplied) country.
+  return toE164(defaultDial, digits);
+}
+
+/**
  * Splits a stored E.164 value back into its country and national number so the
  * UI can prefill the dial-code select and the number input. Returns null for an
  * empty or unrecognised value.

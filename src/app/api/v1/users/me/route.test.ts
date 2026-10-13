@@ -10,6 +10,7 @@ vi.mock("@/lib/mongoose", () => ({
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 
 import { GET, PATCH } from "@/app/api/v1/users/me/route";
+import { decryptField, encryptField, isEncrypted } from "@/lib/crypto";
 
 const { user } = getModelStubs();
 
@@ -51,6 +52,14 @@ describe("GET /api/v1/users/me", () => {
       whatsapp: "",
       nationalId: "12345678",
     });
+  });
+
+  it("decrypts the stored national id for the owner", async () => {
+    user.findById.mockReturnValue(buildQuery(tenantDoc({ nationalId: encryptField("12345678") })));
+    const res = await GET(buildRequest("/api/v1/users/me", { token: signToken(USER_ID) }));
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    expect(body.data).toMatchObject({ nationalId: "12345678" });
   });
 });
 
@@ -114,14 +123,13 @@ describe("PATCH /api/v1/users/me", () => {
     expect(res.status).toBe(200);
     const [filter, update] = user.updateOne.mock.calls[0];
     expect(filter).toEqual({ _id: USER_ID });
-    expect(update).toEqual({
-      $set: {
-        name: "Amina Otieno",
-        phone: "+254733111222",
-        whatsapp: "+254733111222",
-        nationalId: "12345678",
-      },
+    expect(update.$set).toMatchObject({
+      name: "Amina Otieno",
+      phone: "+254733111222",
+      whatsapp: "+254733111222",
     });
+    expect(isEncrypted(update.$set.nationalId)).toBe(true);
+    expect(decryptField(update.$set.nationalId)).toBe("12345678");
   });
 
   it("allows clearing the WhatsApp number to fall back to mobile", async () => {

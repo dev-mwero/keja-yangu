@@ -3,18 +3,19 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, MailCheck } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-
 import AuthLayout from "@/components/AuthLayout";
+import { CountryCodeSelect } from "@/components/account/CountryCodeSelect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type Role, useAuth } from "@/hooks/use-auth";
+import { DEFAULT_COUNTRY, isValidE164, normalizeNationalId, toE164 } from "@/lib/phone";
 
 const signInSchema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -26,7 +27,14 @@ const signUpSchema = z.object({
   email: z.string().email("Enter a valid email"),
   password: z.string().min(6, "At least 6 characters"),
   role: z.enum(["tenant", "caretaker", "owner"]),
+  phone: z.string().min(1, "Enter your mobile number"),
+  nationalId: z.string().min(4, "Enter your national ID number"),
 });
+
+const INVITED_ROLES = ["tenant", "caretaker", "owner"] as const;
+
+const isInvitedRole = (value: string | null): value is (typeof INVITED_ROLES)[number] =>
+  value !== null && (INVITED_ROLES as readonly string[]).includes(value);
 
 type SignInValues = z.infer<typeof signInSchema>;
 type SignUpValues = z.infer<typeof signUpSchema>;
@@ -41,11 +49,18 @@ const roleRoute: Record<Role, string> = {
 
 const AuthForm = () => {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { signIn, signUp, resendVerification } = useAuth();
-  const [tab, setTab] = useState<"signin" | "signup">("signin");
+
+  const invitedEmail = searchParams.get("email") ?? "";
+  const invitedRole = searchParams.get("role");
+  const isInvited = searchParams.get("invited") === "1" || Boolean(invitedEmail);
+
+  const [tab, setTab] = useState<"signin" | "signup">(isInvited ? "signup" : "signin");
   const [submitting, setSubmitting] = useState(false);
   const [pendingEmail, setPendingEmail] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
+  const [dial, setDial] = useState(DEFAULT_COUNTRY.dial);
 
   const signInForm = useForm<SignInValues>({
     resolver: zodResolver(signInSchema),
@@ -54,7 +69,14 @@ const AuthForm = () => {
 
   const signUpForm = useForm<SignUpValues>({
     resolver: zodResolver(signUpSchema),
-    defaultValues: { name: "", email: "", password: "", role: "tenant" },
+    defaultValues: {
+      name: "",
+      email: invitedEmail,
+      password: "",
+      role: isInvitedRole(invitedRole) ? invitedRole : "tenant",
+      phone: "",
+      nationalId: "",
+    },
   });
 
   const onSignIn = async (values: SignInValues) => {
@@ -70,9 +92,17 @@ const AuthForm = () => {
   };
 
   const onSignUp = async (values: SignUpValues) => {
+    const phone = toE164(dial, values.phone);
+    if (!isValidE164(phone)) {
+      signUpForm.setError("phone", { message: "Enter a valid mobile number" });
+      return;
+    }
     setSubmitting(true);
     try {
-      await signUp(values.name, values.email, values.password, values.role);
+      await signUp(values.name, values.email, values.password, values.role, {
+        phone,
+        nationalId: normalizeNationalId(values.nationalId),
+      });
       setPendingEmail(values.email);
     } catch {
       // Error handled by toast in hook
@@ -100,14 +130,18 @@ const AuthForm = () => {
           ? "Check your inbox"
           : tab === "signin"
             ? "Welcome back"
-            : "Create your account"
+            : isInvited
+              ? "Complete your invitation"
+              : "Create your account"
       }
       subtitle={
         pendingEmail
           ? "One more step to get you home."
           : tab === "signin"
             ? "Sign in to continue to Keja."
-            : "Join as a tenant, caretaker, or owner."
+            : isInvited
+              ? "You've been invited — finish setting up your account."
+              : "Join as a tenant, caretaker, or owner."
       }
     >
       {pendingEmail ? (
@@ -210,8 +244,15 @@ const AuthForm = () => {
                   id="su-email"
                   type="email"
                   placeholder="you@keja.co"
+                  readOnly={isInvited}
+                  className={isInvited ? "opacity-70" : undefined}
                   {...signUpForm.register("email")}
                 />
+                {isInvited && (
+                  <p className="text-xs text-muted-foreground">
+                    This invitation is linked to your email address.
+                  </p>
+                )}
                 {signUpForm.formState.errors.email && (
                   <p className="text-xs text-destructive">
                     {signUpForm.formState.errors.email.message}
@@ -229,6 +270,39 @@ const AuthForm = () => {
                 {signUpForm.formState.errors.password && (
                   <p className="text-xs text-destructive">
                     {signUpForm.formState.errors.password.message}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="su-phone">Mobile number</Label>
+                <div className="flex gap-2">
+                  <CountryCodeSelect value={dial} onChange={setDial} />
+                  <Input
+                    id="su-phone"
+                    type="tel"
+                    inputMode="tel"
+                    placeholder="712 345 678"
+                    className="flex-1"
+                    {...signUpForm.register("phone")}
+                  />
+                </div>
+                {signUpForm.formState.errors.phone && (
+                  <p className="text-xs text-destructive">
+                    {signUpForm.formState.errors.phone.message}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="su-national-id">National ID number</Label>
+                <Input
+                  id="su-national-id"
+                  placeholder="12345678"
+                  autoCapitalize="characters"
+                  {...signUpForm.register("nationalId")}
+                />
+                {signUpForm.formState.errors.nationalId && (
+                  <p className="text-xs text-destructive">
+                    {signUpForm.formState.errors.nationalId.message}
                   </p>
                 )}
               </div>
@@ -252,7 +326,8 @@ const AuthForm = () => {
                 </RadioGroup>
               </div>
               <Button type="submit" className="w-full rounded-full" disabled={submitting}>
-                {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Create account
+                {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{" "}
+                {isInvited ? "Complete sign up" : "Create account"}
               </Button>
             </form>
           </TabsContent>

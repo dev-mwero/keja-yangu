@@ -57,6 +57,7 @@ const SystemAdminDashboard = () => {
           label="Total properties"
           value={propertiesLoading ? "..." : total}
           icon={Building2}
+          href="/dashboard/system-admin/portfolio"
         />
         <StatCard
           label="Tenants"
@@ -74,6 +75,7 @@ const SystemAdminDashboard = () => {
           label="Occupancy"
           value={propertiesLoading ? "..." : `${occupancy}%`}
           icon={TrendingUp}
+          href="/dashboard/system-admin/portfolio"
         />
       </div>
 

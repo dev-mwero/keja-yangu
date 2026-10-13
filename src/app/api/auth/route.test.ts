@@ -16,6 +16,7 @@ vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 
 import { POST } from "@/app/api/auth/route";
+import { decryptField, isEncrypted } from "@/lib/crypto";
 import { isEmailConfigured, sendVerificationEmail } from "@/lib/email";
 
 const { user, tenant: tenantStub } = getModelStubs();
@@ -53,6 +54,8 @@ describe("POST /api/auth — signup merge", () => {
       name: "Old Name",
       passwordHash: "old-hash",
       privileges: ["manage_tenants"],
+      phone: "",
+      nationalId: "",
       verificationToken: undefined as string | undefined,
       verificationTokenExpiry: undefined as Date | undefined,
       save: vi.fn().mockResolvedValue(undefined),
@@ -70,6 +73,8 @@ describe("POST /api/auth — signup merge", () => {
           email: "care@keja.co",
           password: "secret123",
           role: "caretaker",
+          phone: "+254712345678",
+          nationalId: "12345678",
         },
       }),
     );
@@ -78,6 +83,9 @@ describe("POST /api/auth — signup merge", () => {
     expect(preCreated.isVerified).toBe(false);
     expect(preCreated.name).toBe("New Name");
     expect(preCreated.role).toBe("caretaker");
+    expect(preCreated.phone).toBe("+254712345678");
+    expect(isEncrypted(preCreated.nationalId)).toBe(true);
+    expect(decryptField(preCreated.nationalId)).toBe("12345678");
     expect(preCreated.privileges).toEqual(["manage_tenants"]);
     expect(preCreated.passwordHash).not.toBe("old-hash");
     expect(preCreated.save).toHaveBeenCalledTimes(1);
@@ -107,10 +115,59 @@ describe("POST /api/auth — signup merge", () => {
           email: "care@keja.co",
           password: "secret123",
           role: "tenant",
+          phone: "+254712345678",
+          nationalId: "12345678",
         },
       }),
     );
     expect(res.status).toBe(409);
+  });
+
+  it("400 when the mobile number is not valid E.164", async () => {
+    const res = await POST(
+      buildRequest("/api/auth", {
+        method: "POST",
+        body: {
+          action: "signup",
+          name: "New Name",
+          email: "new@keja.co",
+          password: "secret123",
+          role: "tenant",
+          phone: "0712345678",
+          nationalId: "12345678",
+        },
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(user.create).not.toHaveBeenCalled();
+  });
+
+  it("creates a fresh user with phone and a normalised national id", async () => {
+    user.findOne.mockResolvedValue(null);
+    user.create.mockImplementation(async (doc: Record<string, unknown>) => doc);
+    vi.mocked(isEmailConfigured).mockReturnValue(true);
+    vi.mocked(sendVerificationEmail).mockResolvedValue(true);
+
+    const res = await POST(
+      buildRequest("/api/auth", {
+        method: "POST",
+        body: {
+          action: "signup",
+          name: "New Name",
+          email: "new@keja.co",
+          password: "secret123",
+          role: "tenant",
+          phone: "+254712345678",
+          nationalId: "ab-123 456",
+        },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(user.create).toHaveBeenCalledTimes(1);
+    const created = user.create.mock.calls[0][0] as Record<string, unknown>;
+    expect(created.phone).toBe("+254712345678");
+    expect(isEncrypted(created.nationalId as string)).toBe(true);
+    expect(decryptField(created.nationalId as string)).toBe("AB123456");
   });
 });
 

@@ -2,9 +2,11 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { encryptField } from "@/lib/crypto";
 import { isEmailConfigured, sendPasswordResetEmail, sendVerificationEmail } from "@/lib/email";
 import { getJwtSecret } from "@/lib/jwt";
 import { connectToDatabase } from "@/lib/mongoose";
+import { isValidE164, isValidNationalId, normalizeNationalId } from "@/lib/phone";
 import { Tenant } from "@/models/Tenant";
 import { User } from "@/models/User";
 
@@ -14,10 +16,21 @@ const signInSchema = z.object({
 });
 
 const signUpSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters"),
-  email: z.string().email("Invalid email"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  name: z.string().min(2, "Tell us your name"),
+  email: z.string().email("Enter a valid email"),
+  password: z.string().min(6, "At least 6 characters"),
   role: z.enum(["tenant", "caretaker", "owner"]),
+  phone: z
+    .string()
+    .trim()
+    .refine((value) => isValidE164(value), "Enter a valid mobile number with its country code"),
+  nationalId: z
+    .string()
+    .trim()
+    .refine(
+      (value) => isValidNationalId(normalizeNationalId(value)),
+      "Enter a valid national ID number",
+    ),
 });
 
 const signUpWithVerificationSchema = signUpSchema.extend({
@@ -105,11 +118,10 @@ export async function POST(request: Request) {
           existing.passwordHash = passwordHash;
           existing.isActive = true;
           existing.isVerified = false;
+          existing.phone = parsed.data.phone;
+          existing.nationalId = encryptField(normalizeNationalId(parsed.data.nationalId));
           existing.verificationToken = verificationToken;
           existing.verificationTokenExpiry = verificationTokenExpiry;
-          if (typeof body.phone === "string" && body.phone) {
-            existing.phone = body.phone;
-          }
           await existing.save();
 
           const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
@@ -148,6 +160,8 @@ export async function POST(request: Request) {
         name: parsed.data.name,
         passwordHash,
         role: parsed.data.role,
+        phone: parsed.data.phone,
+        nationalId: encryptField(normalizeNationalId(parsed.data.nationalId)),
         verificationToken,
         verificationTokenExpiry,
       });
