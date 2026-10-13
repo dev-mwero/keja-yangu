@@ -1,4 +1,4 @@
-export type PropertyType = "room" | "apartment" | "building";
+export type PropertyType = "apartment" | "villa" | "bungalow";
 export type PropertyStatus = "available" | "occupied" | "maintenance";
 
 export interface Property {
@@ -59,7 +59,7 @@ export const properties: Property[] = [
   {
     id: "p3",
     title: "Palmera Residences",
-    type: "building",
+    type: "villa",
     location: "Nyali, Mombasa",
     price: 120000,
     description:
@@ -95,7 +95,7 @@ export const properties: Property[] = [
   {
     id: "p5",
     title: "Cedar Cabin Room",
-    type: "room",
+    type: "bungalow",
     location: "Karen, Nairobi",
     price: 18000,
     description:
@@ -113,7 +113,7 @@ export const properties: Property[] = [
   {
     id: "p6",
     title: "Amber Heights",
-    type: "building",
+    type: "villa",
     location: "Lavington, Nairobi",
     price: 95000,
     description:

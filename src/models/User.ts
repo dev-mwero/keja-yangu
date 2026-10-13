@@ -13,7 +13,7 @@ export interface IUser {
   email: string;
   name: string;
   passwordHash: string;
-  role: "tenant" | "caretaker" | "owner" | "system-admin";
+  role: "tenant" | "caretaker" | "custodian" | "owner" | "system-admin";
   privileges: string[];
   managedByOwnerId: string;
   isActive: boolean;
@@ -44,7 +44,7 @@ const userSchema = new Schema<IUser>(
     passwordHash: { type: String, required: true },
     role: {
       type: String,
-      enum: ["tenant", "caretaker", "owner", "system-admin"],
+      enum: ["tenant", "caretaker", "custodian", "owner", "system-admin"],
       required: true,
     },
     privileges: {
@@ -53,7 +53,9 @@ const userSchema = new Schema<IUser>(
         "create_property",
         "edit_property",
         "delete_assigned_property",
+        "manage_units",
         "manage_tenants",
+        "process_move_requests",
         "manage_invoices",
         "manage_complaints",
         "manage_announcements",

@@ -2,12 +2,44 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-export type PropertyStatus = "available" | "occupied" | "maintenance";
+import type { PropertyStatus, PropertyType } from "@/lib/property-types";
+
+export type { PropertyStatus };
+
+export interface PropertyFloor {
+  _id: string;
+  level: number;
+  label: string;
+  unitsPerFloor: number;
+  rentOverride: number | null;
+}
+
+export interface PropertyBlock {
+  _id: string;
+  name: string;
+  order: number;
+  rentOverride: number | null;
+  floors: PropertyFloor[];
+}
+
+export interface FloorInputPayload {
+  level: number;
+  label?: string;
+  rentOverride?: number | null;
+  unitsPerFloor: number;
+  unitNames?: string[];
+}
+
+export interface BlockInputPayload {
+  name: string;
+  rentOverride?: number | null;
+  floors: FloorInputPayload[];
+}
 
 export interface Property {
   _id: string;
   title: string;
-  type: "room" | "apartment" | "building";
+  type: PropertyType;
   location: string;
   price: number;
   description: string;
@@ -20,11 +52,12 @@ export interface Property {
   baths: number;
   area: number;
   published: boolean;
+  blocks: PropertyBlock[];
 }
 
 export interface PropertyInput {
   title: string;
-  type: "room" | "apartment" | "building";
+  type: PropertyType;
   location: string;
   price: number;
   description?: string;
@@ -37,6 +70,7 @@ export interface PropertyInput {
   caretakerIds?: string[];
   targetOwnerId?: string;
   published?: boolean;
+  blocks?: BlockInputPayload[];
 }
 
 export interface PropertyFilters {

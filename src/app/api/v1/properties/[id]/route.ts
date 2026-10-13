@@ -2,15 +2,18 @@ import { isValidObjectId } from "mongoose";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { normalizeAmenities } from "@/lib/amenities";
 import { connectToDatabase } from "@/lib/mongoose";
 import { authenticate, isFullControlRole, requirePermission } from "@/lib/permissions";
+import { PROPERTY_TYPES } from "@/lib/property-types";
 import { Property } from "@/models/Property";
 import { Tenant } from "@/models/Tenant";
+import { Unit } from "@/models/Unit";
 import { User } from "@/models/User";
 
 const propertyUpdate = z.object({
   title: z.string().trim().min(1).optional(),
-  type: z.enum(["room", "apartment", "building"]).optional(),
+  type: z.enum(PROPERTY_TYPES).optional(),
   location: z.string().trim().min(1).optional(),
   price: z.coerce.number().nonnegative().optional(),
   beds: z.coerce.number().int().nonnegative().optional(),
@@ -106,6 +109,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   if (!canManageCaretakerIds) {
     delete updateData.caretakerIds;
   }
+  if (updateData.amenities) {
+    updateData.amenities = normalizeAmenities(updateData.amenities);
+  }
 
   const updated = await Property.findOneAndUpdate({ _id: id }, updateData, {
     new: true,
@@ -144,5 +150,6 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   if (!deleted) {
     return NextResponse.json({ error: "Property not found" }, { status: 404 });
   }
+  await Unit.deleteMany({ propertyId: id });
   return NextResponse.json({ data: deleted });
 }

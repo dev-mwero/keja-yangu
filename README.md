@@ -19,12 +19,24 @@ A modern property rental and tenant management platform built with Next.js, Type
 ## Features
 
 ### Dashboards
-- **Owner** — Portfolio overview, property distribution, revenue tracking, tenant/caretaker management
+- **Owner** — Portfolio overview, property distribution, revenue tracking, tenant/caretaker/custodian management
+- **Custodian** — Owner-delegated portfolio management (owner-like scope for a single owner)
 - **Caretaker** — Assigned properties, tenant requests, status updates
-- **Tenant** — Application tracking, property recommendations, payment history
+- **Tenant** — Application tracking, unit details, payment history, move-out requests
+
+### Property structure
+- Property types: **apartment, villa, bungalow**
+- Optional hierarchy of **blocks → floors → units**; units are auto-generated
+  and named from the structure (e.g. `GA`, `3A`) and can be renamed/rented
+  individually. Units are unique per block.
+- Curated **amenities** with normalization/dedupe
 
 ### Core
-- Role-based JWT authentication (owner, caretaker, tenant)
+- Role-based JWT authentication (owner, custodian, caretaker, tenant, system-admin)
+- Owner-scoped **custodian** role (owner-delegated; cannot manage other owners)
+- **Move requests** (move-in / move-out) with approval that occupies/frees units
+  and opens/ends leases
+- Global dashboard **search** across properties, units, tenants, and invoices
 - Email verification with Nodemailer
 - Protected dashboard routes with AuthGuard
 - Property listings with search, filters, and pagination
@@ -68,10 +80,22 @@ Open [http://localhost:3000](http://localhost:3000).
 ## API Routes
 
 - `GET /api/v1/properties` — List properties with pagination (`page`, `limit` params)
-- `POST /api/v1/properties` — Create property (owner/caretaker only)
+- `POST /api/v1/properties` — Create property (owner/custodian/caretaker; accepts optional `blocks[]` that generates units)
 - `GET /api/v1/properties/[id]` — Get single property
-- `PATCH /api/v1/properties/[id]` — Update property (owner only)
-- `DELETE /api/v1/properties/[id]` — Delete property (owner only)
+- `PATCH /api/v1/properties/[id]` — Update property (`property:edit`)
+- `DELETE /api/v1/properties/[id]` — Delete property (`property:delete`; also removes its units)
+- `GET /api/v1/units` — List units scoped per role (`propertyId`, `blockId`, `status`, `tenantId` filters)
+- `GET /api/v1/units/[id]` — Get a single unit (`unit:read`; tenants only see the unit they occupy)
+- `PATCH /api/v1/units/[id]` — Update status/rent/name/occupant (`unit:manage`; 409 on in-block name clash)
+- `DELETE /api/v1/units/[id]` — Delete a vacant unit (`unit:manage`; 409 while occupied)
+- `GET /api/v1/custodians` — List an owner's custodians (owner/system-admin only)
+- `POST /api/v1/custodians` — Invite or link a custodian bound to an owner (owner/system-admin; rate-limited 20/min)
+- `PATCH /api/v1/custodians/[id]` — Update a custodian's profile (managing owner/system-admin)
+- `DELETE /api/v1/custodians/[id]` — Revoke a custodian (unlinks from owner and deactivates; owner/system-admin)
+- `GET /api/v1/move-requests` — List move-requests scoped per role (`status` filter)
+- `POST /api/v1/move-requests` — File a move-in/move-out request (occupying tenant, owner, custodian, or privileged caretaker)
+- `PATCH /api/v1/move-requests/[id]` — Decide a move-request (`move-request:manage`; approval occupies/frees the unit and opens/ends the lease)
+- `GET /api/v1/search?q=` — Global dashboard search (properties, units, tenants, invoices; scoped per role)
 - `GET /api/v1/tenants` — List tenants (owner/system-admin; caretakers with `manage_tenants` privilege)
 - `POST /api/v1/tenants` — Create tenant (owner/system-admin; caretakers with `manage_tenants`; rate-limited 20/min)
 - `GET /api/v1/tenants/[id]` — Get single tenant (same scope as tenant list)
@@ -158,13 +182,14 @@ src/
 │   ├── auth/                 # Auth routes (signin, verify, logout)
 │   ├── dashboard/
 │   │   ├── owner/            # Owner dashboard + sub-pages
+│   │   ├── custodian/        # Custodian dashboard + sub-pages
 │   │   ├── caretaker/        # Caretaker dashboard + sub-pages
 │   │   └── tenant/           # Tenant dashboard + sub-pages
 │   └── properties/           # Public property listings
 ├── components/               # Reusable UI components
 ├── config/                   # Navigation config
 ├── lib/                      # Utilities (email, pagination, rate-limit)
-├── models/                   # Mongoose schemas (Property, User)
+├── models/                   # Mongoose schemas (Property, Unit, MoveRequest, User, …)
 ├── hooks/                    # Custom React hooks
 ├── test/                     # Test setup files
 └── proxy.ts                  # Next.js middleware
@@ -197,15 +222,20 @@ UPLOADTHING_TOKEN=
 
 | Role | Dashboard | Access |
 |------|-----------|--------|
-| Owner | `/dashboard/owner` | Portfolio, accounting, reports; manages caretakers and tenants |
+| Owner | `/dashboard/owner` | Portfolio, accounting, reports; manages custodians, caretakers and tenants |
+| Custodian | `/dashboard/custodian` | Owner-delegated portfolio management for a single owner; cannot manage other owners |
 | Caretaker | `/dashboard/caretaker` | Assigned properties, tenant requests; read-only unless granted privileges |
-| Tenant | `/dashboard/tenant` | Applications, payments, complaints |
+| Tenant | `/dashboard/tenant` | Applications, payments, complaints, move-out requests |
 | system-admin | `/dashboard/system-admin` | Full control over properties, tenants, and caretaker privileges |
 
 Caretakers are read-only by default. Owners grant granular privileges — create
 property, edit property, delete assigned property, manage tenants, manage
 invoices — from the team page; system-admin applies to all caretakers.
-`system-admin` is invite/seed-only and cannot be selected at public signup.
+Custodians are **owner-delegates**: bound to one owner via `managedByOwnerId`
+and scoped to that owner's portfolio. They cannot invite or revoke other
+custodians.
+`custodian` and `system-admin` are invite/seed-only and cannot be selected at
+public signup.
 
 Email verification is required for all accounts.
 

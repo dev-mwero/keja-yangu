@@ -34,6 +34,7 @@ type SignUpValues = z.infer<typeof signUpSchema>;
 const roleRoute: Record<Role, string> = {
   tenant: "/dashboard/tenant",
   caretaker: "/dashboard/caretaker",
+  custodian: "/dashboard/custodian",
   owner: "/dashboard/owner",
   "system-admin": "/dashboard/system-admin",
 };

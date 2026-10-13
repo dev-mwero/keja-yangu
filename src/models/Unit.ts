@@ -1,0 +1,41 @@
+import { type InferSchemaType, model, models, Schema } from "mongoose";
+import { UNIT_STATUSES } from "@/lib/domain-enums";
+
+export type { UnitStatus } from "@/lib/domain-enums";
+export { UNIT_STATUSES };
+
+const unitSchema = new Schema(
+  {
+    propertyId: { type: String, required: true },
+    ownerId: { type: String, required: true },
+    blockId: { type: String, required: true },
+    blockName: { type: String, required: true, trim: true },
+    floorId: { type: String, required: true },
+    floorLevel: { type: Number, required: true },
+    floorLabel: { type: String, trim: true, default: "" },
+    // Unit name: floor digit + letter, e.g. "3A", "GA". Unique within a block.
+    name: { type: String, required: true, trim: true },
+    letter: { type: String, trim: true, default: "" },
+    status: { type: String, enum: [...UNIT_STATUSES], default: "available" },
+    // Optional rent override; falls back to floor/block/property rent.
+    rent: { type: Number, min: 0, default: null },
+    beds: { type: Number, min: 0, default: 0 },
+    baths: { type: Number, min: 0, default: 0 },
+    area: { type: Number, min: 0, default: 0 },
+    // Current occupant (tenant user id); empty when vacant.
+    tenantId: { type: String, default: "" },
+  },
+  {
+    timestamps: true,
+  },
+);
+
+// Unit names are unique per block (not per property).
+unitSchema.index({ blockId: 1, name: 1 }, { unique: true });
+unitSchema.index({ propertyId: 1, status: 1 });
+unitSchema.index({ ownerId: 1, status: 1 });
+unitSchema.index({ blockId: 1, floorLevel: 1 });
+
+export type UnitDocument = InferSchemaType<typeof unitSchema>;
+
+export const Unit = models.Unit || model("Unit", unitSchema);

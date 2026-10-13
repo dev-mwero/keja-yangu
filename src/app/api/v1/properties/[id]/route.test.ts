@@ -10,10 +10,11 @@ vi.mock("@/lib/mongoose", () => ({
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
+vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 
 import { DELETE, GET, PATCH } from "@/app/api/v1/properties/[id]/route";
 
-const { user, property, tenant } = getModelStubs();
+const { user, property, tenant, unit } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
@@ -355,6 +356,7 @@ describe("DELETE /api/v1/properties/[id]", () => {
     property.findById.mockReturnValue(buildQuery(ownProperty()));
     tenant.exists.mockResolvedValue(null);
     property.findOneAndDelete.mockReturnValue(buildQuery(ownProperty()));
+    unit.deleteMany.mockResolvedValue({ deletedCount: 0 });
 
     const res = await DELETE(
       buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {
@@ -366,6 +368,7 @@ describe("DELETE /api/v1/properties/[id]", () => {
     expect(res.status).toBe(200);
     expect(tenant.exists).toHaveBeenCalledWith({ propertyId: PROPERTY_ID });
     expect(property.findOneAndDelete).toHaveBeenCalledWith({ _id: PROPERTY_ID });
+    expect(unit.deleteMany).toHaveBeenCalledWith({ propertyId: PROPERTY_ID });
   });
 
   it("403 for owner deleting a foreign property", async () => {
@@ -389,6 +392,7 @@ describe("DELETE /api/v1/properties/[id]", () => {
     property.findById.mockReturnValue(buildQuery(managedProperty()));
     tenant.exists.mockResolvedValue(null);
     property.findOneAndDelete.mockReturnValue(buildQuery(managedProperty()));
+    unit.deleteMany.mockResolvedValue({ deletedCount: 0 });
 
     const res = await DELETE(
       buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {

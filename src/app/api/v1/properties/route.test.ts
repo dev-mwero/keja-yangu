@@ -9,10 +9,11 @@ vi.mock("@/lib/mongoose", () => ({
 }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
+vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 
 import { GET, POST } from "@/app/api/v1/properties/route";
 
-const { user, property } = getModelStubs();
+const { user, property, unit } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
@@ -435,5 +436,105 @@ describe("POST /api/v1/properties", () => {
     );
     expect(res.status).toBe(400);
     expect(property.create).not.toHaveBeenCalled();
+  });
+
+  it("generates units from the block/floor structure", async () => {
+    const owner = makeUser({ _id: OWNER_ID, role: "owner" });
+    user.findById.mockReturnValue(buildQuery(owner));
+    property.create.mockResolvedValue({
+      ...validCreatedProperty,
+      blocks: [
+        {
+          _id: "block-1",
+          name: "Block A",
+          order: 0,
+          rentOverride: null,
+          floors: [
+            { _id: "floor-g", level: 0, label: "", unitsPerFloor: 2, rentOverride: null },
+            { _id: "floor-3", level: 3, label: "", unitsPerFloor: 1, rentOverride: null },
+          ],
+        },
+      ],
+    });
+    unit.insertMany.mockResolvedValue([]);
+
+    const res = await POST(
+      buildRequest("/api/v1/properties", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: {
+          ...validPropertyBody,
+          blocks: [
+            {
+              name: "Block A",
+              floors: [
+                { level: 0, unitsPerFloor: 2 },
+                { level: 3, unitsPerFloor: 1 },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(res.status).toBe(201);
+    expect(unit.insertMany).toHaveBeenCalledTimes(1);
+    const inserted = unit.insertMany.mock.calls[0][0] as Array<{
+      name: string;
+      propertyId: string;
+    }>;
+    expect(inserted.map((u) => u.name)).toEqual(["GA", "GB", "3A"]);
+    expect(inserted.every((u) => u.propertyId === validCreatedProperty._id)).toBe(true);
+    const body = await json(res);
+    expect(body.unitsCreated).toBe(3);
+  });
+
+  it("rejects a structure exceeding the unit cap", async () => {
+    const owner = makeUser({ _id: OWNER_ID, role: "owner" });
+    user.findById.mockReturnValue(buildQuery(owner));
+
+    const floors = Array.from({ length: 11 }, (_, i) => ({ level: i, unitsPerFloor: 200 }));
+    const res = await POST(
+      buildRequest("/api/v1/properties", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { ...validPropertyBody, blocks: [{ name: "Mega", floors }] },
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(property.create).not.toHaveBeenCalled();
+    expect(unit.insertMany).not.toHaveBeenCalled();
+  });
+
+  it("rolls the property back when unit generation fails", async () => {
+    const owner = makeUser({ _id: OWNER_ID, role: "owner" });
+    user.findById.mockReturnValue(buildQuery(owner));
+    property.create.mockResolvedValue({
+      ...validCreatedProperty,
+      blocks: [
+        {
+          _id: "block-1",
+          name: "Block A",
+          order: 0,
+          rentOverride: null,
+          floors: [{ _id: "floor-g", level: 0, label: "", unitsPerFloor: 1, rentOverride: null }],
+        },
+      ],
+    });
+    unit.insertMany.mockRejectedValue(new Error("duplicate key"));
+    property.deleteOne.mockResolvedValue({ deletedCount: 1 });
+
+    const res = await POST(
+      buildRequest("/api/v1/properties", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: {
+          ...validPropertyBody,
+          blocks: [{ name: "Block A", floors: [{ level: 0, unitsPerFloor: 1 }] }],
+        },
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(property.deleteOne).toHaveBeenCalledWith({ _id: validCreatedProperty._id });
   });
 });

@@ -10,7 +10,7 @@ import { Slider } from "@/components/ui/slider";
 import type { Property, PropertyType } from "@/data/properties";
 import { useProperties } from "@/hooks/use-properties";
 
-const types: ("all" | PropertyType)[] = ["all", "room", "apartment", "building"];
+const types: ("all" | PropertyType)[] = ["all", "apartment", "villa", "bungalow"];
 
 const Properties = () => {
   const [q, setQ] = useState("");
