@@ -16,6 +16,7 @@ vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 
 import { POST } from "@/app/api/auth/route";
+import { isEmailConfigured, sendVerificationEmail } from "@/lib/email";
 
 const { user, tenant: tenantStub } = getModelStubs();
 
@@ -35,6 +36,83 @@ function mutableUser(overrides: Record<string, unknown> = {}) {
 async function json(res: Response) {
   return (await res.json()) as Record<string, unknown>;
 }
+
+describe("POST /api/auth — signup merge", () => {
+  beforeEach(() => {
+    resetModelStubs();
+  });
+
+  it("adopts an inactive, unverified pre-created caretaker instead of duplicating", async () => {
+    const preCreated = {
+      _id: USER_ID,
+      email: "care@keja.co",
+      role: "caretaker",
+      isActive: false,
+      isVerified: false,
+      managedByOwnerId: makeObjectId("owner"),
+      name: "Old Name",
+      passwordHash: "old-hash",
+      privileges: ["manage_tenants"],
+      verificationToken: undefined as string | undefined,
+      verificationTokenExpiry: undefined as Date | undefined,
+      save: vi.fn().mockResolvedValue(undefined),
+    };
+    user.findOne.mockResolvedValue(preCreated);
+    vi.mocked(isEmailConfigured).mockReturnValue(true);
+    vi.mocked(sendVerificationEmail).mockResolvedValue(true);
+
+    const res = await POST(
+      buildRequest("/api/auth", {
+        method: "POST",
+        body: {
+          action: "signup",
+          name: "New Name",
+          email: "care@keja.co",
+          password: "secret123",
+          role: "caretaker",
+        },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(preCreated.isActive).toBe(true);
+    expect(preCreated.isVerified).toBe(false);
+    expect(preCreated.name).toBe("New Name");
+    expect(preCreated.role).toBe("caretaker");
+    expect(preCreated.privileges).toEqual(["manage_tenants"]);
+    expect(preCreated.passwordHash).not.toBe("old-hash");
+    expect(preCreated.save).toHaveBeenCalledTimes(1);
+    expect(user.create).not.toHaveBeenCalled();
+    expect(sendVerificationEmail).toHaveBeenCalledWith(
+      "care@keja.co",
+      preCreated.verificationToken,
+      "New Name",
+    );
+  });
+
+  it("409 for an already registered active user", async () => {
+    user.findOne.mockResolvedValue({
+      _id: USER_ID,
+      email: "care@keja.co",
+      role: "caretaker",
+      isActive: true,
+      isVerified: true,
+      managedByOwnerId: "",
+    });
+    const res = await POST(
+      buildRequest("/api/auth", {
+        method: "POST",
+        body: {
+          action: "signup",
+          name: "Name",
+          email: "care@keja.co",
+          password: "secret123",
+          role: "tenant",
+        },
+      }),
+    );
+    expect(res.status).toBe(409);
+  });
+});
 
 describe("POST /api/auth — verify-email", () => {
   beforeEach(() => {

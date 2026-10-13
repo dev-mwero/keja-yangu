@@ -176,8 +176,7 @@ function useToast() {
         listeners.splice(index, 1);
       }
     };
-    // biome-ignore lint/correctness: useExhaustiveDependencies
-  }, [state, listeners]);
+  }, []);
 
   return {
     ...state,

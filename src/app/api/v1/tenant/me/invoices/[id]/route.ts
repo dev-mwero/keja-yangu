@@ -76,15 +76,27 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   }
 
   const now = new Date();
+  const amountPaid = parsed.data.amount ?? invoice.amountDue;
+  let paidAt = now;
+  if (parsed.data.paidAt) {
+    paidAt = new Date(parsed.data.paidAt);
+    if (paidAt.getTime() > Date.now()) {
+      return NextResponse.json({ error: "paidAt cannot be in the future" }, { status: 400 });
+    }
+  }
+
   const updateData: Record<string, unknown> = {
     status: "paid",
-    amountPaid: invoice.amountDue,
-    paidAt: now,
+    amountPaid,
+    paidAt,
     paidBy: userId,
     paidByRole: "tenant",
   };
   if (parsed.data.method !== undefined) updateData.method = parsed.data.method;
   if (parsed.data.notes !== undefined) updateData.notes = parsed.data.notes;
+  if (parsed.data.reference !== undefined) updateData.paymentReference = parsed.data.reference;
+  if (parsed.data.description !== undefined)
+    updateData.paymentDescription = parsed.data.description;
 
   const updated = await Invoice.findOneAndUpdate(
     { _id: id, status: { $in: ["pending", "draft"] } },

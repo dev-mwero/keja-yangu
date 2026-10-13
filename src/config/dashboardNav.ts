@@ -1,8 +1,10 @@
 import {
   AlertTriangle,
+  ArrowLeftRight,
   Building2,
   Calculator,
   CreditCard,
+  DoorOpen,
   FileBarChart,
   FileText,
   Home,
@@ -22,7 +24,7 @@ export interface DashNavItem {
   icon: LucideIcon;
 }
 
-type Role = "tenant" | "caretaker" | "owner" | "system-admin";
+type Role = "tenant" | "caretaker" | "custodian" | "owner" | "system-admin";
 
 interface Section {
   slug: string;
@@ -33,7 +35,9 @@ interface Section {
 const baseSections = [
   { slug: "", label: "Overview", icon: Home },
   { slug: "/portfolio", label: "Portfolio", icon: Building2 },
+  { slug: "/units", label: "Units", icon: DoorOpen },
   { slug: "/tenants", label: "Tenants", icon: Users },
+  { slug: "/move-requests", label: "Move Requests", icon: ArrowLeftRight },
   { slug: "/team", label: "Team", icon: UserCog },
   { slug: "/tasks", label: "Tasks & Maintenance", icon: Wrench },
   { slug: "/accounting", label: "Accounting", icon: Calculator },
@@ -44,12 +48,16 @@ const baseSections = [
 ] satisfies readonly Section[];
 
 const caretakerSections = baseSections.filter((s) => s.slug !== "/tenants" && s.slug !== "/team");
+const custodianSections = baseSections.filter((s) =>
+  ["", "/portfolio", "/units", "/tenants", "/move-requests", "/team"].includes(s.slug),
+);
 const systemAdminSections = baseSections.filter((s) => s.slug !== "/team");
 
 export const buildDashboardNav = (role: Exclude<Role, "tenant">): DashNavItem[] => {
   const base = `/dashboard/${role}`;
   let sectionsToUse = baseSections;
   if (role === "caretaker") sectionsToUse = caretakerSections;
+  if (role === "custodian") sectionsToUse = custodianSections;
   if (role === "system-admin") sectionsToUse = systemAdminSections;
   return sectionsToUse.map((s) => ({
     to: `${base}${s.slug}`,
@@ -60,6 +68,7 @@ export const buildDashboardNav = (role: Exclude<Role, "tenant">): DashNavItem[] 
 
 export const ownerNav = buildDashboardNav("owner");
 export const caretakerNav = buildDashboardNav("caretaker");
+export const custodianNav = buildDashboardNav("custodian");
 
 export const caretakerNavWithTenants: DashNavItem[] = [
   ...caretakerNav,
@@ -82,6 +91,7 @@ const tenantSections: TenantSection[] = [
   { slug: "", label: "Overview", icon: Home },
   { slug: "/browse", label: "Browse homes", icon: Search, external: "/properties" },
   { slug: "/applications", label: "Applications", icon: FileText },
+  { slug: "/move-requests", label: "Move Requests", icon: ArrowLeftRight },
   { slug: "/payments", label: "Payments", icon: CreditCard },
   { slug: "/complaints", label: "Complaints", icon: AlertTriangle },
   { slug: "/chat", label: "Chat", icon: MessagesSquare },

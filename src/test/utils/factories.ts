@@ -32,13 +32,14 @@ export interface TestUser {
 export interface TestProperty {
   _id: string;
   title: string;
-  type: "room" | "apartment" | "building";
+  type: "apartment" | "villa" | "bungalow";
   location: string;
   price: number;
   description: string;
   images: string[];
   amenities: string[];
   status: "available" | "occupied" | "maintenance";
+  published: boolean;
   ownerId: string;
   caretakerIds: string[];
   createdById: string;
@@ -84,12 +85,54 @@ export function makeProperty(overrides: Partial<TestProperty> = {}): TestPropert
     images: [],
     amenities: [],
     status: "available",
+    published: true,
     ownerId: makeObjectId("user"),
     caretakerIds: [],
     createdById: makeObjectId("user"),
     beds: 2,
     baths: 1,
     area: 60,
+    ...overrides,
+  };
+}
+
+export interface TestUnit {
+  _id: string;
+  propertyId: string;
+  ownerId: string;
+  blockId: string;
+  blockName: string;
+  floorId: string;
+  floorLevel: number;
+  floorLabel: string;
+  name: string;
+  letter: string;
+  status: "available" | "occupied" | "maintenance";
+  rent: number | null;
+  beds: number;
+  baths: number;
+  area: number;
+  tenantId: string;
+}
+
+export function makeUnit(overrides: Partial<TestUnit> = {}): TestUnit {
+  return {
+    _id: makeObjectId("unit"),
+    propertyId: makeObjectId("prop"),
+    ownerId: makeObjectId("user"),
+    blockId: makeObjectId("block"),
+    blockName: "D",
+    floorId: makeObjectId("floor"),
+    floorLevel: 3,
+    floorLabel: "3",
+    name: "3A",
+    letter: "A",
+    status: "available",
+    rent: null,
+    beds: 2,
+    baths: 1,
+    area: 60,
+    tenantId: "",
     ...overrides,
   };
 }

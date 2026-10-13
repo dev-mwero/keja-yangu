@@ -1,7 +1,7 @@
 "use client";
 
 import { Construction } from "lucide-react";
-import type { ReactNode } from "react"; // biome-ignore lint/style: useImportType
+import type { ReactNode } from "react";
 import { DashboardShell } from "@/components/DashboardShell";
 import type { DashNavItem } from "@/config/dashboardNav";
 

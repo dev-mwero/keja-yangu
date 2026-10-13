@@ -81,9 +81,24 @@ const CaretakerDashboard = () => {
           value={loading ? "..." : props.length}
           icon={Building2}
         />
-        <StatCard label="Tenants" value={assignedTenants} icon={Users} />
-        <StatCard label="Occupied" value={occupied} icon={CheckCircle2} />
-        <StatCard label="Vacant" value={vacant} icon={Clock} />
+        <StatCard
+          label="Tenants"
+          value={assignedTenants}
+          icon={Users}
+          href="/dashboard/caretaker/tenants"
+        />
+        <StatCard
+          label="Occupied"
+          value={occupied}
+          icon={CheckCircle2}
+          href="/dashboard/caretaker/portfolio"
+        />
+        <StatCard
+          label="Vacant"
+          value={vacant}
+          icon={Clock}
+          href="/dashboard/caretaker/portfolio"
+        />
       </div>
 
       <div className="mt-10">

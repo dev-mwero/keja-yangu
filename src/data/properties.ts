@@ -1,4 +1,4 @@
-export type PropertyType = "room" | "apartment" | "building";
+export type PropertyType = "apartment" | "villa" | "bungalow";
 export type PropertyStatus = "available" | "occupied" | "maintenance";
 
 export interface Property {
@@ -11,6 +11,7 @@ export interface Property {
   images: string[];
   amenities: string[];
   status: PropertyStatus;
+  published: boolean;
   ownerId: string;
   caretakerIds: string[];
   beds: number;
@@ -30,6 +31,7 @@ export const properties: Property[] = [
     images: ["/images/property-1.jpg", "/images/property-2.jpg", "/images/property-4.jpg"],
     amenities: ["Wi-Fi", "Parking", "Backup Water", "Security 24/7", "Gym"],
     status: "available",
+    published: true,
     ownerId: "o1",
     caretakerIds: ["c1"],
     beds: 1,
@@ -47,6 +49,7 @@ export const properties: Property[] = [
     images: ["/images/property-2.jpg", "/images/property-1.jpg", "/images/property-6.jpg"],
     amenities: ["Balcony", "Lift", "Wi-Fi", "Backup Power", "Pool"],
     status: "available",
+    published: true,
     ownerId: "o1",
     caretakerIds: ["c1", "c2"],
     beds: 1,
@@ -56,7 +59,7 @@ export const properties: Property[] = [
   {
     id: "p3",
     title: "Palmera Residences",
-    type: "building",
+    type: "villa",
     location: "Nyali, Mombasa",
     price: 120000,
     description:
@@ -64,6 +67,7 @@ export const properties: Property[] = [
     images: ["/images/property-3.jpg", "/images/property-4.jpg", "/images/property-1.jpg"],
     amenities: ["Pool", "Gym", "Garden", "Security", "CCTV", "Beach Access"],
     status: "occupied",
+    published: true,
     ownerId: "o1",
     caretakerIds: ["c2"],
     beds: 3,
@@ -81,6 +85,7 @@ export const properties: Property[] = [
     images: ["/images/property-4.jpg", "/images/property-2.jpg", "/images/property-6.jpg"],
     amenities: ["Concierge", "Pool", "Gym", "Lift", "Smart Home", "Parking"],
     status: "available",
+    published: true,
     ownerId: "o1",
     caretakerIds: ["c1"],
     beds: 4,
@@ -90,7 +95,7 @@ export const properties: Property[] = [
   {
     id: "p5",
     title: "Cedar Cabin Room",
-    type: "room",
+    type: "bungalow",
     location: "Karen, Nairobi",
     price: 18000,
     description:
@@ -98,6 +103,7 @@ export const properties: Property[] = [
     images: ["/images/property-5.jpg", "/images/property-1.jpg"],
     amenities: ["Wi-Fi", "Shared Kitchen", "Garden", "Quiet Zone"],
     status: "available",
+    published: true,
     ownerId: "o1",
     caretakerIds: ["c2"],
     beds: 1,
@@ -107,7 +113,7 @@ export const properties: Property[] = [
   {
     id: "p6",
     title: "Amber Heights",
-    type: "building",
+    type: "villa",
     location: "Lavington, Nairobi",
     price: 95000,
     description:
@@ -115,6 +121,7 @@ export const properties: Property[] = [
     images: ["/images/property-6.jpg", "/images/property-3.jpg", "/images/property-4.jpg"],
     amenities: ["Concierge", "Lift", "Parking", "Gym", "Backup Power"],
     status: "maintenance",
+    published: true,
     ownerId: "o1",
     caretakerIds: ["c1", "c2"],
     beds: 2,

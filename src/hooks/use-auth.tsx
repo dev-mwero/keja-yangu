@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { toast } from "sonner";
 
-export type Role = "tenant" | "caretaker" | "owner" | "system-admin";
+export type Role = "tenant" | "caretaker" | "custodian" | "owner" | "system-admin";
 
 export interface KejaUser {
   id: string;
@@ -50,8 +50,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setLoading(false);
     }
-    // biome-ignore lint/correctness: useExhaustiveDependencies
-  }, [setUser, setRefreshFailed, setLoading, toast]);
+  }, []);
 
   useEffect(() => {
     refresh();

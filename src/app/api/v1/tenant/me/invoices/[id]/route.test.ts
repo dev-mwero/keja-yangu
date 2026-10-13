@@ -200,6 +200,54 @@ describe("POST /api/v1/tenant/me/invoices/[id]", () => {
     expect(notifyInvoicePaidMock).toHaveBeenCalledTimes(1);
   });
 
+  it("persists a custom amount, paidAt, reference and description", async () => {
+    user.findById.mockReturnValue(buildQuery(tenantDoc()));
+    tenantStub.find.mockReturnValue(buildQuery([{ _id: TENANT_A }]));
+    invoiceStub.findOne.mockReturnValue(buildQuery(pendingInvoice()));
+    invoiceStub.findOneAndUpdate.mockReturnValue(
+      buildQuery({ ...pendingInvoice(), status: "paid", amountPaid: 5000 }),
+    );
+
+    const res = await POST(
+      buildRequest(`/api/v1/tenant/me/invoices/${INVOICE_ID}`, {
+        method: "POST",
+        token: signToken(TENANT_USER_ID),
+        body: {
+          method: "Card",
+          amount: 5000,
+          paidAt: "2026-09-10T08:30:00.000Z",
+          reference: "CARD-9",
+          description: "Part payment",
+        },
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(200);
+    const updateData = invoiceStub.findOneAndUpdate.mock.calls[0][1] as Record<string, unknown>;
+    expect(updateData.amountPaid).toBe(5000);
+    expect(updateData.paidAt).toEqual(new Date("2026-09-10T08:30:00.000Z"));
+    expect(updateData.paymentReference).toBe("CARD-9");
+    expect(updateData.paymentDescription).toBe("Part payment");
+  });
+
+  it("rejects a future paidAt with 400", async () => {
+    user.findById.mockReturnValue(buildQuery(tenantDoc()));
+    tenantStub.find.mockReturnValue(buildQuery([{ _id: TENANT_A }]));
+    invoiceStub.findOne.mockReturnValue(buildQuery(pendingInvoice()));
+    const future = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+    const res = await POST(
+      buildRequest(`/api/v1/tenant/me/invoices/${INVOICE_ID}`, {
+        method: "POST",
+        token: signToken(TENANT_USER_ID),
+        body: { paidAt: future },
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(400);
+    expect(invoiceStub.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
   it("409 for an already-paid invoice", async () => {
     user.findById.mockReturnValue(buildQuery(tenantDoc()));
     tenantStub.find.mockReturnValue(buildQuery([{ _id: TENANT_A }]));

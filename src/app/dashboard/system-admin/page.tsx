@@ -38,8 +38,8 @@ const SystemAdminDashboard = () => {
 
   const distribution = [
     { type: "Apartment", count: properties.filter((p) => p.type === "apartment").length },
-    { type: "Building", count: properties.filter((p) => p.type === "building").length },
-    { type: "Room", count: properties.filter((p) => p.type === "room").length },
+    { type: "Villa", count: properties.filter((p) => p.type === "villa").length },
+    { type: "Bungalow", count: properties.filter((p) => p.type === "bungalow").length },
   ];
   const max = Math.max(...distribution.map((d) => d.count), 1);
 
@@ -58,8 +58,18 @@ const SystemAdminDashboard = () => {
           value={propertiesLoading ? "..." : total}
           icon={Building2}
         />
-        <StatCard label="Tenants" value={tenantsLoading ? "..." : tenants.length} icon={Users} />
-        <StatCard label="Caretakers" value={caretakers.length} icon={Users} />
+        <StatCard
+          label="Tenants"
+          value={tenantsLoading ? "..." : tenants.length}
+          icon={Users}
+          href="/dashboard/system-admin/tenants"
+        />
+        <StatCard
+          label="Caretakers"
+          value={caretakers.length}
+          icon={Users}
+          href="/dashboard/system-admin/caretakers"
+        />
         <StatCard
           label="Occupancy"
           value={propertiesLoading ? "..." : `${occupancy}%`}

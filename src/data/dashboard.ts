@@ -1,20 +1,5 @@
 import { createLocalStore } from "@/lib/local-store";
 
-export type PaymentStatus = "paid" | "due" | "overdue";
-export type PaymentMethod = "M-Pesa" | "Card" | "Bank";
-
-export interface Payment {
-  id: string;
-  label: string;
-  property: string;
-  amount: number;
-  dueDate: string;
-  paidDate?: string;
-  status: PaymentStatus;
-  autoPay: boolean;
-  method?: PaymentMethod;
-}
-
 export type ComplaintStatus = "open" | "in-progress" | "resolved";
 export type ComplaintPriority = "low" | "medium" | "high";
 export type ComplaintCategory =
@@ -101,23 +86,6 @@ export interface MaintenanceTask {
   notes?: string;
 }
 
-export type InvoiceStatus = "paid" | "pending" | "overdue";
-
-export interface Invoice {
-  id: string;
-  number: string;
-  tenant: string;
-  tenantEmail: string;
-  property: string;
-  amount: number;
-  period: string;
-  dueDate: string;
-  issuedAt: string;
-  paidAt?: string;
-  status: InvoiceStatus;
-  method?: PaymentMethod;
-}
-
 export interface ContactThread {
   id: string;
   tenant: string;
@@ -133,49 +101,6 @@ const fromNow = (days: number, hour = 10): string => {
   date.setHours(hour, 0, 0, 0);
   return date.toISOString();
 };
-
-const paymentSeed: Payment[] = [
-  {
-    id: "pay-1",
-    label: "April rent",
-    property: "Sunlit Studio in Kilimani",
-    amount: 45000,
-    dueDate: fromNow(-5),
-    paidDate: fromNow(-12, 9),
-    status: "paid",
-    autoPay: true,
-    method: "M-Pesa",
-  },
-  {
-    id: "pay-2",
-    label: "May rent",
-    property: "Sunlit Studio in Kilimani",
-    amount: 45000,
-    dueDate: fromNow(4),
-    status: "due",
-    autoPay: true,
-  },
-  {
-    id: "pay-3",
-    label: "Water bill",
-    property: "Sunlit Studio in Kilimani",
-    amount: 1250,
-    dueDate: fromNow(8),
-    status: "due",
-    autoPay: false,
-  },
-  {
-    id: "pay-4",
-    label: "March rent",
-    property: "Sunlit Studio in Kilimani",
-    amount: 45000,
-    dueDate: fromNow(-35),
-    paidDate: fromNow(-38, 16),
-    status: "paid",
-    autoPay: true,
-    method: "Bank",
-  },
-];
 
 const complaintSeed: Complaint[] = [
   {
@@ -408,73 +333,6 @@ const taskSeed: MaintenanceTask[] = [
   },
 ];
 
-const invoiceSeed: Invoice[] = [
-  {
-    id: "inv-1",
-    number: "INV-2026-0041",
-    tenant: "Amina Otieno",
-    tenantEmail: "amina@kj.co",
-    property: "Palmera Residences",
-    amount: 120000,
-    period: "April 2026",
-    dueDate: fromNow(1),
-    issuedAt: fromNow(-4),
-    status: "paid",
-    paidAt: fromNow(-1, 9),
-    method: "M-Pesa",
-  },
-  {
-    id: "inv-2",
-    number: "INV-2026-0042",
-    tenant: "Brian Kamau",
-    tenantEmail: "brian@kj.co",
-    property: "Terracotta Loft, Westlands",
-    amount: 78000,
-    period: "April 2026",
-    dueDate: fromNow(2),
-    issuedAt: fromNow(-4),
-    status: "pending",
-  },
-  {
-    id: "inv-3",
-    number: "INV-2026-0043",
-    tenant: "Cynthia Wairimu",
-    tenantEmail: "cyn@kj.co",
-    property: "Sunlit Studio in Kilimani",
-    amount: 45000,
-    period: "April 2026",
-    dueDate: fromNow(3),
-    issuedAt: fromNow(-4),
-    status: "pending",
-  },
-  {
-    id: "inv-4",
-    number: "INV-2026-0038",
-    tenant: "Amina Otieno",
-    tenantEmail: "amina@kj.co",
-    property: "Palmera Residences",
-    amount: 120000,
-    period: "March 2026",
-    dueDate: fromNow(-27),
-    issuedAt: fromNow(-34),
-    status: "paid",
-    paidAt: fromNow(-29, 10),
-    method: "Bank",
-  },
-  {
-    id: "inv-5",
-    number: "INV-2026-0039",
-    tenant: "Daniel Mwangi",
-    tenantEmail: "dan@kj.co",
-    property: "Cedar Cabin Room",
-    amount: 18000,
-    period: "March 2026",
-    dueDate: fromNow(-26),
-    issuedAt: fromNow(-34),
-    status: "overdue",
-  },
-];
-
 const contactThreadSeed: ContactThread[] = [
   {
     id: "ct-1",
@@ -538,7 +396,6 @@ const contactThreadSeed: ContactThread[] = [
   },
 ];
 
-export const paymentsStore = createLocalStore<Payment>("payments", () => paymentSeed);
 export const complaintsStore = createLocalStore<Complaint>("complaints", () => complaintSeed);
 export const chatThreadsStore = createLocalStore<ChatThread>("chat-threads", () => chatThreadSeed);
 export const announcementsStore = createLocalStore<Announcement>(
@@ -550,7 +407,6 @@ export const documentsStore = createLocalStore<DashboardDocument>(
   () => tenantDocumentSeed,
 );
 export const tasksStore = createLocalStore<MaintenanceTask>("tasks", () => taskSeed);
-export const invoicesStore = createLocalStore<Invoice>("invoices", () => invoiceSeed);
 export const contactThreadsStore = createLocalStore<ContactThread>(
   "contact-threads",
   () => contactThreadSeed,

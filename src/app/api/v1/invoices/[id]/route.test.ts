@@ -41,6 +41,9 @@ function draftInvoice() {
     ownerId: OWNER_ID,
     propertyId: PROPERTY_ID,
     status: "draft",
+    // Far-future due date keeps the derived status "pending" once a draft is
+    // edited to "pending", independent of the date the suite runs.
+    dueDate: new Date("2099-01-01T00:00:00.000Z"),
   });
 }
 

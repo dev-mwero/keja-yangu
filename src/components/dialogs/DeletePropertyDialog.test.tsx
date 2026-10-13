@@ -35,11 +35,13 @@ const property: Property = {
   images: [],
   amenities: [],
   status: "available",
+  published: true,
   ownerId: "dce2b032481698ae7cfe04d1",
   caretakerIds: [],
   beds: 2,
   baths: 1,
   area: 60,
+  blocks: [],
 };
 
 describe("DeletePropertyDialog", () => {

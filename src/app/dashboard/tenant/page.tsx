@@ -65,14 +65,26 @@ const TenantDashboard = () => {
       subtitle="Track your applications and discover new homes."
     >
       <div className="grid gap-4 md:grid-cols-3">
-        <StatCard label="Total applications" value={totalCount} icon={FileText} />
+        <StatCard
+          label="Total applications"
+          value={totalCount}
+          icon={FileText}
+          href="/dashboard/tenant/applications"
+        />
         <StatCard
           label="Pending review"
           value={pendingCount}
           icon={Clock}
           hint="Avg. response 18h"
+          href="/dashboard/tenant/applications"
         />
-        <StatCard label="Approved" value={approvedCount} hint={approvedTitle} icon={CheckCircle2} />
+        <StatCard
+          label="Approved"
+          value={approvedCount}
+          hint={approvedTitle}
+          icon={CheckCircle2}
+          href="/dashboard/tenant/applications"
+        />
       </div>
 
       <div className="mt-10">
@@ -148,6 +160,7 @@ const TenantDashboard = () => {
                   images: p.images.length > 0 ? p.images : ["/images/property-1.jpg"],
                   amenities: p.amenities,
                   status: p.status,
+                  published: p.published,
                   ownerId: p.ownerId,
                   caretakerIds: p.caretakerIds,
                   beds: p.beds,

@@ -32,3 +32,12 @@ export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number];
 
 export const DOCUMENT_SCOPES = ["tenant", "landlord", "property"] as const;
 export type DocumentScope = (typeof DOCUMENT_SCOPES)[number];
+
+export const UNIT_STATUSES = ["available", "occupied", "maintenance"] as const;
+export type UnitStatus = (typeof UNIT_STATUSES)[number];
+
+export const MOVE_REQUEST_TYPES = ["move-in", "move-out"] as const;
+export type MoveRequestType = (typeof MOVE_REQUEST_TYPES)[number];
+
+export const MOVE_REQUEST_STATUSES = ["pending", "approved", "rejected", "cancelled"] as const;
+export type MoveRequestStatus = (typeof MOVE_REQUEST_STATUSES)[number];

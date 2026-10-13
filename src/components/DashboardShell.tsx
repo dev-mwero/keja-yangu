@@ -13,6 +13,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { Logo } from "./Logo";
 import { NotificationsBell } from "./NotificationsBell";
+import { SearchBar } from "./SearchBar";
 import { ThemeToggle } from "./ThemeToggle";
 
 export interface DashNavItem {
@@ -135,6 +136,7 @@ export const DashboardShell = ({ roleName, nav, title, subtitle, children }: Pro
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
+              <SearchBar className="hidden md:block" />
               <NotificationsBell />
               <ThemeToggle />
               <Button

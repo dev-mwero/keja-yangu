@@ -9,10 +9,11 @@ vi.mock("@/lib/mongoose", () => ({
 }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
+vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 
 import { GET, POST } from "@/app/api/v1/properties/route";
 
-const { user, property } = getModelStubs();
+const { user, property, unit } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
@@ -62,8 +63,8 @@ describe("GET /api/v1/properties", () => {
     expect(res.status).toBe(200);
     const body = await json(res);
 
-    expect(property.find).toHaveBeenCalledWith({ status: "available" });
-    expect(property.countDocuments).toHaveBeenCalledWith({ status: "available" });
+    expect(property.find).toHaveBeenCalledWith({ status: "available", published: true });
+    expect(property.countDocuments).toHaveBeenCalledWith({ status: "available", published: true });
     expect(chain.select).toHaveBeenCalledWith("-ownerId -caretakerIds -createdById -__v");
     expect(chain.sort).toHaveBeenCalledWith({ createdAt: -1 });
     expect(chain.skip).toHaveBeenCalledWith(0);
@@ -79,7 +80,7 @@ describe("GET /api/v1/properties", () => {
     // anonymous requests ignore identity query filters entirely
     property.find.mockClear();
     await GET(buildRequest("/api/v1/properties?ownerId=someone"));
-    expect(property.find).toHaveBeenCalledWith({ status: "available" });
+    expect(property.find).toHaveBeenCalledWith({ status: "available", published: true });
   });
 
   it("returns all properties for an authenticated owner with no filters", async () => {
@@ -92,7 +93,7 @@ describe("GET /api/v1/properties", () => {
     const res = await GET(buildRequest("/api/v1/properties", { token: signToken(OWNER_ID) }));
     expect(res.status).toBe(200);
     const body = await json(res);
-    expect(property.find).toHaveBeenCalledWith({});
+    expect(property.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
     expect(body.data).toHaveLength(1);
   });
 
@@ -108,7 +109,57 @@ describe("GET /api/v1/properties", () => {
       }),
     );
     expect(res.status).toBe(200);
-    expect(property.find).toHaveBeenCalledWith({ status: "available", ownerId: "abc123" });
+    expect(property.find).toHaveBeenCalledWith({ status: "available", ownerId: OWNER_ID });
+  });
+
+  it("treats a signed-in tenant like anonymous (published + available only)", async () => {
+    const tenantActor = makeUser({ _id: makeObjectId("tenant"), role: "tenant" });
+    user.findById.mockReturnValue(buildQuery(tenantActor));
+    property.find.mockReturnValue(buildQuery([]));
+    property.countDocuments.mockResolvedValue(0);
+
+    const res = await GET(
+      buildRequest("/api/v1/properties?ownerId=someone", { token: signToken(tenantActor._id) }),
+    );
+    expect(res.status).toBe(200);
+    expect(property.find).toHaveBeenCalledWith({ status: "available", published: true });
+    expect(property.countDocuments).toHaveBeenCalledWith({ status: "available", published: true });
+  });
+
+  it("scopes a signed-in caretaker to assigned properties only", async () => {
+    const caretaker = makeUser({
+      _id: CARETAKER_ID,
+      role: "caretaker",
+      managedByOwnerId: OTHER_OWNER_ID,
+      privileges: ["edit_property"],
+    });
+    user.findById.mockReturnValue(buildQuery(caretaker));
+    property.find.mockReturnValue(buildQuery([]));
+    property.countDocuments.mockResolvedValue(0);
+
+    const res = await GET(
+      buildRequest("/api/v1/properties?status=available", { token: signToken(CARETAKER_ID) }),
+    );
+    expect(res.status).toBe(200);
+    expect(property.find).toHaveBeenCalledWith({ caretakerIds: CARETAKER_ID, status: "available" });
+    expect(property.countDocuments).toHaveBeenCalledWith({
+      caretakerIds: CARETAKER_ID,
+      status: "available",
+    });
+  });
+
+  it("lets a system-admin see all properties and honor query filters", async () => {
+    const admin = makeUser({ _id: makeObjectId("admin"), role: "system-admin" });
+    user.findById.mockReturnValue(buildQuery(admin));
+    property.find.mockReturnValue(buildQuery([]));
+    property.countDocuments.mockResolvedValue(0);
+
+    await GET(
+      buildRequest("/api/v1/properties?ownerId=abc&status=occupied", {
+        token: signToken(admin._id),
+      }),
+    );
+    expect(property.find).toHaveBeenCalledWith({ ownerId: "abc", status: "occupied" });
   });
 
   it("applies caretakerId filter via the caretakerIds multikey", async () => {
@@ -118,7 +169,7 @@ describe("GET /api/v1/properties", () => {
     property.countDocuments.mockResolvedValue(0);
 
     await GET(buildRequest("/api/v1/properties?caretakerId=c1", { token: signToken(OWNER_ID) }));
-    expect(property.find).toHaveBeenCalledWith({ caretakerIds: "c1" });
+    expect(property.find).toHaveBeenCalledWith({ ownerId: OWNER_ID, caretakerIds: "c1" });
   });
 });
 
@@ -222,7 +273,12 @@ describe("POST /api/v1/properties", () => {
     );
     expect(res.status).toBe(201);
     expect(property.create).toHaveBeenCalledWith(
-      expect.objectContaining({ ownerId: OWNER_ID, createdById: OWNER_ID, caretakerIds: [] }),
+      expect.objectContaining({
+        ownerId: OWNER_ID,
+        createdById: OWNER_ID,
+        caretakerIds: [],
+        published: false,
+      }),
     );
     const body = await json(res);
     expect((body.data as { title?: string }).title).toBe("Sunset Villa");
@@ -241,15 +297,21 @@ describe("POST /api/v1/properties", () => {
       buildRequest("/api/v1/properties", {
         method: "POST",
         token: signToken(OWNER_ID),
-        body: { ...validPropertyBody, ownerId: spoofed, caretakerIds: [CARETAKER_ID] },
+        body: {
+          ...validPropertyBody,
+          ownerId: spoofed,
+          caretakerIds: [CARETAKER_ID],
+          published: true,
+        },
       }),
     );
     expect(res.status).toBe(201);
     expect(property.create).toHaveBeenCalledWith(
       expect.objectContaining({ ownerId: OWNER_ID, createdById: OWNER_ID }),
     );
-    const createArgs = property.create.mock.calls[0][0] as { ownerId: string };
+    const createArgs = property.create.mock.calls[0][0] as { ownerId: string; published: boolean };
     expect(createArgs.ownerId).not.toBe(spoofed);
+    expect(createArgs.published).toBe(false);
   });
 
   it("owner create validates caretakerIds reference caretaker users", async () => {
@@ -374,5 +436,105 @@ describe("POST /api/v1/properties", () => {
     );
     expect(res.status).toBe(400);
     expect(property.create).not.toHaveBeenCalled();
+  });
+
+  it("generates units from the block/floor structure", async () => {
+    const owner = makeUser({ _id: OWNER_ID, role: "owner" });
+    user.findById.mockReturnValue(buildQuery(owner));
+    property.create.mockResolvedValue({
+      ...validCreatedProperty,
+      blocks: [
+        {
+          _id: "block-1",
+          name: "Block A",
+          order: 0,
+          rentOverride: null,
+          floors: [
+            { _id: "floor-g", level: 0, label: "", unitsPerFloor: 2, rentOverride: null },
+            { _id: "floor-3", level: 3, label: "", unitsPerFloor: 1, rentOverride: null },
+          ],
+        },
+      ],
+    });
+    unit.insertMany.mockResolvedValue([]);
+
+    const res = await POST(
+      buildRequest("/api/v1/properties", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: {
+          ...validPropertyBody,
+          blocks: [
+            {
+              name: "Block A",
+              floors: [
+                { level: 0, unitsPerFloor: 2 },
+                { level: 3, unitsPerFloor: 1 },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(res.status).toBe(201);
+    expect(unit.insertMany).toHaveBeenCalledTimes(1);
+    const inserted = unit.insertMany.mock.calls[0][0] as Array<{
+      name: string;
+      propertyId: string;
+    }>;
+    expect(inserted.map((u) => u.name)).toEqual(["GA", "GB", "3A"]);
+    expect(inserted.every((u) => u.propertyId === validCreatedProperty._id)).toBe(true);
+    const body = await json(res);
+    expect(body.unitsCreated).toBe(3);
+  });
+
+  it("rejects a structure exceeding the unit cap", async () => {
+    const owner = makeUser({ _id: OWNER_ID, role: "owner" });
+    user.findById.mockReturnValue(buildQuery(owner));
+
+    const floors = Array.from({ length: 11 }, (_, i) => ({ level: i, unitsPerFloor: 200 }));
+    const res = await POST(
+      buildRequest("/api/v1/properties", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { ...validPropertyBody, blocks: [{ name: "Mega", floors }] },
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(property.create).not.toHaveBeenCalled();
+    expect(unit.insertMany).not.toHaveBeenCalled();
+  });
+
+  it("rolls the property back when unit generation fails", async () => {
+    const owner = makeUser({ _id: OWNER_ID, role: "owner" });
+    user.findById.mockReturnValue(buildQuery(owner));
+    property.create.mockResolvedValue({
+      ...validCreatedProperty,
+      blocks: [
+        {
+          _id: "block-1",
+          name: "Block A",
+          order: 0,
+          rentOverride: null,
+          floors: [{ _id: "floor-g", level: 0, label: "", unitsPerFloor: 1, rentOverride: null }],
+        },
+      ],
+    });
+    unit.insertMany.mockRejectedValue(new Error("duplicate key"));
+    property.deleteOne.mockResolvedValue({ deletedCount: 1 });
+
+    const res = await POST(
+      buildRequest("/api/v1/properties", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: {
+          ...validPropertyBody,
+          blocks: [{ name: "Block A", floors: [{ level: 0, unitsPerFloor: 1 }] }],
+        },
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(property.deleteOne).toHaveBeenCalledWith({ _id: validCreatedProperty._id });
   });
 });

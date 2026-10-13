@@ -92,7 +92,7 @@ const OwnerReportsPage = () => {
         <section className="rounded-2xl border border-border bg-card p-6 shadow-soft">
           <h3 className="font-display text-lg font-semibold">Distribution by type</h3>
           <div className="mt-4 space-y-4">
-            {(["building", "apartment", "room"] as const).map((type) => {
+            {(["apartment", "villa", "bungalow"] as const).map((type) => {
               const count = byType[type] ?? 0;
               const percent =
                 properties.length > 0 ? Math.round((count / properties.length) * 100) : 0;

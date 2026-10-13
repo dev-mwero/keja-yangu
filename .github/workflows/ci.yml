@@ -16,7 +16,8 @@ jobs:
           node-version: '22'
           cache: 'npm'
       - run: npm ci
-      - run: npm run lint
+      - run: ./node_modules/.bin/biome check .
+      - run: npm run typecheck
       - run: npm run build
       - run: npm run test:coverage
 

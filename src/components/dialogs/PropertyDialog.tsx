@@ -2,11 +2,15 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
-
+import { AmenityPicker } from "@/components/property/AmenityPicker";
+import {
+  PropertyStructureEditor,
+  validateBlocks,
+} from "@/components/property/PropertyStructureEditor";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,25 +29,35 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useCaretakers } from "@/hooks/use-caretakers";
-import { type Property, type PropertyInput, usePropertyMutations } from "@/hooks/use-properties";
+import {
+  type BlockInputPayload,
+  type Property,
+  type PropertyInput,
+  usePropertyMutations,
+} from "@/hooks/use-properties";
+import { mergeImageUrls } from "@/lib/images";
+import { PROPERTY_TYPE_LABELS, PROPERTY_TYPES } from "@/lib/property-types";
+import { useUploadThing } from "@/lib/uploadthing";
 import { cn } from "@/lib/utils";
 
 const formSchema = z.object({
   title: z.string().trim().min(1, "Title is required"),
-  type: z.enum(["room", "apartment", "building"]),
+  type: z.enum(PROPERTY_TYPES),
   location: z.string().trim().min(1, "Location is required"),
   price: z.number().positive("Price must be greater than 0"),
   description: z.string(),
   images: z.string(),
-  amenities: z.string(),
+  amenities: z.array(z.string()),
   beds: z.number().int().min(0, "Beds cannot be negative"),
   baths: z.number().int().min(0, "Baths cannot be negative"),
   area: z.number().min(0, "Area cannot be negative"),
   status: z.enum(["available", "occupied", "maintenance"]),
   caretakerIds: z.array(z.string()),
   targetOwnerId: z.string(),
+  published: z.boolean(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -64,12 +78,6 @@ const splitLines = (value: string): string[] =>
     .map((s) => s.trim())
     .filter(Boolean);
 
-const splitList = (value: string): string[] =>
-  value
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-
 export const PropertyDialog = ({
   open,
   onOpenChange,
@@ -81,6 +89,25 @@ export const PropertyDialog = ({
 }: PropertyDialogProps) => {
   const { createProperty, updateProperty, pending } = usePropertyMutations();
   const { caretakers } = useCaretakers();
+  const [blocks, setBlocks] = useState<BlockInputPayload[]>([]);
+  const [structureError, setStructureError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { startUpload, isUploading } = useUploadThing("propertyImages", {
+    onUploadProgress: (p) => setUploadProgress(p),
+    onClientUploadComplete: (res) => {
+      const urls = res.map((file) => file.ufsUrl);
+      setValue("images", mergeImageUrls(getValues("images"), urls));
+      setUploadProgress(0);
+      toast.success("Images uploaded", {
+        description: `${urls.length} image${urls.length === 1 ? "" : "s"} added.`,
+      });
+    },
+    onUploadError: (error) => {
+      setUploadProgress(0);
+      toast.error("Image upload failed", { description: error.message });
+    },
+  });
 
   const buildDefaults = useCallback(
     (): FormValues => ({
@@ -90,13 +117,14 @@ export const PropertyDialog = ({
       price: property?.price ?? 0,
       description: property?.description ?? "",
       images: (property?.images ?? []).join("\n"),
-      amenities: (property?.amenities ?? []).join(", "),
+      amenities: property?.amenities ?? [],
       beds: property?.beds ?? 0,
       baths: property?.baths ?? 0,
       area: property?.area ?? 0,
       status: property?.status ?? "available",
       caretakerIds: property?.caretakerIds ?? [],
       targetOwnerId: "",
+      published: property?.published ?? false,
     }),
     [property],
   );
@@ -108,6 +136,7 @@ export const PropertyDialog = ({
     watch,
     setValue,
     setError,
+    getValues,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -119,10 +148,13 @@ export const PropertyDialog = ({
   const selectedCaretakerIds = watch("caretakerIds");
   const selectedStatus = watch("status");
   const selectedType = watch("type");
+  const selectedPublished = watch("published");
 
   useEffect(() => {
     if (open) {
       reset(buildDefaults());
+      setBlocks([]);
+      setStructureError(null);
     }
   }, [open, buildDefaults, reset]);
 
@@ -146,6 +178,13 @@ export const PropertyDialog = ({
       return;
     }
 
+    const structureIssues = mode === "create" && blocks.length > 0 ? validateBlocks(blocks) : [];
+    if (structureIssues.length > 0) {
+      setStructureError(structureIssues[0]);
+      return;
+    }
+    setStructureError(null);
+
     const payload: PropertyInput = {
       title: values.title,
       type: values.type,
@@ -153,14 +192,16 @@ export const PropertyDialog = ({
       price: values.price,
       description: values.description.trim() || undefined,
       images: splitLines(values.images),
-      amenities: splitList(values.amenities),
+      amenities: values.amenities,
       beds: values.beds,
       baths: values.baths,
     };
     if (values.area > 0) payload.area = values.area;
+    payload.published = values.published;
     if (allowCaretakerIds) payload.caretakerIds = values.caretakerIds;
     if (mode === "edit") payload.status = values.status;
     if (systemAdmin && mode === "create") payload.targetOwnerId = values.targetOwnerId.trim();
+    if (mode === "create" && blocks.length > 0) payload.blocks = blocks;
 
     try {
       if (mode === "create") {
@@ -223,9 +264,11 @@ export const PropertyDialog = ({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="room">Room</SelectItem>
-                  <SelectItem value="apartment">Apartment</SelectItem>
-                  <SelectItem value="building">Building</SelectItem>
+                  {PROPERTY_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {PROPERTY_TYPE_LABELS[t]}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -273,16 +316,49 @@ export const PropertyDialog = ({
               {...register("images")}
             />
             <p className="text-xs text-muted-foreground">One image URL per line.</p>
+            <div className="space-y-2 pt-1">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={async (e) => {
+                  const files = e.target.files ? Array.from(e.target.files) : [];
+                  e.target.value = "";
+                  if (files.length === 0) return;
+                  setUploadProgress(0);
+                  await startUpload(files);
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isUploading}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isUploading ? `Uploading… ${uploadProgress}%` : "Upload images"}
+              </Button>
+              {isUploading && (
+                <div className="h-1.5 w-full rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="property-amenities">Amenities</Label>
-            <Input
-              id="property-amenities"
-              placeholder="Wi-Fi, Parking, Security 24/7"
-              {...register("amenities")}
+            <Label>Amenities</Label>
+            <AmenityPicker
+              value={watch("amenities")}
+              onChange={(next) => setValue("amenities", next)}
+              disabled={pending}
             />
-            <p className="text-xs text-muted-foreground">Comma separated.</p>
           </div>
 
           <div className="grid grid-cols-3 gap-4">
@@ -313,6 +389,32 @@ export const PropertyDialog = ({
                 {...register("area", { valueAsNumber: true })}
               />
             </div>
+          </div>
+
+          {mode === "create" && (
+            <>
+              <PropertyStructureEditor
+                blocks={blocks}
+                onChange={setBlocks}
+                baseRent={watch("price")}
+                disabled={pending}
+              />
+              {structureError && <p className="text-xs text-destructive">{structureError}</p>}
+            </>
+          )}
+
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="property-published">Published (visible on public site)</Label>
+              <p className="text-xs text-muted-foreground">
+                Published properties appear on the public listings.
+              </p>
+            </div>
+            <Switch
+              id="property-published"
+              checked={selectedPublished}
+              onCheckedChange={(v) => setValue("published", v)}
+            />
           </div>
 
           {mode === "edit" && (

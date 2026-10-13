@@ -13,11 +13,12 @@ export interface IUser {
   email: string;
   name: string;
   passwordHash: string;
-  role: "tenant" | "caretaker" | "owner" | "system-admin";
+  role: "tenant" | "caretaker" | "custodian" | "owner" | "system-admin";
   privileges: string[];
   managedByOwnerId: string;
   isActive: boolean;
   isVerified: boolean;
+  phone: string;
   verificationToken?: string;
   verificationTokenExpiry?: Date;
   invoiceCounters: Record<string, number>;
@@ -43,7 +44,7 @@ const userSchema = new Schema<IUser>(
     passwordHash: { type: String, required: true },
     role: {
       type: String,
-      enum: ["tenant", "caretaker", "owner", "system-admin"],
+      enum: ["tenant", "caretaker", "custodian", "owner", "system-admin"],
       required: true,
     },
     privileges: {
@@ -52,7 +53,9 @@ const userSchema = new Schema<IUser>(
         "create_property",
         "edit_property",
         "delete_assigned_property",
+        "manage_units",
         "manage_tenants",
+        "process_move_requests",
         "manage_invoices",
         "manage_complaints",
         "manage_announcements",
@@ -64,6 +67,7 @@ const userSchema = new Schema<IUser>(
     managedByOwnerId: { type: String, default: "" },
     isActive: { type: Boolean, default: true },
     isVerified: { type: Boolean, default: false },
+    phone: { type: String, trim: true, default: "" },
     verificationToken: { type: String },
     verificationTokenExpiry: { type: Date },
     invoiceCounters: { type: Schema.Types.Map, of: Number, default: {} },
@@ -75,6 +79,7 @@ const userSchema = new Schema<IUser>(
 );
 
 userSchema.index({ role: 1, managedByOwnerId: 1 });
+userSchema.index({ phone: 1 });
 
 export type UserDocument = InferSchemaType<IUser>;
 

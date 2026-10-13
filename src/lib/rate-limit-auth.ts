@@ -18,7 +18,10 @@ function cleanupExpired() {
 
 setInterval(cleanupExpired, 60_000);
 
-export async function rateLimitAuth(request: Request, options: { windowMs?: number; limit?: number } = {}) {
+export async function rateLimitAuth(
+  request: Request,
+  options: { windowMs?: number; limit?: number } = {},
+) {
   const { windowMs = 60_000, limit = 5 } = options;
   const ip = request.headers.get("x-forwarded-for") ?? "unknown";
   const key = `ratelimit:auth:${ip}`;

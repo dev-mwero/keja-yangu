@@ -247,6 +247,27 @@ describe("POST /api/v1/invoices/generate", () => {
     expect(user.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
+  it("full no-op short-circuit: never reserves invoice numbers", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    leaseStub.find.mockReturnValue(buildQuery(activeLeases()));
+    invoiceStub.find.mockReturnValue(
+      buildQuery([{ leaseId: LEASE_A }, { leaseId: LEASE_B }]).select("leaseId"),
+    );
+
+    const res = await POST(
+      buildRequest("/api/v1/invoices/generate", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: {},
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    expect(body.data).toEqual({ created: 0, skipped: 2 });
+    expect(invoiceStub.create).not.toHaveBeenCalled();
+    expect(user.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
   it("counts an insert-time duplicate as skipped", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     leaseStub.find.mockReturnValue(buildQuery([activeLeases()[0]]));

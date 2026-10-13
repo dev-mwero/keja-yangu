@@ -1,9 +1,34 @@
 import { type InferSchemaType, model, models, Schema } from "mongoose";
+import { PROPERTY_TYPES } from "@/lib/property-types";
+
+const floorSchema = new Schema(
+  {
+    level: { type: Number, required: true },
+    label: { type: String, trim: true, default: "" },
+    // How many units this floor holds (informational; units are materialized
+    // in the separate `Unit` collection).
+    unitsPerFloor: { type: Number, min: 0, default: 0 },
+    // Optional rent override for every unit on this floor.
+    rentOverride: { type: Number, min: 0, default: null },
+  },
+  { _id: true },
+);
+
+const blockSchema = new Schema(
+  {
+    name: { type: String, required: true, trim: true },
+    order: { type: Number, default: 0 },
+    // Optional rent override for every unit in this block.
+    rentOverride: { type: Number, min: 0, default: null },
+    floors: { type: [floorSchema], default: [] },
+  },
+  { _id: true },
+);
 
 const propertySchema = new Schema(
   {
     title: { type: String, required: true, trim: true },
-    type: { type: String, enum: ["room", "apartment", "building"], default: "apartment" },
+    type: { type: String, enum: [...PROPERTY_TYPES], default: "apartment" },
     location: { type: String, required: true, trim: true },
     price: { type: Number, required: true, min: 0 },
     description: { type: String, default: "" },
@@ -16,11 +41,17 @@ const propertySchema = new Schema(
     beds: { type: Number, required: true, min: 0 },
     baths: { type: Number, required: true, min: 0 },
     area: { type: Number, default: 0 },
+    published: { type: Boolean, default: false },
+    // Physical hierarchy: Property -> blocks -> floors -> units (units live in
+    // the separate `Unit` collection and reference block/floor subdoc ids).
+    blocks: { type: [blockSchema], default: [] },
   },
   {
     timestamps: true,
   },
 );
+
+propertySchema.index({ status: 1, published: 1 });
 
 export type PropertyDocument = InferSchemaType<typeof propertySchema>;
 
