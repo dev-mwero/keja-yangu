@@ -33,7 +33,13 @@ interface AuthContextValue {
   loading: boolean;
   refreshFailed: boolean;
   signIn: (email: string, password: string) => Promise<KejaUser>;
-  signUp: (name: string, email: string, password: string, role: Role) => Promise<void>;
+  signUp: (
+    name: string,
+    email: string,
+    password: string,
+    role: Role,
+    details: { phone: string; nationalId: string },
+  ) => Promise<void>;
   resendVerification: (email: string) => Promise<void>;
   updateProfile: (patch: ProfilePatch) => Promise<boolean>;
   signOut: () => Promise<void>;
@@ -93,12 +99,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const signUp = async (name: string, email: string, password: string, role: Role) => {
+  const signUp = async (
+    name: string,
+    email: string,
+    password: string,
+    role: Role,
+    details: { phone: string; nationalId: string },
+  ) => {
     try {
       const res = await fetch("/api/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "signup", name, email, password, role }),
+        body: JSON.stringify({
+          action: "signup",
+          name,
+          email,
+          password,
+          role,
+          phone: details.phone,
+          nationalId: details.nationalId,
+        }),
       });
       if (!res.ok) {
         const data = await res.json();

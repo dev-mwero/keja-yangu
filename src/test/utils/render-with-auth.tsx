@@ -1,32 +1,36 @@
 import { render } from "@testing-library/react";
 import type { ReactElement } from "react";
-import type { KejaUser } from "@/hooks/use-auth";
+import type { KejaUser, Role } from "@/hooks/use-auth";
 
 export interface AuthMockValue {
   user: KejaUser | null;
   loading: boolean;
-  refreshFailed: boolean;
-  signIn: () => Promise<KejaUser>;
-  signUp: () => Promise<void>;
-  resendVerification: () => Promise<void>;
-  signOut: () => Promise<void>;
+  signUp: (
+    name: string,
+    email: string,
+    password: string,
+    role: Role,
+    details: { phone: string; nationalId: string },
+  ) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<KejaUser>;
+  resendVerification: (email: string) => Promise<void>;
+  updateProfile: (patch: unknown) => Promise<boolean>;
+  signOut: () => void;
 }
 
-export function createAuthMock(value: Partial<AuthMockValue> = {}): AuthMockValue {
-  return {
-    user: null,
-    loading: false,
-    refreshFailed: false,
-    signIn: () => Promise.resolve({ id: "", email: "", role: "tenant" }),
-    signUp: () => Promise.resolve(),
-    resendVerification: () => Promise.resolve(),
-    signOut: () => Promise.resolve(),
-    ...value,
-  };
-}
+export const createAuthMock = (overrides: Partial<AuthMockValue> = {}): AuthMockValue => ({
+  user: null,
+  loading: false,
+  signUp: () => Promise.resolve(),
+  signIn: () => Promise.reject(new Error("not implemented")),
+  resendVerification: () => Promise.resolve(),
+  updateProfile: () => Promise.resolve(false),
+  signOut: () => {},
+  ...overrides,
+});
 
 /**
- * Mutable holder wired into `vi.mock("@/hooks/use-auth")` factories in
+ * Mutable holder wired to `vi.mock("@/hooks/use-auth")` factories in
  * component tests that need an authenticated viewer. Mirror of the setup.ts
  * `useAuth` default mock; override per file:
  *
