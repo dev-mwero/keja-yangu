@@ -27,20 +27,26 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  PropertyStructureEditor,
+  validateBlocks,
+} from "@/components/property/PropertyStructureEditor";
+import { AmenityPicker } from "@/components/property/AmenityPicker";
 import { useCaretakers } from "@/hooks/use-caretakers";
-import { type Property, type PropertyInput, usePropertyMutations } from "@/hooks/use-properties";
+import { type BlockInputPayload, type Property, type PropertyInput, usePropertyMutations } from "@/hooks/use-properties";
 import { mergeImageUrls } from "@/lib/images";
+import { PROPERTY_TYPES, PROPERTY_TYPE_LABELS } from "@/lib/property-types";
 import { useUploadThing } from "@/lib/uploadthing";
 import { cn } from "@/lib/utils";
 
 const formSchema = z.object({
   title: z.string().trim().min(1, "Title is required"),
-  type: z.enum(["room", "apartment", "building"]),
+  type: z.enum(PROPERTY_TYPES),
   location: z.string().trim().min(1, "Location is required"),
   price: z.number().positive("Price must be greater than 0"),
   description: z.string(),
   images: z.string(),
-  amenities: z.string(),
+  amenities: z.array(z.string()),
   beds: z.number().int().min(0, "Beds cannot be negative"),
   baths: z.number().int().min(0, "Baths cannot be negative"),
   area: z.number().min(0, "Area cannot be negative"),
@@ -68,12 +74,6 @@ const splitLines = (value: string): string[] =>
     .map((s) => s.trim())
     .filter(Boolean);
 
-const splitList = (value: string): string[] =>
-  value
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-
 export const PropertyDialog = ({
   open,
   onOpenChange,
@@ -85,6 +85,8 @@ export const PropertyDialog = ({
 }: PropertyDialogProps) => {
   const { createProperty, updateProperty, pending } = usePropertyMutations();
   const { caretakers } = useCaretakers();
+  const [blocks, setBlocks] = useState<BlockInputPayload[]>([]);
+  const [structureError, setStructureError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { startUpload, isUploading } = useUploadThing("propertyImages", {
@@ -111,7 +113,7 @@ export const PropertyDialog = ({
       price: property?.price ?? 0,
       description: property?.description ?? "",
       images: (property?.images ?? []).join("\n"),
-      amenities: (property?.amenities ?? []).join(", "),
+      amenities: property?.amenities ?? [],
       beds: property?.beds ?? 0,
       baths: property?.baths ?? 0,
       area: property?.area ?? 0,
@@ -147,6 +149,8 @@ export const PropertyDialog = ({
   useEffect(() => {
     if (open) {
       reset(buildDefaults());
+      setBlocks([]);
+      setStructureError(null);
     }
   }, [open, buildDefaults, reset]);
 
@@ -170,6 +174,13 @@ export const PropertyDialog = ({
       return;
     }
 
+    const structureIssues = mode === "create" && blocks.length > 0 ? validateBlocks(blocks) : [];
+    if (structureIssues.length > 0) {
+      setStructureError(structureIssues[0]);
+      return;
+    }
+    setStructureError(null);
+
     const payload: PropertyInput = {
       title: values.title,
       type: values.type,
@@ -177,7 +188,7 @@ export const PropertyDialog = ({
       price: values.price,
       description: values.description.trim() || undefined,
       images: splitLines(values.images),
-      amenities: splitList(values.amenities),
+      amenities: values.amenities,
       beds: values.beds,
       baths: values.baths,
     };
@@ -186,6 +197,7 @@ export const PropertyDialog = ({
     if (allowCaretakerIds) payload.caretakerIds = values.caretakerIds;
     if (mode === "edit") payload.status = values.status;
     if (systemAdmin && mode === "create") payload.targetOwnerId = values.targetOwnerId.trim();
+    if (mode === "create" && blocks.length > 0) payload.blocks = blocks;
 
     try {
       if (mode === "create") {
@@ -248,9 +260,11 @@ export const PropertyDialog = ({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="room">Room</SelectItem>
-                  <SelectItem value="apartment">Apartment</SelectItem>
-                  <SelectItem value="building">Building</SelectItem>
+                  {PROPERTY_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {PROPERTY_TYPE_LABELS[t]}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -335,13 +349,12 @@ export const PropertyDialog = ({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="property-amenities">Amenities</Label>
-            <Input
-              id="property-amenities"
-              placeholder="Wi-Fi, Parking, Security 24/7"
-              {...register("amenities")}
+            <Label>Amenities</Label>
+            <AmenityPicker
+              value={watch("amenities")}
+              onChange={(next) => setValue("amenities", next)}
+              disabled={pending}
             />
-            <p className="text-xs text-muted-foreground">Comma separated.</p>
           </div>
 
           <div className="grid grid-cols-3 gap-4">
@@ -373,6 +386,18 @@ export const PropertyDialog = ({
               />
             </div>
           </div>
+
+          {mode === "create" && (
+            <>
+              <PropertyStructureEditor
+                blocks={blocks}
+                onChange={setBlocks}
+                baseRent={watch("price")}
+                disabled={pending}
+              />
+              {structureError && <p className="text-xs text-destructive">{structureError}</p>}
+            </>
+          )}
 
           <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-3">
             <div className="space-y-0.5">

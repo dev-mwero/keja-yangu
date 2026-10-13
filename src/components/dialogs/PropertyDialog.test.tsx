@@ -56,6 +56,7 @@ const editProperty: Property = {
   beds: 2,
   baths: 1,
   area: 60,
+  blocks: [],
 };
 
 describe("PropertyDialog", () => {

@@ -79,11 +79,12 @@ const properties: Property[] = [
     beds: 2,
     baths: 1,
     area: 60,
+    blocks: [],
   },
   {
     _id: "prop-2",
     title: "Rose Court",
-    type: "building",
+    type: "villa",
     location: "Westlands, Nairobi",
     price: 90000,
     description: "",
@@ -96,6 +97,7 @@ const properties: Property[] = [
     beds: 6,
     baths: 3,
     area: 200,
+    blocks: [],
   },
 ];
 

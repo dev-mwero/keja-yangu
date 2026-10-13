@@ -38,8 +38,8 @@ const SystemAdminDashboard = () => {
 
   const distribution = [
     { type: "Apartment", count: properties.filter((p) => p.type === "apartment").length },
-    { type: "Building", count: properties.filter((p) => p.type === "building").length },
-    { type: "Room", count: properties.filter((p) => p.type === "room").length },
+    { type: "Villa", count: properties.filter((p) => p.type === "villa").length },
+    { type: "Bungalow", count: properties.filter((p) => p.type === "bungalow").length },
   ];
   const max = Math.max(...distribution.map((d) => d.count), 1);
 

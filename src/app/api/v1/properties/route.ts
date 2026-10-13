@@ -4,12 +4,18 @@ import { z } from "zod";
 import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
 import { authenticate, requirePermission } from "@/lib/permissions";
+import { normalizeAmenities } from "@/lib/amenities";
+import { PROPERTY_TYPES } from "@/lib/property-types";
+import { blockInput } from "@/lib/schemas/structure";
+import { buildUnitInserts, countRequestedUnits } from "@/lib/units";
+import { MAX_UNITS_PER_PROPERTY } from "@/lib/schemas/structure";
 import { Property } from "@/models/Property";
+import { Unit } from "@/models/Unit";
 import { User } from "@/models/User";
 
 const propertyInput = z.object({
   title: z.string().trim().min(1),
-  type: z.enum(["room", "apartment", "building"]).optional(),
+  type: z.enum(PROPERTY_TYPES).optional(),
   location: z.string().trim().min(1),
   price: z.coerce.number().nonnegative(),
   beds: z.coerce.number().int().nonnegative(),
@@ -21,6 +27,7 @@ const propertyInput = z.object({
   caretakerIds: z.array(z.string()).optional(),
   targetOwnerId: z.string().optional(),
   description: z.string().optional(),
+  blocks: z.array(blockInput).max(50).optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -55,7 +62,7 @@ export async function GET(request: NextRequest) {
     return publicListing();
   }
 
-  const actorDoc = await User.findById(authUser.userId).select("role isActive").lean();
+  const actorDoc = await User.findById(authUser.userId).select("role isActive managedByOwnerId").lean();
   if (!actorDoc?.isActive) {
     return publicListing();
   }
@@ -67,6 +74,13 @@ export async function GET(request: NextRequest) {
   const filter: Record<string, unknown> = {};
   if (actorDoc.role === "owner") {
     filter.ownerId = authUser.userId;
+    if (caretakerId) filter.caretakerIds = caretakerId;
+    if (status) filter.status = status;
+  } else if (actorDoc.role === "custodian") {
+    if (!actorDoc.managedByOwnerId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    filter.ownerId = actorDoc.managedByOwnerId;
     if (caretakerId) filter.caretakerIds = caretakerId;
     if (status) filter.status = status;
   } else if (actorDoc.role === "caretaker") {
@@ -155,6 +169,22 @@ export async function POST(request: NextRequest) {
     }
     ownerId = managingOwnerId;
     caretakerIds.push(actorId);
+  } else if (user.role === "custodian") {
+    const managingOwnerId = user.managedByOwnerId ?? "";
+    if (!managingOwnerId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const managingOwner = await User.findOne({
+      _id: managingOwnerId,
+      role: "owner",
+      isActive: true,
+    })
+      .select("_id")
+      .lean();
+    if (!managingOwner) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    ownerId = managingOwnerId;
   } else {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -172,9 +202,19 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  const inputBlocks = parsed.data.blocks ?? [];
+  if (countRequestedUnits(inputBlocks) > MAX_UNITS_PER_PROPERTY) {
+    return NextResponse.json(
+      { error: `A property may have at most ${MAX_UNITS_PER_PROPERTY} units` },
+      { status: 400 },
+    );
+  }
+
   const createData = { ...parsed.data };
   delete createData.targetOwnerId;
   delete createData.caretakerIds;
+  delete createData.blocks;
+  createData.amenities = normalizeAmenities(parsed.data.amenities ?? []);
 
   const property = await Property.create({
     ...createData,
@@ -182,6 +222,43 @@ export async function POST(request: NextRequest) {
     createdById: actorId,
     caretakerIds: uniqueCaretakerIds,
     published: false,
+    blocks: inputBlocks.map((block, order) => ({
+      name: block.name,
+      order,
+      rentOverride: block.rentOverride ?? null,
+      floors: block.floors.map((floor) => ({
+        level: floor.level,
+        label: floor.label ?? "",
+        unitsPerFloor: floor.unitsPerFloor ?? 0,
+        rentOverride: floor.rentOverride ?? null,
+      })),
+    })),
   });
-  return NextResponse.json({ data: property }, { status: 201 });
+
+  let unitsCreated = 0;
+  if (inputBlocks.length > 0) {
+    try {
+      const unitDocs = buildUnitInserts(
+        String(property._id),
+        ownerId,
+        property.blocks as unknown as Parameters<typeof buildUnitInserts>[2],
+        inputBlocks,
+      );
+      if (unitDocs.length > 0) {
+        await Unit.insertMany(unitDocs, { ordered: false });
+        unitsCreated = unitDocs.length;
+      }
+    } catch (error) {
+      // Structure generation failed — roll the property back so the client can
+      // retry with a valid structure.
+      await Property.deleteOne({ _id: property._id });
+      const message = error instanceof Error ? error.message : "Failed to generate units";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+  }
+
+  return NextResponse.json(
+    { data: property, unitsCreated },
+    { status: 201 },
+  );
 }

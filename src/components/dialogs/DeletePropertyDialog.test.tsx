@@ -41,6 +41,7 @@ const property: Property = {
   beds: 2,
   baths: 1,
   area: 60,
+  blocks: [],
 };
 
 describe("DeletePropertyDialog", () => {
