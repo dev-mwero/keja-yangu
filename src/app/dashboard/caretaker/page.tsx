@@ -80,6 +80,7 @@ const CaretakerDashboard = () => {
           label="Assigned properties"
           value={loading ? "..." : props.length}
           icon={Building2}
+          href="/dashboard/caretaker/portfolio"
         />
         <StatCard
           label="Tenants"
