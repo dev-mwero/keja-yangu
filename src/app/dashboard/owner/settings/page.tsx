@@ -1,12 +1,10 @@
 "use client";
 
-import { Bell, Building2, KeyRound, LogOut, User as UserIcon } from "lucide-react";
+import { Bell, Building2, User as UserIcon } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { AccountDetailsForm } from "@/components/account/AccountDetailsForm";
 import { DashboardShell } from "@/components/DashboardShell";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -53,7 +51,7 @@ const notificationItems: SettingsItem[] = [
 ];
 
 const OwnerSettingsPage = () => {
-  const { user, signOut } = useAuth();
+  const { user, signOut, updateProfile } = useAuth();
   const { settings: prefs, update } = useSettings();
 
   const setPref = async (patch: Partial<UserSettings>) => {
@@ -86,32 +84,7 @@ const OwnerSettingsPage = () => {
               </span>
             </div>
           </div>
-          <div className="mt-6 space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="display-name">Display name</Label>
-              <Input id="display-name" defaultValue={user?.name ?? ""} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="contact-email">Contact email</Label>
-              <Input id="contact-email" defaultValue={user?.email ?? ""} disabled />
-            </div>
-            <div className="flex flex-wrap gap-2 pt-1">
-              <Link href="/auth/forgot-password">
-                <Button variant="outline" className="rounded-full">
-                  <KeyRound className="h-4 w-4" />
-                  Reset password
-                </Button>
-              </Link>
-              <Button
-                variant="outline"
-                className="rounded-full text-destructive hover:text-destructive"
-                onClick={signOut}
-              >
-                <LogOut className="h-4 w-4" />
-                Sign out
-              </Button>
-            </div>
-          </div>
+          <AccountDetailsForm user={user} onSave={updateProfile} onSignOut={signOut} />
         </section>
 
         <section className="rounded-2xl border border-border bg-card p-6 shadow-soft">

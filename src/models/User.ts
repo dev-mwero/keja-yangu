@@ -19,6 +19,8 @@ export interface IUser {
   isActive: boolean;
   isVerified: boolean;
   phone: string;
+  whatsapp: string;
+  nationalId: string;
   verificationToken?: string;
   verificationTokenExpiry?: Date;
   invoiceCounters: Record<string, number>;
@@ -67,7 +69,12 @@ const userSchema = new Schema<IUser>(
     managedByOwnerId: { type: String, default: "" },
     isActive: { type: Boolean, default: true },
     isVerified: { type: Boolean, default: false },
+    // Mobile number in E.164 form, e.g. "+254712345678" (country code included).
     phone: { type: String, trim: true, default: "" },
+    // WhatsApp number in E.164 form. An empty string means "same as phone".
+    whatsapp: { type: String, trim: true, default: "" },
+    // Government-issued identity number. Uppercased, no separators. PII.
+    nationalId: { type: String, trim: true, uppercase: true, default: "" },
     verificationToken: { type: String },
     verificationTokenExpiry: { type: Date },
     invoiceCounters: { type: Schema.Types.Map, of: Number, default: {} },
