@@ -440,14 +440,16 @@ function createInviteContent(name: string, role: string): string {
 
 export async function sendInviteEmail(email: string, name: string, role: string): Promise<boolean> {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const authUrl = `${appUrl}/auth`;
+  // Deep-link straight into the sign-up form, prefilled with the invited
+  // address, so the invitee only has to complete their details.
+  const authUrl = `${appUrl}/auth?invited=1&email=${encodeURIComponent(email)}&role=${role}`;
   const content = createInviteContent(name, role).replace(
     "{{APPURLPLACEHOLDER}}",
     escapeHtml(authUrl),
   );
   const html = renderTemplate(content, authUrl, `You've been invited to Keja Yangu`);
   const roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
-  const text = `Hi ${name},\n\nYou've been invited to Keja Yangu as a ${roleLabel}. Create your account or set your password at: ${authUrl}\n\nUse the same email address (${email}) when signing up — it links your account to this invitation.\n\nIf you weren't expecting this invitation, you can safely ignore this email.`;
+  const text = `Hi ${name},\n\nYou've been invited to Keja Yangu as a ${roleLabel}. Complete your account setup here: ${authUrl}\n\nYour email (${email}) is already on the form — just set a password, add your mobile number and national ID, and you're in.\n\nIf you weren't expecting this invitation, you can safely ignore this email.`;
 
   return sendEmail({
     to: email,
