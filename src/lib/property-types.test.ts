@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PROPERTY_TYPES, PROPERTY_TYPE_LABELS } from "@/lib/property-types";
+import { PROPERTY_TYPE_LABELS, PROPERTY_TYPES } from "@/lib/property-types";
 
 describe("property types", () => {
   it("is the apartment/villa/bungalow set", () => {

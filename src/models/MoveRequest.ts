@@ -1,8 +1,8 @@
 import { type InferSchemaType, model, models, Schema } from "mongoose";
 import { MOVE_REQUEST_STATUSES, MOVE_REQUEST_TYPES } from "@/lib/domain-enums";
 
-export { MOVE_REQUEST_STATUSES, MOVE_REQUEST_TYPES };
 export type { MoveRequestStatus, MoveRequestType } from "@/lib/domain-enums";
+export { MOVE_REQUEST_STATUSES, MOVE_REQUEST_TYPES };
 
 const moveRequestSchema = new Schema(
   {

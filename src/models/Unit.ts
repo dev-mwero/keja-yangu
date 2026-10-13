@@ -1,8 +1,8 @@
 import { type InferSchemaType, model, models, Schema } from "mongoose";
 import { UNIT_STATUSES } from "@/lib/domain-enums";
 
-export { UNIT_STATUSES };
 export type { UnitStatus } from "@/lib/domain-enums";
+export { UNIT_STATUSES };
 
 const unitSchema = new Schema(
   {

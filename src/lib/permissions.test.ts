@@ -645,7 +645,9 @@ describe("requirePermission — custodian", () => {
 
   it("is denied resource-scoped actions on a foreign owner's resource", async () => {
     const foreign = { ownerId: OWNER_ID, caretakerIds: [] };
-    expect((await guard("property:edit", { resource: foreign }, custodianUser()))?.status).toBe(403);
+    expect((await guard("property:edit", { resource: foreign }, custodianUser()))?.status).toBe(
+      403,
+    );
     expect((await guard("unit:manage", { resource: foreign }, custodianUser()))?.status).toBe(403);
     expect((await guard("invoice:manage", { resource: foreign }, custodianUser()))?.status).toBe(
       403,

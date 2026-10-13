@@ -1,6 +1,6 @@
-import { assertUniqueUnitNames, buildUnitNames, letterLabel } from "@/lib/unit-naming";
 import type { BlockInput, PersistedBlock, UnitInsert } from "@/lib/schemas/structure";
 import { MAX_UNITS_PER_PROPERTY } from "@/lib/schemas/structure";
+import { assertUniqueUnitNames, buildUnitNames, letterLabel } from "@/lib/unit-naming";
 
 /**
  * Build the `Unit` documents for a newly created property. `persisted` is the

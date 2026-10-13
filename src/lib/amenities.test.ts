@@ -18,10 +18,7 @@ describe("AMENITY_OPTIONS", () => {
 
 describe("normalizeAmenities", () => {
   it("trims, drops blanks and de-duplicates case-insensitively", () => {
-    expect(normalizeAmenities(["  Wi-Fi ", "WI-FI", "", "Gym", "GYM"])).toEqual([
-      "Wi-Fi",
-      "Gym",
-    ]);
+    expect(normalizeAmenities(["  Wi-Fi ", "WI-FI", "", "Gym", "GYM"])).toEqual(["Wi-Fi", "Gym"]);
   });
 
   it("preserves first-seen order and casing", () => {

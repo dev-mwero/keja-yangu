@@ -6,7 +6,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
-
+import { AmenityPicker } from "@/components/property/AmenityPicker";
+import {
+  PropertyStructureEditor,
+  validateBlocks,
+} from "@/components/property/PropertyStructureEditor";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -27,15 +31,15 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  PropertyStructureEditor,
-  validateBlocks,
-} from "@/components/property/PropertyStructureEditor";
-import { AmenityPicker } from "@/components/property/AmenityPicker";
 import { useCaretakers } from "@/hooks/use-caretakers";
-import { type BlockInputPayload, type Property, type PropertyInput, usePropertyMutations } from "@/hooks/use-properties";
+import {
+  type BlockInputPayload,
+  type Property,
+  type PropertyInput,
+  usePropertyMutations,
+} from "@/hooks/use-properties";
 import { mergeImageUrls } from "@/lib/images";
-import { PROPERTY_TYPES, PROPERTY_TYPE_LABELS } from "@/lib/property-types";
+import { PROPERTY_TYPE_LABELS, PROPERTY_TYPES } from "@/lib/property-types";
 import { useUploadThing } from "@/lib/uploadthing";
 import { cn } from "@/lib/utils";
 

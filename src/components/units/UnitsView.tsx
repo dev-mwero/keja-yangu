@@ -33,8 +33,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { DashNavItem } from "@/config/dashboardNav";
-import { type Unit, type UnitStatus, useUnitMutations, useUnits } from "@/hooks/use-units";
 import { useProperties } from "@/hooks/use-properties";
+import { type Unit, type UnitStatus, useUnitMutations, useUnits } from "@/hooks/use-units";
 import { UNIT_STATUSES } from "@/lib/domain-enums";
 import { effectiveRent } from "@/lib/schemas/structure";
 

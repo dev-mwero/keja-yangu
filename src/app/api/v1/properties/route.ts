@@ -1,14 +1,13 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { normalizeAmenities } from "@/lib/amenities";
 import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
 import { authenticate, requirePermission } from "@/lib/permissions";
-import { normalizeAmenities } from "@/lib/amenities";
 import { PROPERTY_TYPES } from "@/lib/property-types";
-import { blockInput } from "@/lib/schemas/structure";
+import { blockInput, MAX_UNITS_PER_PROPERTY } from "@/lib/schemas/structure";
 import { buildUnitInserts, countRequestedUnits } from "@/lib/units";
-import { MAX_UNITS_PER_PROPERTY } from "@/lib/schemas/structure";
 import { Property } from "@/models/Property";
 import { Unit } from "@/models/Unit";
 import { User } from "@/models/User";
@@ -62,7 +61,9 @@ export async function GET(request: NextRequest) {
     return publicListing();
   }
 
-  const actorDoc = await User.findById(authUser.userId).select("role isActive managedByOwnerId").lean();
+  const actorDoc = await User.findById(authUser.userId)
+    .select("role isActive managedByOwnerId")
+    .lean();
   if (!actorDoc?.isActive) {
     return publicListing();
   }
@@ -257,8 +258,5 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  return NextResponse.json(
-    { data: property, unitsCreated },
-    { status: 201 },
-  );
+  return NextResponse.json({ data: property, unitsCreated }, { status: 201 });
 }

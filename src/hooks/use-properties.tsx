@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { PropertyType, PropertyStatus } from "@/lib/property-types";
+import type { PropertyStatus, PropertyType } from "@/lib/property-types";
 
 export type { PropertyStatus };
 
