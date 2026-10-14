@@ -1,7 +1,8 @@
 # Keja Yangu — Soft-delete by default (recycle bin / recovery-by-request)
 
-Status: **Stage 1 (data layer) implemented** — plugin, models, partial unique
-indexes, DELETE endpoints, migration script, and tests. Stages 2–3 pending.
+Status: **Stages 1–2 implemented** — data layer (plugin, models, partial unique
+indexes, DELETE endpoints, production migration) and the recycle-bin API. Stage 3
+(UI) pending.
 
 ## Decisions (resolved)
 
@@ -110,13 +111,25 @@ Mongoose `autoIndex` covers dev/fresh DBs. Production runs the one-off
 `syncIndexes()` per collection) — same pattern as the existing `scripts/*`
 backfills.
 
-### 5. Recycle-bin API (Stage 2 — system-admin only)
+### 5. Recycle-bin API (system-admin only) ✅
 
-- `GET /api/v1/recycle-bin` — list deleted records by `type` (system-admin).
+Permission: `recycle-bin:manage` (system-admin only, like `property-type:manage`).
+Helpers live in `src/lib/recycle-bin.ts` (type→model registry).
+
+- `GET /api/v1/recycle-bin` — soft-deleted counts per type.
+- `GET /api/v1/recycle-bin?type=<type>` — paginated list of that type's deleted
+  records, newest first. Types: `property`, `unit`, `tenant`, `lease`, `invoice`,
+  `propertytype`.
 - `POST /api/v1/recycle-bin/:type/:id/restore` — restore.
 - `DELETE /api/v1/recycle-bin/:type/:id` — permanent purge.
 
-### 6. UI (Stage 3)
+Deleted reads bypass the default filter with `.setOptions({ withDeleted: true })`
+and filter `{ deletedAt: { $ne: null } }`. Purge only matches records that are
+already soft-deleted (a live record can never be purged here). Restoring or
+purging a **property** also restores/purges its soft-deleted **units**, mirroring
+the delete cascade.
+
+### 6. UI (Stage 3 — pending)
 
 System-admin **Recycle Bin** page + nav entry, with restore/purge.
 
@@ -131,5 +144,5 @@ plugin's read filtering and helpers using native-collection stubs (no DB).
 ## Staging
 
 - **Stage 1 (data layer):** plugin, models, index changes, DELETE endpoints, tests. ✅
-- **Stage 2 (recycle-bin API):** list / restore / purge.
+- **Stage 2 (recycle-bin API):** list / restore / purge. ✅
 - **Stage 3 (UI):** system-admin recycle-bin page + nav.

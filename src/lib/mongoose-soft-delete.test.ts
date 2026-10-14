@@ -110,6 +110,9 @@ describe("softDeletePlugin", () => {
 
     await model.findOne({ name: "a" }).setOptions({ withDeleted: true }).exec();
     expect(captured.findOne).toEqual({ name: "a" });
+
+    await model.countDocuments({ name: "a" }).setOptions({ withDeleted: true });
+    expect(captured.countDocuments).toEqual({ name: "a" });
   });
 
   it("softDeleteById stamps deletedAt without an exclusion filter", async () => {

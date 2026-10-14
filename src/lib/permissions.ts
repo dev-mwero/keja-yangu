@@ -29,6 +29,7 @@ export type Action =
   | "property:edit"
   | "property:delete"
   | "property-type:manage"
+  | "recycle-bin:manage"
   | "unit:read"
   | "unit:manage"
   | "custodian:manage"
@@ -141,7 +142,12 @@ export async function requirePermission(
 
   // The property taxonomy is platform-wide: only the system administrator may
   // change it, even though owners otherwise have full control of a portfolio.
-  if (action === "property-type:manage" && role !== "system-admin") {
+  // The recycle bin (restore/purge soft-deleted records) is likewise limited to
+  // the system administrator.
+  if (
+    (action === "property-type:manage" || action === "recycle-bin:manage") &&
+    role !== "system-admin"
+  ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
