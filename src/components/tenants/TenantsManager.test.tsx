@@ -198,6 +198,17 @@ describe("TenantsManager", () => {
     expect(screen.getByText("No tenants in this view")).toBeInTheDocument();
   });
 
+  it("filters rows by the search box", async () => {
+    mocks.tenants.push(...tenants);
+    mocks.properties.push(...properties);
+    renderManager();
+
+    await userEvent.type(screen.getByPlaceholderText("Search tenants…"), "brian");
+
+    expect(screen.getByText("Brian Mwangi")).toBeInTheDocument();
+    expect(screen.queryByText("Amina Otieno")).not.toBeInTheDocument();
+  });
+
   it("validates the create form before submitting", async () => {
     mocks.properties.push(...properties);
     renderManager();

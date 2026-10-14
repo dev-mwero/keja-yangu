@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-
+import { SearchInput } from "@/components/SearchInput";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -18,6 +18,7 @@ import {
   useCaretakers,
   useUpdateCaretakerPrivileges,
 } from "@/hooks/use-caretakers";
+import { matchesQuery } from "@/lib/search";
 
 const PRIVILEGES = [
   { key: "create_property", label: "Create property" },
@@ -30,6 +31,7 @@ export const CaretakerPrivilegesTable = () => {
   const { caretakers, loading, error, refetch } = useCaretakers();
   const { updatePrivileges, pendingId } = useUpdateCaretakerPrivileges();
   const [rows, setRows] = useState<CaretakerRow[]>(caretakers);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     setRows(caretakers);
@@ -72,58 +74,76 @@ export const CaretakerPrivilegesTable = () => {
     );
   }
 
+  const visible = rows.filter((c) => matchesQuery(query, c.name, c.email));
+
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>Properties</TableHead>
-            <TableHead className="text-center">
-              <span className="sr-only">Create property</span>
-            </TableHead>
-            <TableHead className="text-center">
-              <span className="sr-only">Edit property</span>
-            </TableHead>
-            <TableHead className="text-center">
-              <span className="sr-only">Delete assigned property</span>
-            </TableHead>
-            <TableHead className="text-center">
-              <span className="sr-only">Manage tenants</span>
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((c) => (
-            <TableRow key={c.id}>
-              <TableCell className="font-medium">{c.name}</TableCell>
-              <TableCell className="text-muted-foreground">{c.email}</TableCell>
-              <TableCell>
-                <Badge variant="secondary">{c.propertyCount}</Badge>
-              </TableCell>
-              {PRIVILEGES.map((priv) => (
-                <TableCell key={priv.key} className="text-center">
-                  <Switch
-                    aria-label={`${priv.label} for ${c.name}`}
-                    checked={c.privileges.includes(priv.key)}
-                    disabled={pendingId === c.id}
-                    onCheckedChange={(checked) => toggle(c, priv.key, checked)}
-                  />
-                </TableCell>
-              ))}
+    <div className="space-y-4">
+      <SearchInput
+        value={query}
+        onChange={setQuery}
+        placeholder="Search caretakers…"
+        className="w-full sm:w-64"
+      />
+      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Properties</TableHead>
+              <TableHead className="text-center">
+                <span className="sr-only">Create property</span>
+              </TableHead>
+              <TableHead className="text-center">
+                <span className="sr-only">Edit property</span>
+              </TableHead>
+              <TableHead className="text-center">
+                <span className="sr-only">Delete assigned property</span>
+              </TableHead>
+              <TableHead className="text-center">
+                <span className="sr-only">Manage tenants</span>
+              </TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      <div className="border-t border-border px-4 py-2 text-right">
-        <button
-          type="button"
-          className="text-xs text-muted-foreground hover:text-foreground hover:underline"
-          onClick={refetch}
-        >
-          Refresh
-        </button>
+          </TableHeader>
+          <TableBody>
+            {visible.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                  No caretakers match your search.
+                </TableCell>
+              </TableRow>
+            ) : (
+              visible.map((c) => (
+                <TableRow key={c.id}>
+                  <TableCell className="font-medium">{c.name}</TableCell>
+                  <TableCell className="text-muted-foreground">{c.email}</TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">{c.propertyCount}</Badge>
+                  </TableCell>
+                  {PRIVILEGES.map((priv) => (
+                    <TableCell key={priv.key} className="text-center">
+                      <Switch
+                        aria-label={`${priv.label} for ${c.name}`}
+                        checked={c.privileges.includes(priv.key)}
+                        disabled={pendingId === c.id}
+                        onCheckedChange={(checked) => toggle(c, priv.key, checked)}
+                      />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+        <div className="border-t border-border px-4 py-2 text-right">
+          <button
+            type="button"
+            className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+            onClick={refetch}
+          >
+            Refresh
+          </button>
+        </div>
       </div>
     </div>
   );

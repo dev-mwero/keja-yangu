@@ -150,6 +150,19 @@ describe("InvoicesManager", () => {
     expect(screen.queryByText("INV-202609-0001")).not.toBeInTheDocument();
   });
 
+  it("filters invoices by the search box", async () => {
+    mocks.invoices.push(
+      makeInvoice({ _id: "inv-a", invoiceNumber: "INV-202601-0001" }),
+      makeInvoice({ _id: "inv-b", invoiceNumber: "INV-202602-0002" }),
+    );
+    renderManager();
+
+    await userEvent.type(screen.getByPlaceholderText("Search invoices…"), "202602");
+
+    expect(screen.getByText("INV-202602-0002")).toBeInTheDocument();
+    expect(screen.queryByText("INV-202601-0001")).not.toBeInTheDocument();
+  });
+
   it("opens the generate dialog and reports the generated month", async () => {
     const user = userEvent.setup();
     mocks.invoices.push(
