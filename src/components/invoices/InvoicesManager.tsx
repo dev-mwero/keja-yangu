@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { SearchInput } from "@/components/SearchInput";
 import { StatCard } from "@/components/StatCard";
 import {
   AlertDialog,
@@ -28,6 +29,7 @@ import type { DashNavItem } from "@/config/dashboardNav";
 import { useInvoiceMutations, useStaffInvoices } from "@/hooks/use-invoices";
 import { formatKES, formatPeriod } from "@/lib/format";
 import type { InvoiceInput, InvoiceMarkPaidInput, InvoiceUpdate } from "@/lib/schemas";
+import { matchesQuery } from "@/lib/search";
 import type { Invoice } from "@/types/invoicing";
 import { GenerateMonthDialog } from "./GenerateMonthDialog";
 import { InvoiceFormDialog } from "./InvoiceFormDialog";
@@ -53,6 +55,7 @@ export const InvoicesManager = (props: InvoicesManagerProps) => {
     useInvoiceMutations();
 
   const [tab, setTab] = useState<StatusTab>("all");
+  const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Invoice | null>(null);
   const [recording, setRecording] = useState<Invoice | null>(null);
@@ -70,8 +73,13 @@ export const InvoicesManager = (props: InvoicesManagerProps) => {
   };
 
   const visible = useMemo(
-    () => (tab === "all" ? invoices : invoices.filter((i) => i.status === tab)),
-    [invoices, tab],
+    () =>
+      invoices
+        .filter((i) => tab === "all" || i.status === tab)
+        .filter((i) =>
+          matchesQuery(query, i.invoiceNumber, i.period, i.status, tenantNames?.[i.tenantId]),
+        ),
+    [invoices, tab, query, tenantNames],
   );
 
   const billed = invoices
@@ -273,6 +281,12 @@ export const InvoicesManager = (props: InvoicesManagerProps) => {
         </Tabs>
 
         <div className="flex items-center gap-3">
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Search invoices…"
+            className="w-full sm:w-56"
+          />
           {canCreate && (
             <Button className="rounded-full" onClick={openCreate}>
               <Plus className="h-4 w-4" />

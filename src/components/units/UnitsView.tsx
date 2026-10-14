@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { DashboardShell } from "@/components/DashboardShell";
+import { SearchInput } from "@/components/SearchInput";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,6 +38,7 @@ import { useProperties } from "@/hooks/use-properties";
 import { type Unit, type UnitStatus, useUnitMutations, useUnits } from "@/hooks/use-units";
 import { UNIT_STATUSES } from "@/lib/domain-enums";
 import { effectiveRent } from "@/lib/schemas/structure";
+import { matchesQuery } from "@/lib/search";
 
 interface Props {
   nav: DashNavItem[];
@@ -55,7 +57,9 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
   const { properties } = useProperties();
   const { updateUnit, deleteUnit, pending } = useUnitMutations();
   const [statusFilter, setStatusFilter] = useState<"all" | UnitStatus>("all");
+  const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<Unit | null>(null);
+
   const [form, setForm] = useState({ name: "", status: "available" as UnitStatus, rent: "" });
 
   const propertyById = useMemo(
@@ -63,7 +67,11 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
     [properties],
   );
 
-  const filtered = units.filter((u) => statusFilter === "all" || u.status === statusFilter);
+  const filtered = units.filter(
+    (u) =>
+      (statusFilter === "all" || u.status === statusFilter) &&
+      matchesQuery(query, u.name, propertyById[u.propertyId]?.title, u.blockName, u.floorLabel),
+  );
 
   const openEdit = (unit: Unit) => {
     setEditing(unit);
@@ -116,7 +124,7 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
       title="Units"
       subtitle="Every unit across your blocks and floors."
     >
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Select
             value={statusFilter}
@@ -134,6 +142,12 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
               ))}
             </SelectContent>
           </Select>
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Search units…"
+            className="w-56"
+          />
           <span className="text-sm text-muted-foreground">{filtered.length} units</span>
         </div>
       </div>

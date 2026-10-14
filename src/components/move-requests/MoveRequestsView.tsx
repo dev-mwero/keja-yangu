@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { DashboardShell } from "@/components/DashboardShell";
+import { SearchInput } from "@/components/SearchInput";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,6 +31,7 @@ import {
 } from "@/hooks/use-move-requests";
 import { MOVE_REQUEST_STATUSES } from "@/lib/domain-enums";
 import { formatDate } from "@/lib/format";
+import { matchesQuery } from "@/lib/search";
 
 interface Props {
   nav: DashNavItem[];
@@ -39,10 +41,15 @@ interface Props {
 
 export function MoveRequestsView({ nav, roleName, canDecide = true }: Props) {
   const [statusFilter, setStatusFilter] = useState<"all" | MoveRequestStatus>("pending");
+  const [query, setQuery] = useState("");
   const { moveRequests, loading, refetch } = useMoveRequests(
     statusFilter === "all" ? undefined : { status: statusFilter },
   );
   const { decide, pending } = useMoveRequestMutations();
+
+  const visible = moveRequests.filter((mr) =>
+    matchesQuery(query, mr.type, mr.requestedByRole, mr.note, mr.status),
+  );
 
   const act = async (id: string, status: MoveRequestStatus) => {
     try {
@@ -63,7 +70,7 @@ export function MoveRequestsView({ nav, roleName, canDecide = true }: Props) {
       title="Move Requests"
       subtitle="Approve or reject tenant move-in and move-out requests."
     >
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
         <Select
           value={statusFilter}
           onValueChange={(v) => setStatusFilter(v as "all" | MoveRequestStatus)}
@@ -80,6 +87,12 @@ export function MoveRequestsView({ nav, roleName, canDecide = true }: Props) {
             ))}
           </SelectContent>
         </Select>
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder="Search requests…"
+          className="w-full sm:w-64"
+        />
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
@@ -101,7 +114,7 @@ export function MoveRequestsView({ nav, roleName, canDecide = true }: Props) {
                   Loading move requests…
                 </TableCell>
               </TableRow>
-            ) : moveRequests.length === 0 ? (
+            ) : visible.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                   <ArrowLeftRight className="mx-auto mb-2 h-6 w-6 opacity-50" />
@@ -109,7 +122,7 @@ export function MoveRequestsView({ nav, roleName, canDecide = true }: Props) {
                 </TableCell>
               </TableRow>
             ) : (
-              moveRequests.map((mr) => (
+              visible.map((mr) => (
                 <TableRow key={mr._id}>
                   <TableCell className="font-medium capitalize">{mr.type}</TableCell>
                   <TableCell className="capitalize text-muted-foreground">

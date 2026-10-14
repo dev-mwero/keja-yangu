@@ -3,7 +3,7 @@
 import { Loader2, Plus, UserCog } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-
+import { SearchInput } from "@/components/SearchInput";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -24,6 +24,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useCustodianMutations, useCustodians } from "@/hooks/use-custodians";
+import { matchesQuery } from "@/lib/search";
 
 interface Props {
   systemAdmin?: boolean;
@@ -33,6 +34,7 @@ export const CustodianManager = ({ systemAdmin = false }: Props) => {
   const { custodians, loading, error, refetch } = useCustodians();
   const { inviteCustodian, revokeCustodian, pending } = useCustodianMutations();
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -44,6 +46,8 @@ export const CustodianManager = ({ systemAdmin = false }: Props) => {
     setPhone("");
     setOwnerId("");
   };
+
+  const visible = custodians.filter((c) => matchesQuery(query, c.name, c.email, c.phone));
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,16 +93,24 @@ export const CustodianManager = ({ systemAdmin = false }: Props) => {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h3 className="font-display text-lg">Custodians</h3>
           <p className="text-sm text-muted-foreground">
             Custodians manage your portfolio on your behalf, scoped to your account.
           </p>
         </div>
-        <Button className="rounded-full" onClick={() => setOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" /> Invite custodian
-        </Button>
+        <div className="flex items-center gap-3">
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Search custodians…"
+            className="w-full sm:w-56"
+          />
+          <Button className="rounded-full" onClick={() => setOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" /> Invite custodian
+          </Button>
+        </div>
       </div>
 
       {loading ? (
@@ -125,24 +137,32 @@ export const CustodianManager = ({ systemAdmin = false }: Props) => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {custodians.map((c) => (
-                <TableRow key={c.id}>
-                  <TableCell className="font-medium">{c.name}</TableCell>
-                  <TableCell className="text-muted-foreground">{c.email}</TableCell>
-                  <TableCell className="text-muted-foreground">{c.phone || "—"}</TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-full"
-                      disabled={pending}
-                      onClick={() => revoke(c.id, c.name)}
-                    >
-                      Revoke
-                    </Button>
+              {visible.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                    No custodians match your search.
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                visible.map((c) => (
+                  <TableRow key={c.id}>
+                    <TableCell className="font-medium">{c.name}</TableCell>
+                    <TableCell className="text-muted-foreground">{c.email}</TableCell>
+                    <TableCell className="text-muted-foreground">{c.phone || "—"}</TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-full"
+                        disabled={pending}
+                        onClick={() => revoke(c.id, c.name)}
+                      >
+                        Revoke
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>

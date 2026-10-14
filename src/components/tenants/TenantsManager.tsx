@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { DashboardShell } from "@/components/DashboardShell";
+import { SearchInput } from "@/components/SearchInput";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -52,6 +53,7 @@ import {
   useTenants,
 } from "@/hooks/use-tenants";
 import { formatDate } from "@/lib/format";
+import { matchesQuery } from "@/lib/search";
 
 type StatusFilter = "all" | TenantStatus;
 
@@ -98,6 +100,7 @@ export const TenantsManager = ({
 
   const [tab, setTab] = useState<StatusFilter>("all");
   const [propertyFilter, setPropertyFilter] = useState("all");
+  const [query, setQuery] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Tenant | null>(null);
   const [form, setForm] = useState<TenantFormState>(emptyForm);
@@ -113,6 +116,11 @@ export const TenantsManager = ({
     return properties.filter((p) => allowedProperties.includes(p._id));
   }, [properties, allowedProperties]);
 
+  const propertyTitleById = useMemo(
+    () => Object.fromEntries(properties.map((p) => [p._id, p.title])),
+    [properties],
+  );
+
   const counts: Record<StatusFilter, number> = {
     all: tenants.length,
     pending: tenants.filter((t) => t.status === "pending").length,
@@ -125,9 +133,10 @@ export const TenantsManager = ({
       tenants.filter(
         (t) =>
           (tab === "all" || t.status === tab) &&
-          (propertyFilter === "all" || t.propertyId === propertyFilter),
+          (propertyFilter === "all" || t.propertyId === propertyFilter) &&
+          matchesQuery(query, t.name, t.email, t.phone, propertyTitleById[t.propertyId]),
       ),
-    [tenants, tab, propertyFilter],
+    [tenants, tab, propertyFilter, query, propertyTitleById],
   );
 
   const openCreate = () => {
@@ -230,6 +239,12 @@ export const TenantsManager = ({
         </Tabs>
 
         <div className="flex items-center gap-3">
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Search tenants…"
+            className="w-full sm:w-56"
+          />
           <Select value={propertyFilter} onValueChange={setPropertyFilter}>
             <SelectTrigger className="w-56">
               <SelectValue placeholder="All properties" />
