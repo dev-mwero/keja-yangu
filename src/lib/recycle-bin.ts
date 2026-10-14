@@ -1,4 +1,5 @@
 import { SOFT_DELETE_FIELD } from "@/lib/mongoose-soft-delete";
+import { isRecycleBinType, RECYCLE_BIN_TYPES, type RecycleBinType } from "@/lib/recycle-bin-types";
 import { Invoice } from "@/models/Invoice";
 import { Lease } from "@/models/Lease";
 import { Property } from "@/models/Property";
@@ -17,21 +18,7 @@ import { Unit } from "@/models/Unit";
  * Restoring or purging a property also applies to its soft-deleted units, the
  * inverse of the property delete cascade.
  */
-
-export const RECYCLE_BIN_TYPES = [
-  "property",
-  "unit",
-  "tenant",
-  "lease",
-  "invoice",
-  "propertytype",
-] as const;
-
-export type RecycleBinType = (typeof RECYCLE_BIN_TYPES)[number];
-
-export function isRecycleBinType(value: string): value is RecycleBinType {
-  return (RECYCLE_BIN_TYPES as readonly string[]).includes(value);
-}
+export { isRecycleBinType, RECYCLE_BIN_TYPES, type RecycleBinType };
 
 interface SoftDeleteQueryOptions {
   withDeleted?: boolean;

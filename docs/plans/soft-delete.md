@@ -1,8 +1,8 @@
 # Keja Yangu — Soft-delete by default (recycle bin / recovery-by-request)
 
-Status: **Stages 1–2 implemented** — data layer (plugin, models, partial unique
-indexes, DELETE endpoints, production migration) and the recycle-bin API. Stage 3
-(UI) pending.
+Status: **Stages 1–3 implemented** — data layer (plugin, models, partial unique
+indexes, DELETE endpoints, production migration), the recycle-bin API, and the
+system-admin recycle-bin UI.
 
 ## Decisions (resolved)
 
@@ -129,9 +129,19 @@ already soft-deleted (a live record can never be purged here). Restoring or
 purging a **property** also restores/purges its soft-deleted **units**, mirroring
 the delete cascade.
 
-### 6. UI (Stage 3 — pending)
+### 6. Recycle-bin UI — system-admin (`/dashboard/system-admin/recycle-bin`)
 
-System-admin **Recycle Bin** page + nav entry, with restore/purge.
+Client-safe type metadata (`RECYCLE_BIN_TYPES`, `RECYCLE_BIN_TYPE_LABELS`,
+`isRecycleBinType`) lives in `src/lib/recycle-bin-types.ts` so browser code never
+imports the model-bearing `src/lib/recycle-bin.ts` (which re-exports them).
+
+- `src/hooks/use-recycle-bin.ts` — `useRecycleBinCounts`, `useRecycleBinRecords`,
+  `useRecycleBinMutations` (same fetch/refetch pattern as `use-caretakers`).
+- `src/components/admin/RecycleBinManager.tsx` — per-type tabs with deleted
+  counts, a paginated list, and Restore / destructive Purge actions (purge behind
+  an `AlertDialog` confirm). Mutations refresh the list and counts.
+- `src/app/dashboard/system-admin/recycle-bin/page.tsx` — `DashboardShell` page.
+- Nav entry added to `systemAdminNav` in `src/config/dashboardNav.ts`.
 
 ## Test impact
 
@@ -145,4 +155,4 @@ plugin's read filtering and helpers using native-collection stubs (no DB).
 
 - **Stage 1 (data layer):** plugin, models, index changes, DELETE endpoints, tests. ✅
 - **Stage 2 (recycle-bin API):** list / restore / purge. ✅
-- **Stage 3 (UI):** system-admin recycle-bin page + nav.
+- **Stage 3 (UI):** system-admin recycle-bin page + nav. ✅

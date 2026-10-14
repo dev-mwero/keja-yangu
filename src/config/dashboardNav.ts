@@ -14,6 +14,7 @@ import {
   Search,
   Settings,
   Tags,
+  Trash2,
   UserCog,
   Users,
   Wrench,
@@ -80,8 +81,12 @@ export const caretakerNavWithTenants: DashNavItem[] = [
 
 export const systemAdminNav: DashNavItem[] = [
   ...buildDashboardNav("system-admin"),
-  { to: "/dashboard/system-admin/caretakers", label: "Caretakers", icon: UserCog },
-  { to: "/dashboard/system-admin/property-types", label: "Property Types", icon: Tags },
+  {
+    to: "/dashboard/system-admin/property-types",
+    label: "Property Types",
+    icon: Tags,
+  },
+  { to: "/dashboard/system-admin/recycle-bin", label: "Recycle Bin", icon: Trash2 },
 ];
 
 interface TenantSection {
