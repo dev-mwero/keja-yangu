@@ -156,6 +156,23 @@ describe("requirePermission — owner", () => {
   });
 });
 
+describe("requirePermission — property-type:manage", () => {
+  beforeEach(() => {
+    resetModelStubs();
+  });
+
+  it("allows the system admin", async () => {
+    const admin = makeUser({ _id: makeObjectId("admin"), role: "system-admin" });
+    expect(await guard("property-type:manage", undefined, admin)).toBeNull();
+  });
+
+  it("forbids owners, custodians and caretakers", async () => {
+    expect((await guard("property-type:manage", undefined, ownerUser()))?.status).toBe(403);
+    expect((await guard("property-type:manage", undefined, custodianUser()))?.status).toBe(403);
+    expect((await guard("property-type:manage", undefined, caretakerUser([])))?.status).toBe(403);
+  });
+});
+
 describe("requirePermission — caretaker", () => {
   beforeEach(() => {
     resetModelStubs();

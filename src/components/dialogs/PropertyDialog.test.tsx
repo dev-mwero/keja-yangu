@@ -2,6 +2,18 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+vi.mock("@/hooks/use-property-types", () => ({
+  usePropertyTypes: () => ({
+    types: [
+      { id: "1", key: "apartment", label: "Apartment", order: 0, active: true },
+      { id: "2", key: "villa", label: "Villa", order: 1, active: true },
+    ],
+    loading: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+}));
+
 import type { Property } from "@/hooks/use-properties";
 
 const mocks = vi.hoisted(() => {

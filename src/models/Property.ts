@@ -1,5 +1,4 @@
 import { type InferSchemaType, model, models, Schema } from "mongoose";
-import { PROPERTY_TYPES } from "@/lib/property-types";
 
 const floorSchema = new Schema(
   {
@@ -28,7 +27,9 @@ const blockSchema = new Schema(
 const propertySchema = new Schema(
   {
     title: { type: String, required: true, trim: true },
-    type: { type: String, enum: [...PROPERTY_TYPES], default: "apartment" },
+    // A key from the platform-wide, admin-managed property taxonomy
+    // (`PropertyType`). Not an enum so administrators can add new types.
+    type: { type: String, default: "apartment" },
     location: { type: String, required: true, trim: true },
     price: { type: Number, required: true, min: 0 },
     description: { type: String, default: "" },
