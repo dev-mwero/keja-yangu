@@ -120,6 +120,8 @@ async function main() {
     throw new Error("Missing MONGODB_URI environment variable.");
   }
 
+  const dryRun = process.argv.includes("--dry-run");
+
   await mongoose.connect(mongoUri, {
     bufferCommands: false,
     maxPoolSize: 10,
@@ -130,20 +132,38 @@ async function main() {
   for (const [name, schema] of schemas) {
     const Model = mongoose.models[name] || mongoose.model(name, schema);
 
+    const pendingBackfill = await Model.countDocuments({ deletedAt: { $exists: false } });
+    const before = (await Model.collection.indexes()).map((ix) => ix.name);
+    const { toCreate, toDrop } = await Model.diffIndexes();
+    const names = (specs: unknown[]) =>
+      specs.map((spec) => (spec as { name?: string }).name ?? JSON.stringify(spec));
+
+    if (dryRun) {
+      console.log(
+        `${name}: ${pendingBackfill} row(s) need deletedAt backfill; ` +
+          `create ${toCreate.length}, drop ${toDrop.length}`,
+      );
+      console.log(`  existing: ${before.join(", ")}`);
+      if (toCreate.length > 0) console.log(`  would create: ${names(toCreate).join(", ")}`);
+      if (toDrop.length > 0) console.log(`  would drop:   ${toDrop.join(", ")}`);
+      continue;
+    }
+
     const backfill = await Model.updateMany(
       { deletedAt: { $exists: false } },
       { $set: { deletedAt: null } },
     );
 
-    const created = await Model.syncIndexes();
+    await Model.syncIndexes();
 
+    const after = (await Model.collection.indexes()).map((ix) => ix.name);
     console.log(
-      `${name}: backfilled ${backfill.modifiedCount} rows, created ${created.length} index(es).`,
+      `${name}: backfilled ${backfill.modifiedCount} row(s); ` + `indexes now: ${after.join(", ")}`,
     );
-    if (created.length > 0) console.log(`  created: ${created.join(", ")}`);
   }
 
   await mongoose.disconnect();
+  console.log(dryRun ? "Dry run complete (no changes written)." : "Migration complete.");
 }
 
 main().catch(async (error) => {
