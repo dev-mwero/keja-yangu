@@ -6,6 +6,7 @@ import {
   type InvoiceStatus,
   PERIOD_REGEX,
 } from "@/lib/invoicing";
+import { softDeletePlugin } from "@/lib/mongoose-soft-delete";
 
 export type { InvoiceMethod, InvoiceStatus };
 export { INVOICE_METHODS, INVOICE_STATUSES };
@@ -29,11 +30,12 @@ export interface IInvoice {
   paymentDescription?: string;
   paidBy?: string;
   paidByRole?: string;
+  deletedAt?: Date | null;
 }
 
 const invoiceSchema = new Schema<IInvoice>(
   {
-    invoiceNumber: { type: String, required: true, unique: true },
+    invoiceNumber: { type: String, required: true },
     tenantId: { type: String, required: true },
     propertyId: { type: String, required: true },
     leaseId: { type: String, default: "" },
@@ -51,6 +53,7 @@ const invoiceSchema = new Schema<IInvoice>(
     paymentDescription: { type: String, trim: true, default: "" },
     paidBy: { type: String },
     paidByRole: { type: String },
+    deletedAt: { type: Date, default: null },
   },
   {
     timestamps: true,
@@ -59,12 +62,18 @@ const invoiceSchema = new Schema<IInvoice>(
 
 invoiceSchema.index({ ownerId: 1, period: 1 });
 invoiceSchema.index({ tenantId: 1 });
-// Generation idempotency: one invoice per lease per period (manual invoices
-// never set leaseId, so they are excluded via the partial filter).
+// Invoice numbers are unique among live invoices only.
+invoiceSchema.index(
+  { invoiceNumber: 1 },
+  { unique: true, partialFilterExpression: { deletedAt: null } },
+);
+// Generation idempotency: one live invoice per lease per period (manual
+// invoices never set leaseId, so they are excluded via the partial filter).
 invoiceSchema.index(
   { leaseId: 1, period: 1 },
-  { unique: true, partialFilterExpression: { leaseId: { $ne: "" } } },
+  { unique: true, partialFilterExpression: { leaseId: { $gt: "" }, deletedAt: null } },
 );
+softDeletePlugin(invoiceSchema);
 
 export type InvoiceDocument = InferSchemaType<IInvoice>;
 

@@ -297,7 +297,7 @@ describe("DELETE /api/v1/tenants/[id]", () => {
   it("owner deletes an in-scope tenant", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     tenantStub.findById.mockReturnValue(buildQuery(inScopeTenant()));
-    tenantStub.deleteOne.mockResolvedValue({ deletedCount: 1 });
+    tenantStub.softDeleteById.mockResolvedValue({ acknowledged: true });
 
     const res = await DELETE(
       buildRequest(`/api/v1/tenants/${TENANT_ID}`, {
@@ -307,7 +307,7 @@ describe("DELETE /api/v1/tenants/[id]", () => {
       withParams(TENANT_ID),
     );
     expect(res.status).toBe(200);
-    expect(tenantStub.deleteOne).toHaveBeenCalledWith({ _id: TENANT_ID });
+    expect(tenantStub.softDeleteById).toHaveBeenCalledWith(TENANT_ID);
     const body = await json(res);
     expect(body.message).toBe("Tenant deleted");
   });
@@ -325,6 +325,6 @@ describe("DELETE /api/v1/tenants/[id]", () => {
       withParams(TENANT_ID),
     );
     expect(res.status).toBe(404);
-    expect(tenantStub.deleteOne).not.toHaveBeenCalled();
+    expect(tenantStub.softDeleteById).not.toHaveBeenCalled();
   });
 });

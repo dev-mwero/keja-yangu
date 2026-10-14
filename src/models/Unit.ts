@@ -1,5 +1,6 @@
 import { type InferSchemaType, model, models, Schema } from "mongoose";
 import { UNIT_STATUSES } from "@/lib/domain-enums";
+import { softDeletePlugin } from "@/lib/mongoose-soft-delete";
 
 export type { UnitStatus } from "@/lib/domain-enums";
 export { UNIT_STATUSES };
@@ -24,17 +25,23 @@ const unitSchema = new Schema(
     area: { type: Number, min: 0, default: 0 },
     // Current occupant (tenant user id); empty when vacant.
     tenantId: { type: String, default: "" },
+    // Set when the unit is soft-deleted (hidden from reads, restorable).
+    deletedAt: { type: Date, default: null },
   },
   {
     timestamps: true,
   },
 );
 
-// Unit names are unique per block (not per property).
-unitSchema.index({ blockId: 1, name: 1 }, { unique: true });
+// Unit names are unique per block (not per property) among live units only.
+unitSchema.index(
+  { blockId: 1, name: 1 },
+  { unique: true, partialFilterExpression: { deletedAt: null } },
+);
 unitSchema.index({ propertyId: 1, status: 1 });
 unitSchema.index({ ownerId: 1, status: 1 });
 unitSchema.index({ blockId: 1, floorLevel: 1 });
+softDeletePlugin(unitSchema);
 
 export type UnitDocument = InferSchemaType<typeof unitSchema>;
 

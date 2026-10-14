@@ -88,6 +88,9 @@ export interface ModelStub {
   deleteMany: ReturnType<typeof vi.fn>;
   updateOne: ReturnType<typeof vi.fn>;
   updateMany: ReturnType<typeof vi.fn>;
+  softDeleteById: ReturnType<typeof vi.fn>;
+  softDeleteMany: ReturnType<typeof vi.fn>;
+  restoreById: ReturnType<typeof vi.fn>;
   insertMany: ReturnType<typeof vi.fn>;
   bulkWrite: ReturnType<typeof vi.fn>;
   exists: ReturnType<typeof vi.fn>;
@@ -115,6 +118,9 @@ export function createModelStub(): ModelStub {
     deleteMany: vi.fn(),
     updateOne: vi.fn(),
     updateMany: vi.fn(),
+    softDeleteById: vi.fn(),
+    softDeleteMany: vi.fn(),
+    restoreById: vi.fn(),
     insertMany: vi.fn(),
     bulkWrite: vi.fn(),
     exists: vi.fn(),

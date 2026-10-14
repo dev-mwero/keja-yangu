@@ -276,14 +276,14 @@ describe("DELETE /api/v1/leases/[id]", () => {
     const body = await json(res);
     expect(body.error).toBe("Lease is referenced by invoices and cannot be deleted");
     expect(invoiceStub.exists).toHaveBeenCalledWith({ leaseId: LEASE_ID });
-    expect(leaseStub.deleteOne).not.toHaveBeenCalled();
+    expect(leaseStub.softDeleteById).not.toHaveBeenCalled();
   });
 
-  it("200 and deletes when no invoices reference the lease", async () => {
+  it("200 and soft-deletes when no invoices reference the lease", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     leaseStub.findById.mockReturnValue(buildQuery(inScopeLease()));
     invoiceStub.exists.mockResolvedValue(null);
-    leaseStub.deleteOne.mockResolvedValue({ deletedCount: 1 });
+    leaseStub.softDeleteById.mockResolvedValue({ acknowledged: true });
 
     const res = await DELETE(
       buildRequest(`/api/v1/leases/${LEASE_ID}`, {
@@ -293,7 +293,7 @@ describe("DELETE /api/v1/leases/[id]", () => {
       withParams(LEASE_ID),
     );
     expect(res.status).toBe(200);
-    expect(leaseStub.deleteOne).toHaveBeenCalledWith({ _id: LEASE_ID });
+    expect(leaseStub.softDeleteById).toHaveBeenCalledWith(LEASE_ID);
     const body = await json(res);
     expect(body.message).toBe("Lease deleted");
   });

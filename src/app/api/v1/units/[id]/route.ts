@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongoose";
+import { asSoftDeleteModel } from "@/lib/mongoose-soft-delete";
 import { authenticate, requirePermission } from "@/lib/permissions";
 import { unitUpdateInput } from "@/lib/schemas/unit";
 import { Unit } from "@/models/Unit";
@@ -117,6 +118,6 @@ export async function DELETE(request: NextRequest, ctx: RouteContext) {
     );
   }
 
-  await Unit.deleteOne({ _id: unit._id });
+  await asSoftDeleteModel(Unit).softDeleteById(unit._id);
   return NextResponse.json({ data: { _id: id } });
 }

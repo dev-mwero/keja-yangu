@@ -168,18 +168,18 @@ describe("DELETE /api/v1/units/[id]", () => {
       withParams(UNIT_ID),
     );
     expect(res.status).toBe(409);
-    expect(unit.deleteOne).not.toHaveBeenCalled();
+    expect(unit.softDeleteById).not.toHaveBeenCalled();
   });
 
-  it("owner deletes a vacated unit", async () => {
+  it("owner soft-deletes a vacated unit", async () => {
     user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
     unit.findById.mockResolvedValue(unitDoc({ status: "available", tenantId: "" }));
-    unit.deleteOne.mockResolvedValue({ deletedCount: 1 });
+    unit.softDeleteById.mockResolvedValue({ acknowledged: true });
     const res = await DELETE(
       buildRequest(`/api/v1/units/${UNIT_ID}`, { method: "DELETE", token: signToken(OWNER_ID) }),
       withParams(UNIT_ID),
     );
     expect(res.status).toBe(200);
-    expect(unit.deleteOne).toHaveBeenCalledWith({ _id: UNIT_ID });
+    expect(unit.softDeleteById).toHaveBeenCalledWith(UNIT_ID);
   });
 });
