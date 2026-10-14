@@ -69,6 +69,7 @@ export function buildQuery(value: unknown) {
     skip: vi.fn((..._args: unknown[]) => chain),
     limit: vi.fn((..._args: unknown[]) => chain),
     populate: vi.fn((..._args: unknown[]) => chain),
+    setOptions: vi.fn(() => chain),
     lean: vi.fn(() => value),
     exec: vi.fn(() => value),
   };
