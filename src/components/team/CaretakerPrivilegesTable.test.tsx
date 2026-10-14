@@ -119,6 +119,23 @@ describe("CaretakerPrivilegesTable", () => {
     expect(screen.getByRole("switch", { name: "Create property for Amka" })).not.toBeChecked();
   });
 
+  it("filters caretakers by the search box", async () => {
+    mocks.list.push(...caretakerRows, {
+      id: "care-2",
+      name: "Brian",
+      email: "brian@keja.co",
+      managedByOwnerId: "owner-1",
+      privileges: [],
+      propertyCount: 1,
+    });
+    render(<CaretakerPrivilegesTable />);
+
+    await userEvent.type(screen.getByPlaceholderText("Search caretakers…"), "brian");
+
+    expect(screen.getByText("Brian")).toBeInTheDocument();
+    expect(screen.queryByText("Amka")).not.toBeInTheDocument();
+  });
+
   it("shows the loading state while fetching", () => {
     mocks.flags.loading = true;
     render(<CaretakerPrivilegesTable />);
