@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { connectToDatabase } from "@/lib/mongoose";
+import { asSoftDeleteModel } from "@/lib/mongoose-soft-delete";
 import { getTenantScope, requirePermission, tenantMatchesScope } from "@/lib/permissions";
 import { Property } from "@/models/Property";
 import { TENANT_SAFE_FIELDS, Tenant } from "@/models/Tenant";
@@ -143,7 +144,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   const scoped = await loadScopedTenant(request, id);
   if (scoped instanceof NextResponse) return scoped;
 
-  await Tenant.deleteOne({ _id: id });
+  await asSoftDeleteModel(Tenant).softDeleteById(id);
 
   return NextResponse.json({ message: "Tenant deleted" });
 }

@@ -1,4 +1,5 @@
 import { type InferSchemaType, model, models, Schema } from "mongoose";
+import { softDeletePlugin } from "@/lib/mongoose-soft-delete";
 
 export interface ITenant {
   name: string;
@@ -10,6 +11,7 @@ export interface ITenant {
   userId?: string;
   joinedAt?: Date;
   notes?: string;
+  deletedAt?: Date | null;
 }
 
 const tenantSchema = new Schema<ITenant>(
@@ -27,14 +29,21 @@ const tenantSchema = new Schema<ITenant>(
     userId: { type: String, default: "" },
     joinedAt: { type: Date },
     notes: { type: String },
+    deletedAt: { type: Date, default: null },
   },
   {
     timestamps: true,
   },
 );
 
-tenantSchema.index({ propertyId: 1, email: 1 }, { unique: true });
+// One live tenant per email per property; soft-deleted rows are excluded so the
+// email can be reused after deletion.
+tenantSchema.index(
+  { propertyId: 1, email: 1 },
+  { unique: true, partialFilterExpression: { deletedAt: null } },
+);
 tenantSchema.index({ userId: 1 });
+softDeletePlugin(tenantSchema);
 
 export type TenantDocument = InferSchemaType<ITenant>;
 

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { type InvoiceActor, readJsonBody, resolveInvoiceActor } from "@/app/api/v1/_helpers";
 import { canDelete, serializeInvoice } from "@/lib/invoicing";
 import { connectToDatabase } from "@/lib/mongoose";
+import { asSoftDeleteModel } from "@/lib/mongoose-soft-delete";
 import { requirePermission } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { invoiceUpdate } from "@/lib/schemas";
@@ -121,7 +122,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     return NextResponse.json({ error: "Only draft invoices can be deleted" }, { status: 409 });
   }
 
-  await Invoice.deleteOne({ _id: id });
+  await asSoftDeleteModel(Invoice).softDeleteById(id);
 
   return NextResponse.json({ message: "Invoice deleted" });
 }

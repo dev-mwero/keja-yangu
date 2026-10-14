@@ -1,4 +1,5 @@
 import { type InferSchemaType, model, models, Schema } from "mongoose";
+import { softDeletePlugin } from "@/lib/mongoose-soft-delete";
 
 const floorSchema = new Schema(
   {
@@ -46,6 +47,8 @@ const propertySchema = new Schema(
     // Physical hierarchy: Property -> blocks -> floors -> units (units live in
     // the separate `Unit` collection and reference block/floor subdoc ids).
     blocks: { type: [blockSchema], default: [] },
+    // Set when the property is soft-deleted (hidden from reads, restorable).
+    deletedAt: { type: Date, default: null },
   },
   {
     timestamps: true,
@@ -53,6 +56,7 @@ const propertySchema = new Schema(
 );
 
 propertySchema.index({ status: 1, published: 1 });
+softDeletePlugin(propertySchema);
 
 export type PropertyDocument = InferSchemaType<typeof propertySchema>;
 
