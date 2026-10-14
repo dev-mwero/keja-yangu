@@ -5,7 +5,7 @@ import { normalizeAmenities } from "@/lib/amenities";
 import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
 import { authenticate, requirePermission } from "@/lib/permissions";
-import { PROPERTY_TYPES } from "@/lib/property-types";
+import { isActivePropertyTypeKey } from "@/lib/property-type-store";
 import { blockInput, MAX_UNITS_PER_PROPERTY } from "@/lib/schemas/structure";
 import { buildUnitInserts, countRequestedUnits } from "@/lib/units";
 import { Property } from "@/models/Property";
@@ -14,7 +14,7 @@ import { User } from "@/models/User";
 
 const propertyInput = z.object({
   title: z.string().trim().min(1),
-  type: z.enum(PROPERTY_TYPES).optional(),
+  type: z.string().trim().min(1).optional(),
   location: z.string().trim().min(1),
   price: z.coerce.number().nonnegative(),
   beds: z.coerce.number().int().nonnegative(),
@@ -112,6 +112,14 @@ export async function POST(request: NextRequest) {
       { error: "Invalid property payload", issues: parsed.error.flatten() },
       { status: 400 },
     );
+  }
+
+  const propertyType = parsed.data.type?.trim().toLowerCase();
+  if (propertyType) {
+    if (!(await isActivePropertyTypeKey(propertyType))) {
+      return NextResponse.json({ error: "Unknown property type" }, { status: 400 });
+    }
+    parsed.data.type = propertyType;
   }
 
   const authUser = authenticate(request);

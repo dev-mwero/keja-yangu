@@ -7,16 +7,23 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
-import type { Property, PropertyType } from "@/data/properties";
+import type { Property } from "@/data/properties";
 import { useProperties } from "@/hooks/use-properties";
-
-const types: ("all" | PropertyType)[] = ["all", "apartment", "villa", "bungalow"];
+import { usePropertyTypes } from "@/hooks/use-property-types";
 
 const Properties = () => {
   const [q, setQ] = useState("");
-  const [type, setType] = useState<(typeof types)[number]>("all");
+  const [type, setType] = useState("all");
   const [maxPrice, setMaxPrice] = useState(250000);
   const { properties: apiProperties } = useProperties();
+  const { types: propertyTypes } = usePropertyTypes();
+  const typeFilters = useMemo(
+    () => [
+      { key: "all", label: "All" },
+      ...propertyTypes.map((t) => ({ key: t.key, label: t.label })),
+    ],
+    [propertyTypes],
+  );
   const properties: Property[] = useMemo(
     () => apiProperties.map((p) => ({ ...p, id: p._id })),
     [apiProperties],
@@ -75,18 +82,18 @@ const Properties = () => {
                   Type
                 </span>
                 <div className="flex flex-wrap gap-2">
-                  {types.map((t) => (
+                  {typeFilters.map((t) => (
                     <button
                       type="button"
-                      key={t}
-                      onClick={() => setType(t)}
+                      key={t.key}
+                      onClick={() => setType(t.key)}
                       className={`rounded-full border px-3 py-1.5 text-xs font-medium capitalize transition-all ${
-                        type === t
+                        type === t.key
                           ? "border-primary bg-primary text-primary-foreground"
                           : "border-border bg-background text-muted-foreground hover:text-foreground"
                       }`}
                     >
-                      {t}
+                      {t.label}
                     </button>
                   ))}
                 </div>

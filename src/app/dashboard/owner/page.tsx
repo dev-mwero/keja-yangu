@@ -17,6 +17,7 @@ import {
 import { ownerNav as nav } from "@/config/dashboardNav";
 import { caretakers, tenants } from "@/data/properties";
 import { useProperties } from "@/hooks/use-properties";
+import { propertyTypeLabel } from "@/lib/property-types";
 
 const OwnerDashboard = () => {
   const { properties, loading } = useProperties();
@@ -24,11 +25,14 @@ const OwnerDashboard = () => {
   const occupied = properties.filter((p) => p.status === "occupied").length;
   const occupancy = total > 0 ? Math.round((occupied / total) * 100) : 0;
 
-  const distribution = [
-    { type: "Apartment", count: properties.filter((p) => p.type === "apartment").length },
-    { type: "Villa", count: properties.filter((p) => p.type === "villa").length },
-    { type: "Bungalow", count: properties.filter((p) => p.type === "bungalow").length },
-  ];
+  const typeCounts = new Map<string, number>();
+  for (const property of properties) {
+    typeCounts.set(property.type, (typeCounts.get(property.type) ?? 0) + 1);
+  }
+  const distribution = [...typeCounts.entries()].map(([type, count]) => ({
+    type: propertyTypeLabel(type),
+    count,
+  }));
   const max = Math.max(...distribution.map((d) => d.count), 1);
 
   return (
