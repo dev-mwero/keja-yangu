@@ -11,6 +11,7 @@ import { useStaffInvoices } from "@/hooks/use-invoices";
 import { useLocalStore } from "@/hooks/use-local-store";
 import { useProperties } from "@/hooks/use-properties";
 import { formatKES, toISODate } from "@/lib/format";
+import { propertyTypeLabel } from "@/lib/property-types";
 
 const OwnerReportsPage = () => {
   const { properties, loading } = useProperties();
@@ -92,14 +93,13 @@ const OwnerReportsPage = () => {
         <section className="rounded-2xl border border-border bg-card p-6 shadow-soft">
           <h3 className="font-display text-lg font-semibold">Distribution by type</h3>
           <div className="mt-4 space-y-4">
-            {(["apartment", "villa", "bungalow"] as const).map((type) => {
-              const count = byType[type] ?? 0;
+            {Object.entries(byType).map(([type, count]) => {
               const percent =
                 properties.length > 0 ? Math.round((count / properties.length) * 100) : 0;
               return (
                 <div key={type}>
                   <div className="flex justify-between text-sm">
-                    <span className="capitalize text-muted-foreground">{type}</span>
+                    <span className="text-muted-foreground">{propertyTypeLabel(type)}</span>
                     <span className="font-medium">{count}</span>
                   </div>
                   <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">

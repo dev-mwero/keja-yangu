@@ -13,6 +13,7 @@ const stubs: Record<
   | "chatmessage"
   | "announcement"
   | "propertydocument"
+  | "propertytype"
   | "unit"
   | "moverrequest",
   ModelStub
@@ -29,6 +30,7 @@ const stubs: Record<
   chatmessage: createModelStub(),
   announcement: createModelStub(),
   propertydocument: createModelStub(),
+  propertytype: createModelStub(),
   unit: createModelStub(),
   moverrequest: createModelStub(),
 };
@@ -87,6 +89,7 @@ export interface ModelStub {
   updateOne: ReturnType<typeof vi.fn>;
   updateMany: ReturnType<typeof vi.fn>;
   insertMany: ReturnType<typeof vi.fn>;
+  bulkWrite: ReturnType<typeof vi.fn>;
   exists: ReturnType<typeof vi.fn>;
   aggregate: ReturnType<typeof vi.fn>;
   countDocuments: ReturnType<typeof vi.fn>;
@@ -113,6 +116,7 @@ export function createModelStub(): ModelStub {
     updateOne: vi.fn(),
     updateMany: vi.fn(),
     insertMany: vi.fn(),
+    bulkWrite: vi.fn(),
     exists: vi.fn(),
     aggregate: vi.fn(),
     countDocuments: vi.fn(),

@@ -1,5 +1,6 @@
-export type PropertyType = "apartment" | "villa" | "bungalow";
-export type PropertyStatus = "available" | "occupied" | "maintenance";
+import type { PropertyStatus, PropertyType } from "@/lib/property-types";
+
+export type { PropertyStatus, PropertyType };
 
 export interface Property {
   id: string;

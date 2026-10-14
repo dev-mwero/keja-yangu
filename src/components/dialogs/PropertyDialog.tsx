@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -39,14 +39,15 @@ import {
   type PropertyInput,
   usePropertyMutations,
 } from "@/hooks/use-properties";
+import { usePropertyTypes } from "@/hooks/use-property-types";
 import { mergeImageUrls } from "@/lib/images";
-import { PROPERTY_TYPE_LABELS, PROPERTY_TYPES } from "@/lib/property-types";
+import { propertyTypeLabel } from "@/lib/property-types";
 import { useUploadThing } from "@/lib/uploadthing";
 import { cn } from "@/lib/utils";
 
 const formSchema = z.object({
   title: z.string().trim().min(1, "Title is required"),
-  type: z.enum(PROPERTY_TYPES),
+  type: z.string().trim().min(1, "Type is required"),
   location: z.string().trim().min(1, "Location is required"),
   price: z.number().positive("Price must be greater than 0"),
   description: z.string(),
@@ -90,6 +91,7 @@ export const PropertyDialog = ({
 }: PropertyDialogProps) => {
   const { createProperty, updateProperty, pending } = usePropertyMutations();
   const { caretakers } = useCaretakers();
+  const { types } = usePropertyTypes();
   const [blocks, setBlocks] = useState<BlockInputPayload[]>([]);
   const [structureError, setStructureError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -145,6 +147,17 @@ export const PropertyDialog = ({
   });
 
   const statuses: Property["status"][] = ["available", "occupied", "maintenance"];
+
+  // Keep the current property's type selectable even if it has been
+  // deactivated, so editing never silently drops the value.
+  const typeOptions = useMemo(() => {
+    const options = types.map((t) => ({ key: t.key, label: t.label }));
+    const current = property?.type;
+    if (current && !options.some((o) => o.key === current)) {
+      options.push({ key: current, label: propertyTypeLabel(current) });
+    }
+    return options;
+  }, [types, property?.type]);
 
   const selectedCaretakerIds = watch("caretakerIds");
   const selectedStatus = watch("status");
@@ -265,9 +278,9 @@ export const PropertyDialog = ({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {PROPERTY_TYPES.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {PROPERTY_TYPE_LABELS[t]}
+                  {typeOptions.map((t) => (
+                    <SelectItem key={t.key} value={t.key}>
+                      {t.label}
                     </SelectItem>
                   ))}
                 </SelectContent>

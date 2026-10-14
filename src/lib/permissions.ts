@@ -28,6 +28,7 @@ export type Action =
   | "property:create"
   | "property:edit"
   | "property:delete"
+  | "property-type:manage"
   | "unit:read"
   | "unit:manage"
   | "custodian:manage"
@@ -137,6 +138,12 @@ export async function requirePermission(
 
   const role = user.role;
   const managedByOwnerId = user.managedByOwnerId ?? "";
+
+  // The property taxonomy is platform-wide: only the system administrator may
+  // change it, even though owners otherwise have full control of a portfolio.
+  if (action === "property-type:manage" && role !== "system-admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   if (role === "tenant") {
     const tenantActions: Action[] = [

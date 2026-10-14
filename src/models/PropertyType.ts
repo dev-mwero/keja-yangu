@@ -1,0 +1,25 @@
+import { type InferSchemaType, model, models, Schema } from "mongoose";
+
+/**
+ * A single entry in the platform-wide property taxonomy. Records reference a
+ * type by its stable `key`; renaming only changes `label`. Types are never hard
+ * deleted — they are deactivated so historical properties keep resolving.
+ */
+const propertyTypeSchema = new Schema(
+  {
+    key: { type: String, required: true, unique: true, trim: true, lowercase: true },
+    label: { type: String, required: true, trim: true },
+    order: { type: Number, default: 0 },
+    active: { type: Boolean, default: true },
+    // Reserved for the app-wide soft-delete (recycle bin) directive.
+    deletedAt: { type: Date, default: null },
+  },
+  { timestamps: true },
+);
+
+propertyTypeSchema.index({ active: 1, order: 1 });
+
+export type PropertyTypeDocument = InferSchemaType<typeof propertyTypeSchema>;
+
+export const PropertyTypeModel =
+  models.PropertyType || model<PropertyTypeDocument>("PropertyType", propertyTypeSchema);
