@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { readJsonBody } from "@/app/api/v1/_helpers";
 import { connectToDatabase } from "@/lib/mongoose";
+import { asSoftDeleteModel } from "@/lib/mongoose-soft-delete";
 import { getTenantScope, requirePermission } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { leaseUpdate } from "@/lib/schemas";
@@ -124,7 +125,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     );
   }
 
-  await Lease.deleteOne({ _id: id });
+  await asSoftDeleteModel(Lease).softDeleteById(id);
 
   return NextResponse.json({ message: "Lease deleted" });
 }

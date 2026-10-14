@@ -318,13 +318,14 @@ describe("DELETE /api/v1/invoices/[id]", () => {
     expect(res.status).toBe(409);
     const body = await json(res);
     expect(body.error).toBe("Only draft invoices can be deleted");
-    expect(invoiceStub.deleteOne).not.toHaveBeenCalled();
+    expect(body.error).toBe("Only draft invoices can be deleted");
+    expect(invoiceStub.softDeleteById).not.toHaveBeenCalled();
   });
 
-  it("200 and deletes a draft invoice", async () => {
+  it("200 and soft-deletes a draft invoice", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     invoiceStub.findById.mockReturnValue(buildQuery(draftInvoice()));
-    invoiceStub.deleteOne.mockResolvedValue({ deletedCount: 1 });
+    invoiceStub.softDeleteById.mockResolvedValue({ acknowledged: true });
 
     const res = await DELETE(
       buildRequest(`/api/v1/invoices/${INVOICE_ID}`, {
@@ -334,7 +335,7 @@ describe("DELETE /api/v1/invoices/[id]", () => {
       withParams(INVOICE_ID),
     );
     expect(res.status).toBe(200);
-    expect(invoiceStub.deleteOne).toHaveBeenCalledWith({ _id: INVOICE_ID });
+    expect(invoiceStub.softDeleteById).toHaveBeenCalledWith(INVOICE_ID);
     const body = await json(res);
     expect(body.message).toBe("Invoice deleted");
   });

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { normalizeAmenities } from "@/lib/amenities";
 import { connectToDatabase } from "@/lib/mongoose";
+import { asSoftDeleteModel } from "@/lib/mongoose-soft-delete";
 import { authenticate, isFullControlRole, requirePermission } from "@/lib/permissions";
 import { isActivePropertyTypeKey } from "@/lib/property-type-store";
 import { Property } from "@/models/Property";
@@ -154,10 +155,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     );
   }
 
-  const deleted = await Property.findOneAndDelete({ _id: id }).lean();
-  if (!deleted) {
-    return NextResponse.json({ error: "Property not found" }, { status: 404 });
-  }
-  await Unit.deleteMany({ propertyId: id });
-  return NextResponse.json({ data: deleted });
+  await asSoftDeleteModel(Property).softDeleteById(id);
+  await asSoftDeleteModel(Unit).softDeleteMany({ propertyId: id });
+  return NextResponse.json({ data: property });
 }

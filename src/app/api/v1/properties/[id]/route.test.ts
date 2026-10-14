@@ -351,12 +351,12 @@ describe("DELETE /api/v1/properties/[id]", () => {
     expect(res.status).toBe(404);
   });
 
-  it("owner can delete their own property", async () => {
+  it("owner soft-deletes their own property", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     property.findById.mockReturnValue(buildQuery(ownProperty()));
     tenant.exists.mockResolvedValue(null);
-    property.findOneAndDelete.mockReturnValue(buildQuery(ownProperty()));
-    unit.deleteMany.mockResolvedValue({ deletedCount: 0 });
+    property.softDeleteById.mockResolvedValue({ acknowledged: true });
+    unit.softDeleteMany.mockResolvedValue({ acknowledged: true });
 
     const res = await DELETE(
       buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {
@@ -367,8 +367,8 @@ describe("DELETE /api/v1/properties/[id]", () => {
     );
     expect(res.status).toBe(200);
     expect(tenant.exists).toHaveBeenCalledWith({ propertyId: PROPERTY_ID });
-    expect(property.findOneAndDelete).toHaveBeenCalledWith({ _id: PROPERTY_ID });
-    expect(unit.deleteMany).toHaveBeenCalledWith({ propertyId: PROPERTY_ID });
+    expect(property.softDeleteById).toHaveBeenCalledWith(PROPERTY_ID);
+    expect(unit.softDeleteMany).toHaveBeenCalledWith({ propertyId: PROPERTY_ID });
   });
 
   it("403 for owner deleting a foreign property", async () => {
@@ -384,15 +384,15 @@ describe("DELETE /api/v1/properties/[id]", () => {
       withParams(PROPERTY_ID),
     );
     expect(res.status).toBe(403);
-    expect(property.findOneAndDelete).not.toHaveBeenCalled();
+    expect(property.softDeleteById).not.toHaveBeenCalled();
   });
 
   it("caretaker C3 can delete a property they are assigned to when in-scope", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerDoc(["delete_assigned_property"])));
     property.findById.mockReturnValue(buildQuery(managedProperty()));
     tenant.exists.mockResolvedValue(null);
-    property.findOneAndDelete.mockReturnValue(buildQuery(managedProperty()));
-    unit.deleteMany.mockResolvedValue({ deletedCount: 0 });
+    property.softDeleteById.mockResolvedValue({ acknowledged: true });
+    unit.softDeleteMany.mockResolvedValue({ acknowledged: true });
 
     const res = await DELETE(
       buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {
@@ -435,6 +435,6 @@ describe("DELETE /api/v1/properties/[id]", () => {
       withParams(PROPERTY_ID),
     );
     expect(res.status).toBe(409);
-    expect(property.findOneAndDelete).not.toHaveBeenCalled();
+    expect(property.softDeleteById).not.toHaveBeenCalled();
   });
 });
