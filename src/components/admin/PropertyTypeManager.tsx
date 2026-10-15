@@ -4,12 +4,14 @@ import { Loader2 } from "lucide-react";
 import type { FormEvent } from "react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { SearchInput } from "@/components/SearchInput";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { usePropertyTypeMutations, usePropertyTypes } from "@/hooks/use-property-types";
+import { matchesQuery } from "@/lib/search";
 
 const errorText = (error: unknown) =>
   error instanceof Error ? error.message : "Something went wrong";
@@ -19,8 +21,11 @@ export const PropertyTypeManager = () => {
   const { createType, updateType, pending } = usePropertyTypeMutations();
 
   const [label, setLabel] = useState("");
+  const [query, setQuery] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
+
+  const visibleTypes = types.filter((type) => matchesQuery(query, type.label, type.key));
 
   const handleAdd = async (event: FormEvent) => {
     event.preventDefault();
@@ -89,11 +94,21 @@ export const PropertyTypeManager = () => {
 
       <div className="rounded-2xl border border-border bg-card shadow-soft">
         <div className="border-b border-border p-6">
-          <h3 className="font-display text-lg font-semibold">Property types</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Rename a type without affecting existing properties, or deactivate one to hide it from
-            new listings.
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h3 className="font-display text-lg font-semibold">Property types</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Rename a type without affecting existing properties, or deactivate one to hide it
+                from new listings.
+              </p>
+            </div>
+            <SearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder="Search types…"
+              className="w-full sm:w-56"
+            />
+          </div>
         </div>
         <div className="divide-y divide-border">
           {loading ? (
@@ -102,8 +117,10 @@ export const PropertyTypeManager = () => {
             </div>
           ) : types.length === 0 ? (
             <p className="p-6 text-sm text-muted-foreground">No property types yet.</p>
+          ) : visibleTypes.length === 0 ? (
+            <p className="p-6 text-sm text-muted-foreground">No types match your search.</p>
           ) : (
-            types.map((type) => (
+            visibleTypes.map((type) => (
               <div
                 key={type.id}
                 className="flex flex-wrap items-center justify-between gap-4 p-4 sm:px-6"

@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, Clock, Plus, Wrench } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { DashboardShell } from "@/components/DashboardShell";
+import { SearchInput } from "@/components/SearchInput";
 import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ import { tenantNav } from "@/config/dashboardNav";
 import { useComplaintMutations, useComplaints } from "@/hooks/use-complaints";
 import type { ComplaintCategory, ComplaintPriority, ComplaintStatus } from "@/lib/domain-enums";
 import { relativeTime } from "@/lib/format";
+import { matchesQuery } from "@/lib/search";
 
 const statusClass: Record<ComplaintStatus, string> = {
   open: "bg-warning/15 text-warning",
@@ -57,6 +59,7 @@ const TenantComplaintsPage = () => {
   const { items, refetch } = useComplaints();
   const { createComplaint, pending } = useComplaintMutations();
   const [filter, setFilter] = useState<Filter>("all");
+  const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [subject, setSubject] = useState("");
   const [category, setCategory] = useState<ComplaintCategory>("Maintenance");
@@ -66,7 +69,9 @@ const TenantComplaintsPage = () => {
   const openCount = items.filter((c) => c.status === "open").length;
   const progressCount = items.filter((c) => c.status === "in-progress").length;
   const resolvedCount = items.filter((c) => c.status === "resolved").length;
-  const visible = filter === "all" ? items : items.filter((c) => c.status === filter);
+  const visible = (filter === "all" ? items : items.filter((c) => c.status === filter)).filter(
+    (c) => matchesQuery(query, c.subject, c.category, c.property, c.message, c.status, c.priority),
+  );
 
   // Single-property tenants pin their property server-side; the page only
   // hints the property when the loaded complaints resolve to exactly one.
@@ -129,10 +134,18 @@ const TenantComplaintsPage = () => {
             ))}
           </TabsList>
         </Tabs>
-        <Button className="rounded-full" onClick={() => setOpen(true)}>
-          <Plus className="h-4 w-4" />
-          Log a complaint
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Search complaints…"
+            className="w-full sm:w-56"
+          />
+          <Button className="rounded-full" onClick={() => setOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Log a complaint
+          </Button>
+        </div>
       </div>
 
       <div className="mt-6 grid gap-4 md:grid-cols-2">

@@ -4,6 +4,7 @@ import { CheckCircle2, ClipboardList, Clock, Plus, Wrench } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { DashboardShell } from "@/components/DashboardShell";
+import { SearchInput } from "@/components/SearchInput";
 import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ import { useCaretakerNav } from "@/hooks/use-caretaker-nav";
 import { useLocalStore } from "@/hooks/use-local-store";
 import { useProperties } from "@/hooks/use-properties";
 import { formatDate } from "@/lib/format";
+import { matchesQuery } from "@/lib/search";
 
 const statusClass: Record<TaskStatus, string> = {
   open: "bg-warning/15 text-warning",
@@ -62,6 +64,7 @@ const CaretakerTasksPage = () => {
   const { items, addItem, updateItem } = useLocalStore<MaintenanceTask>(tasksStore);
 
   const [filter, setFilter] = useState<Filter>("open");
+  const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [property, setProperty] = useState("");
@@ -72,7 +75,9 @@ const CaretakerTasksPage = () => {
   const openCount = items.filter((t) => t.status === "open").length;
   const inProgressCount = items.filter((t) => t.status === "in-progress").length;
   const doneCount = items.filter((t) => t.status === "done").length;
-  const visible = items.filter((t) => t.status === filter);
+  const visible = items
+    .filter((t) => t.status === filter)
+    .filter((t) => matchesQuery(query, t.title, t.property, t.assignedTo, t.notes, t.priority));
 
   const submit = () => {
     if (!title.trim()) {
@@ -137,10 +142,18 @@ const CaretakerTasksPage = () => {
             ))}
           </TabsList>
         </Tabs>
-        <Button className="rounded-full" onClick={() => setOpen(true)}>
-          <Plus className="h-4 w-4" />
-          New task
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Search tasks…"
+            className="w-full sm:w-56"
+          />
+          <Button className="rounded-full" onClick={() => setOpen(true)}>
+            <Plus className="h-4 w-4" />
+            New task
+          </Button>
+        </div>
       </div>
 
       <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -151,9 +164,11 @@ const CaretakerTasksPage = () => {
               {filter === "done" ? "No completed tasks yet" : "Nothing in this view"}
             </h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              {filter === "done"
-                ? "Tasks you finish will land here."
-                : "Create a task to keep maintenance on track."}
+              {items.some((t) => t.status === filter)
+                ? "No tasks match your search."
+                : filter === "done"
+                  ? "Tasks you finish will land here."
+                  : "Create a task to keep maintenance on track."}
             </p>
           </div>
         ) : (

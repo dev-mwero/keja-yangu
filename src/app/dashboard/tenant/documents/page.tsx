@@ -1,8 +1,10 @@
 "use client";
 
 import { Download, FileStack, FileText, Upload } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { DashboardShell } from "@/components/DashboardShell";
+import { SearchInput } from "@/components/SearchInput";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,6 +19,7 @@ import { tenantNav } from "@/config/dashboardNav";
 import { useDocuments } from "@/hooks/use-documents";
 import type { DocumentCategory } from "@/lib/domain-enums";
 import { formatDate } from "@/lib/format";
+import { matchesQuery } from "@/lib/search";
 import type { DashboardDocument } from "@/types/communications";
 
 const categoryClass: Record<DocumentCategory, string> = {
@@ -30,7 +33,10 @@ const categoryClass: Record<DocumentCategory, string> = {
 
 const TenantDocumentsPage = () => {
   const { items } = useDocuments();
-  const sorted = [...items].sort((a, b) => (b.uploadedAt ?? "").localeCompare(a.uploadedAt ?? ""));
+  const [query, setQuery] = useState("");
+  const sorted = [...items]
+    .filter((doc) => matchesQuery(query, doc.name, doc.category, doc.property, doc.uploadedBy))
+    .sort((a, b) => (b.uploadedAt ?? "").localeCompare(a.uploadedAt ?? ""));
 
   const download = (doc: DashboardDocument) => {
     const blob = new Blob(
@@ -60,10 +66,18 @@ const TenantDocumentsPage = () => {
           <h2 className="font-display text-xl font-semibold">My documents</h2>
           <p className="text-sm text-muted-foreground">{items.length} documents</p>
         </div>
-        <Button variant="outline" className="rounded-full" onClick={() => toast.info("Uploads")}>
-          <Upload className="h-4 w-4" />
-          Request a document
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Search documents…"
+            className="w-full sm:w-56"
+          />
+          <Button variant="outline" className="rounded-full" onClick={() => toast.info("Uploads")}>
+            <Upload className="h-4 w-4" />
+            Request a document
+          </Button>
+        </div>
       </div>
 
       <div className="mt-6">
@@ -72,7 +86,9 @@ const TenantDocumentsPage = () => {
             <FileStack className="mx-auto h-8 w-8 text-muted-foreground" />
             <h3 className="mt-3 font-display text-xl">No documents yet</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Lease agreements and receipts will be added here by the landlord.
+              {items.length > 0
+                ? "No documents match your search."
+                : "Lease agreements and receipts will be added here by the landlord."}
             </p>
           </div>
         ) : (
