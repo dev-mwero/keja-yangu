@@ -4,6 +4,7 @@ import { CheckCircle2, Download, FileBarChart, FileText, Wallet, Wrench } from "
 import { useState } from "react";
 import { toast } from "sonner";
 import { DashboardShell } from "@/components/DashboardShell";
+import { SearchInput } from "@/components/SearchInput";
 import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useComplaints } from "@/hooks/use-complaints";
 import { useMyInvoices } from "@/hooks/use-my-invoices";
 import { formatKES, toISODate } from "@/lib/format";
+import { matchesQuery } from "@/lib/search";
 
 const withinRange = (date?: string, from?: string, to?: string): boolean => {
   if (!date) return false;
@@ -30,12 +32,25 @@ const TenantReportsPage = () => {
 
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [query, setQuery] = useState("");
 
-  const inRangePaid = invoices.filter(
+  const visibleInvoices = invoices.filter((i) =>
+    matchesQuery(query, i.period, i.invoiceNumber, i.status),
+  );
+  const visibleApplications = applications.filter((a) =>
+    matchesQuery(query, a.propertyTitle, a.status),
+  );
+  const visibleComplaints = complaints.filter((c) =>
+    matchesQuery(query, c.subject, c.category, c.status, c.priority),
+  );
+
+  const inRangePaid = visibleInvoices.filter(
     (i) => i.status === "paid" && withinRange(i.paidAt, from, to),
   );
-  const inRangeComplaints = complaints.filter((c) => withinRange(c.createdAt, from, to));
-  const withinRangeApplications = applications.filter((a) => withinRange(a.submittedAt, from, to));
+  const inRangeComplaints = visibleComplaints.filter((c) => withinRange(c.createdAt, from, to));
+  const withinRangeApplications = visibleApplications.filter((a) =>
+    withinRange(a.submittedAt, from, to),
+  );
 
   const paidTotal = inRangePaid.reduce((sum, i) => sum + i.amountDue, 0);
   const resolvedComplaints = inRangeComplaints.filter((c) => c.status === "resolved").length;
@@ -100,6 +115,13 @@ const TenantReportsPage = () => {
         </Button>
       </div>
 
+      <SearchInput
+        value={query}
+        onChange={setQuery}
+        placeholder="Search reports…"
+        className="w-full sm:w-56"
+      />
+
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard
           label="Paid in range"
@@ -159,24 +181,28 @@ const TenantReportsPage = () => {
           <dl className="mt-4 space-y-3 text-sm">
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Paid</dt>
-              <dd className="font-medium">{invoices.filter((i) => i.status === "paid").length}</dd>
+              <dd className="font-medium">
+                {visibleInvoices.filter((i) => i.status === "paid").length}
+              </dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Pending</dt>
               <dd className="font-medium">
-                {invoices.filter((i) => i.status === "pending").length}
+                {visibleInvoices.filter((i) => i.status === "pending").length}
               </dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Overdue</dt>
               <dd className="font-medium">
-                {invoices.filter((i) => i.status === "overdue").length}
+                {visibleInvoices.filter((i) => i.status === "overdue").length}
               </dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Largest bill</dt>
               <dd className="font-medium">
-                {formatKES(Math.max(0, ...invoices.map((i) => i.amountDue)))}
+                {visibleInvoices.length > 0
+                  ? formatKES(Math.max(0, ...visibleInvoices.map((i) => i.amountDue)))
+                  : "—"}
               </dd>
             </div>
           </dl>

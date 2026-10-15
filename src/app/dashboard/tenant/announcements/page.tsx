@@ -1,18 +1,23 @@
 "use client";
 
 import { Megaphone, Pin } from "lucide-react";
+import { useState } from "react";
 import { DashboardShell } from "@/components/DashboardShell";
+import { SearchInput } from "@/components/SearchInput";
 import { Badge } from "@/components/ui/badge";
 import { tenantNav } from "@/config/dashboardNav";
 import { useAnnouncements } from "@/hooks/use-announcements";
 import { formatDate, relativeTime } from "@/lib/format";
+import { matchesQuery } from "@/lib/search";
 import type { Announcement } from "@/types/communications";
 
 const isRecent = (createdAt: string) => Date.now() - new Date(createdAt).getTime() < 3 * 86400000;
 
 const TenantAnnouncementsPage = () => {
   const { items } = useAnnouncements();
-  const sorted = [...items].sort((a: Announcement, b: Announcement) => {
+  const [query, setQuery] = useState("");
+  const visibleItems = items.filter((a) => matchesQuery(query, a.title, a.body));
+  const sorted = [...visibleItems].sort((a: Announcement, b: Announcement) => {
     if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1;
     return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
   });
@@ -39,15 +44,23 @@ const TenantAnnouncementsPage = () => {
         </div>
         <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
           <p className="text-sm text-muted-foreground">All announcements</p>
-          <p className="mt-2 font-display text-3xl font-semibold tracking-tight">{items.length}</p>
+          <p className="mt-2 font-display text-3xl font-semibold tracking-tight">
+            {visibleItems.length}
+          </p>
         </div>
       </div>
 
       <div className="mt-8 space-y-4">
-        {sorted.length === 0 ? (
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder="Search announcements…"
+          className="w-full sm:w-56"
+        />
+        {visibleItems.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border bg-card/50 p-10 text-center">
             <Megaphone className="mx-auto h-8 w-8 text-muted-foreground" />
-            <h3 className="mt-3 font-display text-xl">No announcements yet</h3>
+            <h3 className="mt-3 font-display text-xl">No announcements match your search.</h3>
             <p className="mt-1 text-sm text-muted-foreground">
               New updates from the property team will show up here.
             </p>
