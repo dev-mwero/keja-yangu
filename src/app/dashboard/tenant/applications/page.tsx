@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 import { DashboardShell } from "@/components/DashboardShell";
+import { SearchInput } from "@/components/SearchInput";
 import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ import { useTenantApplications } from "@/hooks/use-applications";
 import { useAuth } from "@/hooks/use-auth";
 import { type ApplicationStatus, cancelApplication } from "@/lib/applications";
 import { formatDate } from "@/lib/format";
+import { matchesQuery } from "@/lib/search";
 
 const statusIcon: Record<ApplicationStatus, React.ReactNode> = {
   approved: <CheckCircle2 className="h-3.5 w-3.5" />,
@@ -41,10 +43,13 @@ const TenantApplicationsPage = () => {
   const { user } = useAuth();
   const { applications, refresh } = useTenantApplications(user?.email);
   const [filter, setFilter] = useState<Filter>("all");
+  const [query, setQuery] = useState("");
 
   const pendingCount = applications.filter((a) => a.status === "pending").length;
   const approvedCount = applications.filter((a) => a.status === "approved").length;
-  const visible = filter === "all" ? applications : applications.filter((a) => a.status === filter);
+  const visible = (
+    filter === "all" ? applications : applications.filter((a) => a.status === filter)
+  ).filter((app) => matchesQuery(query, app.propertyTitle, app.applicantName, app.status));
 
   const handleCancel = (id: string, title: string) => {
     cancelApplication(id, user?.email ?? "");
@@ -74,14 +79,21 @@ const TenantApplicationsPage = () => {
             <TabsTrigger value="rejected">Rejected</TabsTrigger>
           </TabsList>
         </Tabs>
-        <Button asChild className="rounded-full">
-          <Link href="/properties">
-            <Plus className="h-4 w-4" />
-            Apply for a home
-          </Link>
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Search applications…"
+            className="w-full sm:w-56"
+          />
+          <Button asChild className="rounded-full">
+            <Link href="/properties">
+              <Plus className="h-4 w-4" />
+              Apply for a home
+            </Link>
+          </Button>
+        </div>
       </div>
-
       <div className="mt-6">
         {visible.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border bg-card/50 p-10 text-center">
@@ -92,7 +104,7 @@ const TenantApplicationsPage = () => {
             <p className="mt-1 text-sm text-muted-foreground">
               {applications.length === 0
                 ? "Find a home you love and apply — it will show up here."
-                : "Change the filter to see your other applications."}
+                : "Change the filter or search to see your other applications."}
             </p>
           </div>
         ) : (

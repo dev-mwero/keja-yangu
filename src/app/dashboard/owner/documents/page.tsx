@@ -4,6 +4,7 @@ import { Download, FileStack, FileText, Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { DashboardShell } from "@/components/DashboardShell";
+import { SearchInput } from "@/components/SearchInput";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,6 +35,7 @@ import { ownerNav as nav } from "@/config/dashboardNav";
 import { type DashboardDocument, type DocumentCategory, documentsStore } from "@/data/dashboard";
 import { useLocalStore } from "@/hooks/use-local-store";
 import { formatDate } from "@/lib/format";
+import { matchesQuery } from "@/lib/search";
 
 const categoryClass: Record<DocumentCategory, string> = {
   lease: "bg-primary/15 text-primary",
@@ -51,8 +53,11 @@ const OwnerDocumentsPage = () => {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [category, setCategory] = useState<DocumentCategory>("lease");
+  const [query, setQuery] = useState("");
 
-  const sorted = [...items].sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
+  const sorted = [...items]
+    .filter((doc) => matchesQuery(query, doc.name, doc.category, doc.uploadedBy, doc.property))
+    .sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
 
   const download = (doc: DashboardDocument) => {
     const blob = new Blob(
@@ -101,10 +106,18 @@ const OwnerDocumentsPage = () => {
           <h2 className="font-display text-xl font-semibold">Document vault</h2>
           <p className="text-sm text-muted-foreground">{items.length} documents</p>
         </div>
-        <Button className="rounded-full" onClick={() => setOpen(true)}>
-          <Plus className="h-4 w-4" />
-          Add document
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Search documents…"
+            className="w-full sm:w-56"
+          />
+          <Button className="rounded-full" onClick={() => setOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Add document
+          </Button>
+        </div>
       </div>
 
       <div className="mt-6">
@@ -113,7 +126,9 @@ const OwnerDocumentsPage = () => {
             <FileStack className="mx-auto h-8 w-8 text-muted-foreground" />
             <h3 className="mt-3 font-display text-xl">No documents yet</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Upload lease templates and policies for the whole portfolio.
+              {items.length > 0
+                ? "No documents match your search."
+                : "Upload lease templates and policies for the whole portfolio."}
             </p>
           </div>
         ) : (

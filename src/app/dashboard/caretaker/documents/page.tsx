@@ -1,15 +1,16 @@
 "use client";
 
-import { Download, FileUser, Search, Upload } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Download, FileUser, Upload } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { DashboardShell } from "@/components/DashboardShell";
+import { SearchInput } from "@/components/SearchInput";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { tenants } from "@/data/properties";
 import { useCaretakerNav } from "@/hooks/use-caretaker-nav";
 import { formatKES } from "@/lib/format";
+import { matchesQuery } from "@/lib/search";
 
 const docs: Record<string, { label: string; present: boolean }[]> = {
   t1: [
@@ -48,13 +49,7 @@ const CaretakerDocumentsPage = () => {
   const nav = useCaretakerNav();
   const [query, setQuery] = useState("");
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return tenants;
-    return tenants.filter(
-      (t) => t.name.toLowerCase().includes(q) || t.email.toLowerCase().includes(q),
-    );
-  }, [query]);
+  const filtered = tenants.filter((t) => matchesQuery(query, t.name, t.email));
 
   const upload = () =>
     toast.info("Documents shared", {
@@ -72,15 +67,12 @@ const CaretakerDocumentsPage = () => {
       subtitle="Check that every tenant has their paperwork on file."
     >
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search tenants…"
-            className="w-64 pl-9"
-          />
-        </div>
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder="Search tenants…"
+          className="w-full sm:w-64"
+        />
         <Button variant="outline" className="rounded-full" onClick={upload}>
           <Upload className="h-4 w-4" />
           Bulk upload

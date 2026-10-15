@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { DashboardShell } from "@/components/DashboardShell";
 import { ReceiptDialog } from "@/components/invoices/ReceiptDialog";
+import { SearchInput } from "@/components/SearchInput";
 import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ import { useMyInvoiceMutations, useMyInvoices } from "@/hooks/use-my-invoices";
 import { formatKES, formatPeriod } from "@/lib/format";
 import type { DerivedInvoiceStatus } from "@/lib/invoicing";
 import { INVOICE_METHODS, type InvoiceMethod } from "@/lib/invoicing";
+import { matchesQuery } from "@/lib/search";
 import type { Invoice } from "@/types/invoicing";
 
 const statusClass: Record<DerivedInvoiceStatus, string> = {
@@ -53,6 +55,7 @@ const TenantPaymentsPage = () => {
   const { invoices, refetch } = useMyInvoices();
   const { markOwnPaid, initiatePay, checkPaymentReference, pending } = useMyInvoiceMutations();
   const [tab, setTab] = useState<Tab>("upcoming");
+  const [query, setQuery] = useState("");
   const [paying, setPaying] = useState<Invoice | null>(null);
   const [method, setMethod] = useState<InvoiceMethod>("M-Pesa");
   const [receipt, setReceipt] = useState<Invoice | null>(null);
@@ -95,7 +98,10 @@ const TenantPaymentsPage = () => {
   const paidTotal = history.reduce((sum, i) => sum + i.amountDue, 0);
   const nextDue = upcoming.slice().sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
 
-  const rows = tab === "history" ? history : upcoming;
+  const tabRows = tab === "history" ? history : upcoming;
+  const rows = tabRows.filter((invoice) =>
+    matchesQuery(query, invoice.period, invoice.invoiceNumber, invoice.status),
+  );
 
   const confirmPayment = async () => {
     if (!paying) return;
@@ -141,13 +147,19 @@ const TenantPaymentsPage = () => {
         <StatCard label="Paid to date" value={formatKES(paidTotal)} icon={CheckCircle2} />
       </div>
 
-      <div className="mt-8">
+      <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
         <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
           <TabsList>
             <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>
         </Tabs>
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder="Search bills…"
+          className="w-full sm:w-56"
+        />
       </div>
 
       <div className="mt-6">
@@ -156,7 +168,11 @@ const TenantPaymentsPage = () => {
             <Wallet className="mx-auto h-8 w-8 text-muted-foreground" />
             <h3 className="mt-3 font-display text-xl">Nothing here</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              {tab === "history" ? "You have no past payments yet." : "All bills are settled."}
+              {tabRows.length > 0
+                ? "No bills match your search."
+                : tab === "history"
+                  ? "You have no past payments yet."
+                  : "All bills are settled."}
             </p>
           </div>
         ) : (
