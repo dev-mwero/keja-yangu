@@ -41,6 +41,12 @@ export async function GET(request: NextRequest) {
 
   const filter: Record<string, unknown> = {};
   if (actor.role === "owner") filter.ownerId = actor.userId;
+  if (actor.role === "custodian") {
+    if (!actor.managedByOwnerId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    filter.ownerId = actor.managedByOwnerId;
+  }
   if (actor.role === "caretaker") {
     filter.propertyId = { $in: actor.assignedPropertyIds };
     filter.ownerId = actor.managedByOwnerId;
@@ -67,6 +73,8 @@ export async function GET(request: NextRequest) {
       };
     } else if (actor.role === "owner") {
       sweepScope = { ownerId: actor.userId };
+    } else if (actor.role === "custodian") {
+      sweepScope = { ownerId: actor.managedByOwnerId };
     }
     await notifyOverdueInvoices(now, sweepScope);
   }
@@ -130,6 +138,9 @@ export async function POST(request: NextRequest) {
     if (actor.role === "owner" && lease.ownerId !== actor.userId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+    if (actor.role === "custodian" && lease.ownerId !== actor.managedByOwnerId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     if (
       actor.role === "caretaker" &&
       (lease.ownerId !== actor.managedByOwnerId ||
@@ -158,6 +169,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
     }
     if (actor.role === "owner" && tenant.ownerId !== actor.userId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (actor.role === "custodian" && tenant.ownerId !== actor.managedByOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     if (
