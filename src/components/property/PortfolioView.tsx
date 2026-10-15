@@ -11,6 +11,7 @@ import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { DashNavItem } from "@/config/dashboardNav";
+import { useAmounts } from "@/hooks/use-amounts";
 import { useProperties } from "@/hooks/use-properties";
 import { formatKES } from "@/lib/format";
 import { matchesQuery } from "@/lib/search";
@@ -31,6 +32,7 @@ export const PortfolioView = ({
   canSetCaretakerIds = true,
 }: PortfolioViewProps) => {
   const { properties, loading, refetch } = useProperties();
+  const { amounts } = useAmounts();
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -44,7 +46,6 @@ export const PortfolioView = ({
 
   const visible = filter === "all" ? properties : properties.filter((p) => p.status === filter);
   const matching = visible.filter((p) => matchesQuery(query, p.title, p.location, p.type));
-  const rentRoll = properties.reduce((sum, p) => sum + p.price, 0);
 
   return (
     <DashboardShell
@@ -61,7 +62,12 @@ export const PortfolioView = ({
         <StatCard label="Properties" value={loading ? "…" : properties.length} icon={Building2} />
         <StatCard label="Occupied" value={counts.occupied} icon={CheckCircle2} />
         <StatCard label="Vacant" value={counts.available} icon={Clock} />
-        <StatCard label="Monthly rent roll" value={formatKES(rentRoll)} icon={Banknote} />
+        <StatCard
+          label="Potential Monthly Rent"
+          value={formatKES(amounts.potentialMonthlyRent)}
+          hint={`${amounts.unitCount} rentable units at full occupancy`}
+          icon={Banknote}
+        />
       </div>
 
       <div className="mt-8 flex flex-wrap items-center justify-between gap-4">

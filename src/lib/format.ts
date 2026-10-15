@@ -26,12 +26,19 @@ export const formatDateTime = (input?: string | number | Date | null): string =>
   });
 };
 
+const KES_FORMATTER = new Intl.NumberFormat("en-KE", {
+  style: "currency",
+  currency: "KES",
+  maximumFractionDigits: 0,
+});
+
+/**
+ * Formats a shilling amount for display (`"Ksh 5,000"`). The `en-KE` currency
+ * format separates the symbol with a non-breaking space; it is normalised to a
+ * regular space so money text stays searchable, copyable and comparable.
+ */
 export const formatKES = (value: number): string =>
-  new Intl.NumberFormat("en-KE", {
-    style: "currency",
-    currency: "KES",
-    maximumFractionDigits: 0,
-  }).format(value);
+  KES_FORMATTER.format(value).replace(/\u00a0/g, " ");
 
 export const relativeTime = (input?: string | number | Date | null): string => {
   if (!input) return "—";

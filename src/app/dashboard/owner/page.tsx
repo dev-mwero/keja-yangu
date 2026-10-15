@@ -15,12 +15,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ownerNav as nav } from "@/config/dashboardNav";
-import { caretakers, tenants } from "@/data/properties";
+import { useAmounts } from "@/hooks/use-amounts";
+import { useCaretakers } from "@/hooks/use-caretakers";
 import { useProperties } from "@/hooks/use-properties";
+import { useTenants } from "@/hooks/use-tenants";
+import { formatKES, formatPeriod } from "@/lib/format";
 import { propertyTypeLabel } from "@/lib/property-types";
 
 const OwnerDashboard = () => {
   const { properties, loading } = useProperties();
+  const { tenants } = useTenants();
+  const { caretakers } = useCaretakers();
+  const { amounts, loading: amountsLoading } = useAmounts();
   const total = properties.length;
   const occupied = properties.filter((p) => p.status === "occupied").length;
   const occupancy = total > 0 ? Math.round((occupied / total) * 100) : 0;
@@ -34,6 +40,15 @@ const OwnerDashboard = () => {
     count,
   }));
   const max = Math.max(...distribution.map((d) => d.count), 1);
+
+  // Amount bars are derived from the API rollup — never authored by hand.
+  const amountBars = [
+    { label: "Potential", value: amounts.potentialMonthlyRent },
+    { label: "Contracted", value: amounts.contractedRent },
+    { label: "Collected", value: amounts.rentCollected },
+  ];
+  const maxAmount = Math.max(...amountBars.map((b) => b.value), 1);
+  const hasAmounts = amountBars.some((b) => b.value > 0);
 
   return (
     <DashboardShell
@@ -74,7 +89,7 @@ const OwnerDashboard = () => {
           label="Occupancy"
           value={loading ? "..." : `${occupancy}%`}
           icon={TrendingUp}
-          hint="vs 62% last quarter"
+          hint={loading ? "…" : `${occupied} of ${total} properties`}
           href="/dashboard/owner/reports"
         />
       </div>
@@ -104,16 +119,49 @@ const OwnerDashboard = () => {
         </div>
 
         <div className="rounded-2xl border border-border bg-secondary p-6 text-secondary-foreground shadow-elevated">
-          <p className="text-xs uppercase tracking-widest text-primary-glow">Monthly revenue</p>
-          <p className="mt-2 font-display text-4xl font-semibold">KES 240K</p>
-          <p className="mt-1 text-sm text-secondary-foreground/70">+12% vs last month</p>
-          <div className="mt-6 flex h-20 items-end gap-1.5">
-            {[40, 55, 48, 70, 62, 80, 72, 90, 78, 95, 88, 100].map((h, i) => (
-              <div
-                key={i}
-                className="flex-1 rounded-sm gradient-warm transition-all duration-700"
-                style={{ height: `${h}%` }}
-              />
+          <p className="text-xs uppercase tracking-widest text-primary-glow">Rent collected</p>
+          <p className="mt-2 font-display text-4xl font-semibold">
+            {amountsLoading ? "…" : formatKES(amounts.rentCollected)}
+          </p>
+          <p className="mt-1 text-sm text-secondary-foreground/70">
+            {amounts.period
+              ? `${formatPeriod(amounts.period)} · ${amounts.invoiceCount} invoices`
+              : "No amount data yet"}
+          </p>
+          <dl className="mt-5 space-y-2 text-sm">
+            <div className="flex justify-between">
+              <dt className="text-secondary-foreground/70">Potential monthly rent (snapshot)</dt>
+              <dd className="font-medium">
+                {amountsLoading ? "…" : formatKES(amounts.potentialMonthlyRent)}
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-secondary-foreground/70">Contracted rent</dt>
+              <dd className="font-medium">
+                {amountsLoading ? "…" : formatKES(amounts.contractedRent)}
+              </dd>
+            </div>
+          </dl>
+          <p className="mt-3 text-xs text-secondary-foreground/60">
+            Contracted and collected cover the period above; potential is a current snapshot.
+          </p>
+          <div className="mt-6 flex h-24 items-end gap-3">
+            {amountBars.map((bar) => (
+              <div key={bar.label} className="flex flex-1 flex-col items-center gap-1.5">
+                <div className="flex w-full flex-1 items-end">
+                  <div
+                    className="w-full rounded-t-sm gradient-warm transition-all duration-700"
+                    style={{
+                      height: hasAmounts
+                        ? `${Math.max(4, Math.round((bar.value / maxAmount) * 100))}%`
+                        : "0%",
+                    }}
+                  />
+                </div>
+                <span className="text-[10px] uppercase tracking-wider text-secondary-foreground/70">
+                  {bar.label}
+                </span>
+              </div>
             ))}
           </div>
         </div>

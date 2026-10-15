@@ -73,7 +73,7 @@ const TenantPaymentsPage = () => {
         const result = await checkPaymentReference(reference);
         if (result.invoice?.status === "paid") {
           toast.success("Payment confirmed", {
-            description: "Your bill has been settled. Thank you!",
+            description: `Payment of ${formatKES(result.payment.amountMinor / 100)} received.`,
           });
           refetch();
         } else {
@@ -95,7 +95,7 @@ const TenantPaymentsPage = () => {
     [invoices],
   );
   const history = useMemo(() => invoices.filter((i) => i.status === "paid"), [invoices]);
-  const paidTotal = history.reduce((sum, i) => sum + i.amountDue, 0);
+  const paidTotal = history.reduce((sum, i) => sum + Math.min(i.amountDue, i.amountPaid ?? 0), 0);
   const nextDue = upcoming.slice().sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
 
   const tabRows = tab === "history" ? history : upcoming;
@@ -108,7 +108,7 @@ const TenantPaymentsPage = () => {
     try {
       await markOwnPaid(paying._id, { method });
       toast.success("Payment recorded", {
-        description: `${paying.invoiceNumber} settled via ${method}.`,
+        description: `Payment recorded for ${paying.invoiceNumber} via ${method}.`,
       });
       setPaying(null);
       refetch();
@@ -138,7 +138,9 @@ const TenantPaymentsPage = () => {
       <div className="grid gap-4 md:grid-cols-2">
         <StatCard
           label="Next payment"
-          value={nextDue ? formatKES(nextDue.amountDue) : "—"}
+          value={
+            nextDue ? formatKES(Math.max(0, nextDue.amountDue - (nextDue.amountPaid ?? 0))) : "—"
+          }
           hint={
             nextDue ? `${formatPeriod(nextDue.period)} · ${nextDue.invoiceNumber}` : "Nothing due"
           }
@@ -181,7 +183,7 @@ const TenantPaymentsPage = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Bill</TableHead>
-                  <TableHead>Amount</TableHead>
+                  <TableHead>{tab === "history" ? "Paid" : "Balance due"}</TableHead>
                   <TableHead>Due</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -194,7 +196,11 @@ const TenantPaymentsPage = () => {
                       <p className="font-medium">{formatPeriod(invoice.period)}</p>
                       <p className="text-xs text-muted-foreground">{invoice.invoiceNumber}</p>
                     </TableCell>
-                    <TableCell className="font-medium">{formatKES(invoice.amountDue)}</TableCell>
+                    <TableCell className="font-medium">
+                      {tab === "history"
+                        ? formatKES(Math.min(invoice.amountDue, invoice.amountPaid ?? 0))
+                        : formatKES(Math.max(0, invoice.amountDue - (invoice.amountPaid ?? 0)))}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">
                       {new Date(invoice.dueDate).toLocaleDateString(undefined, {
                         month: "short",

@@ -16,6 +16,7 @@ function invoiceInScope(
 ): boolean {
   if (actor.role === "system-admin") return true;
   if (actor.role === "owner") return doc.ownerId === actor.userId;
+  if (actor.role === "custodian") return doc.ownerId === actor.managedByOwnerId;
   if (actor.role === "caretaker") {
     return (
       doc.ownerId === actor.managedByOwnerId && actor.assignedPropertyIds.includes(doc.propertyId)

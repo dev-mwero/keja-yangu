@@ -2,13 +2,14 @@
 
 import {
   Banknote,
+  Building2,
   CalendarPlus,
   CheckCircle2,
   CircleDollarSign,
   Clock,
   Loader2,
   Plus,
-  TrendingUp,
+  Receipt,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -24,10 +25,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { DashNavItem } from "@/config/dashboardNav";
+import { useAmounts } from "@/hooks/use-amounts";
 import { useInvoiceMutations, useStaffInvoices } from "@/hooks/use-invoices";
 import { formatKES, formatPeriod } from "@/lib/format";
+import { currentPeriod } from "@/lib/invoicing";
 import type { InvoiceInput, InvoiceMarkPaidInput, InvoiceUpdate } from "@/lib/schemas";
 import { matchesQuery } from "@/lib/search";
 import type { Invoice } from "@/types/invoicing";
@@ -50,7 +54,9 @@ interface InvoicesManagerProps {
 
 export const InvoicesManager = (props: InvoicesManagerProps) => {
   const { canManage, roleName, tenantNames } = props;
-  const { invoices, loading, error, refetch } = useStaffInvoices();
+  const [period, setPeriod] = useState(currentPeriod());
+  const { invoices, loading, error, refetch } = useStaffInvoices({ period });
+  const { amounts, loading: amountsLoading, error: amountsError } = useAmounts({ period });
   const { createInvoice, updateInvoice, markPaid, voidInvoice, deleteInvoice, generate, pending } =
     useInvoiceMutations();
 
@@ -82,31 +88,13 @@ export const InvoicesManager = (props: InvoicesManagerProps) => {
     [invoices, tab, query, tenantNames],
   );
 
-  const billed = invoices
-    .filter((i) => i.status !== "void")
-    .reduce((sum, i) => sum + i.amountDue, 0);
-  const collected = invoices
-    .filter((i) => i.status === "paid")
-    .reduce((sum, i) => sum + i.amountDue, 0);
-  const outstanding = invoices
-    .filter((i) => i.status === "pending" || i.status === "overdue")
-    .reduce((sum, i) => sum + i.amountDue, 0);
-  const openCount = invoices.filter((i) => i.status === "pending" || i.status === "overdue").length;
+  const billed = amounts.rentBilled;
+  const collected = amounts.rentCollected;
+  const outstanding = amounts.rentOutstanding;
+  const openCount = amounts.openInvoiceCount;
   const collectionRate = billed > 0 ? Math.round((collected / billed) * 100) : 0;
-
-  const byPeriod = useMemo(() => {
-    const map = new Map<string, { billed: number; collected: number }>();
-    for (const invoice of invoices) {
-      if (invoice.status === "void") continue;
-      const entry = map.get(invoice.period) ?? { billed: 0, collected: 0 };
-      entry.billed += invoice.amountDue;
-      if (invoice.status === "paid") entry.collected += invoice.amountDue;
-      map.set(invoice.period, entry);
-    }
-    return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
-  }, [invoices]);
-
-  const latest = byPeriod[0];
+  const byPeriod = amounts.byPeriod;
+  const statsLoading = amountsLoading;
 
   const openCreate = () => {
     setEditing(null);
@@ -246,27 +234,69 @@ export const InvoicesManager = (props: InvoicesManagerProps) => {
 
   return (
     <>
-      <div className="grid gap-4 md:grid-cols-4">
-        <StatCard label="Billed" value={formatKES(billed)} icon={Banknote} />
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3 rounded-2xl border border-border bg-card p-4 shadow-soft">
+        <div className="space-y-1.5">
+          <div className="text-sm font-medium text-muted-foreground">Rent period</div>
+          <Input
+            type="month"
+            value={period}
+            onChange={(event) => setPeriod(event.target.value)}
+            className="w-44"
+          />
+        </div>
+        <p className="max-w-md text-xs text-muted-foreground">
+          Contracted, billed, collected and outstanding are for {formatPeriod(period)}. Potential
+          and occupied rent are current monthly snapshots.
+        </p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatCard
+          label="Potential Monthly Rent"
+          value={statsLoading ? "…" : formatKES(amounts.potentialMonthlyRent)}
+          hint="Rent if all rentable units were occupied"
+          icon={Banknote}
+        />
+        <StatCard
+          label="Occupied Monthly Rent"
+          value={statsLoading ? "…" : formatKES(amounts.occupiedMonthlyRent)}
+          hint={`${amounts.occupiedUnitCount} occupied units · current rent settings`}
+          icon={Building2}
+        />
+        <StatCard
+          label="Contracted Rent"
+          value={statsLoading ? "…" : formatKES(amounts.contractedRent)}
+          hint={`${formatPeriod(period)} · active leases, prorated`}
+          icon={Receipt}
+        />
+      </div>
+
+      <div className="mt-4 grid gap-4 md:grid-cols-3">
+        <StatCard
+          label="Billed"
+          value={statsLoading ? "…" : formatKES(billed)}
+          hint={`${amounts.invoiceCount} invoices for ${formatPeriod(period)}`}
+          icon={Banknote}
+        />
         <StatCard
           label="Collected"
-          value={formatKES(collected)}
-          hint={`${collectionRate}% collection rate`}
+          value={statsLoading ? "…" : formatKES(collected)}
+          hint={`${collectionRate}% of billed`}
           icon={CheckCircle2}
         />
         <StatCard
           label="Outstanding"
-          value={formatKES(outstanding)}
+          value={statsLoading ? "…" : formatKES(outstanding)}
           hint={`${openCount} open`}
           icon={Clock}
         />
-        <StatCard
-          label="This month"
-          value={latest ? formatKES(latest[1].collected) : "—"}
-          hint={latest ? formatPeriod(latest[0]) : "No billing yet"}
-          icon={TrendingUp}
-        />
       </div>
+
+      {amountsError && (
+        <p className="mt-4 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {amountsError}
+        </p>
+      )}
 
       <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
         <Tabs value={tab} onValueChange={(v) => setTab(v as StatusTab)}>
@@ -308,7 +338,9 @@ export const InvoicesManager = (props: InvoicesManagerProps) => {
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <section className="rounded-2xl border border-border bg-card p-6 shadow-soft lg:col-span-2">
-          <h3 className="font-display text-lg font-semibold">Invoices</h3>
+          <h3 className="font-display text-lg font-semibold">
+            Invoices for {formatPeriod(period)}
+          </h3>
           <div className="mt-4">
             {loading ? (
               <p className="text-muted-foreground">Loading invoices…</p>
@@ -319,7 +351,7 @@ export const InvoicesManager = (props: InvoicesManagerProps) => {
                 <CircleDollarSign className="mx-auto h-8 w-8 text-muted-foreground" />
                 <h3 className="mt-3 font-display text-xl">No invoices here</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Nothing matches this view. Try another status or generate a month.
+                  Nothing matches this view. Try another status, period or generate a month.
                 </p>
               </div>
             ) : (
@@ -333,24 +365,29 @@ export const InvoicesManager = (props: InvoicesManagerProps) => {
         </section>
 
         <section className="rounded-2xl border border-border bg-card p-6 shadow-soft">
-          <h3 className="font-display text-lg font-semibold">By billing period</h3>
-          <dl className="mt-4 space-y-3 text-sm">
+          <h3 className="font-display text-lg font-semibold">Payments by rent period</h3>
+          <div className="mt-4 space-y-3 text-sm">
             {byPeriod.length === 0 && <p className="text-muted-foreground">No data yet.</p>}
-            {byPeriod.map(([period, sums]) => (
-              <div
-                key={period}
-                className="flex items-center justify-between border-b border-border pb-2 last:border-0"
+            {byPeriod.map((row) => (
+              <button
+                key={row.period}
+                type="button"
+                onClick={() => setPeriod(row.period)}
+                className={`flex w-full items-center justify-between border-b border-border pb-2 text-left last:border-0 ${
+                  row.period === period ? "text-primary" : ""
+                }`}
               >
                 <div>
-                  <p className="font-medium">{formatPeriod(period)}</p>
+                  <p className="font-medium">{formatPeriod(row.period)}</p>
                   <p className="text-xs text-muted-foreground">
-                    {Math.round((sums.collected / Math.max(sums.billed, 1)) * 100)}% collected
+                    {Math.round((row.collected / Math.max(row.billed, 1)) * 100)}% of billed ·{" "}
+                    {row.open} open
                   </p>
                 </div>
-                <p className="font-medium">{formatKES(sums.collected)}</p>
-              </div>
+                <p className="font-medium">{formatKES(row.collected)}</p>
+              </button>
             ))}
-          </dl>
+          </div>
         </section>
       </div>
 

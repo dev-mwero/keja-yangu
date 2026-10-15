@@ -43,8 +43,14 @@ export const ReceiptDialog = ({ open, onOpenChange, invoice }: ReceiptDialogProp
               <span className="font-medium">{user?.name ?? invoice.tenantId}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Amount</span>
+              <span className="text-muted-foreground">Invoice amount</span>
               <span className="font-medium">{formatKES(invoice.amountDue)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Amount received</span>
+              <span className="font-medium">
+                {formatKES(Math.min(invoice.amountDue, invoice.amountPaid ?? 0))}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Paid</span>

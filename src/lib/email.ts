@@ -278,10 +278,11 @@ export interface NotificationLeadContentInput {
   invoiceNumber?: string;
   period: string;
   amountDue?: number;
+  amountPaid?: number;
 }
 
 export function createInvoicePaidContent(input: NotificationLeadContentInput): string {
-  const amount = formatKES(input.amountDue ?? 0);
+  const amount = formatKES(input.amountPaid ?? input.amountDue ?? 0);
   return `
     <p style="margin: 0 0 16px; font-size: 16px; color: ${TEXT_PRIMARY}; line-height: 1.6;">Hi there,</p>
     <p style="margin: 0 0 24px; font-size: 15px; color: ${TEXT_SECONDARY}; line-height: 1.6;">We're confirming receipt of your payment of <strong>${amount}</strong> for <strong>${formatPeriod(input.period)}</strong>.</p>
@@ -293,10 +294,10 @@ export function createInvoicePaidContent(input: NotificationLeadContentInput): s
 }
 
 export function createInvoicePaidStaffContent(input: NotificationLeadContentInput): string {
-  const amount = formatKES(input.amountDue ?? 0);
+  const amount = formatKES(input.amountPaid ?? input.amountDue ?? 0);
   return `
     <p style="margin: 0 0 16px; font-size: 16px; color: ${TEXT_PRIMARY}; line-height: 1.6;">Hi there,</p>
-    <p style="margin: 0 0 24px; font-size: 15px; color: ${TEXT_SECONDARY}; line-height: 1.6;">Invoice <strong>${escapeHtml(input.invoiceNumber ?? "")}</strong> for <strong>${formatPeriod(input.period)}</strong> was paid in full (${amount}).</p>
+    <p style="margin: 0 0 24px; font-size: 15px; color: ${TEXT_SECONDARY}; line-height: 1.6;">A payment of <strong>${amount}</strong> was recorded for invoice <strong>${escapeHtml(input.invoiceNumber ?? "")}</strong> for <strong>${formatPeriod(input.period)}</strong>.</p>
     <div style="text-align: center; margin: 32px 0;">
       <a href="{{APP_URL}}" style="display: inline-block; background: linear-gradient(135deg, ${BRAND_COLOR} 0%, ${BRAND_COLOR_LIGHT} 100%); color: #ffffff; text-decoration: none; padding: 16px 32px; border-radius: 10px; font-weight: 600; font-size: 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">View Invoice</a>
     </div>
