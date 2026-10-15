@@ -21,6 +21,7 @@ import { DashboardShell } from "@/components/DashboardShell";
 import { DeletePropertyDialog } from "@/components/dialogs/DeletePropertyDialog";
 import { PropertyDialog } from "@/components/dialogs/PropertyDialog";
 import { PropertyCover } from "@/components/property/PropertyCover";
+import { SearchInput } from "@/components/SearchInput";
 import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useCaretakerNav } from "@/hooks/use-caretaker-nav";
 import { type Property, useProperties } from "@/hooks/use-properties";
 import { formatKES } from "@/lib/format";
+import { matchesQuery } from "@/lib/search";
 
 const statusClass: Record<string, string> = {
   available: "bg-success/15 text-success",
@@ -45,6 +47,7 @@ const CaretakerPortfolioPage = () => {
   const nav = useCaretakerNav();
   const { user } = useAuth();
   const { properties, loading, error, refetch } = useProperties();
+  const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Property | null>(null);
   const [deleting, setDeleting] = useState<Property | null>(null);
@@ -55,6 +58,7 @@ const CaretakerPortfolioPage = () => {
   const canDelete = user?.privileges?.includes("delete_assigned_property") ?? false;
 
   const mine = properties.filter((p) => p.caretakerIds.includes(selfId));
+  const visibleProperties = mine.filter((p) => matchesQuery(query, p.title, p.location));
 
   const occupied = mine.filter((p) => p.status === "occupied").length;
   const vacant = mine.filter((p) => p.status === "available").length;
@@ -86,7 +90,17 @@ const CaretakerPortfolioPage = () => {
       subtitle="Every property under your care at a glance."
     >
       <div className="grid gap-4 md:grid-cols-4">
-        <StatCard label="Assigned" value={loading ? "…" : mine.length} icon={Building2} />
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder="Search properties…"
+          className="col-span-4 sm:col-span-2 mb-4"
+        />
+        <StatCard
+          label="Assigned"
+          value={loading ? "…" : visibleProperties.length}
+          icon={Building2}
+        />
         <StatCard label="Occupied" value={occupied} icon={CheckCircle2} />
         <StatCard label="Vacant" value={vacant} icon={Clock} />
         <StatCard label="Maintenance" value={maintenance} icon={Wrench} />
@@ -106,17 +120,17 @@ const CaretakerPortfolioPage = () => {
           <p className="text-muted-foreground">Loading properties…</p>
         ) : error ? (
           <p className="text-destructive">{error}</p>
-        ) : mine.length === 0 ? (
+        ) : visibleProperties.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border bg-card/50 p-10 text-center">
             <Building2 className="mx-auto h-8 w-8 text-muted-foreground" />
-            <h3 className="mt-3 font-display text-xl">No properties assigned yet</h3>
+            <h3 className="mt-3 font-display text-xl">No properties match your search.</h3>
             <p className="mt-1 text-sm text-muted-foreground">
               The landlord will assign properties to you from the portfolio.
             </p>
           </div>
         ) : (
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {mine.map((p) => {
+            {visibleProperties.map((p) => {
               const showEdit = canEdit;
               const showDelete = canDelete && p.caretakerIds.includes(selfId);
               const showActions = showEdit || showDelete;

@@ -1,14 +1,16 @@
 "use client";
 
-import { ArrowLeft, MessagesSquare, Send } from "lucide-react";
+import { ArrowLeft, MessagesSquare, Plus, Send } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { DashboardShell } from "@/components/DashboardShell";
+import { SearchInput } from "@/components/SearchInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { tenantNav } from "@/config/dashboardNav";
 import { useChatMutations, useChatThreads, useThreadMessages } from "@/hooks/use-chat";
 import { relativeTime } from "@/lib/format";
+import { matchesQuery } from "@/lib/search";
 
 const initials = (name: string) =>
   name
@@ -28,6 +30,8 @@ const ContactAvatar = ({ name, className = "" }: { name: string; className?: str
 
 const TenantChatPage = () => {
   const { items, markThreadRead, bumpThread } = useChatThreads();
+  const [query, setQuery] = useState("");
+  const visibleItems = items.filter((t) => matchesQuery(query, t.contact, t.lastMessageText));
   const { sendMessage, openThread } = useChatMutations();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -73,10 +77,12 @@ const TenantChatPage = () => {
             <h3 className="font-display text-lg font-semibold">Conversations</h3>
           </div>
           <div className="max-h-[32rem] overflow-y-auto">
-            {items.length === 0 && (
-              <p className="p-4 text-sm text-muted-foreground">No conversations yet.</p>
+            {visibleItems.length === 0 && (
+              <p className="p-4 text-sm text-muted-foreground">
+                No conversations match your search.
+              </p>
             )}
-            {items.map((thread) => (
+            {visibleItems.map((thread) => (
               <button
                 key={thread._id}
                 type="button"
@@ -189,6 +195,18 @@ const TenantChatPage = () => {
           </Link>
           .
         </p>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Search conversations…"
+            className="w-full sm:w-56"
+          />
+          <Button variant="outline" className="rounded-full" onClick={() => void send()}>
+            <Plus className="h-4 w-4" />
+            New conversation
+          </Button>
+        </div>
       </div>
     </DashboardShell>
   );
