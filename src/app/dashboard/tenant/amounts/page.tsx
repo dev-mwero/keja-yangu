@@ -1,34 +1,28 @@
 "use client";
 
-import { DashboardShell } from "@/components/DashboardShell";
-import { tenantNav } from "@/config/dashboardNav";
-import { Input } from "@/components/ui/input";
-import { StatCard } from "@/components/StatCard";
-import { formatKES } from "@/lib/format";
-import { useMyInvoices } from "@/hooks/use-my-invoices";
-import { SearchInput } from "@/components/SearchInput";
+import { Clock, Receipt, Wallet } from "lucide-react";
 import { useState } from "react";
+import { DashboardShell } from "@/components/DashboardShell";
+import { StatCard } from "@/components/StatCard";
+import { Input } from "@/components/ui/input";
+import { tenantNav } from "@/config/dashboardNav";
+import { useMyInvoices } from "@/hooks/use-my-invoices";
+import { formatKES, formatPeriod } from "@/lib/format";
 import { currentPeriod } from "@/lib/invoicing";
-import { Building2 } from "lucide-react";
 
 const TenantAmountsPage = () => {
-  const { invoices } = useMyInvoices();
   const [period, setPeriod] = useState(currentPeriod());
-  const [query, setQuery] = useState("");
+  const { invoices, loading, error } = useMyInvoices({ period });
 
-  // Compute total amounts from invoices
-  const totalActual = invoices.reduce(
-    (sum, inv) => sum + inv.amountDue,
+  // A tenant has no portfolio-wide rent roll to read, so the meaningful
+  // trio is what was billed, what was paid and what is still owed — all
+  // derived from the invoice API rather than authored on the page.
+  const billed = invoices.reduce((sum, inv) => sum + inv.amountDue, 0);
+  const paid = invoices.reduce((sum, inv) => sum + (inv.amountPaid ?? 0), 0);
+  const outstanding = invoices.reduce(
+    (sum, inv) => sum + Math.max(0, inv.amountDue - (inv.amountPaid ?? 0)),
     0,
   );
-  const totalPaid = invoices.reduce(
-    (sum, inv) => sum + (inv.amountPaid ?? 0),
-    0,
-  );
-
-  // Expected: this is a placeholder - in a full implementation,
-  // this would sum unit rents for the tenant's properties
-  const totalExpected = 0;
 
   return (
     <DashboardShell
@@ -41,7 +35,7 @@ const TenantAmountsPage = () => {
         <div className="space-y-1.5">
           <div className="text-sm font-medium text-muted-foreground">Period</div>
           <Input
-            type="date"
+            type="month"
             value={period}
             onChange={(e) => setPeriod(e.target.value)}
             className="w-44"
@@ -49,39 +43,37 @@ const TenantAmountsPage = () => {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      {error && (
+        <p className="mb-4 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error}
+        </p>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-3">
         <StatCard
-          label="Expected Total"
-          value={formatKES(totalExpected)}
-          hint="Based on your property rents"
-          icon={Building2}
+          label="Billed"
+          value={loading ? "…" : formatKES(billed)}
+          hint={`${invoices.length} invoices issued`}
+          icon={Receipt}
         />
         <StatCard
-          label="Actual Total"
-          value={formatKES(totalActual)}
-          hint={`${invoices.length} invoices`}
-          icon={Building2}
+          label="Paid"
+          value={loading ? "…" : formatKES(paid)}
+          hint="Received this period"
+          icon={Wallet}
         />
         <StatCard
-          label="Paid Total"
-          value={formatKES(totalPaid)}
-          hint="${invoices.length} invoices"
-          icon={Building2}
+          label="Outstanding"
+          value={loading ? "…" : formatKES(outstanding)}
+          hint={outstanding > 0 ? "Still owed" : "Nothing owed"}
+          icon={Clock}
         />
       </div>
 
-      <SearchInput
-        value={query}
-        onChange={setQuery}
-        placeholder="Search invoices…"
-        className="w-full sm:w-56"
-      />
-
-      <div className="mt-8">
-        <p>You have {invoices.length} invoices.</p>
-        <p>Total actual: {formatKES(totalActual)}</p>
-        <p>Total paid: {formatKES(totalPaid)}</p>
-      </div>
+      <p className="mt-6 text-sm text-muted-foreground">
+        {period ? formatPeriod(period) : "—"} ·{" "}
+        {loading ? "Loading amounts…" : `${invoices.length} invoices`}
+      </p>
     </DashboardShell>
   );
 };
