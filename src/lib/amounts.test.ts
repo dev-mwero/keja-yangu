@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildRentLookup, resolveUnitRent, sumExpectedRent } from "@/lib/amounts";
+import {
+  buildRentLookup,
+  resolveUnitRent,
+  sumContractedRentForPeriod,
+  sumOccupiedMonthlyRent,
+  sumPotentialMonthlyRent,
+} from "@/lib/amounts";
 
 const BLOCK_ID = "block-1";
 const OTHER_BLOCK_ID = "block-2";
@@ -84,24 +90,72 @@ describe("resolveUnitRent", () => {
   });
 });
 
-describe("sumExpectedRent", () => {
-  it("sums the resolved rent of every unit", () => {
+describe("rent roll calculations", () => {
+  it("sums available and occupied units for potential monthly rent", () => {
     const props = [property({ blockRent: 20000, floorRent: 25000 })];
     const units = [
-      { rent: 30000, floorId: FLOOR_ID, blockId: BLOCK_ID },
-      { rent: null, floorId: FLOOR_ID, blockId: BLOCK_ID },
-      { rent: null, floorId: OTHER_FLOOR_ID, blockId: OTHER_BLOCK_ID },
+      { rent: 30000, status: "occupied", floorId: FLOOR_ID, blockId: BLOCK_ID },
+      { rent: null, status: "available", floorId: FLOOR_ID, blockId: BLOCK_ID },
+      { rent: null, status: "maintenance", floorId: OTHER_FLOOR_ID, blockId: OTHER_BLOCK_ID },
     ];
-    expect(sumExpectedRent(units, props)).toBe(55000);
+    expect(sumPotentialMonthlyRent(units, props)).toBe(55000);
+    expect(sumOccupiedMonthlyRent(units, props)).toBe(30000);
   });
 
   it("returns 0 for an empty portfolio", () => {
-    expect(sumExpectedRent([], [])).toBe(0);
+    expect(sumPotentialMonthlyRent([], [])).toBe(0);
+    expect(sumOccupiedMonthlyRent([], [])).toBe(0);
   });
 
   it("tolerates properties without a blocks array", () => {
-    expect(sumExpectedRent([{ rent: 12000, floorId: FLOOR_ID, blockId: BLOCK_ID }], [{}])).toBe(
-      12000,
-    );
+    expect(
+      sumPotentialMonthlyRent(
+        [
+          {
+            rent: null,
+            status: "available",
+            floorId: FLOOR_ID,
+            blockId: BLOCK_ID,
+            propertyId: "p1",
+          },
+        ],
+        [{ _id: "p1", price: 12000 }],
+      ),
+    ).toBe(12000);
+  });
+});
+
+describe("sumContractedRentForPeriod", () => {
+  it("sums full-month active leases", () => {
+    expect(
+      sumContractedRentForPeriod(
+        [{ rentAmount: 30000, startDate: "2026-09-01T00:00:00.000Z" }],
+        "2026-09",
+      ),
+    ).toBe(30000);
+  });
+
+  it("prorates a lease by inclusive UTC calendar days", () => {
+    expect(
+      sumContractedRentForPeriod(
+        [{ rentAmount: 30000, startDate: "2026-09-16T00:00:00.000Z" }],
+        "2026-09",
+      ),
+    ).toBe(15000);
+  });
+
+  it("ignores leases outside the selected month", () => {
+    expect(
+      sumContractedRentForPeriod(
+        [
+          {
+            rentAmount: 30000,
+            startDate: "2026-08-01T00:00:00.000Z",
+            endDate: "2026-08-31T00:00:00.000Z",
+          },
+        ],
+        "2026-09",
+      ),
+    ).toBe(0);
   });
 });

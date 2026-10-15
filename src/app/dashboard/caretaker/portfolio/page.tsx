@@ -150,7 +150,7 @@ const CaretakerPortfolioPage = () => {
                         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
                         <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
                           <span className="rounded-full bg-background/90 px-3 py-1 text-xs font-medium">
-                            {formatKES(p.price)}/mo
+                            {formatKES(p.price)}/mo advertised property rate
                           </span>
                           <Badge
                             className={`${statusClass[p.status]} capitalize hover:opacity-100`}

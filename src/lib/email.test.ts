@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   createComplaintStatusContent,
+  createInvoicePaidContent,
+  createInvoicePaidStaffContent,
   escapeHtml,
   isEmailConfigured,
   sanitizeHeader,
@@ -70,5 +72,31 @@ describe("Email header and HTML injection protection", () => {
     expect(html).toContain("&lt;script&gt;");
     expect(html).not.toContain("<script>");
     expect(html).toContain("resolved");
+  });
+});
+
+describe("payment email amounts", () => {
+  it("reports the amount actually recorded as received", () => {
+    const html = createInvoicePaidContent({
+      invoiceNumber: "INV-1",
+      period: "2026-09",
+      amountDue: 25000,
+      amountPaid: 5000,
+    });
+
+    expect(html).toContain("Ksh 5,000");
+    expect(html).not.toContain("Ksh 25,000");
+  });
+
+  it("does not claim a partially-paid invoice was paid in full", () => {
+    const html = createInvoicePaidStaffContent({
+      invoiceNumber: "INV-1",
+      period: "2026-09",
+      amountDue: 25000,
+      amountPaid: 5000,
+    });
+
+    expect(html).toContain("A payment of");
+    expect(html).not.toContain("paid in full");
   });
 });

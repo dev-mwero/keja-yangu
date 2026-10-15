@@ -176,6 +176,7 @@ export interface InvoiceLike {
   ownerId: string;
   period?: string;
   amountDue?: number;
+  amountPaid?: number;
 }
 
 export async function notifyInvoicePaid(invoice: InvoiceLike): Promise<boolean> {
@@ -184,9 +185,10 @@ export async function notifyInvoicePaid(invoice: InvoiceLike): Promise<boolean> 
     const invoiceNumber = invoice.invoiceNumber ?? "";
     const period = invoice.period ?? "";
     const amountDue = invoice.amountDue ?? 0;
+    const amountPaid = Math.min(amountDue, invoice.amountPaid ?? amountDue);
     const periodLabel = formatPeriod(period);
-    const amount = formatKES(amountDue);
-    const data = { invoiceId, period, amountDue };
+    const amount = formatKES(amountPaid);
+    const data = { invoiceId, period, amountDue, amountPaid };
     const base = appUrl();
 
     let ok = true;
@@ -196,14 +198,14 @@ export async function notifyInvoicePaid(invoice: InvoiceLike): Promise<boolean> 
       ok =
         (await notifyUser(tenantUserId, {
           type: "invoice:paid",
-          title: "Invoice paid",
+          title: "Payment received",
           body: `Payment of ${amount} for ${periodLabel} received. Thank you!`,
           data,
           link: "/dashboard/tenant/payments",
           channels: ["in-app", "email"],
           email: {
             subjectPrefix: `Invoice ${invoiceNumber} paid - Keja Yangu`,
-            content: createInvoicePaidContent({ invoiceNumber, period, amountDue }),
+            content: createInvoicePaidContent({ invoiceNumber, period, amountDue, amountPaid }),
             text: `Your payment of ${amount} for ${periodLabel} has been received.\n\nView your invoice: ${base}/dashboard/tenant/payments`,
             linkUrl: `${base}/dashboard/tenant/payments`,
             preheader: "Your payment has been received",
@@ -214,8 +216,8 @@ export async function notifyInvoicePaid(invoice: InvoiceLike): Promise<boolean> 
     ok =
       (await notifyUser(invoice.ownerId, {
         type: "invoice:paid",
-        title: "Invoice paid",
-        body: `Invoice ${invoiceNumber} (${periodLabel}) was paid for ${amount}`,
+        title: "Payment received",
+        body: `A payment of ${amount} was recorded for invoice ${invoiceNumber} (${periodLabel})`,
         data,
         link: "/dashboard/owner/accounting",
         channels: ["in-app"],
@@ -226,8 +228,8 @@ export async function notifyInvoicePaid(invoice: InvoiceLike): Promise<boolean> 
       ok =
         (await notifyUser(caretakerId, {
           type: "invoice:paid",
-          title: "Invoice paid",
-          body: `Invoice ${invoiceNumber} (${periodLabel}) was paid for ${amount}`,
+          title: "Payment received",
+          body: `A payment of ${amount} was recorded for invoice ${invoiceNumber} (${periodLabel})`,
           data,
           link: "/dashboard/caretaker/accounting",
           channels: ["in-app"],

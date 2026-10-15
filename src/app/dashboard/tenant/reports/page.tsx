@@ -45,14 +45,17 @@ const TenantReportsPage = () => {
   );
 
   const inRangePaid = visibleInvoices.filter(
-    (i) => i.status === "paid" && withinRange(i.paidAt, from, to),
+    (i) => (i.amountPaid ?? 0) > 0 && withinRange(i.paidAt, from, to),
   );
   const inRangeComplaints = visibleComplaints.filter((c) => withinRange(c.createdAt, from, to));
   const withinRangeApplications = visibleApplications.filter((a) =>
     withinRange(a.submittedAt, from, to),
   );
 
-  const paidTotal = inRangePaid.reduce((sum, i) => sum + i.amountDue, 0);
+  const paidTotal = inRangePaid.reduce(
+    (sum, i) => sum + Math.min(i.amountDue, i.amountPaid ?? 0),
+    0,
+  );
   const resolvedComplaints = inRangeComplaints.filter((c) => c.status === "resolved").length;
 
   const exportJson = () => {
@@ -62,7 +65,7 @@ const TenantReportsPage = () => {
       payments: inRangePaid.map((i) => ({
         period: i.period,
         invoiceNumber: i.invoiceNumber,
-        amount: i.amountDue,
+        amount: Math.min(i.amountDue, i.amountPaid ?? 0),
         paidAt: i.paidAt,
         method: i.method,
       })),
@@ -124,7 +127,7 @@ const TenantReportsPage = () => {
 
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard
-          label="Paid in range"
+          label="Payments received in range"
           value={formatKES(paidTotal)}
           hint={`${inRangePaid.length} payment${inRangePaid.length === 1 ? "" : "s"}`}
           icon={Wallet}
