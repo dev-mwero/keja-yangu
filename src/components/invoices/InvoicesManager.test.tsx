@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { currentPeriod } from "@/lib/invoicing";
@@ -23,27 +23,53 @@ function makeInvoice(overrides: Partial<Invoice> = {}): Invoice {
   };
 }
 
+function makeAmounts(overrides: Record<string, unknown> = {}) {
+  return {
+    potentialMonthlyRent: 0,
+    occupiedMonthlyRent: 0,
+    contractedRent: 0,
+    rentBilled: 0,
+    rentCollected: 0,
+    rentOutstanding: 0,
+    openInvoiceCount: 0,
+    period: "2026-09",
+    byPeriod: [] as unknown[],
+    unitCount: 0,
+    invoiceCount: 0,
+    occupiedUnitCount: 0,
+    ...overrides,
+  };
+}
+
 const mocks = vi.hoisted(() => {
   const invoices = [] as Invoice[];
-  const flags = {
+  const state = {
     loading: false,
     error: null as string | null,
+    amounts: {} as Record<string, unknown>,
+    amountsError: null as string | null,
   };
   const generate = vi.fn();
   const refetch = vi.fn();
   const toast = { success: vi.fn(), error: vi.fn() };
   return {
     invoices,
-    flags,
+    state,
     generate,
     refetch,
     toast,
-    useStaffInvoices: () => ({
+    useStaffInvoices: vi.fn(() => ({
       invoices,
-      loading: flags.loading,
-      error: flags.error,
+      loading: state.loading,
+      error: state.error,
       refetch,
-    }),
+    })),
+    useAmounts: vi.fn(() => ({
+      amounts: state.amounts,
+      loading: false,
+      error: state.amountsError,
+      refetch,
+    })),
     useInvoiceMutations: () => ({
       createInvoice: vi.fn(),
       updateInvoice: vi.fn(),
@@ -61,6 +87,7 @@ vi.mock("@/hooks/use-invoices", () => ({
   useStaffInvoices: mocks.useStaffInvoices,
   useInvoiceMutations: mocks.useInvoiceMutations,
 }));
+vi.mock("@/hooks/use-amounts", () => ({ useAmounts: mocks.useAmounts }));
 
 import { InvoicesManager } from "@/components/invoices/InvoicesManager";
 
@@ -76,49 +103,67 @@ function statValue(label: string): HTMLElement {
 describe("InvoicesManager", () => {
   beforeEach(() => {
     mocks.invoices.length = 0;
-    mocks.flags.loading = false;
-    mocks.flags.error = null;
+    mocks.state.loading = false;
+    mocks.state.error = null;
+    mocks.state.amounts = makeAmounts();
+    mocks.state.amountsError = null;
     mocks.toast.success.mockClear();
     mocks.toast.error.mockClear();
     mocks.generate.mockReset();
     mocks.refetch.mockReset();
+    mocks.useStaffInvoices.mockClear();
+    mocks.useAmounts.mockClear();
   });
 
-  it("computes billing stats that exclude voided invoices", () => {
-    mocks.invoices.push(
-      makeInvoice({
-        _id: "inv-p",
-        invoiceNumber: "INV-202609-0001",
-        amountDue: 100,
-        status: "pending",
-      }),
-      makeInvoice({
-        _id: "inv-o",
-        invoiceNumber: "INV-202609-0002",
-        amountDue: 50,
-        status: "paid",
-        amountPaid: 50,
-      }),
-      makeInvoice({
-        _id: "inv-v",
-        invoiceNumber: "INV-202609-0003",
-        amountDue: 40,
-        status: "void",
-      }),
-    );
+  it("renders the server-computed rent roll and collection stats", () => {
+    mocks.state.amounts = makeAmounts({
+      potentialMonthlyRent: 100000,
+      occupiedMonthlyRent: 60000,
+      contractedRent: 55000,
+      rentBilled: 50000,
+      rentCollected: 25000,
+      rentOutstanding: 25000,
+      openInvoiceCount: 2,
+      invoiceCount: 3,
+    });
     renderManager();
 
-    // Billed = pending 100 + paid 50 (void 40 excluded) = 150
-    expect(statValue("Billed")).toHaveTextContent(/150/);
-    expect(statValue("Billed")).not.toHaveTextContent(/190/);
-    // Collected = 50 on a 150 base → 33% collection rate
-    expect(statValue("Collected")).toHaveTextContent(/50/);
-    expect(statValue("Collected")).toHaveTextContent(/33%/);
-    // Outstanding = pending 100, 1 open invoice
-    expect(statValue("Outstanding")).toHaveTextContent(/100/);
-    expect(statValue("Outstanding")).toHaveTextContent(/1 open/);
-    // This month = collected for the latest period
-    expect(statValue("This month")).toHaveTextContent(/50/);
+    expect(statValue("Potential Monthly Rent")).toHaveTextContent(/100,000/);
+    expect(statValue("Occupied Monthly Rent")).toHaveTextContent(/60,000/);
+    expect(statValue("Contracted Rent")).toHaveTextContent(/55,000/);
+    expect(statValue("Billed")).toHaveTextContent(/50,000/);
+    expect(statValue("Billed")).toHaveTextContent(/3 invoices/);
+    // Collection rate is collected / billed.
+    expect(statValue("Collected")).toHaveTextContent(/25,000/);
+    expect(statValue("Collected")).toHaveTextContent(/50% of billed/);
+    expect(statValue("Outstanding")).toHaveTextContent(/25,000/);
+    expect(statValue("Outstanding")).toHaveTextContent(/2 open/);
+  });
+
+  it("requests the selected period from the amounts and invoice hooks", async () => {
+    renderManager();
+
+    expect(mocks.useAmounts).toHaveBeenCalledWith({ period: currentPeriod() });
+    expect(mocks.useStaffInvoices).toHaveBeenCalledWith({ period: currentPeriod() });
+
+    fireEvent.change(screen.getByDisplayValue(currentPeriod()), {
+      target: { value: "2026-01" },
+    });
+
+    await waitFor(() => expect(mocks.useAmounts).toHaveBeenLastCalledWith({ period: "2026-01" }));
+    expect(mocks.useStaffInvoices).toHaveBeenLastCalledWith({ period: "2026-01" });
+  });
+
+  it("switches the period when a history row is clicked", async () => {
+    const user = userEvent.setup();
+    mocks.state.amounts = makeAmounts({
+      byPeriod: [{ period: "2026-08", billed: 40000, collected: 30000, open: 1, count: 2 }],
+    });
+    renderManager();
+
+    await user.click(screen.getByText("Aug 2026"));
+
+    await waitFor(() => expect(mocks.useAmounts).toHaveBeenLastCalledWith({ period: "2026-08" }));
   });
 
   it("filters rows client-side by tab", async () => {
@@ -191,13 +236,13 @@ describe("InvoicesManager", () => {
   });
 
   it("renders a loading state", () => {
-    mocks.flags.loading = true;
+    mocks.state.loading = true;
     renderManager();
     expect(screen.getByText(/loading invoices/i)).toBeInTheDocument();
   });
 
   it("renders an error state", () => {
-    mocks.flags.error = "Failed to fetch invoices";
+    mocks.state.error = "Failed to fetch invoices";
     renderManager();
     expect(screen.getByText("Failed to fetch invoices")).toBeInTheDocument();
   });

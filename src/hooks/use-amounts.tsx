@@ -2,14 +2,29 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+/** One rent period's collection totals, as returned in `AmountSummary.byPeriod`. */
+export interface AmountPeriodSummary {
+  period: string;
+  billed: number;
+  collected: number;
+  open: number;
+  count: number;
+}
+
 /** Response payload of `GET /api/v1/amounts`. */
 export interface AmountSummary {
-  expectedAmount: number;
-  actualAmount: number;
-  paidAmount: number;
+  potentialMonthlyRent: number;
+  occupiedMonthlyRent: number;
+  contractedRent: number;
+  rentBilled: number;
+  rentCollected: number;
+  rentOutstanding: number;
+  openInvoiceCount: number;
   period: string;
+  byPeriod: AmountPeriodSummary[];
   unitCount: number;
   invoiceCount: number;
+  occupiedUnitCount: number;
 }
 
 export interface AmountsFilters {
@@ -22,16 +37,22 @@ export interface AmountsFilters {
 }
 
 const EMPTY_SUMMARY: AmountSummary = {
-  expectedAmount: 0,
-  actualAmount: 0,
-  paidAmount: 0,
+  potentialMonthlyRent: 0,
+  occupiedMonthlyRent: 0,
+  contractedRent: 0,
+  rentBilled: 0,
+  rentCollected: 0,
+  rentOutstanding: 0,
+  openInvoiceCount: 0,
   period: "",
+  byPeriod: [],
   unitCount: 0,
   invoiceCount: 0,
+  occupiedUnitCount: 0,
 };
 
 /**
- * Fetches the expected/actual/paid amount rollup for the caller's scope.
+ * Fetches the rent potential, occupied rent, and period collection rollup.
  * The server derives the portfolio from the session, so `ownerId` is only
  * meaningful for a system-admin impersonating a specific owner.
  */
@@ -59,7 +80,7 @@ export function useAmounts(filters?: AmountsFilters) {
         const res = await fetch(`/api/v1/amounts${query}`);
         const json = (await res.json()) as Partial<AmountSummary> & { error?: string };
         if (cancelled) return;
-        if (res.ok && typeof json.actualAmount === "number") {
+        if (res.ok && typeof json.potentialMonthlyRent === "number") {
           setAmounts(json as AmountSummary);
           setError(null);
         } else {

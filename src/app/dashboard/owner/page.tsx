@@ -43,9 +43,9 @@ const OwnerDashboard = () => {
 
   // Amount bars are derived from the API rollup — never authored by hand.
   const amountBars = [
-    { label: "Expected", value: amounts.expectedAmount },
-    { label: "Actual", value: amounts.actualAmount },
-    { label: "Paid", value: amounts.paidAmount },
+    { label: "Potential", value: amounts.potentialMonthlyRent },
+    { label: "Contracted", value: amounts.contractedRent },
+    { label: "Collected", value: amounts.rentCollected },
   ];
   const maxAmount = Math.max(...amountBars.map((b) => b.value), 1);
   const hasAmounts = amountBars.some((b) => b.value > 0);
@@ -119,9 +119,9 @@ const OwnerDashboard = () => {
         </div>
 
         <div className="rounded-2xl border border-border bg-secondary p-6 text-secondary-foreground shadow-elevated">
-          <p className="text-xs uppercase tracking-widest text-primary-glow">Monthly revenue</p>
+          <p className="text-xs uppercase tracking-widest text-primary-glow">Rent collected</p>
           <p className="mt-2 font-display text-4xl font-semibold">
-            {amountsLoading ? "…" : formatKES(amounts.actualAmount)}
+            {amountsLoading ? "…" : formatKES(amounts.rentCollected)}
           </p>
           <p className="mt-1 text-sm text-secondary-foreground/70">
             {amounts.period
@@ -130,18 +130,21 @@ const OwnerDashboard = () => {
           </p>
           <dl className="mt-5 space-y-2 text-sm">
             <div className="flex justify-between">
-              <dt className="text-secondary-foreground/70">Expected</dt>
+              <dt className="text-secondary-foreground/70">Potential monthly rent (snapshot)</dt>
               <dd className="font-medium">
-                {amountsLoading ? "…" : formatKES(amounts.expectedAmount)}
+                {amountsLoading ? "…" : formatKES(amounts.potentialMonthlyRent)}
               </dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-secondary-foreground/70">Paid</dt>
+              <dt className="text-secondary-foreground/70">Contracted rent</dt>
               <dd className="font-medium">
-                {amountsLoading ? "…" : formatKES(amounts.paidAmount)}
+                {amountsLoading ? "…" : formatKES(amounts.contractedRent)}
               </dd>
             </div>
           </dl>
+          <p className="mt-3 text-xs text-secondary-foreground/60">
+            Contracted and collected cover the period above; potential is a current snapshot.
+          </p>
           <div className="mt-6 flex h-24 items-end gap-3">
             {amountBars.map((bar) => (
               <div key={bar.label} className="flex flex-1 flex-col items-center gap-1.5">

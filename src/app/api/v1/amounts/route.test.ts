@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildRequest, signToken } from "@/test/utils/api-request";
 import {
   makeInvoice,
+  makeLease,
   makeObjectId,
   makeProperty,
   makeUnit,
@@ -18,10 +19,11 @@ vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 vi.mock("@/models/Invoice", () => ({ Invoice: getModelStubs().invoice }));
+vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
 
 import { GET } from "@/app/api/v1/amounts/route";
 
-const { user, property, unit, invoice } = getModelStubs();
+const { user, property, unit, invoice, lease } = getModelStubs();
 
 const SELF_ID = makeObjectId("self");
 const OWNER_ID = makeObjectId("owner");
@@ -50,12 +52,16 @@ function stubReads({
   docs = [] as unknown[],
   units = [] as unknown[],
   invoices = [] as unknown[],
+  leases = [] as unknown[],
   invoiceCount = 0,
+  periodHistory = [] as unknown[],
 } = {}) {
   property.find.mockReturnValue(buildQuery(docs));
   unit.find.mockReturnValue(buildQuery(units));
   invoice.find.mockReturnValue(buildQuery(invoices));
+  lease.find.mockReturnValue(buildQuery(leases));
   invoice.countDocuments.mockResolvedValue(invoiceCount);
+  invoice.aggregate.mockResolvedValue(periodHistory);
 }
 
 function signIn(role: TestUser["role"], overrides: Partial<TestUser> = {}) {
@@ -93,11 +99,17 @@ describe("GET /api/v1/amounts", () => {
 
     expect(Object.keys(body).sort()).toEqual(
       [
-        "actualAmount",
-        "expectedAmount",
+        "byPeriod",
+        "contractedRent",
         "invoiceCount",
-        "paidAmount",
+        "occupiedMonthlyRent",
+        "occupiedUnitCount",
+        "openInvoiceCount",
         "period",
+        "potentialMonthlyRent",
+        "rentBilled",
+        "rentCollected",
+        "rentOutstanding",
         "unitCount",
       ].sort(),
     );
@@ -115,6 +127,7 @@ describe("GET /api/v1/amounts", () => {
           floorId: FLOOR_ID,
           blockId: BLOCK_ID,
           rent: 30000,
+          status: "occupied",
         }),
         makeUnit({
           propertyId: PROP_ID,
@@ -122,13 +135,17 @@ describe("GET /api/v1/amounts", () => {
           floorId: FLOOR_ID,
           blockId: BLOCK_ID,
           rent: null,
+          status: "occupied",
         }),
       ],
       invoices: [
         makeInvoice({ ownerId: SELF_ID, amountDue: 55000, amountPaid: 20000 }),
-        makeInvoice({ ownerId: SELF_ID, amountDue: 1000, amountPaid: 0 }),
+        makeInvoice({ ownerId: SELF_ID, amountDue: 1000, amountPaid: 0, status: "paid" }),
       ],
       invoiceCount: 2,
+      leases: [
+        makeLease({ ownerId: SELF_ID, rentAmount: 50000, startDate: new Date("2026-10-01") }),
+      ],
     });
 
     const res = await GET(
@@ -138,15 +155,49 @@ describe("GET /api/v1/amounts", () => {
     expect(res.status).toBe(200);
     // Scope is derived from the session, never the query string.
     expect(unit.find).toHaveBeenCalledWith({ ownerId: SELF_ID });
-    expect(invoice.find).toHaveBeenCalledWith({ ownerId: SELF_ID, period: expect.any(String) });
+    expect(invoice.find).toHaveBeenCalledWith({
+      ownerId: SELF_ID,
+      period: expect.any(String),
+      status: { $nin: ["draft", "void"] },
+    });
 
     const body = await json(res);
     // 30000 (own rent) + 25000 (floor override) — not the block's 20000.
-    expect(body.expectedAmount).toBe(55000);
-    expect(body.actualAmount).toBe(56000);
-    expect(body.paidAmount).toBe(20000);
+    expect(body.potentialMonthlyRent).toBe(55000);
+    expect(body.occupiedMonthlyRent).toBe(55000);
+    expect(body.contractedRent).toBe(50000);
+    expect(body.rentBilled).toBe(56000);
+    expect(body.rentCollected).toBe(20000);
+    expect(body.rentOutstanding).toBe(36000);
+    expect(body.openInvoiceCount).toBe(2);
     expect(body.unitCount).toBe(2);
+    expect(body.occupiedUnitCount).toBe(2);
     expect(body.invoiceCount).toBe(2);
+  });
+
+  it("summarises per-period history scoped to the caller, excluding drafts and voids", async () => {
+    const token = signIn("owner");
+    stubReads({
+      periodHistory: [
+        { _id: "2026-09", billed: 50000, collected: 20000, open: 1, count: 2 },
+        { _id: "2026-08", billed: 30000, collected: 30000, open: 0, count: 2 },
+      ],
+    });
+
+    const body = (await json(await GET(buildRequest("/api/v1/amounts", { token })))) as Record<
+      string,
+      unknown
+    >;
+
+    expect(body.byPeriod).toEqual([
+      { period: "2026-09", billed: 50000, collected: 20000, open: 1, count: 2 },
+      { period: "2026-08", billed: 30000, collected: 30000, open: 0, count: 2 },
+    ]);
+    expect(invoice.aggregate).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        { $match: { ownerId: SELF_ID, status: { $nin: ["draft", "void"] } } },
+      ]),
+    );
   });
 
   it("resolves a unit with no rent through the block override", async () => {
@@ -163,7 +214,7 @@ describe("GET /api/v1/amounts", () => {
     });
 
     const body = await json(await GET(buildRequest("/api/v1/amounts", { token })));
-    expect(body.expectedAmount).toBe(20000);
+    expect(body.potentialMonthlyRent).toBe(20000);
   });
 
   it("scopes a custodian to the managing owner", async () => {
@@ -197,13 +248,13 @@ describe("GET /api/v1/amounts", () => {
     const res = await GET(buildRequest("/api/v1/amounts", { token }));
 
     expect(res.status).toBe(200);
-    expect(unit.find).toHaveBeenCalledWith({ propertyId: { $in: [PROP_ID] } });
+    expect(unit.find).toHaveBeenCalledWith({ ownerId: OWNER_ID, propertyId: { $in: [PROP_ID] } });
     expect(invoice.find).toHaveBeenCalledWith(
       expect.objectContaining({ propertyId: { $in: [PROP_ID] }, ownerId: OWNER_ID }),
     );
 
     const body = await json(res);
-    expect(body.expectedAmount).toBe(18000);
+    expect(body.potentialMonthlyRent).toBe(18000);
   });
 
   it("returns 403 for a caretaker asking about a property outside their assignment", async () => {
@@ -234,7 +285,11 @@ describe("GET /api/v1/amounts", () => {
 
     expect(property.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
     expect(unit.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
-    expect(invoice.find).toHaveBeenCalledWith({ ownerId: OWNER_ID, period: expect.any(String) });
+    expect(invoice.find).toHaveBeenCalledWith({
+      ownerId: OWNER_ID,
+      period: expect.any(String),
+      status: { $nin: ["draft", "void"] },
+    });
   });
 
   it("reads platform-wide for a system-admin with no ownerId", async () => {
@@ -249,7 +304,7 @@ describe("GET /api/v1/amounts", () => {
 
     expect(property.find).toHaveBeenCalledWith({});
     expect(unit.find).toHaveBeenCalledWith({});
-    expect(body.actualAmount).toBe(40000);
+    expect(body.rentOutstanding).toBe(40000);
   });
 
   it("honours an explicit period and rejects a malformed one", async () => {
@@ -257,7 +312,11 @@ describe("GET /api/v1/amounts", () => {
     stubReads();
 
     await GET(buildRequest("/api/v1/amounts", { token, query: { period: "2026-05" } }));
-    expect(invoice.find).toHaveBeenCalledWith({ ownerId: SELF_ID, period: "2026-05" });
+    expect(invoice.find).toHaveBeenCalledWith({
+      ownerId: SELF_ID,
+      period: "2026-05",
+      status: { $nin: ["draft", "void"] },
+    });
 
     resetModelStubs();
     user.findById.mockReturnValue(buildQuery(makeUser({ _id: SELF_ID, role: "owner" })));
@@ -275,11 +334,17 @@ describe("GET /api/v1/amounts", () => {
     const body = await json(await GET(buildRequest("/api/v1/amounts", { token })));
 
     expect(body).toMatchObject({
-      expectedAmount: 0,
-      actualAmount: 0,
-      paidAmount: 0,
+      potentialMonthlyRent: 0,
+      occupiedMonthlyRent: 0,
+      contractedRent: 0,
+      rentBilled: 0,
+      rentCollected: 0,
+      rentOutstanding: 0,
+      openInvoiceCount: 0,
       unitCount: 0,
       invoiceCount: 0,
+      occupiedUnitCount: 0,
     });
+    expect(body.byPeriod).toEqual([]);
   });
 });

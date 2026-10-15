@@ -7,26 +7,23 @@ import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
 import { ownerNav as nav } from "@/config/dashboardNav";
 import { type MaintenanceTask, tasksStore } from "@/data/dashboard";
-import { useStaffInvoices } from "@/hooks/use-invoices";
+import { useAmounts } from "@/hooks/use-amounts";
 import { useLocalStore } from "@/hooks/use-local-store";
 import { useProperties } from "@/hooks/use-properties";
-import { formatKES, toISODate } from "@/lib/format";
+import { formatKES, formatPeriod, toISODate } from "@/lib/format";
 import { propertyTypeLabel } from "@/lib/property-types";
 
 const OwnerReportsPage = () => {
   const { properties, loading } = useProperties();
-  const { invoices } = useStaffInvoices();
+  const { amounts } = useAmounts();
   const { items: tasks } = useLocalStore<MaintenanceTask>(tasksStore);
 
-  const rentRoll = properties.reduce((sum, p) => sum + p.price, 0);
   const occupied = properties.filter((p) => p.status === "occupied").length;
   const occupancy = properties.length > 0 ? Math.round((occupied / properties.length) * 100) : 0;
-  const collected = invoices
-    .filter((i) => i.status === "paid")
-    .reduce((s, i) => s + i.amountDue, 0);
-  const outstanding = invoices
-    .filter((i) => i.status === "pending" || i.status === "overdue")
-    .reduce((s, i) => s + i.amountDue, 0);
+  const billed = amounts.rentBilled;
+  const collected = amounts.rentCollected;
+  const outstanding = amounts.rentOutstanding;
+  const collectionRate = billed > 0 ? Math.round((collected / billed) * 100) : 0;
   const doneTasks = tasks.filter((t) => t.status === "done").length;
 
   const byType: Record<string, number> = {};
@@ -37,8 +34,22 @@ const OwnerReportsPage = () => {
   const exportJson = () => {
     const report = {
       generatedAt: new Date().toISOString(),
-      portfolio: { units: properties.length, occupied, occupancyPercent: occupancy, rentRoll },
-      revenue: { collected, outstanding, invoices: invoices.length },
+      portfolio: {
+        period: amounts.period,
+        properties: properties.length,
+        occupied,
+        occupancyPercent: occupancy,
+        potentialMonthlyRent: amounts.potentialMonthlyRent,
+        occupiedMonthlyRent: amounts.occupiedMonthlyRent,
+        contractedRent: amounts.contractedRent,
+      },
+      revenue: {
+        period: amounts.period,
+        rentBilled: billed,
+        rentCollected: collected,
+        rentOutstanding: outstanding,
+        invoiceCount: amounts.invoiceCount,
+      },
       maintenance: { completed: doneTasks, open: tasks.length - doneTasks },
       distributionByType: byType,
     };
@@ -69,16 +80,16 @@ const OwnerReportsPage = () => {
 
       <div className="mt-6 grid gap-4 md:grid-cols-4">
         <StatCard
-          label="Monthly rent roll"
-          value={formatKES(rentRoll)}
-          hint={loading ? "…" : `${properties.length} units`}
+          label="Potential Monthly Rent"
+          value={formatKES(amounts.potentialMonthlyRent)}
+          hint={loading ? "…" : `${amounts.unitCount} rentable units · current snapshot`}
           icon={Banknote}
         />
         <StatCard label="Occupancy" value={`${occupancy}%`} icon={Home} />
         <StatCard
           label="Collected"
           value={formatKES(collected)}
-          hint={`${outstanding ? formatKES(outstanding) : "—"} outstanding`}
+          hint={`${formatPeriod(amounts.period)} · ${formatKES(outstanding)} outstanding`}
           icon={CheckCircle2}
         />
         <StatCard
@@ -116,10 +127,26 @@ const OwnerReportsPage = () => {
 
         <section className="rounded-2xl border border-border bg-card p-6 shadow-soft">
           <h3 className="font-display text-lg font-semibold">Revenue position</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Collection figures for {amounts.period ? formatPeriod(amounts.period) : "—"}; rent-roll
+            figures are current monthly snapshots.
+          </p>
           <dl className="mt-4 space-y-3 text-sm">
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Invoices issued</dt>
-              <dd className="font-medium">{invoices.length}</dd>
+              <dd className="font-medium">{amounts.invoiceCount}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Occupied Monthly Rent</dt>
+              <dd className="font-medium">{formatKES(amounts.occupiedMonthlyRent)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Contracted Rent</dt>
+              <dd className="font-medium">{formatKES(amounts.contractedRent)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Billed</dt>
+              <dd className="font-medium">{formatKES(billed)}</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Collected</dt>
@@ -131,11 +158,7 @@ const OwnerReportsPage = () => {
             </div>
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Collection rate</dt>
-              <dd className="font-medium">
-                {collected + outstanding > 0
-                  ? `${Math.round((collected / (collected + outstanding)) * 100)}%`
-                  : "—"}
-              </dd>
+              <dd className="font-medium">{billed > 0 ? `${collectionRate}%` : "—"}</dd>
             </div>
           </dl>
           <div className="mt-5 flex items-center gap-2 rounded-xl bg-primary/5 p-3 text-sm text-muted-foreground">

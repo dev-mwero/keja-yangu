@@ -8,12 +8,12 @@ import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { type MaintenanceTask, tasksStore } from "@/data/dashboard";
+import { useAmounts } from "@/hooks/use-amounts";
 import { useAuth } from "@/hooks/use-auth";
 import { useCaretakerNav } from "@/hooks/use-caretaker-nav";
-import { useInvoices } from "@/hooks/use-invoices";
 import { useLocalStore } from "@/hooks/use-local-store";
 import { useProperties } from "@/hooks/use-properties";
-import { formatKES, toISODate } from "@/lib/format";
+import { formatKES, formatPeriod, toISODate } from "@/lib/format";
 
 const CaretakerReportsPage = () => {
   const nav = useCaretakerNav();
@@ -26,16 +26,14 @@ const CaretakerReportsPage = () => {
     [properties, user?.id],
   );
   const { items: tasks } = useLocalStore<MaintenanceTask>(tasksStore);
-  const { invoices, error: invoicesError } = useInvoices();
+  const { amounts, error: invoicesError } = useAmounts();
 
   const doneTasks = tasks.filter((t) => t.status === "done").length;
   const openTasks = tasks.filter((t) => t.status !== "done").length;
-  const collected = invoices
-    .filter((i) => i.status === "paid")
-    .reduce((s, i) => s + i.amountDue, 0);
-  const outstanding = invoices
-    .filter((i) => i.status === "pending" || i.status === "overdue")
-    .reduce((s, i) => s + i.amountDue, 0);
+  const billed = amounts.rentBilled;
+  const collected = amounts.rentCollected;
+  const outstanding = amounts.rentOutstanding;
+  const collectionRate = billed > 0 ? Math.round((collected / billed) * 100) : 0;
   const occupiedUnits = mine.filter((p) => p.status === "occupied").length;
   const occupancy = mine.length > 0 ? Math.round((occupiedUnits / mine.length) * 100) : 0;
 
@@ -45,7 +43,20 @@ const CaretakerReportsPage = () => {
       caretaker: user?.name ?? "Caretaker",
       portfolio: mine.map((p) => ({ title: p.title, status: p.status })),
       tasks: { completed: doneTasks, open: openTasks, total: tasks.length },
-      ...(privileged ? { rent: { collected, outstanding, invoices: invoices.length } } : {}),
+      ...(privileged
+        ? {
+            rent: {
+              period: amounts.period,
+              potentialMonthlyRent: amounts.potentialMonthlyRent,
+              occupiedMonthlyRent: amounts.occupiedMonthlyRent,
+              contractedRent: amounts.contractedRent,
+              rentBilled: billed,
+              rentCollected: collected,
+              rentOutstanding: outstanding,
+              invoiceCount: amounts.invoiceCount,
+            },
+          }
+        : {}),
       occupancyPercent: occupancy,
     };
     const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
@@ -82,14 +93,19 @@ const CaretakerReportsPage = () => {
         />
         {privileged && (
           <>
-            <StatCard label="Rent collected" value={formatKES(collected)} icon={Banknote} />
+            <StatCard
+              label="Collected"
+              value={formatKES(collected)}
+              hint={amounts.period ? `for ${formatPeriod(amounts.period)}` : undefined}
+              icon={Banknote}
+            />
             <StatCard label="Outstanding" value={formatKES(outstanding)} icon={Wrench} />
           </>
         )}
         <StatCard
           label="Occupancy"
           value={`${occupancy}%`}
-          hint={loading ? "…" : `${occupiedUnits}/${mine.length} units`}
+          hint={loading ? "…" : `${occupiedUnits}/${mine.length} properties`}
           icon={Home}
         />
       </div>
@@ -127,8 +143,15 @@ const CaretakerReportsPage = () => {
         {privileged && (
           <section className="rounded-2xl border border-border bg-card p-6 shadow-soft">
             <h3 className="font-display text-lg font-semibold">Rent position</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Collection figures for {amounts.period ? formatPeriod(amounts.period) : "—"}.
+            </p>
             {invoicesError && <p className="mt-2 text-xs text-destructive">{invoicesError}</p>}
             <div className="mt-4 space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Billed</span>
+                <span className="font-medium">{formatKES(billed)}</span>
+              </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Collected</span>
                 <span className="font-medium">{formatKES(collected)}</span>
@@ -139,21 +162,12 @@ const CaretakerReportsPage = () => {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Collection rate</span>
-                <span className="font-medium">
-                  {collected + outstanding > 0
-                    ? `${Math.round((collected / (collected + outstanding)) * 100)}%`
-                    : "—"}
-                </span>
+                <span className="font-medium">{billed > 0 ? `${collectionRate}%` : "—"}</span>
               </div>
               <div className="relative h-2 overflow-hidden rounded-full bg-muted">
                 <div
                   className="h-full rounded-full bg-primary"
-                  style={{
-                    width:
-                      collected + outstanding > 0
-                        ? `${Math.round((collected / (collected + outstanding)) * 100)}%`
-                        : "0%",
-                  }}
+                  style={{ width: billed > 0 ? `${collectionRate}%` : "0%" }}
                 />
               </div>
             </div>
