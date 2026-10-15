@@ -51,10 +51,12 @@ const baseSections = [
 
 const caretakerSections = baseSections.filter((s) => s.slug !== "/tenants" && s.slug !== "/team");
 const custodianSections = baseSections.filter((s) =>
-  ["", "/portfolio", "/units", "/tenants", "/move-requests", "/team"].includes(s.slug),
+  ["", "/portfolio", "/units", "/tenants", "/move-requests", "/team", "/accounting"].includes(
+    s.slug,
+  ),
 );
 const systemAdminSections = baseSections.filter((s) =>
-  ["", "/portfolio", "/tenants"].includes(s.slug),
+  ["", "/portfolio", "/tenants", "/accounting"].includes(s.slug),
 );
 
 export const buildDashboardNav = (role: Exclude<Role, "tenant">): DashNavItem[] => {
