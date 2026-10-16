@@ -17,8 +17,30 @@ export const blockInput = z.object({
 
 export const propertyBlocksInput = z.array(blockInput).max(50);
 
+/**
+ * Structure-update payload. Identical in shape to the create payload, except
+ * each block/floor may carry the `id` of an existing subdocument. The server
+ * matches by id to reconcile units (add / rename / remove) instead of treating
+ * an edit as a full replace — which would orphan units referenced by move
+ * requests and invoices.
+ */
+export const structureFloorInput = floorInput.extend({
+  id: z.string().trim().min(1).optional(),
+});
+
+export const structureBlockInput = blockInput.extend({
+  id: z.string().trim().min(1).optional(),
+  floors: z.array(structureFloorInput).min(1).max(200),
+});
+
+export const structureUpdateInput = z.object({
+  blocks: z.array(structureBlockInput).max(50),
+});
+
 export type FloorInput = z.infer<typeof floorInput>;
 export type BlockInput = z.infer<typeof blockInput>;
+export type StructureFloorInput = z.infer<typeof structureFloorInput>;
+export type StructureBlockInput = z.infer<typeof structureBlockInput>;
 
 /**
  * Flatten a persisted property's blocks + the create specs into the unit

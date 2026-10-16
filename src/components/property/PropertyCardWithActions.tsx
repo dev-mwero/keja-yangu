@@ -1,6 +1,8 @@
 "use client";
 
-import { Pencil, Trash2 } from "lucide-react";
+import { Layers, Pencil, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { DeletePropertyDialog } from "@/components/dialogs/DeletePropertyDialog";
 import { PropertyDialog } from "@/components/dialogs/PropertyDialog";
@@ -27,8 +29,13 @@ export const PropertyCardWithActions = ({
 }: PropertyCardWithActionsProps) => {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const pathname = usePathname();
 
   const showActions = canEdit || canDelete;
+
+  // `/dashboard/<role>/portfolio` -> `/dashboard/<role>/portfolio/<id>/structure`
+  const base = `/${pathname.split("/").filter(Boolean).slice(0, 3).join("/")}`;
+  const structureHref = `${base}/portfolio/${property._id}/structure`;
 
   return (
     <div className="relative">
@@ -53,6 +60,19 @@ export const PropertyCardWithActions = ({
       />
       {showActions && (
         <div className="absolute right-4 top-4 z-10 flex gap-2">
+          {canEdit && (
+            <Button
+              asChild
+              size="icon"
+              variant="secondary"
+              className="h-8 w-8 rounded-full shadow-soft"
+              aria-label={`Manage structure for ${property.title}`}
+            >
+              <Link href={structureHref}>
+                <Layers className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          )}
           {canEdit && (
             <Button
               size="icon"

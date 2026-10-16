@@ -6,6 +6,7 @@ import {
   Building2,
   CheckCircle2,
   Clock,
+  Layers,
   MapPin,
   Pencil,
   Plus,
@@ -186,6 +187,19 @@ const CaretakerPortfolioPage = () => {
                   </Link>
                   {showActions && (
                     <div className="absolute right-4 top-4 z-10 flex gap-2">
+                      {showEdit && (
+                        <Button
+                          asChild
+                          size="icon"
+                          variant="secondary"
+                          className="h-8 w-8 rounded-full shadow-soft"
+                          aria-label={`Manage structure for ${p.title}`}
+                        >
+                          <Link href={`/dashboard/caretaker/portfolio/${p._id}/structure`}>
+                            <Layers className="h-3.5 w-3.5" />
+                          </Link>
+                        </Button>
+                      )}
                       {showEdit && (
                         <Button
                           size="icon"
