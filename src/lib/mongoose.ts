@@ -27,12 +27,17 @@ export async function connectToDatabase() {
     return cached.conn;
   }
 
-  cached.promise ??= mongoose.connect(mongoUri, {
-    bufferCommands: false,
-    maxPoolSize: 10,
-    socketTimeoutMS: 45000,
-    connectTimeoutMS: 10000,
-  });
+  if (!cached.promise) {
+    cached.promise = mongoose.connect(mongoUri, {
+      bufferCommands: false,
+      maxPoolSize: 10,
+      socketTimeoutMS: 45000,
+      connectTimeoutMS: 10000,
+    });
+    cached.promise.catch(() => {
+      cached.promise = null;
+    });
+  }
 
   cached.conn = await cached.promise;
   return cached.conn;
