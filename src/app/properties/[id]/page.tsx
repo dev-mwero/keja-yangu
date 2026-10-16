@@ -380,7 +380,7 @@ const PropertyDetails = () => {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Caretakers</span>
-                  <span className="font-medium">{property.caretakerIds.length}</span>
+                  <span className="font-medium">{property.caretakerIds?.length ?? 0}</span>
                 </div>
               </div>
             </div>
