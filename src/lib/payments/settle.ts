@@ -1,6 +1,6 @@
 import { notifyInvoicePaid } from "@/lib/notifications";
 import type { PaymentProviderName } from "@/lib/payments/provider";
-import { mapChannelToMethod, toMinorUnits } from "@/lib/payments/provider";
+import { mapChannelToMethod, PROVIDER_LABELS, toMinorUnits } from "@/lib/payments/provider";
 import { Invoice } from "@/models/Invoice";
 import { Payment } from "@/models/Payment";
 
@@ -156,8 +156,8 @@ export async function applyProviderPayment(
         paidAt,
         method: mapChannelToMethod(input.channel),
         notes: invoice.notes
-          ? `${invoice.notes}\nPaid via Paystack (${input.providerReference})`
-          : `Paid via Paystack (${input.providerReference})`,
+          ? `${invoice.notes}\nPaid via ${PROVIDER_LABELS[input.provider]} (${input.providerReference})`
+          : `Paid via ${PROVIDER_LABELS[input.provider]} (${input.providerReference})`,
         paidBy: invoice.tenantId,
         paidByRole: "tenant",
       },

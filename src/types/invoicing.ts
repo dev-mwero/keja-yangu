@@ -28,6 +28,11 @@ export interface Invoice {
   overdue: boolean;
   createdAt?: string;
   updatedAt?: string;
+  /**
+   * Which online rails the tenant can use on this invoice. `paystack` is
+   * platform-wide; `mpesa` depends on the invoice owner's Daraja config.
+   */
+  online?: { paystack: boolean; mpesa: boolean };
 }
 
 /** Lease as returned by `/api/v1/leases`. Dates are ISO strings after JSON. */

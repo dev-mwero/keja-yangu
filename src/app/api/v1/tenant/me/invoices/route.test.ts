@@ -13,11 +13,19 @@ vi.mock("@/lib/notifications", () => ({
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Invoice", () => ({ Invoice: getModelStubs().invoice }));
+vi.mock("@/models/OwnerPaymentConfig", () => ({
+  OwnerPaymentConfig: getModelStubs().ownerpaymentconfig,
+}));
 
 import { GET } from "@/app/api/v1/tenant/me/invoices/route";
 import { notifyOverdueInvoices } from "@/lib/notifications";
 
-const { user, tenant: tenantStub, invoice: invoiceStub } = getModelStubs();
+const {
+  user,
+  tenant: tenantStub,
+  invoice: invoiceStub,
+  ownerpaymentconfig: ownerConfigStub,
+} = getModelStubs();
 const notifyOverdueInvoicesMock = vi.mocked(notifyOverdueInvoices);
 
 const TENANT_USER_ID = makeObjectId("tenant-user");
@@ -40,6 +48,7 @@ async function json(res: Response) {
 describe("GET /api/v1/tenant/me/invoices", () => {
   beforeEach(() => {
     resetModelStubs();
+    ownerConfigStub.find.mockReturnValue(buildQuery([]));
     notifyOverdueInvoicesMock.mockClear();
   });
 
@@ -152,5 +161,54 @@ describe("GET /api/v1/tenant/me/invoices", () => {
     expect(data).toHaveLength(1);
     expect(data[0].status).toBe("overdue");
     expect(data[0].overdue).toBe(true);
+  });
+
+  it("annotates each invoice with per-owner online payment availability", async () => {
+    vi.stubEnv("PAYSTACK_SECRET_KEY", "sk_test_availability");
+    user.findById.mockReturnValue(buildQuery(tenantDoc()));
+    tenantStub.find.mockReturnValue(buildQuery([{ _id: TENANT_A }]));
+    const darajaOwner = makeObjectId("daraja-owner");
+    const plainOwner = makeObjectId("plain-owner");
+    const invDaraja = makeObjectId("inv-daraja");
+    const invPlain = makeObjectId("inv-plain");
+    invoiceStub.find.mockReturnValue(
+      buildQuery([
+        makeInvoice({ _id: invDaraja, tenantId: TENANT_A, ownerId: darajaOwner }),
+        makeInvoice({ _id: invPlain, tenantId: TENANT_A, ownerId: plainOwner }),
+      ])
+        .sort({ issuedAt: -1 })
+        .skip(0)
+        .limit(10),
+    );
+    invoiceStub.countDocuments.mockResolvedValue(2);
+    ownerConfigStub.find.mockReturnValue(
+      buildQuery([
+        {
+          ownerId: darajaOwner,
+          darajaEnabled: true,
+          daraja: {
+            environment: "sandbox",
+            consumerKey: "enc:v1:key",
+            consumerSecret: "enc:v1:secret",
+            passphrase: "enc:v1:pass",
+            shortcode: "174379",
+          },
+        },
+      ]),
+    );
+
+    const res = await GET(
+      buildRequest("/api/v1/tenant/me/invoices", { token: signToken(TENANT_USER_ID) }),
+    );
+    const body = await json(res);
+    const data = body.data as Array<{ _id: string; online: { paystack: boolean; mpesa: boolean } }>;
+    const byId = Object.fromEntries(data.map((row) => [row._id, row.online]));
+    expect(byId[invDaraja]).toEqual({ paystack: true, mpesa: true });
+    expect(byId[invPlain]).toEqual({ paystack: true, mpesa: false });
+    expect(ownerConfigStub.find).toHaveBeenCalledWith({
+      ownerId: { $in: [darajaOwner, plainOwner] },
+      darajaEnabled: true,
+    });
+    vi.unstubAllEnvs();
   });
 });

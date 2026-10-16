@@ -1,7 +1,7 @@
 "use client";
 
-import { CheckCircle2, CreditCard, Download, Wallet } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { CheckCircle2, CreditCard, Download, Loader2, Smartphone, Wallet } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { DashboardShell } from "@/components/DashboardShell";
 import { ReceiptDialog } from "@/components/invoices/ReceiptDialog";
@@ -41,6 +41,7 @@ import { formatKES, formatPeriod } from "@/lib/format";
 import type { DerivedInvoiceStatus } from "@/lib/invoicing";
 import { INVOICE_METHODS, type InvoiceMethod } from "@/lib/invoicing";
 import { manualMethodRequiresReference } from "@/lib/payments/methods";
+import { COUNTRIES, DEFAULT_COUNTRY, isValidE164, toE164 } from "@/lib/phone";
 import { matchesQuery } from "@/lib/search";
 import type { Invoice } from "@/types/invoicing";
 
@@ -56,13 +57,22 @@ type Tab = "upcoming" | "history";
 
 const TenantPaymentsPage = () => {
   const { invoices, refetch } = useMyInvoices();
-  const { markOwnPaid, initiatePay, checkPaymentReference, pending } = useMyInvoiceMutations();
+  const { markOwnPaid, initiatePay, initiateMpesa, checkPaymentReference, pending } =
+    useMyInvoiceMutations();
   const [tab, setTab] = useState<Tab>("upcoming");
   const [query, setQuery] = useState("");
   const [paying, setPaying] = useState<Invoice | null>(null);
   const [method, setMethod] = useState<InvoiceMethod>("M-Pesa");
   const [reference, setReference] = useState("");
   const [receipt, setReceipt] = useState<Invoice | null>(null);
+
+  // M-Pesa STK flow: collect a phone number, send the push, then poll the
+  // status route until the tenant approves (or the attempt fails / lapses).
+  const [mpesaInvoice, setMpesaInvoice] = useState<Invoice | null>(null);
+  const [mpesaDial, setMpesaDial] = useState(DEFAULT_COUNTRY.dial);
+  const [mpesaNational, setMpesaNational] = useState("");
+  const [mpesaPhase, setMpesaPhase] = useState<"form" | "waiting">("form");
+  const mpesaAbort = useRef(false);
 
   // Callback return: the "Pay online" flow redirects the browser to Paystack
   // and back to this page with ?reference=<id>. Verify server-side (the
@@ -134,6 +144,77 @@ const TenantPaymentsPage = () => {
       toast.error("Could not start online payment", { description: message });
     }
   };
+
+  const closeMpesa = () => {
+    mpesaAbort.current = true;
+    setMpesaInvoice(null);
+    setMpesaPhase("form");
+    setMpesaNational("");
+    setMpesaDial(DEFAULT_COUNTRY.dial);
+  };
+
+  // Polls the status route (which queries Daraja) for up to ~2 minutes. Stops
+  // early on a settled invoice or a definitive failure; a transient network
+  // error just retries on the next tick.
+  const pollMpesa = async (reference: string) => {
+    mpesaAbort.current = false;
+    for (let attempt = 0; attempt < 24 && !mpesaAbort.current; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      if (mpesaAbort.current) return;
+      try {
+        const result = await checkPaymentReference(reference);
+        if (mpesaAbort.current) return;
+        if (result.invoice?.status === "paid") {
+          toast.success("Payment confirmed", {
+            description: `Payment of ${formatKES(result.payment.amountMinor / 100)} received.`,
+          });
+          refetch();
+          closeMpesa();
+          return;
+        }
+        if (result.payment.status === "failed") {
+          toast.error("M-Pesa payment failed", {
+            description: "The request was declined or cancelled. You can try again.",
+          });
+          closeMpesa();
+          return;
+        }
+      } catch {
+        // Transient — keep polling while the prompt is still live.
+      }
+    }
+    if (!mpesaAbort.current) {
+      toast.info("Still waiting on M-Pesa", {
+        description: "We have not received the confirmation yet. Check this bill again shortly.",
+      });
+      closeMpesa();
+    }
+  };
+
+  const handlePayMpesa = async () => {
+    if (!mpesaInvoice) return;
+    const phone = toE164(mpesaDial, mpesaNational);
+    if (!isValidE164(phone)) {
+      toast.error("Enter a valid phone number", {
+        description: "Use the number registered to your M-Pesa account.",
+      });
+      return;
+    }
+    try {
+      const result = await initiateMpesa(mpesaInvoice._id, phone);
+      setMpesaPhase("waiting");
+      void pollMpesa(result.reference);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Something went wrong";
+      toast.error("Could not start M-Pesa payment", { description: message });
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      mpesaAbort.current = true;
+    };
+  }, []);
 
   return (
     <DashboardShell
@@ -235,18 +316,37 @@ const TenantPaymentsPage = () => {
                         </Button>
                       ) : invoice.amountPaid === 0 &&
                         (invoice.status === "pending" || invoice.status === "overdue") ? (
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            size="sm"
-                            className="rounded-full"
-                            disabled={pending}
-                            onClick={() => {
-                              void handlePayOnline(invoice);
-                            }}
-                          >
-                            <CreditCard className="h-4 w-4" />
-                            Pay online
-                          </Button>
+                        <div className="flex flex-wrap justify-end gap-2">
+                          {(invoice.online?.paystack ?? true) && (
+                            <Button
+                              size="sm"
+                              className="rounded-full"
+                              disabled={pending}
+                              onClick={() => {
+                                void handlePayOnline(invoice);
+                              }}
+                            >
+                              <CreditCard className="h-4 w-4" />
+                              Pay online
+                            </Button>
+                          )}
+                          {invoice.online?.mpesa && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="rounded-full"
+                              disabled={pending}
+                              onClick={() => {
+                                setMpesaDial(DEFAULT_COUNTRY.dial);
+                                setMpesaNational("");
+                                setMpesaPhase("form");
+                                setMpesaInvoice(invoice);
+                              }}
+                            >
+                              <Smartphone className="h-4 w-4" />
+                              Pay with M-Pesa
+                            </Button>
+                          )}
                           <Button
                             variant="outline"
                             size="sm"
@@ -346,6 +446,90 @@ const TenantPaymentsPage = () => {
               <CreditCard className="h-4 w-4" />
               Confirm payment
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={mpesaInvoice !== null}
+        onOpenChange={(open) => {
+          if (!open) closeMpesa();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Pay with M-Pesa</DialogTitle>
+            <DialogDescription>
+              {mpesaPhase === "waiting"
+                ? "Approve the request on your phone to complete the payment."
+                : `We will send an STK prompt to your phone for ${mpesaInvoice?.invoiceNumber ?? "this bill"}.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          {mpesaPhase === "waiting" ? (
+            <div className="flex flex-col items-center gap-3 py-6 text-center">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="font-medium">Check your phone</p>
+              <p className="text-sm text-muted-foreground">
+                Enter your M-Pesa PIN on the prompt to pay{" "}
+                {formatKES(
+                  Math.max(0, (mpesaInvoice?.amountDue ?? 0) - (mpesaInvoice?.amountPaid ?? 0)),
+                )}
+                . This page updates automatically once it is confirmed.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Label htmlFor="mpesa-phone">M-Pesa phone number</Label>
+              <div className="flex gap-2">
+                <Select value={mpesaDial} onValueChange={setMpesaDial}>
+                  <SelectTrigger className="w-36">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COUNTRIES.map((country) => (
+                      <SelectItem key={country.code} value={country.dial}>
+                        {country.name} ({country.dial})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  id="mpesa-phone"
+                  inputMode="tel"
+                  value={mpesaNational}
+                  onChange={(e) => setMpesaNational(e.target.value)}
+                  placeholder="712 345 678"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Use the number registered to your M-Pesa account.
+              </p>
+            </div>
+          )}
+
+          <DialogFooter>
+            {mpesaPhase === "waiting" ? (
+              <Button variant="outline" className="rounded-full" onClick={closeMpesa}>
+                Close
+              </Button>
+            ) : (
+              <>
+                <Button variant="outline" className="rounded-full" onClick={closeMpesa}>
+                  Cancel
+                </Button>
+                <Button
+                  className="rounded-full"
+                  disabled={pending || toE164(mpesaDial, mpesaNational) === ""}
+                  onClick={() => {
+                    void handlePayMpesa();
+                  }}
+                >
+                  <Smartphone className="h-4 w-4" />
+                  Send request
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
