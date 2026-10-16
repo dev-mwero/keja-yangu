@@ -5,8 +5,11 @@ import { serializeInvoice } from "@/lib/invoicing";
 import { connectToDatabase } from "@/lib/mongoose";
 import { notifyOverdueInvoices } from "@/lib/notifications";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
+import { hasDarajaCredentials } from "@/lib/payments/owner-config";
+import { paystackConfigured } from "@/lib/payments/paystack";
 import { requirePermission } from "@/lib/permissions";
 import { Invoice } from "@/models/Invoice";
+import { OwnerPaymentConfig } from "@/models/OwnerPaymentConfig";
 
 export async function GET(request: NextRequest) {
   const { page, limit } = parsePagination({
@@ -50,9 +53,27 @@ export async function GET(request: NextRequest) {
     Invoice.countDocuments(filter),
   ]);
 
+  // Availability is per-invoice because M-Pesa collection is per owner (their
+  // own Daraja shortcode) while Paystack is platform-wide. One config lookup
+  // per distinct owner in the page, not one per row.
+  const paystackOn = paystackConfigured();
+  const ownerIds = [...new Set(invoices.map((doc) => String(doc.ownerId)))];
+  const ownerConfigs = ownerIds.length
+    ? await OwnerPaymentConfig.find({ ownerId: { $in: ownerIds }, darajaEnabled: true }).lean()
+    : [];
+  const mpesaOwnerIds = new Set(
+    ownerConfigs.filter(hasDarajaCredentials).map((doc) => String(doc.ownerId)),
+  );
+
   return NextResponse.json(
     buildPaginationResult(
-      invoices.map((doc) => serializeInvoice(doc, now)),
+      invoices.map((doc) => ({
+        ...serializeInvoice(doc, now),
+        online: {
+          paystack: paystackOn,
+          mpesa: mpesaOwnerIds.has(String(doc.ownerId)),
+        },
+      })),
       total,
       page,
       limit,

@@ -17,6 +17,15 @@ export interface PayInitiateResult {
   expiresAt: string;
 }
 
+/** Result of initiating an M-Pesa STK push (`POST .../pay-mpesa`). */
+export interface MpesaInitiateResult {
+  paymentId: string;
+  reference: string;
+  expiresAt: string;
+  status: string;
+  customerMessage?: string;
+}
+
 /** Serialized payment ledger row as returned by the tenant status route. */
 export interface PaymentStatusResult {
   payment: {
@@ -139,5 +148,23 @@ export function useMyInvoiceMutations() {
     }
   };
 
-  return { markOwnPaid, initiatePay, checkPaymentReference, pending };
+  const initiateMpesa = async (id: string, phone: string): Promise<MpesaInitiateResult> => {
+    setPending(true);
+    try {
+      const res = await fetch(`/api/v1/tenant/me/invoices/${id}/pay-mpesa`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || "Could not start M-Pesa payment");
+      }
+      return json.data as MpesaInitiateResult;
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return { markOwnPaid, initiatePay, initiateMpesa, checkPaymentReference, pending };
 }

@@ -114,6 +114,29 @@ describe("applyProviderPayment", () => {
     expect(notifyInvoicePaidMock).toHaveBeenCalledWith(paid);
   });
 
+  it("records the provider label and M-Pesa method for an mpesa settlement", async () => {
+    paymentStub.findOne.mockReturnValue(buildQuery({ ...paymentDoc(), provider: "mpesa" }));
+    invoiceStub.findById.mockReturnValue(buildQuery(pendingInvoice()));
+    invoiceStub.findOneAndUpdate.mockReturnValue(buildQuery(paidInvoice()));
+    paymentStub.updateOne.mockResolvedValue(undefined);
+
+    const result = await applyProviderPayment({
+      ...input,
+      provider: "mpesa",
+      providerReference: "ws_CO_123",
+      channel: "mpesa",
+    });
+
+    expect(result.outcome).toBe("settled");
+    const [, updateData] = invoiceStub.findOneAndUpdate.mock.calls[0] as [
+      Record<string, unknown>,
+      { $set: Record<string, unknown> },
+    ];
+    expect(updateData.$set.method).toBe("M-Pesa");
+    expect(String(updateData.$set.notes)).toContain("Paid via M-Pesa");
+    expect(String(updateData.$set.notes)).toContain("ws_CO_123");
+  });
+
   it("replays an already-paid invoice as a ledger catch-up without re-notifying", async () => {
     paymentStub.findOne.mockReturnValue(buildQuery(paymentDoc()));
     invoiceStub.findById.mockReturnValue(buildQuery(paidInvoice()));

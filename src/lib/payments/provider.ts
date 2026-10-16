@@ -1,8 +1,18 @@
 import { randomBytes } from "node:crypto";
 import type { InvoiceMethod } from "@/lib/invoicing";
 
-export const PAYMENT_PROVIDERS = ["paystack"] as const;
+export const PAYMENT_PROVIDERS = ["paystack", "mpesa"] as const;
 export type PaymentProviderName = (typeof PAYMENT_PROVIDERS)[number];
+
+/**
+ * Human label per provider, used in invoice notes and notification copy. Lives
+ * beside the provider vocabulary so the settlement layer never hardcodes a
+ * provider name in user-visible text.
+ */
+export const PROVIDER_LABELS: Record<PaymentProviderName, string> = {
+  paystack: "Paystack",
+  mpesa: "M-Pesa",
+};
 
 export const PAYMENT_STATUSES = ["pending", "success", "failed", "abandoned"] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
@@ -66,6 +76,9 @@ const CHANNEL_TO_METHOD: Record<string, InvoiceMethod> = {
   mobile_money: "M-Pesa",
   ussd: "Other",
   qr: "Card",
+  // Daraja STK callbacks carry no channel field; the M-Pesa adapter passes this
+  // synthetic value so the settled invoice records the "M-Pesa" method.
+  mpesa: "M-Pesa",
 };
 
 export function mapChannelToMethod(channel?: string | null): InvoiceMethod {

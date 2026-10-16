@@ -19,13 +19,23 @@ vi.mock("@/models/Payment", async (importOriginal) => {
   return { ...mod, Payment: getModelStubs().payment };
 });
 vi.mock("@/lib/payments/paystack", () => ({ verify: vi.fn() }));
+vi.mock("@/lib/payments/mpesa", () => ({ queryStkStatus: vi.fn() }));
+vi.mock("@/lib/payments/owner-config", () => ({
+  getOwnerPaymentConfig: vi.fn(),
+  resolveDarajaConfig: vi.fn(),
+}));
 
 import { GET } from "@/app/api/v1/tenant/me/payments/status/route";
 import { notifyInvoicePaid } from "@/lib/notifications";
+import { queryStkStatus } from "@/lib/payments/mpesa";
+import { getOwnerPaymentConfig, resolveDarajaConfig } from "@/lib/payments/owner-config";
 import { verify } from "@/lib/payments/paystack";
 
 const { user, tenant: tenantStub, invoice: invoiceStub, payment: paymentStub } = getModelStubs();
 const verifyMock = vi.mocked(verify);
+const queryStkStatusMock = vi.mocked(queryStkStatus);
+const getOwnerPaymentConfigMock = vi.mocked(getOwnerPaymentConfig);
+const resolveDarajaConfigMock = vi.mocked(resolveDarajaConfig);
 const notifyInvoicePaidMock = vi.mocked(notifyInvoicePaid);
 
 const TENANT_USER_ID = makeObjectId("status-tenant");
@@ -34,6 +44,15 @@ const TENANT_A = makeObjectId("tenant-a");
 const INVOICE_ID = makeObjectId("invoice");
 const PAYMENT_ID = makeObjectId("payment");
 const REFERENCE = "KY-abc123-1a2b3c4d";
+const MPESA_REFERENCE = "ws_CO_20092026120000123";
+
+const DARAJA_CONFIG = {
+  environment: "sandbox" as const,
+  consumerKey: "key",
+  consumerSecret: "secret",
+  passphrase: "pass",
+  shortcode: "174379",
+};
 
 function tenantDoc() {
   return makeUser({ _id: TENANT_USER_ID, role: "tenant" });
@@ -60,6 +79,20 @@ function successPayment() {
     status: "success",
     paidAt: new Date("2026-09-20T12:00:00.000Z"),
     lastEvent: "verify",
+  });
+}
+
+function pendingMpesaPayment() {
+  return makePayment({
+    _id: PAYMENT_ID,
+    provider: "mpesa",
+    providerReference: MPESA_REFERENCE,
+    channel: "mpesa",
+    invoiceId: INVOICE_ID,
+    tenantId: TENANT_A,
+    ownerId: OWNER_ID,
+    amountMinor: 2500000,
+    status: "pending",
   });
 }
 
@@ -96,6 +129,9 @@ describe("GET /api/v1/tenant/me/payments/status", () => {
   beforeEach(() => {
     resetModelStubs();
     verifyMock.mockReset();
+    queryStkStatusMock.mockReset();
+    getOwnerPaymentConfigMock.mockReset();
+    resolveDarajaConfigMock.mockReset();
     notifyInvoicePaidMock.mockClear();
   });
 
@@ -236,6 +272,94 @@ describe("GET /api/v1/tenant/me/payments/status", () => {
     const body = await json(res);
     expect((body.data as { payment: Record<string, unknown> }).payment.status).toBe("pending");
     expect(invoiceStub.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it("200 queries Daraja and settles a pending M-Pesa payment", async () => {
+    user.findById.mockReturnValue(buildQuery(tenantDoc()));
+    tenantStub.find.mockReturnValue(buildQuery([{ _id: TENANT_A }]));
+    paymentStub.findOne.mockReturnValue(buildQuery(pendingMpesaPayment()));
+    getOwnerPaymentConfigMock.mockResolvedValue({
+      darajaEnabled: true,
+      daraja: {
+        environment: "sandbox",
+        consumerKey: "enc",
+        consumerSecret: "enc",
+        passphrase: "enc",
+        shortcode: "174379",
+      },
+    });
+    resolveDarajaConfigMock.mockReturnValue(DARAJA_CONFIG);
+    queryStkStatusMock.mockResolvedValue({ resultCode: 0, resultDesc: "processed" });
+    invoiceStub.findById
+      .mockReturnValueOnce(buildQuery(pendingInvoice()))
+      .mockReturnValue(buildQuery(paidInvoice()));
+    invoiceStub.findOneAndUpdate.mockReturnValue(buildQuery(paidInvoice()));
+    paymentStub.updateOne.mockResolvedValue(undefined);
+    paymentStub.findById.mockReturnValue(
+      buildQuery({ ...pendingMpesaPayment(), status: "success" }),
+    );
+
+    const res = await GET(
+      buildRequest(`/api/v1/tenant/me/payments/status?reference=${MPESA_REFERENCE}`, {
+        token: signToken(TENANT_USER_ID),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(queryStkStatusMock).toHaveBeenCalledWith(DARAJA_CONFIG, MPESA_REFERENCE);
+    expect(verifyMock).not.toHaveBeenCalled();
+    expect(notifyInvoicePaidMock).toHaveBeenCalledTimes(1);
+    const body = await json(res);
+    expect((body.data as { invoice: Record<string, unknown> }).invoice.status).toBe("paid");
+  });
+
+  it("200 marks a declined M-Pesa attempt failed and leaves the invoice pending", async () => {
+    user.findById.mockReturnValue(buildQuery(tenantDoc()));
+    tenantStub.find.mockReturnValue(buildQuery([{ _id: TENANT_A }]));
+    paymentStub.findOne.mockReturnValue(buildQuery(pendingMpesaPayment()));
+    getOwnerPaymentConfigMock.mockResolvedValue({ darajaEnabled: true });
+    resolveDarajaConfigMock.mockReturnValue(DARAJA_CONFIG);
+    queryStkStatusMock.mockResolvedValue({ resultCode: 1032, resultDesc: "Request cancelled" });
+    invoiceStub.findById.mockReturnValue(buildQuery(pendingInvoice()));
+    paymentStub.updateOne.mockResolvedValue(undefined);
+    paymentStub.findById.mockReturnValue(
+      buildQuery({ ...pendingMpesaPayment(), status: "failed" }),
+    );
+
+    const res = await GET(
+      buildRequest(`/api/v1/tenant/me/payments/status?reference=${MPESA_REFERENCE}`, {
+        token: signToken(TENANT_USER_ID),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const update = paymentStub.updateOne.mock.calls[0];
+    expect((update[1] as { $set: { status: string } }).$set.status).toBe("failed");
+    const body = await json(res);
+    expect((body.data as { payment: Record<string, unknown> }).payment.status).toBe("failed");
+    expect((body.data as { invoice: Record<string, unknown> }).invoice.status).toBe("pending");
+    expect(invoiceStub.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it("200 reports current state when the owner has no Daraja config", async () => {
+    user.findById.mockReturnValue(buildQuery(tenantDoc()));
+    tenantStub.find.mockReturnValue(buildQuery([{ _id: TENANT_A }]));
+    paymentStub.findOne.mockReturnValue(buildQuery(pendingMpesaPayment()));
+    getOwnerPaymentConfigMock.mockResolvedValue(null);
+    resolveDarajaConfigMock.mockReturnValue(null);
+    invoiceStub.findById.mockReturnValue(buildQuery(pendingInvoice()));
+    paymentStub.findById.mockReturnValue(buildQuery(pendingMpesaPayment()));
+
+    const res = await GET(
+      buildRequest(`/api/v1/tenant/me/payments/status?reference=${MPESA_REFERENCE}`, {
+        token: signToken(TENANT_USER_ID),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(queryStkStatusMock).not.toHaveBeenCalled();
+    const body = await json(res);
+    expect((body.data as { payment: Record<string, unknown> }).payment.status).toBe("pending");
   });
 
   it("429 after the per-user rate limit is exhausted", async () => {
