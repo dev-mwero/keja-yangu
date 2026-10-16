@@ -1,5 +1,27 @@
 import type { NextConfig } from "next";
 
+const isDev = process.env.NODE_ENV !== "production";
+
+// Strict in production; development keeps `unsafe-eval` (React Fast Refresh)
+// and localhost/ws origins (HMR + dev asset server).
+const contentSecurityPolicy = [
+  `default-src 'self'${isDev ? " http://localhost:* ws://localhost:*" : ""}`,
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval' http://localhost:*" : ""}`,
+  `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com${
+    isDev ? " http://localhost:*" : ""
+  }`,
+  "img-src 'self' data: blob: https: http:",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  `connect-src 'self' https://*.uploadthing.com https://*.ingest.uploadthing.com${
+    isDev ? " ws://localhost:* http://localhost:*" : ""
+  }`,
+  "frame-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
+
 const nextConfig: NextConfig = {
   output: "standalone",
   reactStrictMode: true,
@@ -37,8 +59,7 @@ const nextConfig: NextConfig = {
           },
           {
             key: "Content-Security-Policy",
-            value:
-              "default-src 'self' http://localhost:* ws://localhost:*; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*; style-src 'self' 'unsafe-inline' http://localhost:*; img-src 'self' data: blob: https: http:; font-src 'self' data:; connect-src 'self' ws://localhost:* http://localhost:* https://*.uploadthing.com https://*.ingest.uploadthing.com; frame-src *; object-src *;",
+            value: contentSecurityPolicy,
           },
           {
             key: "X-XSS-Protection",
