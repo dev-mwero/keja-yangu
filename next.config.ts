@@ -2,6 +2,12 @@ import type { NextConfig } from "next";
 
 const isDev = process.env.NODE_ENV !== "production";
 
+// Next.js 16.3 emits no `next-server.js.nft.json` when a build adapter is
+// active, but the `output: "standalone"` finalize step still reads it —
+// crashing builds on Vercel. Only request standalone output for Docker /
+// self-hosted builds, never on Vercel.
+const isVercel = Boolean(process.env.VERCEL);
+
 // Strict in production; development keeps `unsafe-eval` (React Fast Refresh)
 // and localhost/ws origins (HMR + dev asset server).
 const contentSecurityPolicy = [
@@ -23,7 +29,7 @@ const contentSecurityPolicy = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  output: isVercel ? undefined : "standalone",
   reactStrictMode: true,
   poweredByHeader: false,
   compress: true,
