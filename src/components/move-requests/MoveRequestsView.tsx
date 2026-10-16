@@ -48,7 +48,15 @@ export function MoveRequestsView({ nav, roleName, canDecide = true }: Props) {
   const { decide, pending } = useMoveRequestMutations();
 
   const visible = moveRequests.filter((mr) =>
-    matchesQuery(query, mr.type, mr.requestedByRole, mr.note, mr.status),
+    matchesQuery(
+      query,
+      mr.type,
+      mr.requestedByRole,
+      mr.propertyTitle,
+      mr.requestedByName,
+      mr.note,
+      mr.status,
+    ),
   );
 
   const act = async (id: string, status: MoveRequestStatus) => {
@@ -100,6 +108,7 @@ export function MoveRequestsView({ nav, roleName, canDecide = true }: Props) {
           <TableHeader>
             <TableRow>
               <TableHead>Type</TableHead>
+              <TableHead>Property</TableHead>
               <TableHead>Requested by</TableHead>
               <TableHead>Date</TableHead>
               <TableHead>Note</TableHead>
@@ -110,13 +119,13 @@ export function MoveRequestsView({ nav, roleName, canDecide = true }: Props) {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                   Loading move requests…
                 </TableCell>
               </TableRow>
             ) : visible.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                   <ArrowLeftRight className="mx-auto mb-2 h-6 w-6 opacity-50" />
                   No move requests.
                 </TableCell>
@@ -125,8 +134,9 @@ export function MoveRequestsView({ nav, roleName, canDecide = true }: Props) {
               visible.map((mr) => (
                 <TableRow key={mr._id}>
                   <TableCell className="font-medium capitalize">{mr.type}</TableCell>
+                  <TableCell className="text-muted-foreground">{mr.propertyTitle || "—"}</TableCell>
                   <TableCell className="capitalize text-muted-foreground">
-                    {mr.requestedByRole}
+                    {mr.requestedByName || mr.requestedByRole}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {mr.requestedDate ? formatDate(mr.requestedDate) : "—"}
