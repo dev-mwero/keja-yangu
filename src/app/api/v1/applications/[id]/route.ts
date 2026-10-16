@@ -14,6 +14,9 @@ interface RouteContext {
 export async function PATCH(request: NextRequest, ctx: RouteContext) {
   const { id } = await ctx.params;
 
+  const auth = authenticate(request);
+  if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   await connectToDatabase();
   const application = await Application.findById(id);
   if (!application) {
@@ -34,10 +37,9 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
     );
   }
 
-  const actor = authenticate(request);
   application.status = parsed.data.status;
   application.decisionNote = parsed.data.decisionNote ?? "";
-  application.decidedById = actor?.userId ?? "";
+  application.decidedById = auth.userId;
   application.decidedAt = new Date();
   await application.save();
 

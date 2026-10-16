@@ -54,6 +54,17 @@ describe("PATCH /api/v1/applications/[id]", () => {
     resetModelStubs();
   });
 
+  it("401 when unauthenticated", async () => {
+    const res = await PATCH(
+      buildRequest(`/api/v1/applications/${APP_ID}`, {
+        method: "PATCH",
+        body: { status: "approved" },
+      }),
+      withParams(APP_ID),
+    );
+    expect(res.status).toBe(401);
+  });
+
   it("404 when the application does not exist", async () => {
     authOwner();
     application.findById.mockResolvedValue(null);
