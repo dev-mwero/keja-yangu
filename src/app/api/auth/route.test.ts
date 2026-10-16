@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildRequest } from "@/test/utils/api-request";
 import { makeObjectId } from "@/test/utils/factories";
-import { getModelStubs, resetModelStubs } from "@/test/utils/model-mocks";
+import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-mocks";
 
 vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
@@ -18,6 +18,7 @@ vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 import { POST } from "@/app/api/auth/route";
 import { decryptField, isEncrypted } from "@/lib/crypto";
 import { isEmailConfigured, sendVerificationEmail } from "@/lib/email";
+import { resetAuthRateLimits } from "@/lib/rate-limit-auth";
 
 const { user, tenant: tenantStub } = getModelStubs();
 
@@ -41,6 +42,7 @@ async function json(res: Response) {
 describe("POST /api/auth — signup merge", () => {
   beforeEach(() => {
     resetModelStubs();
+    resetAuthRateLimits();
   });
 
   it("adopts an inactive, unverified pre-created caretaker instead of duplicating", async () => {
@@ -174,6 +176,7 @@ describe("POST /api/auth — signup merge", () => {
 describe("POST /api/auth — verify-email", () => {
   beforeEach(() => {
     resetModelStubs();
+    resetAuthRateLimits();
   });
 
   it("400 when the token is missing", async () => {
@@ -247,5 +250,59 @@ describe("POST /api/auth — verify-email", () => {
     const [filter] = user.findOne.mock.calls[0] as [Record<string, unknown>];
     expect(filter.verificationToken).toBe("tok");
     expect(filter.verificationTokenExpiry).toEqual({ $gt: expect.any(Date) });
+  });
+});
+
+describe("POST /api/auth — rate limiting", () => {
+  beforeEach(() => {
+    resetModelStubs();
+    resetAuthRateLimits();
+  });
+
+  it("429s once an IP exceeds the per-action sign-in budget", async () => {
+    user.findOne.mockReturnValue(buildQuery(null));
+    const headers = { "x-forwarded-for": "203.0.113.7" };
+    const signin = () =>
+      POST(
+        buildRequest("/api/auth", {
+          method: "POST",
+          headers,
+          body: { action: "signin", email: "a@b.co", password: "secret123" },
+        }),
+      );
+
+    // 10 attempts are allowed (each 401 — no such user), the 11th is throttled.
+    for (let i = 0; i < 10; i++) {
+      expect((await signin()).status).toBe(401);
+    }
+
+    const limited = await signin();
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("Retry-After")).toBeTruthy();
+  });
+
+  it("throttles each action independently", async () => {
+    user.findOne.mockReturnValue(buildQuery(null));
+    const headers = { "x-forwarded-for": "198.51.100.4" };
+    // Exhaust signup (limit 5) with invalid payloads (400, no DB write).
+    for (let i = 0; i < 5; i++) {
+      await POST(
+        buildRequest("/api/auth", { method: "POST", headers, body: { action: "signup" } }),
+      );
+    }
+    const signupLimited = await POST(
+      buildRequest("/api/auth", { method: "POST", headers, body: { action: "signup" } }),
+    );
+    expect(signupLimited.status).toBe(429);
+
+    // A different action from the same IP is unaffected.
+    const signin = await POST(
+      buildRequest("/api/auth", {
+        method: "POST",
+        headers,
+        body: { action: "signin", email: "a@b.co", password: "secret123" },
+      }),
+    );
+    expect(signin.status).toBe(401);
   });
 });

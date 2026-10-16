@@ -25,7 +25,7 @@ const signInSchema = z.object({
 const signUpSchema = z.object({
   name: z.string().min(2, "Tell us your name"),
   email: z.string().email("Enter a valid email"),
-  password: z.string().min(6, "At least 6 characters"),
+  password: z.string().min(8, "At least 8 characters"),
   role: z.enum(["tenant", "caretaker", "owner"]),
   phone: z.string().min(1, "Enter your mobile number"),
   nationalId: z.string().min(4, "Enter your national ID number"),
@@ -264,7 +264,7 @@ const AuthForm = () => {
                 <Input
                   id="su-pw"
                   type="password"
-                  placeholder="At least 6 characters"
+                  placeholder="At least 8 characters"
                   {...signUpForm.register("password")}
                 />
                 {signUpForm.formState.errors.password && (
