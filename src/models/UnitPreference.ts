@@ -26,7 +26,6 @@ const unitPreferenceSchema = new Schema(
   { timestamps: true },
 );
 
-unitPreferenceSchema.index({ userId: 1, propertyId: 1 });
 unitPreferenceSchema.index({ unitId: 1 });
 unitPreferenceSchema.index({ ownerId: 1 });
 // At most one live preference per tenant per property.
