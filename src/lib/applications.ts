@@ -1,106 +1,49 @@
-import { z } from "zod";
+import type { ApplicationStatus } from "@/lib/domain-enums";
 
-export type ApplicationStatus = "pending" | "approved" | "rejected";
+export type { ApplicationStatus };
 
+/** The shape the application UIs consume (mapped from the API document). */
 export interface Application {
   id: string;
-  tenantEmail: string;
   propertyId: string;
-  propertyTitle: string;
+  propertyTitle?: string;
+  applicantUserId: string;
   applicantName: string;
   applicantEmail: string;
-  message?: string;
+  message: string;
   status: ApplicationStatus;
   submittedAt: string;
   decidedAt?: string;
   decisionNote?: string;
 }
 
-const STORAGE_KEY = "keja-applications";
-
-export const applicationInputSchema = z.object({
-  name: z.string().trim().min(1, "Name is required").max(100, "Name must be under 100 characters"),
-  email: z.string().trim().email("Invalid email").max(255, "Email must be under 255 characters"),
-  message: z.string().trim().max(500, "Message must be under 500 characters").optional(),
-});
-
-export type ApplicationInput = z.infer<typeof applicationInputSchema>;
-
-const readAll = (): Application[] => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed as Application[];
-  } catch {
-    return [];
-  }
-};
-
-const writeAll = (apps: Application[]) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(apps));
-  window.dispatchEvent(new CustomEvent("keja-applications:changed"));
-};
-
-export const listApplicationsForTenant = (tenantEmail: string): Application[] =>
-  readAll()
-    .filter((a) => a.tenantEmail.toLowerCase() === tenantEmail.toLowerCase())
-    .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
-
-export const getApplicationById = (id: string): Application | undefined =>
-  readAll().find((a) => a.id === id);
-
-export const hasPendingApplication = (tenantEmail: string, propertyId: string): boolean =>
-  readAll().some(
-    (a) =>
-      a.tenantEmail.toLowerCase() === tenantEmail.toLowerCase() &&
-      a.propertyId === propertyId &&
-      a.status === "pending",
-  );
-
-export const createApplication = (params: {
-  tenantEmail: string;
+/** The raw document returned by `GET /api/v1/applications`. */
+export interface ApplicationDoc {
+  _id: string;
   propertyId: string;
-  propertyTitle: string;
-  input: ApplicationInput;
-}): Application => {
-  const app: Application = {
-    id: `app_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    tenantEmail: params.tenantEmail,
-    propertyId: params.propertyId,
-    propertyTitle: params.propertyTitle,
-    applicantName: params.input.name,
-    applicantEmail: params.input.email,
-    message: params.input.message || undefined,
-    status: "pending",
-    submittedAt: new Date().toISOString(),
-  };
-  const all = readAll();
-  all.push(app);
-  writeAll(all);
-  return app;
-};
+  propertyTitle?: string;
+  applicantUserId: string;
+  applicantName: string;
+  applicantEmail: string;
+  message?: string;
+  status: ApplicationStatus;
+  decisionNote?: string;
+  decidedAt?: string;
+  createdAt: string;
+}
 
-export const cancelApplication = (id: string, tenantEmail: string): boolean => {
-  const all = readAll();
-  const next = all.filter(
-    (a) => !(a.id === id && a.tenantEmail.toLowerCase() === tenantEmail.toLowerCase()),
-  );
-  if (next.length === all.length) return false;
-  writeAll(next);
-  return true;
-};
-
-export const subscribeApplications = (cb: () => void): (() => void) => {
-  const onChange = () => cb();
-  const onStorage = (e: StorageEvent) => {
-    if (e.key === STORAGE_KEY) cb();
+export function toApplication(doc: ApplicationDoc): Application {
+  return {
+    id: doc._id,
+    propertyId: doc.propertyId,
+    propertyTitle: doc.propertyTitle,
+    applicantUserId: doc.applicantUserId,
+    applicantName: doc.applicantName,
+    applicantEmail: doc.applicantEmail,
+    message: doc.message ?? "",
+    status: doc.status,
+    submittedAt: doc.createdAt,
+    decidedAt: doc.decidedAt,
+    decisionNote: doc.decisionNote,
   };
-  window.addEventListener("keja-applications:changed", onChange);
-  window.addEventListener("storage", onStorage);
-  return () => {
-    window.removeEventListener("keja-applications:changed", onChange);
-    window.removeEventListener("storage", onStorage);
-  };
-};
+}

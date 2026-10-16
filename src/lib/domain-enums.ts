@@ -41,3 +41,9 @@ export type MoveRequestType = (typeof MOVE_REQUEST_TYPES)[number];
 
 export const MOVE_REQUEST_STATUSES = ["pending", "approved", "rejected", "cancelled"] as const;
 export type MoveRequestStatus = (typeof MOVE_REQUEST_STATUSES)[number];
+
+export const APPLICATION_STATUSES = ["pending", "approved", "rejected"] as const;
+export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
+
+export const APPLICATION_DECISION_STATUSES = ["approved", "rejected"] as const;
+export type ApplicationDecisionStatus = (typeof APPLICATION_DECISION_STATUSES)[number];
