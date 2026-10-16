@@ -1,4 +1,5 @@
 /** @vitest-environment node */
+import bcrypt from "bcryptjs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildRequest } from "@/test/utils/api-request";
 import { makeObjectId } from "@/test/utils/factories";
@@ -250,6 +251,56 @@ describe("POST /api/auth — verify-email", () => {
     const [filter] = user.findOne.mock.calls[0] as [Record<string, unknown>];
     expect(filter.verificationToken).toBe("tok");
     expect(filter.verificationTokenExpiry).toEqual({ $gt: expect.any(Date) });
+  });
+});
+
+describe("POST /api/auth — signin tenant binding", () => {
+  beforeEach(() => {
+    resetModelStubs();
+    resetAuthRateLimits();
+  });
+
+  function activeTenant() {
+    return {
+      _id: USER_ID,
+      email: "tenant@keja.co",
+      name: "Amina",
+      role: "tenant",
+      isActive: true,
+      isVerified: true,
+      passwordHash: bcrypt.hashSync("secret123", 4),
+    };
+  }
+
+  it("binds unbound tenant rows to the signing-in tenant by normalized email", async () => {
+    user.findOne.mockReturnValue(buildQuery(activeTenant()));
+
+    const res = await POST(
+      buildRequest("/api/auth", {
+        method: "POST",
+        body: { action: "signin", email: "Tenant@Keja.co", password: "secret123" },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(tenantStub.updateMany).toHaveBeenCalledWith(
+      { email: "tenant@keja.co", userId: "" },
+      { $set: { userId: USER_ID } },
+    );
+  });
+
+  it("does not touch tenant rows when an owner signs in", async () => {
+    user.findOne.mockReturnValue(
+      buildQuery({ ...activeTenant(), role: "owner", email: "owner@keja.co" }),
+    );
+
+    const res = await POST(
+      buildRequest("/api/auth", {
+        method: "POST",
+        body: { action: "signin", email: "owner@keja.co", password: "secret123" },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(tenantStub.updateMany).not.toHaveBeenCalled();
   });
 });
 

@@ -122,6 +122,7 @@ describe("PATCH /api/v1/move-requests/[id]", () => {
     authOwner();
     const mr = moveRequest({ type: "move-out" });
     moverrequest.findById.mockResolvedValue(mr);
+    tenant.findById.mockReturnValue(buildQuery({ userId: TENANT_ID }));
     const u = unitDoc();
     unit.findById.mockResolvedValue(u);
     lease.updateMany.mockResolvedValue({ modifiedCount: 1 });
@@ -151,6 +152,7 @@ describe("PATCH /api/v1/move-requests/[id]", () => {
     authOwner();
     const mr = moveRequest({ type: "move-in" });
     moverrequest.findById.mockResolvedValue(mr);
+    tenant.findById.mockReturnValue(buildQuery({ userId: TENANT_ID }));
     const u = unitDoc({ tenantId: "", status: "available", rent: 30000 });
     unit.findById.mockResolvedValue(u);
     tenant.updateOne.mockResolvedValue({ modifiedCount: 1 });
@@ -183,6 +185,7 @@ describe("PATCH /api/v1/move-requests/[id]", () => {
     authOwner();
     const mr = moveRequest({ type: "move-in" });
     moverrequest.findById.mockResolvedValue(mr);
+    tenant.findById.mockReturnValue(buildQuery({ userId: TENANT_ID }));
     unit.findById.mockResolvedValue(unitDoc({ tenantId: "", status: "available" }));
     tenant.updateOne.mockResolvedValue({});
     property.findById.mockReturnValue(buildQuery({ price: 45000 }));

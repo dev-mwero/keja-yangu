@@ -57,6 +57,18 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
   return NextResponse.json({ data: moveRequest.toObject() });
 }
 
+/** Resolve the tenant's linked userId (falls back to the requester). */
+async function resolveOccupantUserId(moveRequest: {
+  tenantId: string;
+  requestedById: string;
+}): Promise<string> {
+  if (moveRequest.tenantId) {
+    const tenantDoc = await Tenant.findById(moveRequest.tenantId).select("userId").lean();
+    if (tenantDoc?.userId) return String(tenantDoc.userId);
+  }
+  return moveRequest.requestedById;
+}
+
 /** Approving a move-in occupies the unit and opens an active lease. */
 async function applyMoveIn(moveRequest: {
   unitId: string;
@@ -66,7 +78,7 @@ async function applyMoveIn(moveRequest: {
   requestedById: string;
 }) {
   const unit = moveRequest.unitId ? await Unit.findById(moveRequest.unitId) : null;
-  const occupantUserId = moveRequest.requestedById;
+  const occupantUserId = await resolveOccupantUserId(moveRequest);
 
   if (unit) {
     unit.tenantId = occupantUserId;
@@ -111,8 +123,9 @@ async function applyMoveOut(moveRequest: {
   requestedById: string;
 }) {
   if (moveRequest.unitId) {
+    const occupantUserId = await resolveOccupantUserId(moveRequest);
     const unit = await Unit.findById(moveRequest.unitId);
-    if (unit && (!unit.tenantId || unit.tenantId === moveRequest.requestedById)) {
+    if (unit && (!unit.tenantId || unit.tenantId === occupantUserId)) {
       unit.tenantId = "";
       unit.status = "available";
       await unit.save();

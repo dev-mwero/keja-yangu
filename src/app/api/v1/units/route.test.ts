@@ -10,10 +10,11 @@ vi.mock("@/lib/mongoose", () => ({
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
+vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 
 import { GET } from "@/app/api/v1/units/route";
 
-const { user, property, unit } = getModelStubs();
+const { user, property, unit, tenant } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CUSTODIAN_ID = makeObjectId("custodian");
@@ -82,12 +83,47 @@ describe("GET /api/v1/units", () => {
     expect(unit.find).toHaveBeenCalledWith({ ownerId: OWNER_ID, propertyId: { $in: [p1] } });
   });
 
-  it("scopes a tenant to units they occupy", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: TENANT_ID, role: "tenant" })));
+  it("scopes a tenant to units at their tenancy's property", async () => {
+    const PROP_ID = makeObjectId("prop");
+    user.findById.mockReturnValue(
+      buildQuery(makeUser({ _id: TENANT_ID, role: "tenant", email: "t@keja.co" })),
+    );
+    tenant.find.mockReturnValue(buildQuery([{ propertyId: PROP_ID }]));
     listResult([]);
 
     const res = await GET(buildRequest("/api/v1/units", { token: signToken(TENANT_ID) }));
     expect(res.status).toBe(200);
-    expect(unit.find).toHaveBeenCalledWith({ tenantId: TENANT_ID });
+    expect(tenant.find).toHaveBeenCalledWith({
+      $or: [{ userId: TENANT_ID }, { email: "t@keja.co" }],
+      deletedAt: null,
+    });
+    expect(unit.find).toHaveBeenCalledWith({ propertyId: { $in: [PROP_ID] } });
+  });
+
+  it("returns an empty list when a tenant has no tenancy", async () => {
+    user.findById.mockReturnValue(
+      buildQuery(makeUser({ _id: TENANT_ID, role: "tenant", email: "t@keja.co" })),
+    );
+    tenant.find.mockReturnValue(buildQuery([]));
+
+    const res = await GET(buildRequest("/api/v1/units", { token: signToken(TENANT_ID) }));
+    expect(res.status).toBe(200);
+    expect(unit.find).not.toHaveBeenCalled();
+    expect((await json(res)).data).toEqual([]);
+  });
+
+  it("403 when a tenant requests units for a foreign property", async () => {
+    const OWN_PROP = makeObjectId("own");
+    const OTHER_PROP = makeObjectId("other");
+    user.findById.mockReturnValue(
+      buildQuery(makeUser({ _id: TENANT_ID, role: "tenant", email: "t@keja.co" })),
+    );
+    tenant.find.mockReturnValue(buildQuery([{ propertyId: OWN_PROP }]));
+
+    const res = await GET(
+      buildRequest(`/api/v1/units?propertyId=${OTHER_PROP}`, { token: signToken(TENANT_ID) }),
+    );
+    expect(res.status).toBe(403);
+    expect(unit.find).not.toHaveBeenCalled();
   });
 });

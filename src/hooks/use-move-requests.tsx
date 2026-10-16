@@ -10,11 +10,13 @@ export interface MoveRequest {
   _id: string;
   type: MoveRequestType;
   propertyId: string;
+  propertyTitle?: string;
   ownerId: string;
   blockId: string;
   unitId: string;
   tenantId: string;
   requestedById: string;
+  requestedByName?: string;
   requestedByRole: string;
   requestedFor: string;
   requestedDate?: string;
@@ -79,6 +81,7 @@ export interface CreateMoveRequestInput {
   propertyId: string;
   unitId?: string;
   tenantId?: string;
+  requestedDate?: string;
   note?: string;
 }
 

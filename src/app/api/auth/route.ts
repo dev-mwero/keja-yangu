@@ -94,6 +94,18 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
       }
 
+      // Bind tenant signups to any unbound Tenant rows carrying the same
+      // email (normalised to match signup storage). This heals tenancies
+      // created before the verify-email bind existed or where verification
+      // ran before the Tenant row was added.
+      if (user.role === "tenant") {
+        const userId = user._id?.toString() ?? user.id ?? "";
+        await Tenant.updateMany(
+          { email: user.email.trim().toLowerCase(), userId: "" },
+          { $set: { userId } },
+        );
+      }
+
       const token = jwt.sign(
         { userId: user._id, email: user.email, role: user.role, name: user.name },
         getJwtSecret(),
