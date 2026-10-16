@@ -7,6 +7,7 @@ import { isEmailConfigured, sendPasswordResetEmail, sendVerificationEmail } from
 import { getJwtSecret } from "@/lib/jwt";
 import { connectToDatabase } from "@/lib/mongoose";
 import { isValidE164, isValidNationalId, normalizeNationalId } from "@/lib/phone";
+import { rateLimitAuth } from "@/lib/rate-limit-auth";
 import { Tenant } from "@/models/Tenant";
 import { User } from "@/models/User";
 
@@ -18,7 +19,7 @@ const signInSchema = z.object({
 const signUpSchema = z.object({
   name: z.string().min(2, "Tell us your name"),
   email: z.string().email("Enter a valid email"),
-  password: z.string().min(6, "At least 6 characters"),
+  password: z.string().min(8, "At least 8 characters"),
   role: z.enum(["tenant", "caretaker", "owner"]),
   phone: z
     .string()
@@ -37,6 +38,21 @@ const signUpWithVerificationSchema = signUpSchema.extend({
   name: z.string().min(2),
 });
 
+/**
+ * Per-action throttle. Credential and email-sending actions get the tightest
+ * budgets; verify/reset (token-gated) are looser. Buckets are per IP *and*
+ * action, so hammering one endpoint cannot exhaust another's allowance.
+ */
+const AUTH_RATE_LIMITS: Record<string, { windowMs: number; limit: number }> = {
+  signin: { windowMs: 15 * 60_000, limit: 10 },
+  signup: { windowMs: 15 * 60_000, limit: 5 },
+  "resend-verification": { windowMs: 15 * 60_000, limit: 3 },
+  "forgot-password": { windowMs: 15 * 60_000, limit: 3 },
+  "reset-password": { windowMs: 15 * 60_000, limit: 10 },
+  "verify-email": { windowMs: 15 * 60_000, limit: 10 },
+};
+const DEFAULT_AUTH_RATE_LIMIT = { windowMs: 15 * 60_000, limit: 20 };
+
 async function generateVerificationToken(): Promise<string> {
   return crypto.randomUUID();
 }
@@ -45,6 +61,13 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { action } = body;
+
+    const limitConfig = AUTH_RATE_LIMITS[action as string] ?? DEFAULT_AUTH_RATE_LIMIT;
+    const rateLimited = await rateLimitAuth(request, {
+      ...limitConfig,
+      key: typeof action === "string" ? action : "default",
+    });
+    if (rateLimited) return rateLimited;
 
     if (action === "signin") {
       const parsed = signInSchema.safeParse(body);
@@ -56,7 +79,8 @@ export async function POST(request: Request) {
       }
 
       await connectToDatabase();
-      const user = await User.findOne({ email: parsed.data.email }).lean();
+      // Emails are stored lowercased (see signup), so normalise before lookup.
+      const user = await User.findOne({ email: parsed.data.email.trim().toLowerCase() }).lean();
       // biome-ignore lint/complexity: useOptionalChain
       if (!user || !user.isActive) {
         return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
@@ -156,7 +180,7 @@ export async function POST(request: Request) {
       const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
       const createdUser = await User.create({
-        email: parsed.data.email,
+        email,
         name: parsed.data.name,
         passwordHash,
         role: parsed.data.role,
@@ -170,14 +194,12 @@ export async function POST(request: Request) {
       const verifyUrl = `${appBaseUrl}/auth/verify?token=${verificationToken}`;
 
       const emailSent = isEmailConfigured()
-        ? await sendVerificationEmail(parsed.data.email, verificationToken, parsed.data.name)
+        ? await sendVerificationEmail(email, verificationToken, parsed.data.name)
         : false;
 
       if (!emailSent) {
         if (process.env.NODE_ENV === "development") {
-          console.warn(
-            `[DEV] Email sending failed. Verification link for ${parsed.data.email}: ${verifyUrl}`,
-          );
+          console.warn(`[DEV] Email sending failed. Verification link for ${email}: ${verifyUrl}`);
         }
         await User.deleteOne({ _id: createdUser._id });
         return NextResponse.json(
@@ -233,9 +255,10 @@ export async function POST(request: Request) {
       if (!email) {
         return NextResponse.json({ error: "Email required" }, { status: 400 });
       }
+      const normalizedEmail = String(email).trim().toLowerCase();
 
       await connectToDatabase();
-      const user = await User.findOne({ email });
+      const user = await User.findOne({ email: normalizedEmail });
       if (!user) {
         return NextResponse.json({ error: "User not found" }, { status: 404 });
       }
@@ -253,12 +276,14 @@ export async function POST(request: Request) {
       const verifyUrl = `${appBaseUrl}/auth/verify?token=${verificationToken}`;
 
       const emailSent = isEmailConfigured()
-        ? await sendVerificationEmail(email, verificationToken, user.name || "User")
+        ? await sendVerificationEmail(normalizedEmail, verificationToken, user.name || "User")
         : false;
 
       if (!emailSent) {
         if (process.env.NODE_ENV === "development") {
-          console.warn(`[DEV] Email sending failed. Verification link for ${email}: ${verifyUrl}`);
+          console.warn(
+            `[DEV] Email sending failed. Verification link for ${normalizedEmail}: ${verifyUrl}`,
+          );
         }
         return NextResponse.json(
           { error: "Failed to send verification email. Please try again later." },
@@ -276,9 +301,10 @@ export async function POST(request: Request) {
       if (!email) {
         return NextResponse.json({ error: "Email required" }, { status: 400 });
       }
+      const normalizedEmail = String(email).trim().toLowerCase();
 
       await connectToDatabase();
-      const user = await User.findOne({ email });
+      const user = await User.findOne({ email: normalizedEmail });
       if (!user) {
         // Don't reveal if user exists
         return NextResponse.json({
@@ -299,7 +325,9 @@ export async function POST(request: Request) {
 
       if (!emailSent) {
         if (process.env.NODE_ENV === "development") {
-          console.warn(`[DEV] Password reset email failed. Reset link for ${email}: ${resetUrl}`);
+          console.warn(
+            `[DEV] Password reset email failed. Reset link for ${normalizedEmail}: ${resetUrl}`,
+          );
         }
         return NextResponse.json(
           { error: "Failed to send password reset email. Please try again later." },
@@ -317,9 +345,9 @@ export async function POST(request: Request) {
       if (!token || !password) {
         return NextResponse.json({ error: "Token and new password required" }, { status: 400 });
       }
-      if (password.length < 6) {
+      if (password.length < 8) {
         return NextResponse.json(
-          { error: "Password must be at least 6 characters" },
+          { error: "Password must be at least 8 characters" },
           { status: 400 },
         );
       }

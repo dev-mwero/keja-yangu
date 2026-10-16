@@ -1,6 +1,8 @@
 import { createUploadthing, type FileRouter } from "uploadthing/next";
 import { UploadThingError } from "uploadthing/server";
+import { connectToDatabase } from "@/lib/mongoose";
 import { authenticate } from "@/lib/permissions";
+import { User } from "@/models/User";
 
 const f = createUploadthing();
 
@@ -13,9 +15,16 @@ export const ourFileRouter = {
       if (!auth) {
         throw new UploadThingError("Unauthorized");
       }
+      // Re-verify against the database: the JWT alone would let a deactivated
+      // account keep uploading until its 7-day token expires.
+      await connectToDatabase();
+      const user = await User.findById(auth.userId).select("isActive role").lean();
+      if (!user?.isActive) {
+        throw new UploadThingError("Unauthorized");
+      }
       return {
         uploadedBy: auth.userId,
-        role: auth.role,
+        role: user.role ?? auth.role,
         // Stable public prefix for the files this endpoint returns
         fileUrlPrefix: "https://utfs.io/f",
       };

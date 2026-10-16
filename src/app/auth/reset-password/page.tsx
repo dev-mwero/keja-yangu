@@ -28,8 +28,8 @@ const ResetPasswordForm = () => {
       setError("This reset link is missing a token. Please request a new one.");
       return;
     }
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
       return;
     }
     if (password !== confirm) {
@@ -84,7 +84,7 @@ const ResetPasswordForm = () => {
             <Input
               id="rp-pw"
               type="password"
-              placeholder="At least 6 characters"
+              placeholder="At least 8 characters"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
