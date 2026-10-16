@@ -17,6 +17,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -38,6 +40,7 @@ import { useMyInvoiceMutations, useMyInvoices } from "@/hooks/use-my-invoices";
 import { formatKES, formatPeriod } from "@/lib/format";
 import type { DerivedInvoiceStatus } from "@/lib/invoicing";
 import { INVOICE_METHODS, type InvoiceMethod } from "@/lib/invoicing";
+import { manualMethodRequiresReference } from "@/lib/payments/methods";
 import { matchesQuery } from "@/lib/search";
 import type { Invoice } from "@/types/invoicing";
 
@@ -58,6 +61,7 @@ const TenantPaymentsPage = () => {
   const [query, setQuery] = useState("");
   const [paying, setPaying] = useState<Invoice | null>(null);
   const [method, setMethod] = useState<InvoiceMethod>("M-Pesa");
+  const [reference, setReference] = useState("");
   const [receipt, setReceipt] = useState<Invoice | null>(null);
 
   // Callback return: the "Pay online" flow redirects the browser to Paystack
@@ -106,7 +110,10 @@ const TenantPaymentsPage = () => {
   const confirmPayment = async () => {
     if (!paying) return;
     try {
-      await markOwnPaid(paying._id, { method });
+      await markOwnPaid(paying._id, {
+        method,
+        reference: reference.trim() || undefined,
+      });
       toast.success("Payment recorded", {
         description: `Payment recorded for ${paying.invoiceNumber} via ${method}.`,
       });
@@ -247,6 +254,7 @@ const TenantPaymentsPage = () => {
                             disabled={pending}
                             onClick={() => {
                               setMethod(invoice.method ?? "M-Pesa");
+                              setReference("");
                               setPaying(invoice);
                             }}
                           >
@@ -262,6 +270,7 @@ const TenantPaymentsPage = () => {
                           disabled={pending}
                           onClick={() => {
                             setMethod(invoice.method ?? "M-Pesa");
+                            setReference("");
                             setPaying(invoice);
                           }}
                         >
@@ -302,6 +311,22 @@ const TenantPaymentsPage = () => {
               </SelectContent>
             </Select>
           </div>
+          {manualMethodRequiresReference(method) && (
+            <div className="space-y-2">
+              <Label htmlFor="tenant-payment-reference">Transaction reference</Label>
+              <Input
+                id="tenant-payment-reference"
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+                placeholder={
+                  method === "M-Pesa" ? "e.g. QK12ABC3XY" : "Bank slip or transfer reference"
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                Required for {method} so your landlord can reconcile the payment.
+              </p>
+            </div>
+          )}
           <DialogFooter>
             <Button
               variant="outline"
@@ -311,7 +336,13 @@ const TenantPaymentsPage = () => {
             >
               Cancel
             </Button>
-            <Button className="rounded-full" disabled={pending} onClick={confirmPayment}>
+            <Button
+              className="rounded-full"
+              disabled={
+                pending || (manualMethodRequiresReference(method) && reference.trim() === "")
+              }
+              onClick={confirmPayment}
+            >
               <CreditCard className="h-4 w-4" />
               Confirm payment
             </Button>

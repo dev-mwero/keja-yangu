@@ -178,7 +178,7 @@ describe("POST /api/v1/tenant/me/invoices/[id]", () => {
       buildRequest(`/api/v1/tenant/me/invoices/${INVOICE_ID}`, {
         method: "POST",
         token: signToken(TENANT_USER_ID),
-        body: { method: "M-Pesa", notes: "paid from portal" },
+        body: { method: "M-Pesa", reference: "QK12ABC3XY", notes: "paid from portal" },
       }),
       withParams(INVOICE_ID),
     );

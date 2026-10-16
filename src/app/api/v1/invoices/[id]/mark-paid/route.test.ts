@@ -163,6 +163,23 @@ describe("POST /api/v1/invoices/[id]/mark-paid", () => {
     expect(body.error).toBe("Invalid payment payload");
   });
 
+  it("400 when a non-cash method has no transaction reference", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    invoiceStub.findById.mockReturnValue(buildQuery(pendingInvoice()));
+    const res = await POST(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}/mark-paid`, {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { method: "M-Pesa", notes: "paid via M-Pesa" },
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(400);
+    const body = await json(res);
+    expect(body.error).toBe("Invalid payment payload");
+    expect(invoiceStub.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
   it("marks a pending invoice paid with full amount and owner audit stamps", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     invoiceStub.findById.mockReturnValue(buildQuery(pendingInvoice()));
@@ -173,7 +190,7 @@ describe("POST /api/v1/invoices/[id]/mark-paid", () => {
       buildRequest(`/api/v1/invoices/${INVOICE_ID}/mark-paid`, {
         method: "POST",
         token: signToken(OWNER_ID),
-        body: { method: "M-Pesa", notes: "paid via M-Pesa" },
+        body: { method: "M-Pesa", reference: "QK12ABC3XY", notes: "paid via M-Pesa" },
       }),
       withParams(INVOICE_ID),
     );

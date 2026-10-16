@@ -66,6 +66,30 @@ describe("RecordPaymentDialog", () => {
     expect(screen.queryByText(/transaction reference/i)).not.toBeInTheDocument();
   });
 
+  it("disables submit for a non-cash method without a reference", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <RecordPaymentDialog
+        open
+        onOpenChange={() => {}}
+        invoice={makeInvoice()}
+        pending={false}
+        onSubmit={onSubmit}
+      />,
+    );
+    // Default method is M-Pesa, which requires a reference.
+    expect(screen.getByRole("button", { name: /Record payment/i })).toBeDisabled();
+    await user.type(screen.getByLabelText(/Reference/i), "QK12ABC3XY");
+    expect(screen.getByRole("button", { name: /Record payment/i })).toBeEnabled();
+
+    // Cash does not require a reference.
+    await user.click(screen.getByRole("combobox"));
+    await user.click(await screen.findByRole("option", { name: "Cash" }));
+    await user.clear(screen.getByLabelText(/Reference/i));
+    expect(screen.getByRole("button", { name: /Record payment/i })).toBeEnabled();
+  });
+
   it("submits the extended payload", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn().mockResolvedValue(undefined);
