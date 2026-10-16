@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { AccountDetailsForm } from "@/components/account/AccountDetailsForm";
 import { DashboardShell } from "@/components/DashboardShell";
+import { PaymentMethodsSettings } from "@/components/settings/PaymentMethodsSettings";
 import {
   Select,
   SelectContent,
@@ -124,6 +125,8 @@ const OwnerSettingsPage = () => {
           </div>
         </section>
       </div>
+
+      <PaymentMethodsSettings />
 
       <Link href="/dashboard/owner/portfolio">
         <div className="mt-6 flex items-center gap-3 rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground">

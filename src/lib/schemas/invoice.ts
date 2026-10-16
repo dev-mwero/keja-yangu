@@ -75,14 +75,28 @@ export const invoiceGenerateInput = z.object({
 // Client-supplied `amountPaid` is stripped (unknown key): offline mark-paid
 // settles the validated `amount` (defaulting to `amountDue` server-side). The
 // field exists only for the Paystack path.
-export const invoiceMarkPaidInput = z.object({
-  amount: z.coerce.number().min(0).optional(),
-  method: z.enum(INVOICE_METHODS).optional(),
-  paidAt: z.iso.datetime().optional(),
-  description: z.string().max(500).optional(),
-  reference: z.string().max(100).optional(),
-  notes: z.string().optional(),
-});
+//
+// Manual payments need a transaction code/reference for reconciliation unless
+// they are cash — a non-cash method without a reference is rejected here so
+// both the staff and tenant mark-paid routes enforce the same rule.
+export const invoiceMarkPaidInput = z
+  .object({
+    amount: z.coerce.number().min(0).optional(),
+    method: z.enum(INVOICE_METHODS).optional(),
+    paidAt: z.iso.datetime().optional(),
+    description: z.string().max(500).optional(),
+    reference: z.string().max(100).optional(),
+    notes: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.method && data.method !== "Cash" && !data.reference?.trim()) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["reference"],
+        message: "A transaction reference is required for non-cash payments",
+      });
+    }
+  });
 
 export type InvoiceInput = z.infer<typeof invoiceInput>;
 export type InvoiceUpdate = z.infer<typeof invoiceUpdate>;

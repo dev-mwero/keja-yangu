@@ -23,6 +23,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { formatPeriod } from "@/lib/format";
 import { INVOICE_METHODS, type InvoiceMethod } from "@/lib/invoicing";
+import { manualMethodRequiresReference } from "@/lib/payments/methods";
 import type { InvoiceMarkPaidInput } from "@/lib/schemas";
 import type { Invoice } from "@/types/invoicing";
 
@@ -81,6 +82,7 @@ export const RecordPaymentDialog = ({
 
   const showReferenceHint =
     method === "M-Pesa" || method === "Card" || method === "Bank" || method === "Other";
+  const referenceRequired = manualMethodRequiresReference(method) && reference.trim() === "";
 
   return (
     <Dialog
@@ -143,7 +145,9 @@ export const RecordPaymentDialog = ({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="payment-reference">Reference (optional)</Label>
+            <Label htmlFor="payment-reference">
+              Reference {showReferenceHint ? "(required)" : "(optional)"}
+            </Label>
             <Input
               id="payment-reference"
               value={reference}
@@ -175,7 +179,11 @@ export const RecordPaymentDialog = ({
           >
             Cancel
           </Button>
-          <Button className="rounded-full" disabled={pending} onClick={handleSubmit}>
+          <Button
+            className="rounded-full"
+            disabled={pending || referenceRequired}
+            onClick={handleSubmit}
+          >
             {pending && <Loader2 className="h-4 w-4 animate-spin" />}
             Record payment
           </Button>
