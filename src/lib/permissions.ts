@@ -32,6 +32,7 @@ export type Action =
   | "recycle-bin:manage"
   | "unit:read"
   | "unit:manage"
+  | "unit:prefer"
   | "custodian:manage"
   | "tenant:manage"
   | "move-request:create"
@@ -152,6 +153,11 @@ export async function requirePermission(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // Choosing a preferred unit is a tenant-only action.
+  if (action === "unit:prefer" && role !== "tenant") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   if (role === "tenant") {
     const tenantActions: Action[] = [
       "invoice:read-own",
@@ -166,6 +172,7 @@ export async function requirePermission(
       "announcement:read",
       "document:read-own",
       "unit:read",
+      "unit:prefer",
       "move-request:create",
     ];
     return tenantActions.includes(action)

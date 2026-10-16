@@ -112,6 +112,7 @@ interface TenantSection {
 const tenantSections: TenantSection[] = [
   { slug: "", label: "Overview", icon: Home },
   { slug: "/browse", label: "Browse homes", icon: Search, external: "/properties" },
+  { slug: "/units", label: "Vacant units", icon: DoorOpen },
   { slug: "/applications", label: "Applications", icon: FileText },
   { slug: "/move-requests", label: "Move Requests", icon: ArrowLeftRight },
   { slug: "/payments", label: "Payments", icon: CreditCard },

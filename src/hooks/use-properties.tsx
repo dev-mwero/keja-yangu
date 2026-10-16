@@ -23,6 +23,8 @@ export interface PropertyBlock {
 }
 
 export interface FloorInputPayload {
+  /** Existing floor subdocument id (present when editing a saved structure). */
+  id?: string;
   level: number;
   label?: string;
   rentOverride?: number | null;
@@ -31,9 +33,31 @@ export interface FloorInputPayload {
 }
 
 export interface BlockInputPayload {
+  /** Existing block subdocument id (present when editing a saved structure). */
+  id?: string;
   name: string;
   rentOverride?: number | null;
   floors: FloorInputPayload[];
+}
+
+/**
+ * Convert a saved property's blocks into editor payloads, preserving the
+ * block/floor subdocument ids so a save reconciles in place instead of
+ * recreating units.
+ */
+export function toBlockPayloads(property: Pick<Property, "blocks">): BlockInputPayload[] {
+  return (property.blocks ?? []).map((block) => ({
+    id: block._id,
+    name: block.name,
+    rentOverride: block.rentOverride,
+    floors: block.floors.map((floor) => ({
+      id: floor._id,
+      level: floor.level,
+      label: floor.label,
+      rentOverride: floor.rentOverride,
+      unitsPerFloor: floor.unitsPerFloor,
+    })),
+  }));
 }
 
 export interface Property {
@@ -171,6 +195,24 @@ export function usePropertyMutations() {
     }
   };
 
+  const updateStructure = async (id: string, blocks: BlockInputPayload[]): Promise<Property> => {
+    setPending(true);
+    try {
+      const res = await fetch(`/api/v1/properties/${id}/structure`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blocks }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to update property structure");
+      }
+      return json.data as Property;
+    } finally {
+      setPending(false);
+    }
+  };
+
   const deleteProperty = async (id: string): Promise<void> => {
     setPending(true);
     try {
@@ -184,5 +226,5 @@ export function usePropertyMutations() {
     }
   };
 
-  return { createProperty, updateProperty, deleteProperty, pending };
+  return { createProperty, updateProperty, updateStructure, deleteProperty, pending };
 }

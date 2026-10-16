@@ -17,7 +17,8 @@ const stubs: Record<
   | "unit"
   | "moverrequest"
   | "application"
-  | "ownerpaymentconfig",
+  | "ownerpaymentconfig"
+  | "unitpreference",
   ModelStub
 > = {
   user: createModelStub(),
@@ -37,6 +38,7 @@ const stubs: Record<
   moverrequest: createModelStub(),
   application: createModelStub(),
   ownerpaymentconfig: createModelStub(),
+  unitpreference: createModelStub(),
 };
 
 /**
