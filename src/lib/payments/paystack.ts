@@ -37,6 +37,16 @@ export function getPaystackSecret(): string {
   return secret;
 }
 
+/** Non-throwing probe of the same fail-closed guard, for availability badges. */
+export function paystackConfigured(): boolean {
+  try {
+    getPaystackSecret();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Verifies the Paystack `x-paystack-signature` header over the exact raw body
  * bytes. Constant-time comparison with a length guard first (timingSafeEqual

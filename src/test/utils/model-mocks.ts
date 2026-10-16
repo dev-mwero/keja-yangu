@@ -15,7 +15,8 @@ const stubs: Record<
   | "propertydocument"
   | "propertytype"
   | "unit"
-  | "moverrequest",
+  | "moverrequest"
+  | "ownerpaymentconfig",
   ModelStub
 > = {
   user: createModelStub(),
@@ -33,6 +34,7 @@ const stubs: Record<
   propertytype: createModelStub(),
   unit: createModelStub(),
   moverrequest: createModelStub(),
+  ownerpaymentconfig: createModelStub(),
 };
 
 /**

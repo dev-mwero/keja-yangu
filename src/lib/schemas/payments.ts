@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DARAJA_ENVIRONMENTS } from "@/lib/payments/methods";
 import { hex24 } from "./lease";
 
 /** Paystack references are `KY-<objectid>-<hex>`; callback query params echo them unencoded-safe. */
@@ -33,3 +34,24 @@ export type PaystackWebhookEnvelope = z.infer<typeof paystackWebhookEnvelope>;
 export type PaystackInitiateInput = z.infer<typeof paystackInitiateInput>;
 export type PaystackInitiateParams = z.infer<typeof paystackInitiateParams>;
 export type PaystackStatusQuery = z.infer<typeof paystackStatusQuery>;
+
+/**
+ * Owner Daraja configuration. All fields optional so an owner can flip
+ * `darajaEnabled` or update a single secret; omitted keys are left untouched
+ * and empty strings clear a field. The route enforces completeness before the
+ * M-Pesa method actually turns on.
+ */
+export const ownerPaymentConfigInput = z.object({
+  darajaEnabled: z.boolean().optional(),
+  daraja: z
+    .object({
+      environment: z.enum(DARAJA_ENVIRONMENTS).optional(),
+      consumerKey: z.string().trim().max(200).optional(),
+      consumerSecret: z.string().trim().max(200).optional(),
+      passphrase: z.string().trim().max(200).optional(),
+      shortcode: z.string().trim().max(20).optional(),
+    })
+    .optional(),
+});
+
+export type OwnerPaymentConfigInput = z.infer<typeof ownerPaymentConfigInput>;
