@@ -36,6 +36,7 @@ export type Action =
   | "tenant:manage"
   | "move-request:create"
   | "move-request:manage"
+  | "application:manage"
   | "lease:manage"
   | "invoice:read"
   | "invoice:manage"
@@ -193,6 +194,7 @@ export async function requirePermission(
         action === "unit:manage" ||
         action === "tenant:manage" ||
         action === "move-request:manage" ||
+        action === "application:manage" ||
         action === "lease:manage" ||
         action === "invoice:manage" ||
         action === "invoice:mark-paid" ||
@@ -259,6 +261,15 @@ export async function requirePermission(
     case "move-request:manage":
       if (
         !privileges.includes("process_move_requests") ||
+        !resource ||
+        resource.ownerId !== managedByOwnerId
+      ) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      return null;
+    case "application:manage":
+      if (
+        !privileges.includes("manage_tenants") ||
         !resource ||
         resource.ownerId !== managedByOwnerId
       ) {

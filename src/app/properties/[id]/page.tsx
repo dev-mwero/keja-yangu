@@ -23,14 +23,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { useApplicationMutations, useApplications } from "@/hooks/use-applications";
 import { useAuth } from "@/hooks/use-auth";
 import { useProperties } from "@/hooks/use-properties";
 import { useToast } from "@/hooks/use-toast";
-import {
-  applicationInputSchema,
-  createApplication,
-  hasPendingApplication,
-} from "@/lib/applications";
+import { applicationFormSchema } from "@/lib/schemas/application";
 
 const PropertyDetails = () => {
   const { id } = useParams();
@@ -41,6 +38,8 @@ const PropertyDetails = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const router = useRouter();
+  const { create } = useApplicationMutations();
+  const { applications } = useApplications(undefined, { enabled: user?.role === "tenant" });
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", message: "" });
@@ -72,12 +71,14 @@ const PropertyDetails = () => {
   }
 
   const alreadyPending =
-    user?.role === "tenant" && property ? hasPendingApplication(user.email, property.id) : false;
+    user?.role === "tenant" && property
+      ? applications.some((a) => a.propertyId === property.id && a.status === "pending")
+      : false;
 
   const gallery = property.images.length > 0 ? property.images : ["/images/property-1.jpg"];
   const safeActive = Math.min(active, gallery.length - 1);
 
-  const handleApply = (e: React.FormEvent) => {
+  const handleApply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!property) return;
 
@@ -105,7 +106,7 @@ const PropertyDetails = () => {
       return;
     }
 
-    const result = applicationInputSchema.safeParse(form);
+    const result = applicationFormSchema.safeParse(form);
     if (!result.success) {
       const fieldErrors: typeof errors = {};
       result.error.issues.forEach((iss) => {
@@ -118,11 +119,11 @@ const PropertyDetails = () => {
 
     setSubmitting(true);
     try {
-      createApplication({
-        tenantEmail: user.email,
+      await create({
         propertyId: property.id,
-        propertyTitle: property.title,
-        input: result.data,
+        name: result.data.name,
+        email: result.data.email,
+        message: result.data.message,
       });
       toast({
         title: "Application submitted",
@@ -132,6 +133,12 @@ const PropertyDetails = () => {
       setForm({ name: "", email: "", message: "" });
       setErrors({});
       router.push("/dashboard/tenant/applications");
+    } catch (err) {
+      toast({
+        title: "Could not submit application",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
     } finally {
       setSubmitting(false);
     }

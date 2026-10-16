@@ -39,6 +39,7 @@ const baseSections = [
   { slug: "/portfolio", label: "Portfolio", icon: Building2 },
   { slug: "/units", label: "Units", icon: DoorOpen },
   { slug: "/tenants", label: "Tenants", icon: Users },
+  { slug: "/applications", label: "Applications", icon: FileText },
   { slug: "/move-requests", label: "Move Requests", icon: ArrowLeftRight },
   { slug: "/team", label: "Team", icon: UserCog },
   { slug: "/tasks", label: "Tasks & Maintenance", icon: Wrench },
@@ -49,11 +50,20 @@ const baseSections = [
   { slug: "/settings", label: "Settings", icon: Settings },
 ] satisfies readonly Section[];
 
-const caretakerSections = baseSections.filter((s) => s.slug !== "/tenants" && s.slug !== "/team");
+const caretakerSections = baseSections.filter(
+  (s) => s.slug !== "/tenants" && s.slug !== "/team" && s.slug !== "/applications",
+);
 const custodianSections = baseSections.filter((s) =>
-  ["", "/portfolio", "/units", "/tenants", "/move-requests", "/team", "/accounting"].includes(
-    s.slug,
-  ),
+  [
+    "",
+    "/portfolio",
+    "/units",
+    "/tenants",
+    "/applications",
+    "/move-requests",
+    "/team",
+    "/accounting",
+  ].includes(s.slug),
 );
 const systemAdminSections = baseSections.filter((s) =>
   ["", "/portfolio", "/tenants", "/accounting"].includes(s.slug),
@@ -79,6 +89,7 @@ export const custodianNav = buildDashboardNav("custodian");
 export const caretakerNavWithTenants: DashNavItem[] = [
   ...caretakerNav,
   { to: "/dashboard/caretaker/tenants", label: "Tenants", icon: Users },
+  { to: "/dashboard/caretaker/applications", label: "Applications", icon: FileText },
 ];
 
 export const systemAdminNav: DashNavItem[] = [

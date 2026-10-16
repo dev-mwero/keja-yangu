@@ -19,9 +19,9 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { tenantNav } from "@/config/dashboardNav";
-import { useTenantApplications } from "@/hooks/use-applications";
+import { useApplicationMutations, useTenantApplications } from "@/hooks/use-applications";
 import { useAuth } from "@/hooks/use-auth";
-import { type ApplicationStatus, cancelApplication } from "@/lib/applications";
+import type { ApplicationStatus } from "@/lib/domain-enums";
 import { formatDate } from "@/lib/format";
 import { matchesQuery } from "@/lib/search";
 
@@ -42,6 +42,7 @@ type Filter = "all" | ApplicationStatus;
 const TenantApplicationsPage = () => {
   const { user } = useAuth();
   const { applications, refresh } = useTenantApplications(user?.email);
+  const { withdraw, pending } = useApplicationMutations();
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
 
@@ -51,10 +52,18 @@ const TenantApplicationsPage = () => {
     filter === "all" ? applications : applications.filter((a) => a.status === filter)
   ).filter((app) => matchesQuery(query, app.propertyTitle, app.applicantName, app.status));
 
-  const handleCancel = (id: string, title: string) => {
-    cancelApplication(id, user?.email ?? "");
-    refresh();
-    toast.success("Application withdrawn", { description: `${title} removed from your requests.` });
+  const handleCancel = async (id: string, title: string) => {
+    try {
+      await withdraw(id);
+      refresh();
+      toast.success("Application withdrawn", {
+        description: `${title} removed from your requests.`,
+      });
+    } catch (err) {
+      toast.error("Could not withdraw application", {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
   };
 
   return (
@@ -145,7 +154,8 @@ const TenantApplicationsPage = () => {
                           variant="outline"
                           size="sm"
                           className="rounded-full text-muted-foreground"
-                          onClick={() => handleCancel(app.id, app.propertyTitle)}
+                          disabled={pending}
+                          onClick={() => handleCancel(app.id, app.propertyTitle ?? "")}
                         >
                           Withdraw
                         </Button>
