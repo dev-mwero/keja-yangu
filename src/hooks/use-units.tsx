@@ -32,6 +32,18 @@ export interface UnitFilters {
   tenantId?: string;
 }
 
+export interface UseUnitsOptions {
+  /**
+   * Page through `/api/v1/units` until every matching unit is loaded, instead
+   * of the single default page (10). Bounded by MAX_FETCH_ALL_PAGES.
+   */
+  fetchAll?: boolean;
+}
+
+const FETCH_ALL_PAGE_SIZE = 100;
+// 100 * 25 = 2,500 — comfortably above MAX_UNITS_PER_PROPERTY (2,000).
+const MAX_FETCH_ALL_PAGES = 25;
+
 export interface UnitInput {
   status?: UnitStatus;
   rent?: number | null;
@@ -42,21 +54,27 @@ export interface UnitInput {
   tenantId?: string;
 }
 
-export function useUnits(filters?: UnitFilters) {
+export function useUnits(filters?: UnitFilters, options?: UseUnitsOptions) {
   const [units, setUnits] = useState<Unit[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [total, setTotal] = useState(0);
   const [reload, setReload] = useState(0);
 
-  const query = useMemo(() => {
-    const params = new URLSearchParams();
-    if (filters?.propertyId) params.set("propertyId", filters.propertyId);
-    if (filters?.blockId) params.set("blockId", filters.blockId);
-    if (filters?.status) params.set("status", filters.status);
-    if (filters?.tenantId) params.set("tenantId", filters.tenantId);
-    const qs = params.toString();
-    return qs ? `?${qs}` : "";
-  }, [filters?.propertyId, filters?.blockId, filters?.status, filters?.tenantId]);
+  const fetchAll = options?.fetchAll ?? false;
+  const propertyId = filters?.propertyId;
+  const blockId = filters?.blockId;
+  const status = filters?.status;
+  const tenantId = filters?.tenantId;
+
+  const params = useMemo(() => {
+    const search = new URLSearchParams();
+    if (propertyId) search.set("propertyId", propertyId);
+    if (blockId) search.set("blockId", blockId);
+    if (status) search.set("status", status);
+    if (tenantId) search.set("tenantId", tenantId);
+    return search;
+  }, [propertyId, blockId, status, tenantId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,11 +82,37 @@ export function useUnits(filters?: UnitFilters) {
     const fetchUnits = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/v1/units${query}`);
+        if (fetchAll) {
+          const all: Unit[] = [];
+          let seenTotal = 0;
+          for (let page = 1; page <= MAX_FETCH_ALL_PAGES; page++) {
+            const search = new URLSearchParams(params);
+            search.set("page", String(page));
+            search.set("limit", String(FETCH_ALL_PAGE_SIZE));
+            const res = await fetch(`/api/v1/units?${search.toString()}`);
+            const json = await res.json();
+            if (cancelled) return;
+            if (!res.ok) {
+              setError(json.error || "Failed to fetch units");
+              return;
+            }
+            all.push(...(json.data as Unit[]));
+            seenTotal = json.pagination?.total ?? all.length;
+            if (!json.pagination?.hasNextPage) break;
+          }
+          if (cancelled) return;
+          setUnits(all);
+          setTotal(seenTotal);
+          setError(null);
+          return;
+        }
+
+        const res = await fetch(`/api/v1/units${params.size ? `?${params.toString()}` : ""}`);
         const json = await res.json();
         if (cancelled) return;
         if (res.ok) {
           setUnits(json.data);
+          setTotal(json.pagination?.total ?? json.data.length);
           setError(null);
         } else {
           setError(json.error || "Failed to fetch units");
@@ -83,7 +127,7 @@ export function useUnits(filters?: UnitFilters) {
     return () => {
       cancelled = true;
     };
-  }, [query, reload]);
+  }, [params, reload, fetchAll]);
 
   useEffect(() => {
     const onFocus = () => setReload((n) => n + 1);
@@ -93,7 +137,7 @@ export function useUnits(filters?: UnitFilters) {
 
   const refetch = useCallback(() => setReload((n) => n + 1), []);
 
-  return { units, loading, error, refetch };
+  return { units, loading, error, total, refetch };
 }
 
 export function useUnitMutations() {
