@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => {
   const createTenant = vi.fn();
   const updateTenant = vi.fn();
   const deleteTenant = vi.fn();
+  const assignUnit = vi.fn();
+  const vacateUnit = vi.fn();
   const toast = { success: vi.fn(), error: vi.fn() };
   return {
     tenants,
@@ -24,6 +26,8 @@ const mocks = vi.hoisted(() => {
     createTenant,
     updateTenant,
     deleteTenant,
+    assignUnit,
+    vacateUnit,
     toast,
     useTenants: () => ({
       tenants,
@@ -41,7 +45,35 @@ const mocks = vi.hoisted(() => {
       createTenant,
       updateTenant,
       deleteTenant,
+      assignUnit,
+      vacateUnit,
       pending: flags.pending,
+    }),
+    useUnits: () => ({
+      units: [
+        {
+          _id: "unit-1",
+          propertyId: "prop-1",
+          ownerId: "o1",
+          blockId: "b1",
+          blockName: "Block A",
+          floorId: "f1",
+          floorLevel: 1,
+          floorLabel: "1",
+          name: "1A",
+          letter: "A",
+          status: "available",
+          rent: null,
+          beds: 2,
+          baths: 1,
+          area: 60,
+          tenantId: "",
+        },
+      ],
+      loading: false,
+      error: null,
+      total: 1,
+      refetch: vi.fn(),
     }),
   };
 });
@@ -59,6 +91,7 @@ vi.mock("@/hooks/use-tenants", () => ({
   useTenantMutations: mocks.useTenantMutations,
 }));
 vi.mock("@/hooks/use-properties", () => ({ useProperties: mocks.useProperties }));
+vi.mock("@/hooks/use-units", () => ({ useUnits: mocks.useUnits }));
 
 import { TenantsManager } from "@/components/tenants/TenantsManager";
 
@@ -156,6 +189,8 @@ describe("TenantsManager", () => {
     mocks.createTenant.mockReset();
     mocks.updateTenant.mockReset();
     mocks.deleteTenant.mockReset();
+    mocks.assignUnit.mockReset();
+    mocks.vacateUnit.mockReset();
   });
 
   it("renders the shell title and tenant rows", () => {
@@ -328,6 +363,40 @@ describe("TenantsManager", () => {
 
     await waitFor(() => expect(mocks.deleteTenant).toHaveBeenCalledWith("ten-1"));
     expect(mocks.toast.success).toHaveBeenCalledWith("Tenant removed", expect.any(Object));
+  });
+
+  it("assigns a vacant unit to a tenant", async () => {
+    const user = userEvent.setup();
+    mocks.tenants.push(tenants[0]);
+    mocks.properties.push(...properties);
+    mocks.assignUnit.mockResolvedValue(undefined);
+    renderManager();
+
+    fireEvent.click(screen.getByRole("button", { name: "Assign unit" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(comboboxByText(dialog, "Choose a unit"));
+    await user.click(await screen.findByRole("option", { name: "1A · Block A" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Assign unit" }));
+
+    await waitFor(() => expect(mocks.assignUnit).toHaveBeenCalledWith("ten-1", "unit-1"));
+    expect(mocks.toast.success).toHaveBeenCalledWith("Unit assigned", expect.any(Object));
+  });
+
+  it("vacates the tenant's unit after confirmation", async () => {
+    mocks.tenants.push({
+      ...tenants[0],
+      unit: { _id: "unit-1", name: "1A", blockName: "Block A" },
+    });
+    mocks.properties.push(...properties);
+    mocks.vacateUnit.mockResolvedValue(undefined);
+    renderManager();
+
+    fireEvent.click(screen.getByRole("button", { name: "Vacate" }));
+    const confirm = await screen.findByRole("alertdialog");
+    fireEvent.click(within(confirm).getByRole("button", { name: "Vacate unit" }));
+
+    await waitFor(() => expect(mocks.vacateUnit).toHaveBeenCalledWith("ten-1"));
+    expect(mocks.toast.success).toHaveBeenCalledWith("Unit vacated", expect.any(Object));
   });
 
   it("surfaces create errors through the error toast", async () => {

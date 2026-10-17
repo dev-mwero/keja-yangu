@@ -38,6 +38,11 @@ export interface UseUnitsOptions {
    * of the single default page (10). Bounded by MAX_FETCH_ALL_PAGES.
    */
   fetchAll?: boolean;
+  /**
+   * When false, skip fetching entirely (units stays empty). Useful for lazily
+   * loading a picker only once its dialog is open.
+   */
+  enabled?: boolean;
 }
 
 const FETCH_ALL_PAGE_SIZE = 100;
@@ -62,6 +67,7 @@ export function useUnits(filters?: UnitFilters, options?: UseUnitsOptions) {
   const [reload, setReload] = useState(0);
 
   const fetchAll = options?.fetchAll ?? false;
+  const enabled = options?.enabled ?? true;
   const propertyId = filters?.propertyId;
   const blockId = filters?.blockId;
   const status = filters?.status;
@@ -80,6 +86,10 @@ export function useUnits(filters?: UnitFilters, options?: UseUnitsOptions) {
     let cancelled = false;
     void reload;
     const fetchUnits = async () => {
+      if (!enabled) {
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       try {
         if (fetchAll) {
@@ -127,7 +137,7 @@ export function useUnits(filters?: UnitFilters, options?: UseUnitsOptions) {
     return () => {
       cancelled = true;
     };
-  }, [params, reload, fetchAll]);
+  }, [params, reload, fetchAll, enabled]);
 
   useEffect(() => {
     const onFocus = () => setReload((n) => n + 1);
