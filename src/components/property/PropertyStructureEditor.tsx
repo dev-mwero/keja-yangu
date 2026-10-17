@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { BlockInputPayload, FloorInputPayload } from "@/hooks/use-properties";
-import { MAX_UNITS_PER_PROPERTY } from "@/lib/schemas/structure";
+import { effectiveRent, MAX_UNITS_PER_PROPERTY } from "@/lib/schemas/structure";
 import { buildUnitNames } from "@/lib/unit-naming";
 
 export interface PropertyStructureEditorProps {
@@ -36,6 +36,55 @@ export function countBlockUnits(block: BlockInputPayload): number {
 
 export function totalUnits(blocks: BlockInputPayload[]): number {
   return blocks.reduce((sum, b) => sum + countBlockUnits(b), 0);
+}
+
+export interface StructureSummary {
+  blocks: number;
+  floors: number;
+  units: number;
+  /** Total monthly rent across every unit, using floor > block > property rent. */
+  monthlyRent: number;
+  /** Lowest effective unit rent (0 when there are no units). */
+  minRent: number;
+  /** Highest effective unit rent (0 when there are no units). */
+  maxRent: number;
+}
+
+/**
+ * At-a-glance totals for a block/floor structure: how many blocks, floors and
+ * units it produces, and the resulting monthly rent roll. Updates live as the
+ * editor changes, so it doubles as a preview before saving.
+ */
+export function summarizeStructure(blocks: BlockInputPayload[], baseRent = 0): StructureSummary {
+  let floors = 0;
+  let units = 0;
+  let monthlyRent = 0;
+  let minRent = 0;
+  let maxRent = 0;
+  let priced = false;
+
+  for (const block of blocks) {
+    for (const floor of block.floors) {
+      floors += 1;
+      const count = Math.max(0, floor.unitsPerFloor || 0);
+      if (count === 0) continue;
+      units += count;
+      const rent = effectiveRent(null, floor.rentOverride, block.rentOverride, baseRent);
+      monthlyRent += rent * count;
+      minRent = priced ? Math.min(minRent, rent) : rent;
+      maxRent = priced ? Math.max(maxRent, rent) : rent;
+      priced = true;
+    }
+  }
+
+  return {
+    blocks: blocks.length,
+    floors,
+    units,
+    monthlyRent,
+    minRent: priced ? minRent : 0,
+    maxRent: priced ? maxRent : 0,
+  };
 }
 
 /** Returns a list of human-readable validation errors for the structure. */

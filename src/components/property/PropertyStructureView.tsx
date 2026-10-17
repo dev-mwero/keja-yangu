@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Loader2, Save } from "lucide-react";
+import { ArrowLeft, Building2, DoorOpen, Layers, Loader2, Save, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -8,8 +8,10 @@ import { toast } from "sonner";
 import { DashboardShell } from "@/components/DashboardShell";
 import {
   PropertyStructureEditor,
+  summarizeStructure,
   validateBlocks,
 } from "@/components/property/PropertyStructureEditor";
+import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
 import type { DashNavItem } from "@/config/dashboardNav";
 import {
@@ -18,6 +20,7 @@ import {
   toBlockPayloads,
   usePropertyMutations,
 } from "@/hooks/use-properties";
+import { formatKES } from "@/lib/format";
 
 interface Props {
   propertyId: string;
@@ -71,6 +74,13 @@ export function PropertyStructureView({ propertyId, nav, roleName, backHref }: P
   }, [propertyId]);
 
   const errors = validateBlocks(blocks);
+  const summary = summarizeStructure(blocks, property?.price ?? 0);
+  const rentHint =
+    summary.units === 0
+      ? "No units yet"
+      : summary.minRent === summary.maxRent
+        ? `${formatKES(summary.minRent)} per unit`
+        : `${formatKES(summary.minRent)} – ${formatKES(summary.maxRent)} per unit`;
 
   const handleSave = async () => {
     if (errors.length > 0) {
@@ -114,6 +124,17 @@ export function PropertyStructureView({ propertyId, nav, roleName, backHref }: P
         </div>
       ) : (
         <div className="max-w-3xl space-y-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <StatCard label="Blocks" value={summary.blocks} icon={Layers} />
+            <StatCard label="Floors" value={summary.floors} icon={Building2} />
+            <StatCard label="Units" value={summary.units} icon={DoorOpen} />
+            <StatCard
+              label="Monthly rent"
+              value={formatKES(summary.monthlyRent)}
+              hint={rentHint}
+              icon={Wallet}
+            />
+          </div>
           <PropertyStructureEditor
             blocks={blocks}
             onChange={setBlocks}
