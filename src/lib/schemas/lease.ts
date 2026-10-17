@@ -5,7 +5,7 @@ export const hex24: RegExp = /^[0-9a-fA-F]{24}$/;
 export const leaseInput = z.object({
   tenantId: z.string().regex(hex24),
   propertyId: z.string().regex(hex24),
-  unitId: z.string().regex(hex24).optional(),
+  unitId: z.string().regex(hex24),
   rentAmount: z.coerce.number().positive(),
   frequency: z.enum(["monthly"]).default("monthly"),
   startDate: z.coerce.date(),

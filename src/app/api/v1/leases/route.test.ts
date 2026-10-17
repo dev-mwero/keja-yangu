@@ -36,6 +36,7 @@ const OTHER_PROPERTY_ID = makeObjectId("p2");
 const LEASE_INPUT = {
   tenantId: TENANT_ID,
   propertyId: PROPERTY_ID,
+  unitId: UNIT_ID,
   rentAmount: 25000,
   frequency: "monthly" as const,
   startDate: new Date("2026-09-01T00:00:00.000Z"),
@@ -150,6 +151,19 @@ describe("GET /api/v1/leases", () => {
 describe("POST /api/v1/leases", () => {
   beforeEach(() => {
     resetModelStubs();
+  });
+
+  it("400 when unitId is missing", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    const { unitId: _omitted, ...withoutUnit } = LEASE_INPUT;
+    const res = await POST(
+      buildRequest("/api/v1/leases", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: withoutUnit,
+      }),
+    );
+    expect(res.status).toBe(400);
   });
 
   it("403 for a request with a mismatched origin", async () => {
@@ -303,11 +317,28 @@ describe("POST /api/v1/leases", () => {
       buildQuery(makeProperty({ _id: PROPERTY_ID, ownerId: OWNER_ID })),
     );
     tenantStub.findById.mockReturnValue(
-      buildQuery(makeTenant({ _id: TENANT_ID, ownerId: OWNER_ID, propertyId: PROPERTY_ID })),
+      buildQuery(
+        makeTenant({
+          _id: TENANT_ID,
+          ownerId: OWNER_ID,
+          propertyId: PROPERTY_ID,
+          userId: TENANT_USER_ID,
+        }),
+      ),
     );
     leaseStub.findOne.mockReturnValue(buildQuery(null));
     leaseStub.create.mockResolvedValue({ _id: makeObjectId("new-lease") });
     leaseStub.findById.mockReturnValue(buildQuery(inScopeLease()));
+    unitStub.findById.mockReturnValue(
+      buildQuery(
+        makeUnit({
+          _id: UNIT_ID,
+          propertyId: PROPERTY_ID,
+          status: "occupied",
+          tenantId: TENANT_USER_ID,
+        }),
+      ),
+    );
 
     const res = await POST(
       buildRequest("/api/v1/leases", {
@@ -323,6 +354,7 @@ describe("POST /api/v1/leases", () => {
         tenantId: TENANT_ID,
         propertyId: PROPERTY_ID,
         ownerId: OWNER_ID,
+        unitId: UNIT_ID,
         rentAmount: 25000,
         frequency: "monthly",
       }),

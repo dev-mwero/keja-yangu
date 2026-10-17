@@ -101,31 +101,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Tenant already has an active lease" }, { status: 409 });
   }
 
-  // If a unitId is provided, it must already be occupied by this tenant (no
-  // occupancy changes here). Otherwise, fall back to the legacy billing-only path.
+  // Every lease names a unit, and the tenant must already occupy it (no
+  // occupancy changes here — allocateUnit owns those).
   const unitId = parsed.data.unitId;
-  if (unitId) {
-    const unit = await Unit.findById(unitId).select("status tenantId ownerId propertyId").lean();
-    if (!unit) {
-      return NextResponse.json({ error: "Unit not found" }, { status: 404 });
-    }
-    if (unit.propertyId !== parsed.data.propertyId) {
-      return NextResponse.json(
-        { error: "Unit does not belong to the specified property" },
-        { status: 400 },
-      );
-    }
-    const occupantUserId = tenant.userId || "";
-    if (unit.status !== "occupied" || unit.tenantId !== occupantUserId) {
-      return NextResponse.json({ error: "Tenant does not occupy this unit" }, { status: 409 });
-    }
+  const unit = await Unit.findById(unitId).select("status tenantId ownerId propertyId").lean();
+  if (!unit) {
+    return NextResponse.json({ error: "Unit not found" }, { status: 404 });
+  }
+  if (unit.propertyId !== parsed.data.propertyId) {
+    return NextResponse.json(
+      { error: "Unit does not belong to the specified property" },
+      { status: 400 },
+    );
+  }
+  const occupantUserId = tenant.userId || "";
+  if (unit.status !== "occupied" || unit.tenantId !== occupantUserId) {
+    return NextResponse.json({ error: "Tenant does not occupy this unit" }, { status: 409 });
   }
 
   const lease = await Lease.create({
     tenantId: parsed.data.tenantId,
     propertyId: parsed.data.propertyId,
     ownerId: property.ownerId,
-    unitId: unitId ?? "",
+    unitId,
     rentAmount: parsed.data.rentAmount,
     frequency: parsed.data.frequency,
     startDate: parsed.data.startDate,
