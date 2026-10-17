@@ -2,10 +2,8 @@
 
 import { Megaphone, Pin } from "lucide-react";
 import { useState } from "react";
-import { DashboardShell } from "@/components/DashboardShell";
 import { SearchInput } from "@/components/SearchInput";
 import { Badge } from "@/components/ui/badge";
-import { tenantNav } from "@/config/dashboardNav";
 import { useAnnouncements } from "@/hooks/use-announcements";
 import { formatDate, relativeTime } from "@/lib/format";
 import { matchesQuery } from "@/lib/search";
@@ -13,7 +11,8 @@ import type { Announcement } from "@/types/communications";
 
 const isRecent = (createdAt: string) => Date.now() - new Date(createdAt).getTime() < 3 * 86400000;
 
-const TenantAnnouncementsPage = () => {
+/** Tenant announcements body — rendered inside the Messages tabs. */
+export function TenantAnnouncementsPanel() {
   const { items } = useAnnouncements();
   const [query, setQuery] = useState("");
   const visibleItems = items.filter((a) => matchesQuery(query, a.title, a.body));
@@ -23,12 +22,7 @@ const TenantAnnouncementsPage = () => {
   });
 
   return (
-    <DashboardShell
-      roleName="Tenant"
-      nav={tenantNav}
-      title="Announcements"
-      subtitle="Updates from your landlord and caretaker."
-    >
+    <>
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
           <p className="text-sm text-muted-foreground">Recent updates</p>
@@ -99,8 +93,6 @@ const TenantAnnouncementsPage = () => {
           ))
         )}
       </div>
-    </DashboardShell>
+    </>
   );
-};
-
-export default TenantAnnouncementsPage;
+}

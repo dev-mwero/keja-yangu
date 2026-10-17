@@ -542,6 +542,6 @@ describe("complaint, message and announcement seams", () => {
     expect(notification.create).toHaveBeenCalledTimes(2);
     const row = notification.create.mock.calls[0][0] as Record<string, unknown>;
     expect(row.type).toBe("announcement");
-    expect(row.link).toBe("/dashboard/tenant/announcements");
+    expect(row.link).toBe("/dashboard/tenant/messages");
   });
 });

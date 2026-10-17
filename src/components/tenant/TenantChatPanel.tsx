@@ -3,11 +3,9 @@
 import { ArrowLeft, MessagesSquare, Plus, Send } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { DashboardShell } from "@/components/DashboardShell";
 import { SearchInput } from "@/components/SearchInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { tenantNav } from "@/config/dashboardNav";
 import { useChatMutations, useChatThreads, useThreadMessages } from "@/hooks/use-chat";
 import { relativeTime } from "@/lib/format";
 import { matchesQuery } from "@/lib/search";
@@ -28,7 +26,8 @@ const ContactAvatar = ({ name, className = "" }: { name: string; className?: str
   </div>
 );
 
-const TenantChatPage = () => {
+/** Tenant chat body — rendered inside the Messages tabs. */
+export function TenantChatPanel() {
   const { items, markThreadRead, bumpThread } = useChatThreads();
   const [query, setQuery] = useState("");
   const visibleItems = items.filter((t) => matchesQuery(query, t.contact, t.lastMessageText));
@@ -58,19 +57,8 @@ const TenantChatPage = () => {
     }
   };
 
-  const unreadTotal = items.reduce((sum, t) => sum + t.unread, 0);
-
   return (
-    <DashboardShell
-      roleName="Tenant"
-      nav={tenantNav}
-      title="Chat"
-      subtitle={
-        unreadTotal > 0
-          ? `${unreadTotal} unread message${unreadTotal === 1 ? "" : "s"}`
-          : "Messages with your caretaker and landlord."
-      }
-    >
+    <>
       <div className="grid overflow-hidden rounded-2xl border border-border bg-card shadow-soft md:grid-cols-[320px_1fr]">
         <div className={`border-r border-border ${selected ? "hidden md:block" : "block"}`}>
           <div className="border-b border-border p-4">
@@ -190,8 +178,8 @@ const TenantChatPage = () => {
       <div className="mt-6 rounded-2xl border border-dashed border-border p-4 text-center">
         <p className="text-xs text-muted-foreground">
           Need urgent help? Call your caretaker directly or report an issue from{" "}
-          <Link href="/dashboard/tenant/complaints" className="text-primary hover:underline">
-            Complaints
+          <Link href="/dashboard/tenant/home" className="text-primary hover:underline">
+            My Home
           </Link>
           .
         </p>
@@ -208,8 +196,6 @@ const TenantChatPage = () => {
           </Button>
         </div>
       </div>
-    </DashboardShell>
+    </>
   );
-};
-
-export default TenantChatPage;
+}
