@@ -1,6 +1,7 @@
 # Simplify user flows
 
-Status: **PROPOSAL — pending decisions D1–D4**
+Status: **IMPLEMENTED** — Phases 1–5 shipped; closing work in
+[phase-6-finish-line.md](./phase-6-finish-line.md)
 Branch: `feature/simplify-user-flows`
 Author: Orchestrix (inline)
 Date: 2026-10-17
@@ -114,7 +115,8 @@ occupancy; no occupancy without a lease.
 Implications:
 - **Phases 2–5 are preventive/structural, not data-cleanup.** Migration risk is
   near-zero; the cost is code surface + UX, not data.
-- `UnitPreference` is a **dead mechanism** in production → safe candidate to retire (D1).
+- `UnitPreference` is a **dead mechanism** in production → **retired in
+  Phase 6**.
 - The one legacy risk that *does* exist is the **1 unlinked tenant**
   (`userId:""`) — a real person who will need binding when they next sign in.
 
@@ -155,12 +157,13 @@ Payments · Messages · Documents · Settings** (12 → ~8) (Phase 5).
 
 | Phase | Spec | Status | Depends on |
 |---|---|---|---|
-| 0 | this document (decisions) | pending D1–D4 | — |
-| 1 | [Prospect picks a unit](./phase-1-prospect-picks-unit.md) | **implementation-ready** | — |
-| 2 | [Single allocation service](./phase-2-allocation-service.md) | spec ready | D2 |
-| 3 | [Approval allocates the unit](./phase-3-approval-allocates.md) | spec ready | D1, D2 |
-| 4 | [Unit-scoped occupant records](./phase-4-unit-scoped-requests.md) | spec ready | D2 |
-| 5 | [Navigation / IA consolidation](./phase-5-navigation.md) | spec ready | — |
+| 0 | this document (decisions) | **decided** (see §9) | — |
+| 1 | [Prospect picks a unit](./phase-1-prospect-picks-unit.md) | **shipped** (`031f7c0`) | — |
+| 2 | [Single allocation service](./phase-2-allocation-service.md) | **shipped** (`400d5ba`) | D2 |
+| 3 | [Approval allocates the unit](./phase-3-approval-allocates.md) | **shipped** (`ddc21e1`) | D1, D2 |
+| 4 | [Unit-scoped occupant records](./phase-4-unit-scoped-requests.md) | **shipped** (`766b801`) | D2 |
+| 5 | [Navigation / IA consolidation](./phase-5-navigation.md) | **shipped** (`14d6df6`) | — |
+| 6 | [Finish-line: retire dead mechanisms & unify tenant requests](./phase-6-finish-line.md) | **shipped** (`e682731`..`32bc470`) | 1–5 |
 
 Phase 2–3 specs are written against the **recommended** options (A for D1 and D2);
 §"If the decision differs" in each file records the delta if the other option wins.
@@ -192,3 +195,28 @@ Phase 2–3 specs are written against the **recommended** options (A for D1 and 
    commit to Phases 1–5 as one programme.
 4. **D4** — hold Phases 2–3 (the data-contract change) for a funded
    `@principal-architect` review? (Recommended: yes.)
+
+## 9. Decisions (resolved 2026-10-18)
+
+All five phases were built and merged on `feat/simple-usr-low`; the
+recommended options were taken in practice, so they are recorded here as
+rulings rather than left open.
+
+1. **D1 = Option A** — `Application` + `unitId` is the primary join-flow
+   request. `MoveRequest` is retained, but scoped to tenant transfers and
+   move-outs (not the prospect join flow). `UnitPreference` is **retired**
+   (Phase 6) — the manager's "requested unit" badge now derives from pending
+   move-in `MoveRequest`s.
+2. **D2 = Option A** — `Lease` (now with `unitId`) is authoritative for
+   occupancy; `Unit.status`/`Unit.tenantId` are the derived cache written only
+   by `src/lib/allocation.ts`.
+3. **D3 = Phases 1–5** built sequentially, then Phase 6 to close the
+   leftovers.
+4. **D4 = proceeded without the mandated architect review** (agent tier
+   unfunded). The risk this covered — concurrent allocation — is pinned by
+   `src/lib/allocation.test.ts` (atomic claim; two concurrent allocations of
+   the same unit → exactly one wins).
+
+Phase 6 also closed the two divergences the audit left behind: the legacy
+`POST /api/v1/leases` billing-only path (no `unitId`) is gone, and the tenant
+Requests page is a single unified list instead of two tabs.

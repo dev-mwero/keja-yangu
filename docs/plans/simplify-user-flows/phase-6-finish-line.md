@@ -1,5 +1,7 @@
 # Finish-line: retire dead mechanisms & unify tenant requests — Implementation Plan
 
+Status: **shipped** (commits `e682731`..`32bc470`) · Depends on: Phases 1–5 · Risk: low
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > superpowers:subagent-driven-development (recommended) or
 > superpowers:executing-plans to implement this plan task-by-task. Steps use
