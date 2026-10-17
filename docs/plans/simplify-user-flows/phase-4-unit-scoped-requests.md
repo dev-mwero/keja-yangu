@@ -1,7 +1,7 @@
 # Phase 4 — Unit-scoped occupant records
 
 Part of [Simplify user flows](./README.md).
-Status: spec ready · Depends on: **D2** (needs a resolvable occupancy) · Risk: low
+Status: **shipped** (`766b801`) · Depends on: **D2** (needs a resolvable occupancy) · Risk: low
 
 > **Goal:** when an occupant raises something — a complaint, later a chat — it is
 > tied to the **unit they occupy**, not just the property. Today a complaint cannot
@@ -101,6 +101,7 @@ at creation date (best-effort) via a `--dry-run` script.
 ## 9. Follow-on (same phase, optional)
 
 - `ChatThread` gains `unitId` the same way so conversations are unit-aware.
+  *Not built — deferred with the rest of this follow-on in Phase 6.*
 - `PropertyDocument` / tenant documents: decide whether they are unit-scoped.
 
 ## 10. If the decision differs

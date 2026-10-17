@@ -1,7 +1,7 @@
 # Phase 1 — Prospect picks a vacant unit
 
 Part of [Simplify user flows](./README.md).
-Status: **implementation-ready** · Depends on: nothing (additive) · Risk: low
+Status: **shipped** (`031f7c0`) · Depends on: nothing (additive) · Risk: low
 
 > **Goal:** a prospect picks a vacant unit, and the request carries that unit.
 > **Why first:** highest user-visible value, **purely additive**, no index/data

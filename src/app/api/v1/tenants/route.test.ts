@@ -15,7 +15,7 @@ vi.mock("@/models/Tenant", () => ({
     "name email phone propertyId ownerId status joinedAt notes createdAt updatedAt",
 }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
-vi.mock("@/models/UnitPreference", () => ({ UnitPreference: getModelStubs().unitpreference }));
+vi.mock("@/models/MoveRequest", () => ({ MoveRequest: getModelStubs().moverrequest }));
 vi.mock("@/lib/email", () => ({
   sendInviteEmail: vi.fn(),
 }));
@@ -23,7 +23,13 @@ vi.mock("@/lib/email", () => ({
 import { GET, POST } from "@/app/api/v1/tenants/route";
 import { sendInviteEmail } from "@/lib/email";
 
-const { user, property, tenant: tenantStub } = getModelStubs();
+const {
+  user,
+  property,
+  tenant: tenantStub,
+  unit: unitStub,
+  moverrequest: moveRequestStub,
+} = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
@@ -84,6 +90,8 @@ describe("GET /api/v1/tenants", () => {
     const chain = buildQuery(rows);
     tenantStub.find.mockReturnValue(chain);
     tenantStub.countDocuments.mockResolvedValue(1);
+    moveRequestStub.find.mockReturnValue(buildQuery([]));
+    unitStub.find.mockReturnValue(buildQuery([]));
 
     const res = await GET(buildRequest("/api/v1/tenants", { token: signToken(OWNER_ID) }));
     expect(res.status).toBe(200);
@@ -94,6 +102,31 @@ describe("GET /api/v1/tenants", () => {
     );
     const body = await json(res);
     expect((body.data as Array<{ ownerId: string }>)[0].ownerId).toBe(OWNER_ID);
+  });
+
+  it("attaches requestedUnit from a pending move-in request", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    const userId = makeObjectId("u1");
+    const rows = [makeTenant({ _id: TENANT_ID, ownerId: OWNER_ID, userId })];
+    tenantStub.find.mockReturnValue(buildQuery(rows));
+    tenantStub.countDocuments.mockResolvedValue(1);
+    const unitId = makeObjectId("unit-a");
+    moveRequestStub.find.mockReturnValue(
+      buildQuery([{ tenantId: TENANT_ID, type: "move-in", status: "pending", unitId }]),
+    );
+    unitStub.find.mockReturnValue(
+      buildQuery([{ _id: unitId, name: "3A", blockName: "Block A", tenantId: "" }]),
+    );
+
+    const res = await GET(buildRequest("/api/v1/tenants", { token: signToken(OWNER_ID) }));
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    const row = (body.data as Array<{ requestedUnit?: { _id: string; name: string } }>)[0];
+    expect(row.requestedUnit).toMatchObject({
+      _id: unitId,
+      name: "3A",
+      blockName: "Block A",
+    });
   });
 
   it("403 when an owner requests a foreign ownerId filter", async () => {
