@@ -2,7 +2,7 @@
 
 import { ArrowLeft, Building2, DoorOpen, Layers, Loader2, Save, Wallet } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { DashboardShell } from "@/components/DashboardShell";
@@ -30,6 +30,14 @@ interface Props {
   backHref: string;
 }
 
+/** Live unit counts by status, from `GET /api/v1/properties/[id]/unit-counts`. */
+interface UnitCounts {
+  total: number;
+  occupied: number;
+  vacant: number;
+  maintenance: number;
+}
+
 /**
  * Dedicated manager view for editing a property's block/floor structure. Units
  * are reconciled server-side: new floors create units, removed floors/blocks
@@ -42,6 +50,22 @@ export function PropertyStructureView({ propertyId, nav, roleName, backHref }: P
   const [blocks, setBlocks] = useState<BlockInputPayload[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [counts, setCounts] = useState<UnitCounts | null>(null);
+
+  const loadCounts = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/v1/properties/${propertyId}/unit-counts`);
+      if (!res.ok) return;
+      const json = await res.json();
+      setCounts(json.data as UnitCounts);
+    } catch {
+      // Non-fatal: the occupancy strip is supplementary.
+    }
+  }, [propertyId]);
+
+  useEffect(() => {
+    void loadCounts();
+  }, [loadCounts]);
 
   useEffect(() => {
     let cancelled = false;
@@ -91,6 +115,7 @@ export function PropertyStructureView({ propertyId, nav, roleName, backHref }: P
       const updated = await updateStructure(propertyId, blocks);
       setProperty(updated);
       setBlocks(toBlockPayloads(updated));
+      void loadCounts();
       toast.success("Structure saved", {
         description: "Blocks, floors and units have been updated.",
       });
@@ -135,6 +160,31 @@ export function PropertyStructureView({ propertyId, nav, roleName, backHref }: P
               icon={Wallet}
             />
           </div>
+          {counts && (
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-2xl border border-border bg-card px-5 py-3 text-sm">
+              <span className="text-muted-foreground">
+                Current occupancy{" "}
+                <span className="text-xs">
+                  (saved units — structure edits don&apos;t move tenants)
+                </span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-primary" />
+                <span className="font-medium">{counts.occupied}</span>
+                <span className="text-muted-foreground">occupied</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                <span className="font-medium">{counts.vacant}</span>
+                <span className="text-muted-foreground">vacant</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-amber-500" />
+                <span className="font-medium">{counts.maintenance}</span>
+                <span className="text-muted-foreground">maintenance</span>
+              </span>
+            </div>
+          )}
           <PropertyStructureEditor
             blocks={blocks}
             onChange={setBlocks}

@@ -54,7 +54,15 @@ describe("PropertyStructureView summary", () => {
     vi.restoreAllMocks();
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: property }) }),
+      vi.fn((url: string) => {
+        if (String(url).endsWith("/unit-counts")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ data: { total: 5, occupied: 4, vacant: 1, maintenance: 0 } }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({ data: property }) });
+      }),
     );
   });
 
@@ -69,5 +77,10 @@ describe("PropertyStructureView summary", () => {
     // 2 units @ 20000 + 3 units @ 30000 (floor override) = 130000
     expect(screen.getByText("Ksh 130,000")).toBeInTheDocument();
     expect(screen.getByText("Ksh 20,000 – Ksh 30,000 per unit")).toBeInTheDocument();
+
+    // Saved occupancy strip (from /unit-counts)
+    expect(await screen.findByText("Current occupancy")).toBeInTheDocument();
+    expect(screen.getByText("occupied")).toBeInTheDocument();
+    expect(screen.getByText("vacant")).toBeInTheDocument();
   });
 });
