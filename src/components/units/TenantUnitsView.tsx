@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Building2, Check, DoorOpen, Loader2, Star } from "lucide-react";
+import { ArrowRight, Building2, Check, DoorOpen, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { tenantNav } from "@/config/dashboardNav";
 import { useMoveRequestMutations, useMoveRequests } from "@/hooks/use-move-requests";
 import { useMyTenancy } from "@/hooks/use-my-tenancy";
-import { useUnitPreferenceMutations, useUnitPreferences } from "@/hooks/use-unit-preferences";
 import { type Unit, useUnits } from "@/hooks/use-units";
 import { formatKES } from "@/lib/format";
 import { effectiveRent } from "@/lib/schemas/structure";
@@ -31,13 +30,11 @@ interface PropertyLite {
  * The vacant units at a tenant's property. The primary action is an explicit
  * "Request this unit", which files a move-in request the property manager
  * approves (the same request that ultimately occupies the unit and opens the
- * lease). A tenant can also save a lighter-weight preference for a unit.
+ * lease).
  */
 export function TenantUnitsView() {
   const { tenancy, loading: tenancyLoading } = useMyTenancy();
   const { units, loading, error } = useUnits({ status: "available" });
-  const { preferences, loading: prefsLoading, refetch: refetchPrefs } = useUnitPreferences();
-  const { preferUnit, clearPreference, pending: prefPending } = useUnitPreferenceMutations();
   const { moveRequests, refetch: refetchRequests } = useMoveRequests();
   const { create, pending: requestPending } = useMoveRequestMutations();
 
@@ -62,11 +59,6 @@ export function TenantUnitsView() {
     };
   }, [tenancy?.propertyId]);
 
-  const preferredUnitId = useMemo(
-    () => preferences.find((p) => p.propertyId === tenancy?.propertyId)?.unitId ?? null,
-    [preferences, tenancy?.propertyId],
-  );
-
   // Units the tenant already has a pending move-in request for.
   const requestedUnitIds = useMemo(() => {
     const ids = new Set<string>();
@@ -83,26 +75,6 @@ export function TenantUnitsView() {
     const block = property.blocks.find((b) => b._id === unit.blockId);
     const floor = block?.floors.find((f) => f._id === unit.floorId);
     return effectiveRent(unit.rent, floor?.rentOverride, block?.rentOverride, property.price);
-  };
-
-  const handlePrefer = async (unit: Unit) => {
-    try {
-      await preferUnit(unit._id);
-      refetchPrefs();
-      toast.success("Unit preferred", { description: `${unit.name} · Block ${unit.blockName}` });
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save preference");
-    }
-  };
-
-  const handleClear = async (unit: Unit) => {
-    try {
-      await clearPreference(unit._id);
-      refetchPrefs();
-      toast.success("Preference cleared");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to clear preference");
-    }
   };
 
   const handleRequest = async (unit: Unit) => {
@@ -136,7 +108,7 @@ export function TenantUnitsView() {
       roleName="Tenant"
       nav={tenantNav}
       title="Vacant units"
-      subtitle="Request a unit to move in, or save one as preferred."
+      subtitle="Request a unit to move in — your property manager reviews it."
     >
       {!tenancyLoading && !tenancy ? (
         emptyState(
@@ -146,7 +118,7 @@ export function TenantUnitsView() {
             <Link href="/properties">Browse homes</Link>
           </Button>,
         )
-      ) : loading || prefsLoading ? (
+      ) : loading ? (
         <p className="text-muted-foreground">Loading units…</p>
       ) : error ? (
         <p className="text-destructive">{error}</p>
@@ -164,7 +136,7 @@ export function TenantUnitsView() {
                 : "Requesting a unit sends it to your property manager to review."}
             </span>
             <Link
-              href="/dashboard/tenant/move-requests"
+              href="/dashboard/tenant/requests"
               className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
             >
               Track requests <ArrowRight className="h-3.5 w-3.5" />
@@ -173,15 +145,12 @@ export function TenantUnitsView() {
 
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {units.map((unit) => {
-              const preferred = preferredUnitId === unit._id;
               const requested = requestedUnitIds.has(unit._id);
               const rent = rentFor(unit);
               return (
                 <div
                   key={unit._id}
-                  className={`rounded-2xl border bg-card p-5 shadow-soft transition-all ${
-                    preferred ? "border-primary ring-1 ring-primary" : "border-border"
-                  }`}
+                  className="rounded-2xl border border-border bg-card p-5 shadow-soft transition-all"
                 >
                   <div className="flex items-start justify-between">
                     <div>
@@ -193,11 +162,6 @@ export function TenantUnitsView() {
                       </p>
                     </div>
                     <div className="flex items-center gap-1">
-                      {preferred && (
-                        <Badge className="bg-primary/15 text-primary hover:bg-primary/15">
-                          Preferred
-                        </Badge>
-                      )}
                       {requested && (
                         <Badge variant="outline" className="text-primary">
                           Requested
@@ -226,32 +190,6 @@ export function TenantUnitsView() {
                       {rent != null ? `${formatKES(rent)}/mo` : "Rent on request"}
                     </span>
                     <div className="flex items-center gap-2">
-                      {preferred ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={prefPending}
-                          onClick={() => handleClear(unit)}
-                        >
-                          {prefPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
-                          Clear
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={prefPending}
-                          onClick={() => handlePrefer(unit)}
-                          title="Save as your preferred unit"
-                        >
-                          {prefPending ? (
-                            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                          ) : (
-                            <Star className="mr-1 h-4 w-4" />
-                          )}
-                          Prefer
-                        </Button>
-                      )}
                       <Button
                         size="sm"
                         disabled={requestPending || requested}

@@ -1,13 +1,10 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { AllocationError, allocateUnit, vacateUnit } from "@/lib/allocation";
 import { connectToDatabase } from "@/lib/mongoose";
 import { authenticate, requirePermission } from "@/lib/permissions";
 import { moveRequestDecisionInput } from "@/lib/schemas/move-request";
-import { Lease } from "@/models/Lease";
 import { MoveRequest } from "@/models/MoveRequest";
-import { Property } from "@/models/Property";
-import { Tenant } from "@/models/Tenant";
-import { Unit } from "@/models/Unit";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -39,103 +36,40 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
   const actor = authenticate(request);
   const previousStatus = moveRequest.status;
 
+  // Apply occupancy/lease effects on the first transition into "approved",
+  // before persisting the decision so a failed allocation does not record a
+  // decision whose effects never ran.
+  if (parsed.data.status === "approved" && previousStatus !== "approved") {
+    try {
+      if (moveRequest.type === "move-in") {
+        if (!moveRequest.tenantId || !moveRequest.unitId) {
+          return NextResponse.json(
+            { error: "Move-in request is missing a tenant or unit" },
+            { status: 422 },
+          );
+        }
+        await allocateUnit({
+          tenantId: String(moveRequest.tenantId),
+          unitId: String(moveRequest.unitId),
+        });
+      } else if (moveRequest.type === "move-out") {
+        if (moveRequest.tenantId) {
+          await vacateUnit({ tenantId: String(moveRequest.tenantId) });
+        }
+      }
+    } catch (error) {
+      if (error instanceof AllocationError) {
+        return NextResponse.json({ error: error.message }, { status: error.status });
+      }
+      throw error;
+    }
+  }
+
   moveRequest.status = parsed.data.status;
   moveRequest.decisionNote = parsed.data.decisionNote ?? "";
   moveRequest.decidedById = actor?.userId ?? "";
   moveRequest.decidedAt = new Date();
   await moveRequest.save();
 
-  // Only apply occupancy/lease effects on the first transition into "approved".
-  if (parsed.data.status === "approved" && previousStatus !== "approved") {
-    if (moveRequest.type === "move-in") {
-      await applyMoveIn(moveRequest);
-    } else if (moveRequest.type === "move-out") {
-      await applyMoveOut(moveRequest);
-    }
-  }
-
   return NextResponse.json({ data: moveRequest.toObject() });
-}
-
-/** Resolve the tenant's linked userId (falls back to the requester). */
-async function resolveOccupantUserId(moveRequest: {
-  tenantId: string;
-  requestedById: string;
-}): Promise<string> {
-  if (moveRequest.tenantId) {
-    const tenantDoc = await Tenant.findById(moveRequest.tenantId).select("userId").lean();
-    if (tenantDoc?.userId) return String(tenantDoc.userId);
-  }
-  return moveRequest.requestedById;
-}
-
-/** Approving a move-in occupies the unit and opens an active lease. */
-async function applyMoveIn(moveRequest: {
-  unitId: string;
-  propertyId: string;
-  ownerId: string;
-  tenantId: string;
-  requestedById: string;
-}) {
-  const unit = moveRequest.unitId ? await Unit.findById(moveRequest.unitId) : null;
-  const occupantUserId = await resolveOccupantUserId(moveRequest);
-
-  if (unit) {
-    unit.tenantId = occupantUserId;
-    unit.status = "occupied";
-    await unit.save();
-  }
-
-  if (moveRequest.tenantId) {
-    // Bind the tenant record to the property and mark it active.
-    await Tenant.updateOne(
-      { _id: moveRequest.tenantId },
-      { $set: { propertyId: moveRequest.propertyId, status: "active" } },
-    );
-
-    const property = await Property.findById(moveRequest.propertyId).select("price").lean();
-    const unitRent = unit?.rent ?? null;
-    const rentAmount = unitRent ?? property?.price ?? 0;
-
-    const existingLease = await Lease.findOne({
-      tenantId: moveRequest.tenantId,
-      status: "active",
-    }).lean();
-
-    if (!existingLease) {
-      await Lease.create({
-        tenantId: moveRequest.tenantId,
-        propertyId: moveRequest.propertyId,
-        ownerId: moveRequest.ownerId,
-        rentAmount,
-        frequency: "monthly",
-        startDate: new Date(),
-        status: "active",
-      });
-    }
-  }
-}
-
-/** Approving a move-out frees the unit and ends the active lease. */
-async function applyMoveOut(moveRequest: {
-  unitId: string;
-  tenantId: string;
-  requestedById: string;
-}) {
-  if (moveRequest.unitId) {
-    const occupantUserId = await resolveOccupantUserId(moveRequest);
-    const unit = await Unit.findById(moveRequest.unitId);
-    if (unit && (!unit.tenantId || unit.tenantId === occupantUserId)) {
-      unit.tenantId = "";
-      unit.status = "available";
-      await unit.save();
-    }
-  }
-
-  if (moveRequest.tenantId) {
-    await Lease.updateMany(
-      { tenantId: moveRequest.tenantId, status: "active" },
-      { $set: { status: "ended", endDate: new Date() } },
-    );
-  }
 }

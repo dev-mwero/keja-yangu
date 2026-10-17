@@ -6,6 +6,7 @@ import {
   makeObjectId,
   makeProperty,
   makeTenant,
+  makeUnit,
   makeUser,
 } from "@/test/utils/factories";
 import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-mocks";
@@ -17,16 +18,19 @@ vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
+vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 
 import { GET, POST } from "@/app/api/v1/leases/route";
 
-const { user, property, tenant: tenantStub, lease: leaseStub } = getModelStubs();
+const { user, property, tenant: tenantStub, lease: leaseStub, unit: unitStub } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
 const ADMIN_ID = makeObjectId("admin");
 const TENANT_ID = makeObjectId("tenant");
+const TENANT_USER_ID = makeObjectId("tenant-user");
 const PROPERTY_ID = makeObjectId("p1");
+const UNIT_ID = makeObjectId("u1");
 const OTHER_PROPERTY_ID = makeObjectId("p2");
 
 const LEASE_INPUT = {
@@ -138,7 +142,7 @@ describe("GET /api/v1/leases", () => {
     await GET(buildRequest("/api/v1/leases", { token: signToken(OWNER_ID) }));
     expect(leaseStub.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
     expect(chain.select).toHaveBeenCalledWith(
-      "tenantId propertyId ownerId rentAmount frequency startDate endDate status notes createdAt updatedAt",
+      "tenantId propertyId ownerId unitId rentAmount frequency startDate endDate status notes createdAt updatedAt",
     );
   });
 });
@@ -325,6 +329,83 @@ describe("POST /api/v1/leases", () => {
     );
     const body = await json(res);
     expect((body.data as { ownerId?: string }).ownerId).toBe(OWNER_ID);
+  });
+
+  it("409 when the tenant does not occupy the specified unit", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    property.findById.mockReturnValue(
+      buildQuery(makeProperty({ _id: PROPERTY_ID, ownerId: OWNER_ID })),
+    );
+    tenantStub.findById.mockReturnValue(
+      buildQuery(
+        makeTenant({
+          _id: TENANT_ID,
+          ownerId: OWNER_ID,
+          propertyId: PROPERTY_ID,
+          userId: TENANT_USER_ID,
+        }),
+      ),
+    );
+    leaseStub.findOne.mockReturnValue(buildQuery(null));
+    unitStub.findById.mockReturnValue(
+      buildQuery(
+        makeUnit({ _id: UNIT_ID, propertyId: PROPERTY_ID, status: "available", tenantId: "" }),
+      ),
+    );
+
+    const res = await POST(
+      buildRequest("/api/v1/leases", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { ...LEASE_INPUT, unitId: UNIT_ID },
+      }),
+    );
+    expect(res.status).toBe(409);
+    const body = await json(res);
+    expect(body.error).toBe("Tenant does not occupy this unit");
+    expect(leaseStub.create).not.toHaveBeenCalled();
+  });
+
+  it("201 when the tenant already occupies the unit", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    property.findById.mockReturnValue(
+      buildQuery(makeProperty({ _id: PROPERTY_ID, ownerId: OWNER_ID })),
+    );
+    tenantStub.findById.mockReturnValue(
+      buildQuery(
+        makeTenant({
+          _id: TENANT_ID,
+          ownerId: OWNER_ID,
+          propertyId: PROPERTY_ID,
+          userId: TENANT_USER_ID,
+        }),
+      ),
+    );
+    leaseStub.findOne.mockReturnValue(buildQuery(null));
+    unitStub.findById.mockReturnValue(
+      buildQuery(
+        makeUnit({
+          _id: UNIT_ID,
+          propertyId: PROPERTY_ID,
+          status: "occupied",
+          tenantId: TENANT_USER_ID,
+        }),
+      ),
+    );
+    leaseStub.create.mockResolvedValue({ _id: makeObjectId("new-lease") });
+    leaseStub.findById.mockReturnValue(buildQuery(inScopeLease()));
+
+    const res = await POST(
+      buildRequest("/api/v1/leases", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { ...LEASE_INPUT, unitId: UNIT_ID },
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect(leaseStub.create).toHaveBeenCalledWith(
+      expect.objectContaining({ unitId: UNIT_ID, tenantId: TENANT_ID }),
+    );
   });
 
   it("429 after the per-IP rate limit is exhausted", async () => {

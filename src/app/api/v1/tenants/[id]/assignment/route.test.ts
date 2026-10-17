@@ -168,10 +168,11 @@ describe("DELETE /api/v1/tenants/[id]/assignment", () => {
     tenantStub.findById.mockReturnValue(buildQuery(tenantDoc()));
     const occupied = {
       ...unitDoc({ status: "occupied", tenantId: OCCUPANT_USER_ID }),
-      save: vi.fn().mockResolvedValue(undefined),
     };
     unitStub.findOne.mockResolvedValue(occupied);
+    unitStub.updateOne.mockResolvedValue({ modifiedCount: 1 });
     lease.updateMany.mockResolvedValue({ modifiedCount: 1 });
+    tenantStub.findById.mockReturnValue(buildQuery(tenantDoc()));
 
     const res = await DELETE(
       buildRequest(`/api/v1/tenants/${TENANT_ID}/assignment`, {
@@ -182,9 +183,7 @@ describe("DELETE /api/v1/tenants/[id]/assignment", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(occupied.status).toBe("available");
-    expect(occupied.tenantId).toBe("");
-    expect(occupied.save).toHaveBeenCalled();
+    expect(unitStub.updateOne).toHaveBeenCalled();
     expect(lease.updateMany).toHaveBeenCalledWith(
       { tenantId: TENANT_ID, status: "active" },
       expect.objectContaining({ $set: expect.objectContaining({ status: "ended" }) }),
