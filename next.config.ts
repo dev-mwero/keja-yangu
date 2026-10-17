@@ -42,6 +42,37 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "**" },
     ],
   },
+  async redirects() {
+    return [
+      { source: "/dashboard/tenant/units", destination: "/properties", permanent: false },
+      {
+        source: "/dashboard/tenant/applications",
+        destination: "/dashboard/tenant/requests",
+        permanent: false,
+      },
+      {
+        source: "/dashboard/tenant/move-requests",
+        destination: "/dashboard/tenant/requests",
+        permanent: false,
+      },
+      {
+        source: "/dashboard/tenant/complaints",
+        destination: "/dashboard/tenant/home",
+        permanent: false,
+      },
+      {
+        source: "/dashboard/tenant/chat",
+        destination: "/dashboard/tenant/messages",
+        permanent: false,
+      },
+      {
+        source: "/dashboard/tenant/announcements",
+        destination: "/dashboard/tenant/messages",
+        permanent: false,
+      },
+      { source: "/dashboard/tenant/reports", destination: "/dashboard/tenant", permanent: false },
+    ];
+  },
   async headers() {
     return [
       {

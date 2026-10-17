@@ -78,6 +78,7 @@ export function useTenantApplications(_email?: string) {
 
 export interface CreateApplicationInput {
   propertyId: string;
+  unitId?: string;
   name: string;
   email: string;
   message?: string;

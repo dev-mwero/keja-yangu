@@ -56,7 +56,6 @@ export interface UnitInput {
   baths?: number;
   area?: number;
   name?: string;
-  tenantId?: string;
 }
 
 export function useUnits(filters?: UnitFilters, options?: UseUnitsOptions) {

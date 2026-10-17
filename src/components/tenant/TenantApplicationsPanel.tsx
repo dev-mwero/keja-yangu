@@ -4,7 +4,6 @@ import { CheckCircle2, Clock, FileText, Plus, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
-import { DashboardShell } from "@/components/DashboardShell";
 import { SearchInput } from "@/components/SearchInput";
 import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +17,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { tenantNav } from "@/config/dashboardNav";
 import { useApplicationMutations, useTenantApplications } from "@/hooks/use-applications";
 import { useAuth } from "@/hooks/use-auth";
 import type { ApplicationStatus } from "@/lib/domain-enums";
@@ -39,7 +37,8 @@ const statusClass: Record<ApplicationStatus, string> = {
 
 type Filter = "all" | ApplicationStatus;
 
-const TenantApplicationsPage = () => {
+/** Tenant applications body — rendered inside the Requests tabs. */
+export function TenantApplicationsPanel() {
   const { user } = useAuth();
   const { applications, refresh } = useTenantApplications(user?.email);
   const { withdraw, pending } = useApplicationMutations();
@@ -50,7 +49,9 @@ const TenantApplicationsPage = () => {
   const approvedCount = applications.filter((a) => a.status === "approved").length;
   const visible = (
     filter === "all" ? applications : applications.filter((a) => a.status === filter)
-  ).filter((app) => matchesQuery(query, app.propertyTitle, app.applicantName, app.status));
+  ).filter((app) =>
+    matchesQuery(query, app.propertyTitle, app.unitName, app.applicantName, app.status),
+  );
 
   const handleCancel = async (id: string, title: string) => {
     try {
@@ -67,12 +68,7 @@ const TenantApplicationsPage = () => {
   };
 
   return (
-    <DashboardShell
-      roleName="Tenant"
-      nav={tenantNav}
-      title="Applications"
-      subtitle="Review the homes you've applied for and track decisions."
-    >
+    <>
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard label="Total applications" value={applications.length} icon={FileText} />
         <StatCard label="Pending review" value={pendingCount} icon={Clock} />
@@ -122,6 +118,7 @@ const TenantApplicationsPage = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Property</TableHead>
+                  <TableHead>Unit</TableHead>
                   <TableHead>Applicant</TableHead>
                   <TableHead>Submitted</TableHead>
                   <TableHead>Status</TableHead>
@@ -135,6 +132,9 @@ const TenantApplicationsPage = () => {
                       <Link href={`/properties/${app.propertyId}`} className="hover:underline">
                         {app.propertyTitle}
                       </Link>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {app.unitName ? `Unit ${app.unitName}` : "—"}
                     </TableCell>
                     <TableCell className="text-muted-foreground">{app.applicantName}</TableCell>
                     <TableCell className="text-muted-foreground">
@@ -175,8 +175,6 @@ const TenantApplicationsPage = () => {
           </div>
         )}
       </div>
-    </DashboardShell>
+    </>
   );
-};
-
-export default TenantApplicationsPage;
+}

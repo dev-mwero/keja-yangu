@@ -9,9 +9,10 @@ import { leaseInput } from "@/lib/schemas";
 import { Lease } from "@/models/Lease";
 import { Property } from "@/models/Property";
 import { Tenant } from "@/models/Tenant";
+import { Unit } from "@/models/Unit";
 
 const LEASE_SAFE_FIELDS =
-  "tenantId propertyId ownerId rentAmount frequency startDate endDate status notes createdAt updatedAt";
+  "tenantId propertyId ownerId unitId rentAmount frequency startDate endDate status notes createdAt updatedAt";
 
 export async function GET(request: NextRequest) {
   const { page, limit } = parsePagination({
@@ -100,10 +101,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Tenant already has an active lease" }, { status: 409 });
   }
 
+  // If a unitId is provided, it must already be occupied by this tenant (no
+  // occupancy changes here). Otherwise, fall back to the legacy billing-only path.
+  const unitId = parsed.data.unitId;
+  if (unitId) {
+    const unit = await Unit.findById(unitId).select("status tenantId ownerId propertyId").lean();
+    if (!unit) {
+      return NextResponse.json({ error: "Unit not found" }, { status: 404 });
+    }
+    if (unit.propertyId !== parsed.data.propertyId) {
+      return NextResponse.json(
+        { error: "Unit does not belong to the specified property" },
+        { status: 400 },
+      );
+    }
+    const occupantUserId = tenant.userId || "";
+    if (unit.status !== "occupied" || unit.tenantId !== occupantUserId) {
+      return NextResponse.json({ error: "Tenant does not occupy this unit" }, { status: 409 });
+    }
+  }
+
   const lease = await Lease.create({
     tenantId: parsed.data.tenantId,
     propertyId: parsed.data.propertyId,
     ownerId: property.ownerId,
+    unitId: unitId ?? "",
     rentAmount: parsed.data.rentAmount,
     frequency: parsed.data.frequency,
     startDate: parsed.data.startDate,

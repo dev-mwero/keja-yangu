@@ -41,6 +41,7 @@ export interface Lease {
   tenantId: string;
   propertyId: string;
   ownerId: string;
+  unitId?: string;
   rentAmount: number;
   frequency: "monthly";
   startDate: string;

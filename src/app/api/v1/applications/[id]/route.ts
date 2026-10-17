@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { AllocationError, allocateUnit } from "@/lib/allocation";
 import { connectToDatabase } from "@/lib/mongoose";
 import { asSoftDeleteModel } from "@/lib/mongoose-soft-delete";
 import { authenticate, requirePermission } from "@/lib/permissions";
@@ -39,30 +40,50 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
   }
 
   const previousStatus = application.status;
+  const isFirstApproval = parsed.data.status === "approved" && previousStatus !== "approved";
+
+  if (isFirstApproval) {
+    // Approving admits the applicant as a tenant, then (when the application
+    // carries a unit) occupies that unit and opens the lease in one request.
+    // Both steps run before the decision is written: a failed allocation leaves
+    // the application pending so the manager can pick another unit.
+    const tenantId = await admitApprovedApplicant(application);
+
+    if (application.unitId) {
+      try {
+        await allocateUnit({ tenantId, unitId: String(application.unitId) });
+      } catch (error) {
+        if (error instanceof AllocationError) {
+          return NextResponse.json({ error: error.message }, { status: error.status });
+        }
+        throw error;
+      }
+    }
+  }
+
+  // Persist the decision last.
   application.status = parsed.data.status;
   application.decisionNote = parsed.data.decisionNote ?? "";
   application.decidedById = auth.userId;
   application.decidedAt = new Date();
   await application.save();
 
-  // Approving an application admits the applicant as a tenant of the property,
-  // so they appear in the Tenants list and can be assigned a unit. Re-approving
-  // or rejecting never removes an existing tenancy.
-  if (parsed.data.status === "approved" && previousStatus !== "approved") {
-    await admitApprovedApplicant(application);
-  }
-
   return NextResponse.json({ data: application.toObject() });
 }
 
-/** Create or bind the Tenant record for an approved application. */
+/**
+ * Create or bind the Tenant record for an approved application. Idempotent:
+ * finds an existing tenancy by `{propertyId,email}` and heals its `userId`
+ * binding instead of creating a duplicate. Returns the tenant's `_id` so the
+ * caller can immediately allocate a unit to it.
+ */
 async function admitApprovedApplicant(application: {
   propertyId: string;
   ownerId: string;
   applicantUserId: string;
   applicantName: string;
   applicantEmail: string;
-}) {
+}): Promise<string> {
   const email = application.applicantEmail.trim().toLowerCase();
   const existing = await Tenant.findOne({
     propertyId: application.propertyId,
@@ -80,10 +101,10 @@ async function admitApprovedApplicant(application: {
         },
       },
     );
-    return;
+    return String(existing._id);
   }
 
-  await Tenant.create({
+  const created = await Tenant.create({
     name: application.applicantName,
     email,
     propertyId: application.propertyId,
@@ -92,6 +113,7 @@ async function admitApprovedApplicant(application: {
     userId: application.applicantUserId,
     joinedAt: new Date(),
   });
+  return String(created._id);
 }
 
 export async function DELETE(request: NextRequest, ctx: RouteContext) {

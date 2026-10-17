@@ -10,13 +10,16 @@ import type {
 
 /**
  * Serialized complaint from `/api/v1/complaints`. `property` is the denormalized
- * property title the tenant pages render; dates arrive as ISO strings via JSON.
+ * property title the tenant pages render; `unitName` is the denormalized unit
+ * name ("" when the complaint is property-level); dates arrive as ISO strings
+ * via JSON.
  */
 export interface Complaint {
   _id: string;
   tenantId: string;
   propertyId: string;
   ownerId: string;
+  unitId: string;
   subject: string;
   category: ComplaintCategory;
   message: string;
@@ -26,6 +29,7 @@ export interface Complaint {
   updatedById?: string;
   updatedByRole?: string;
   property: string;
+  unitName: string;
   createdAt?: string;
   updatedAt?: string;
 }

@@ -4,7 +4,6 @@ import { ArrowLeftRight, LogIn, LogOut } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { DashboardShell } from "@/components/DashboardShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,13 +22,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { tenantNav as nav } from "@/config/dashboardNav";
 import { useMoveRequestMutations, useMoveRequests } from "@/hooks/use-move-requests";
 import { useMyTenancy } from "@/hooks/use-my-tenancy";
 import { useUnits } from "@/hooks/use-units";
 import { formatDate } from "@/lib/format";
 
-const TenantMoveRequestsPage = () => {
+/** Tenant move-request body — rendered inside the Requests tabs. */
+export function TenantMoveRequestsPanel() {
   const { moveRequests, loading, refetch } = useMoveRequests();
   const { tenancy } = useMyTenancy();
   const { create, pending } = useMoveRequestMutations();
@@ -116,12 +115,7 @@ const TenantMoveRequestsPage = () => {
   };
 
   return (
-    <DashboardShell
-      roleName="Tenant"
-      nav={nav}
-      title="Move Requests"
-      subtitle="Request a move-in or move-out and track their status."
-    >
+    <>
       <div className="mb-6 grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-border bg-card p-4 shadow-soft">
           <div className="flex items-start justify-between gap-4">
@@ -258,8 +252,6 @@ const TenantMoveRequestsPage = () => {
           </TableBody>
         </Table>
       </div>
-    </DashboardShell>
+    </>
   );
-};
-
-export default TenantMoveRequestsPage;
+}

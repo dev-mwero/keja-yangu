@@ -153,6 +153,57 @@ describe("PATCH /api/v1/units/[id]", () => {
     );
     expect(res.status).toBe(403);
   });
+
+  it("rejects setting tenantId directly (occupancy changes via allocation)", async () => {
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    const doc = persistedUnit();
+    unit.findById.mockResolvedValue(doc);
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/units/${UNIT_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { tenantId: TENANT_ID },
+      }),
+      withParams(UNIT_ID),
+    );
+    expect(res.status).toBe(400);
+    expect(doc.save).not.toHaveBeenCalled();
+  });
+
+  it("rejects setting status occupied directly", async () => {
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    const doc = persistedUnit();
+    unit.findById.mockResolvedValue(doc);
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/units/${UNIT_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { status: "occupied" },
+      }),
+      withParams(UNIT_ID),
+    );
+    expect(res.status).toBe(409);
+    expect(doc.save).not.toHaveBeenCalled();
+  });
+
+  it("rejects flipping an occupied unit to available directly", async () => {
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    const doc = persistedUnit({ status: "occupied", tenantId: TENANT_ID });
+    unit.findById.mockResolvedValue(doc);
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/units/${UNIT_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { status: "available" },
+      }),
+      withParams(UNIT_ID),
+    );
+    expect(res.status).toBe(409);
+    expect(doc.save).not.toHaveBeenCalled();
+  });
 });
 
 describe("DELETE /api/v1/units/[id]", () => {

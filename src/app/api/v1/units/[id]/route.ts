@@ -82,16 +82,26 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
     }
     unit.name = updates.name;
   }
-  if (updates.status !== undefined) unit.status = updates.status;
+  if (updates.status !== undefined) {
+    const requestedStatus = updates.status;
+    if (requestedStatus === "occupied") {
+      return NextResponse.json(
+        { error: "Use tenant assignment to change occupancy" },
+        { status: 409 },
+      );
+    }
+    if (unit.status === "occupied" && requestedStatus !== "maintenance") {
+      return NextResponse.json(
+        { error: "Use tenant assignment to change occupancy" },
+        { status: 409 },
+      );
+    }
+    unit.status = requestedStatus;
+  }
   if (updates.rent !== undefined) unit.rent = updates.rent;
   if (updates.beds !== undefined) unit.beds = updates.beds;
   if (updates.baths !== undefined) unit.baths = updates.baths;
   if (updates.area !== undefined) unit.area = updates.area;
-  if (updates.tenantId !== undefined) {
-    unit.tenantId = updates.tenantId;
-    if (updates.tenantId && updates.status === undefined) unit.status = "occupied";
-    if (!updates.tenantId && updates.status === undefined) unit.status = "available";
-  }
 
   await unit.save();
   return NextResponse.json({ data: unit.toObject() });

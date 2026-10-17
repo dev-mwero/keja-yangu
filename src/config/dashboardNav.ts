@@ -1,5 +1,4 @@
 import {
-  AlertTriangle,
   ArrowLeftRight,
   Building2,
   Calculator,
@@ -9,7 +8,6 @@ import {
   FileText,
   Home,
   type LucideIcon,
-  Megaphone,
   MessagesSquare,
   Search,
   Settings,
@@ -111,15 +109,11 @@ interface TenantSection {
 
 const tenantSections: TenantSection[] = [
   { slug: "", label: "Overview", icon: Home },
-  { slug: "/browse", label: "Browse homes", icon: Search, external: "/properties" },
-  { slug: "/units", label: "Vacant units", icon: DoorOpen },
-  { slug: "/applications", label: "Applications", icon: FileText },
-  { slug: "/move-requests", label: "Move Requests", icon: ArrowLeftRight },
+  { slug: "/browse", label: "Browse", icon: Search, external: "/properties" },
+  { slug: "/home", label: "My Home", icon: DoorOpen },
+  { slug: "/requests", label: "Requests", icon: ArrowLeftRight },
   { slug: "/payments", label: "Payments", icon: CreditCard },
-  { slug: "/complaints", label: "Complaints", icon: AlertTriangle },
-  { slug: "/chat", label: "Chat", icon: MessagesSquare },
-  { slug: "/announcements", label: "Announcements", icon: Megaphone },
-  { slug: "/reports", label: "Reports", icon: FileBarChart },
+  { slug: "/messages", label: "Messages", icon: MessagesSquare },
   { slug: "/documents", label: "Documents", icon: FileText },
   { slug: "/settings", label: "Settings", icon: Settings },
 ];

@@ -61,6 +61,7 @@ async function json(res: Response) {
 describe("GET /api/v1/properties/[id]", () => {
   beforeEach(() => {
     resetModelStubs();
+    unit.find.mockReturnValue(buildQuery([]));
   });
 
   it("400 for an invalid id", async () => {
@@ -185,6 +186,53 @@ describe("GET /api/v1/properties/[id]", () => {
     expect(property.findOne).toHaveBeenCalledWith(
       expect.objectContaining({ caretakerIds: CARETAKER_ID }),
     );
+  });
+
+  it("embeds only available units under a safe projection for anonymous", async () => {
+    property.findOne.mockReturnValue(
+      buildQuery(makeProperty({ _id: PROPERTY_ID, status: "available" })),
+    );
+    unit.find.mockReturnValue(
+      buildQuery([
+        { _id: makeObjectId("u1"), name: "3A", status: "available", tenantId: "leak" },
+        { _id: makeObjectId("u2"), name: "3B", status: "available", tenantId: "" },
+      ]),
+    );
+
+    const res = await GET(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}`),
+      withParams(PROPERTY_ID),
+    );
+    expect(res.status).toBe(200);
+    expect(unit.find).toHaveBeenCalledWith({
+      propertyId: PROPERTY_ID,
+      status: "available",
+    });
+    const unitChain = unit.find.mock.results[0].value as { select: ReturnType<typeof vi.fn> };
+    const projection = unitChain.select.mock.calls[0][0] as string;
+    expect(projection).not.toContain("tenantId");
+    expect(projection).not.toContain("ownerId");
+
+    const body = await json(res);
+    const data = body.data as { units?: Array<{ name?: string }> };
+    expect(data.units?.map((u) => u.name)).toEqual(["3A", "3B"]);
+  });
+
+  it("embeds no occupied units", async () => {
+    property.findOne.mockReturnValue(
+      buildQuery(makeProperty({ _id: PROPERTY_ID, status: "available" })),
+    );
+    unit.find.mockReturnValue(buildQuery([]));
+
+    const res = await GET(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}`),
+      withParams(PROPERTY_ID),
+    );
+    expect(res.status).toBe(200);
+    expect(unit.find).toHaveBeenCalledWith({
+      propertyId: PROPERTY_ID,
+      status: "available",
+    });
   });
 });
 

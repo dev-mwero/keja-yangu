@@ -10,6 +10,7 @@ export const applicationFormSchema = z.object({
 
 export const applicationCreateInput = applicationFormSchema.extend({
   propertyId: z.string().trim().min(1),
+  unitId: z.string().trim().min(1).optional(),
 });
 
 export const applicationDecisionInput = z.object({

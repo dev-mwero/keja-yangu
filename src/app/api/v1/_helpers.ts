@@ -4,6 +4,7 @@ import { connectToDatabase } from "@/lib/mongoose";
 import { authenticate, type Role } from "@/lib/permissions";
 import { Property } from "@/models/Property";
 import { Tenant } from "@/models/Tenant";
+import { Unit } from "@/models/Unit";
 import { User } from "@/models/User";
 
 export interface InvoiceActor {
@@ -129,6 +130,20 @@ export async function propertyTitleMap(propertyIds: string[]): Promise<Map<strin
     .select("_id title")
     .lean();
   return new Map(properties.map((p) => [String(p._id), p.title]));
+}
+
+/**
+ * Resolves unit ids to their display names with a single `$in` query. Missing
+ * ids are simply absent from the returned map.
+ */
+export async function unitNameMap(unitIds: string[]): Promise<Map<string, string>> {
+  const uniqueIds = [...new Set(unitIds.filter(Boolean))];
+  if (uniqueIds.length === 0) return new Map();
+  await connectToDatabase();
+  const units = await Unit.find({ _id: { $in: uniqueIds } })
+    .select("_id name")
+    .lean();
+  return new Map(units.map((u) => [String(u._id), u.name]));
 }
 
 export async function resolveTenantIds(userId: string): Promise<string[]> {
