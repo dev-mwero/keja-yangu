@@ -302,6 +302,7 @@ export interface TestComplaint {
   tenantId: string;
   propertyId: string;
   ownerId: string;
+  unitId: string;
   subject: string;
   category: "Maintenance" | "Noise" | "Billing" | "Security" | "Neighbours" | "Other";
   message: string;
@@ -320,6 +321,7 @@ export function makeComplaint(overrides: Partial<TestComplaint> = {}): TestCompl
     tenantId: makeObjectId("tenant"),
     propertyId: makeObjectId("prop"),
     ownerId: makeObjectId("user"),
+    unitId: "",
     subject: "Loose bathroom tap",
     category: "Maintenance",
     message: "The bathroom tap is leaking.",

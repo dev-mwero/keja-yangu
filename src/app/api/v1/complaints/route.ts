@@ -1,6 +1,11 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { propertyTitleMap, readJsonBody, resolveDashboardActor } from "@/app/api/v1/_helpers";
+import {
+  propertyTitleMap,
+  readJsonBody,
+  resolveDashboardActor,
+  unitNameMap,
+} from "@/app/api/v1/_helpers";
 import { serializeComplaint } from "@/lib/complaints";
 import { COMPLAINT_STATUSES } from "@/lib/domain-enums";
 import { connectToDatabase } from "@/lib/mongoose";
@@ -10,6 +15,7 @@ import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { complaintInput } from "@/lib/schemas";
 import { Complaint } from "@/models/Complaint";
 import { Tenant } from "@/models/Tenant";
+import { Unit } from "@/models/Unit";
 
 export async function GET(request: NextRequest) {
   const { page, limit } = parsePagination({
@@ -48,11 +54,14 @@ export async function GET(request: NextRequest) {
     Complaint.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
     Complaint.countDocuments(filter),
   ]);
-  const titles = await propertyTitleMap(complaints.map((complaint) => complaint.propertyId));
+  const [titles, unitNames] = await Promise.all([
+    propertyTitleMap(complaints.map((complaint) => complaint.propertyId)),
+    unitNameMap(complaints.map((complaint) => complaint.unitId)),
+  ]);
 
   return NextResponse.json(
     buildPaginationResult(
-      complaints.map((document) => serializeComplaint(document, titles)),
+      complaints.map((document) => serializeComplaint(document, titles, unitNames)),
       total,
       page,
       limit,
@@ -113,10 +122,22 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Resolve the unit the actor currently occupies at this property (same rule
+  // the allocation service uses). No occupancy → "" (property-level complaint).
+  const occupiedUnit = await Unit.findOne({
+    propertyId,
+    tenantId: actor.userId,
+    status: "occupied",
+    deletedAt: null,
+  })
+    .select("_id")
+    .lean();
+
   const complaint = await Complaint.create({
     tenantId: String(row?._id) ?? "",
     propertyId: propertyId ?? "",
     ownerId: row?.ownerId ?? "",
+    unitId: occupiedUnit ? String(occupiedUnit._id) : "",
     subject: parsed.data.subject,
     category: parsed.data.category,
     message: parsed.data.message,
@@ -128,11 +149,17 @@ export async function POST(request: NextRequest) {
   if (!created) {
     return NextResponse.json({ error: "Complaint not found" }, { status: 404 });
   }
-  const titles = await propertyTitleMap([created.propertyId]);
+  const [titles, unitNames] = await Promise.all([
+    propertyTitleMap([created.propertyId]),
+    unitNameMap([created.unitId]),
+  ]);
 
   console.info(
     `[complaints] create actor=${actor.userId} role=${actor.role} complaint=${String(complaint._id)}`,
   );
 
-  return NextResponse.json({ data: serializeComplaint(created, titles) }, { status: 201 });
+  return NextResponse.json(
+    { data: serializeComplaint(created, titles, unitNames) },
+    { status: 201 },
+  );
 }

@@ -1,7 +1,12 @@
 import { isValidObjectId } from "mongoose";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { propertyTitleMap, readJsonBody, resolveDashboardActor } from "@/app/api/v1/_helpers";
+import {
+  propertyTitleMap,
+  readJsonBody,
+  resolveDashboardActor,
+  unitNameMap,
+} from "@/app/api/v1/_helpers";
 import { serializeComplaint } from "@/lib/complaints";
 import { connectToDatabase } from "@/lib/mongoose";
 import { requirePermission } from "@/lib/permissions";
@@ -72,11 +77,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   if (!updated) {
     return NextResponse.json({ error: "Complaint not found" }, { status: 404 });
   }
-  const titles = await propertyTitleMap([updated.propertyId]);
+  const [titles, unitNames] = await Promise.all([
+    propertyTitleMap([updated.propertyId]),
+    unitNameMap([updated.unitId]),
+  ]);
 
   console.info(
     `[complaints] update-status actor=${actor.userId} role=${actor.role} complaint=${id}`,
   );
 
-  return NextResponse.json({ data: serializeComplaint(updated, titles) });
+  return NextResponse.json({ data: serializeComplaint(updated, titles, unitNames) });
 }
