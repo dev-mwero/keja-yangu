@@ -6,10 +6,10 @@ import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
 import { getTenantScope, requirePermission } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
+import { MoveRequest } from "@/models/MoveRequest";
 import { Property } from "@/models/Property";
 import { TENANT_SAFE_FIELDS, Tenant } from "@/models/Tenant";
 import { Unit } from "@/models/Unit";
-import { UnitPreference } from "@/models/UnitPreference";
 import { User } from "@/models/User";
 
 interface UnitHint {
@@ -19,26 +19,45 @@ interface UnitHint {
   propertyId: string;
 }
 
+const OBJECT_ID = /^[0-9a-fA-F]{24}$/;
+
 /**
- * Attach each tenant's currently-occupied unit and their preferred unit. The
- * `userId` column is selected only to join, then stripped from the response.
+ * Attach each tenant's currently-occupied unit and the unit they most
+ * recently requested (pending move-in). The `userId` column is selected only
+ * to join, then stripped from the response.
  */
-async function attachUnitHints<T extends { userId?: string }>(rows: T[]) {
+async function attachUnitHints<T extends { userId?: string; _id?: unknown }>(rows: T[]) {
   const userIds = [...new Set(rows.map((r) => r.userId).filter((v): v is string => !!v))];
+  const tenantObjectIds = [
+    ...new Set(
+      rows
+        .map((r) => String(r._id ?? ""))
+        .filter((id) => id && OBJECT_ID.test(id)),
+    ),
+  ];
   const occupiedByUser = new Map<string, UnitHint>();
-  const prefByUser = new Map<string, { unitId: string; blockName: string }>();
+  const requestedByTenant = new Map<string, string>();
   const nameByUnitId = new Map<string, { name: string; blockName: string }>();
 
-  if (userIds.length > 0) {
-    const prefs = await UnitPreference.find({ userId: { $in: userIds } })
-      .select("userId unitId blockName")
-      .lean();
-    const prefUnitIds = prefs
-      .map((p) => String(p.unitId))
-      .filter((unitId) => /^[0-9a-fA-F]{24}$/.test(unitId));
+  if (userIds.length > 0 || tenantObjectIds.length > 0) {
+    // Newest first; first seen per tenant wins (their latest pending request).
+    const moveIns = tenantObjectIds.length
+      ? await MoveRequest.find({
+          tenantId: { $in: tenantObjectIds },
+          type: "move-in",
+          status: "pending",
+          unitId: { $ne: "" },
+        })
+          .sort({ createdAt: -1 })
+          .select("tenantId unitId")
+          .lean()
+      : [];
+    const moveInUnitIds = moveIns
+      .map((m) => String(m.unitId))
+      .filter((unitId) => OBJECT_ID.test(unitId));
 
     const units = await Unit.find({
-      $or: [{ tenantId: { $in: userIds } }, { _id: { $in: prefUnitIds } }],
+      $or: [{ tenantId: { $in: userIds } }, { _id: { $in: moveInUnitIds } }],
     })
       .select("tenantId name blockName propertyId")
       .lean();
@@ -54,24 +73,23 @@ async function attachUnitHints<T extends { userId?: string }>(rows: T[]) {
       if (occupant && userIds.includes(occupant)) occupiedByUser.set(occupant, hint);
       nameByUnitId.set(String(unit._id), { name: unit.name, blockName: unit.blockName });
     }
-    for (const pref of prefs) {
-      prefByUser.set(String(pref.userId), {
-        unitId: String(pref.unitId),
-        blockName: String(pref.blockName ?? ""),
-      });
+    for (const moveIn of moveIns) {
+      const tenantId = String(moveIn.tenantId);
+      if (!requestedByTenant.has(tenantId)) requestedByTenant.set(tenantId, String(moveIn.unitId));
     }
   }
 
   return rows.map((row) => {
     const { userId, ...rest } = row;
     const unit = userId ? (occupiedByUser.get(userId) ?? null) : null;
-    const pref = userId ? prefByUser.get(userId) : undefined;
-    const preferred = pref ? nameByUnitId.get(pref.unitId) : undefined;
-    const requestedUnit = pref
+    const tenantId = String(row._id ?? "");
+    const requestedUnitId = tenantId ? requestedByTenant.get(tenantId) : undefined;
+    const requested = requestedUnitId ? nameByUnitId.get(requestedUnitId) : undefined;
+    const requestedUnit = requestedUnitId
       ? {
-          _id: pref.unitId,
-          name: preferred?.name ?? "",
-          blockName: preferred?.blockName ?? pref.blockName,
+          _id: requestedUnitId,
+          name: requested?.name ?? "",
+          blockName: requested?.blockName ?? "",
         }
       : null;
     return { ...rest, unit, requestedUnit };
