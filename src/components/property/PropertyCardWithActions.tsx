@@ -34,7 +34,7 @@ export const PropertyCardWithActions = ({
   const showActions = canEdit || canDelete;
 
   // `/dashboard/<role>/portfolio` -> `/dashboard/<role>/portfolio/<id>/structure`
-  const base = `/${pathname.split("/").filter(Boolean).slice(0, 3).join("/")}`;
+  const base = `/${pathname.split("/").filter(Boolean).slice(0, 2).join("/")}`;
   const structureHref = `${base}/portfolio/${property._id}/structure`;
 
   return (
