@@ -67,4 +67,24 @@ describe("MoveRequestsView search", () => {
     expect(screen.getByText("Relocating to Mombasa")).toBeInTheDocument();
     expect(screen.queryByText("Needs the ground floor unit")).not.toBeInTheDocument();
   });
+
+  it("shows the requested unit and block", () => {
+    mocks.moveRequests.push({ ...rows[0], unitName: "3A", blockName: "D" });
+    render(<MoveRequestsView nav={[]} roleName="Owner" />);
+
+    expect(screen.getByRole("columnheader", { name: "Unit" })).toBeInTheDocument();
+    expect(screen.getByText("3A · Block D")).toBeInTheDocument();
+  });
+
+  it("falls back to a dash when no unit is attached", () => {
+    mocks.moveRequests.push({
+      ...rows[0],
+      propertyTitle: "Sunset Villa",
+      requestedByName: "Amina",
+    });
+    render(<MoveRequestsView nav={[]} roleName="Owner" />);
+
+    expect(screen.getByRole("columnheader", { name: "Unit" })).toBeInTheDocument();
+    expect(screen.getAllByText("—")).toHaveLength(1);
+  });
 });
