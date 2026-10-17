@@ -10,11 +10,12 @@ vi.mock("@/lib/mongoose", () => ({
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
+vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 vi.mock("@/models/MoveRequest", () => ({ MoveRequest: getModelStubs().moverrequest }));
 
 import { GET, POST } from "@/app/api/v1/move-requests/route";
 
-const { user, property, tenant, moverrequest } = getModelStubs();
+const { user, property, tenant, unit, moverrequest } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CUSTODIAN_ID = makeObjectId("custodian");
@@ -109,6 +110,31 @@ describe("GET /api/v1/move-requests", () => {
       propertyTitle: "Sunset Villa",
       requestedByName: "Amina",
     });
+  });
+
+  it("enriches results with the requested unit name and block", async () => {
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    const unitId = makeObjectId("unit");
+    listResult([
+      {
+        _id: makeObjectId("mr"),
+        type: "move-in",
+        propertyId: PROP_ID,
+        ownerId: OWNER_ID,
+        unitId,
+        requestedById: TENANT_ID,
+        requestedByRole: "tenant",
+        status: "pending",
+      },
+    ]);
+    property.find.mockReturnValue(buildQuery([]));
+    user.find.mockReturnValue(buildQuery([]));
+    unit.find.mockReturnValue(buildQuery([{ _id: unitId, name: "3A", blockName: "D" }]));
+
+    const res = await GET(buildRequest("/api/v1/move-requests", { token: signToken(OWNER_ID) }));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.data[0]).toMatchObject({ unitName: "3A", blockName: "D" });
   });
 });
 

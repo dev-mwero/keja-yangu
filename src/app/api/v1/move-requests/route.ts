@@ -7,6 +7,7 @@ import { moveRequestCreateInput } from "@/lib/schemas/move-request";
 import { MoveRequest } from "@/models/MoveRequest";
 import { Property } from "@/models/Property";
 import { Tenant } from "@/models/Tenant";
+import { Unit } from "@/models/Unit";
 import { User } from "@/models/User";
 
 export async function GET(request: NextRequest) {
@@ -54,15 +55,17 @@ export async function GET(request: NextRequest) {
     MoveRequest.countDocuments(filter),
   ]);
 
-  // Resolve property titles and requester names so the dashboard table can
-  // show which unit/property each request belongs to without N+1 lookups.
+  // Resolve property titles, requester names, and the requested unit so the
+  // dashboard table can show which unit/property each request belongs to
+  // without N+1 lookups.
   const propertyIds = [...new Set(items.map((m) => String(m.propertyId)).filter(Boolean))];
+  const unitIds = [...new Set(items.map((m) => String(m.unitId ?? "")).filter(Boolean))];
   const requesterIds = [
     ...new Set(
       items.map((m) => String(m.requestedById)).filter((id) => id && id !== String(user._id)),
     ),
   ];
-  const [properties, requesters] = await Promise.all([
+  const [properties, requesters, units] = await Promise.all([
     propertyIds.length
       ? Property.find({ _id: { $in: propertyIds } })
           .select("title")
@@ -73,17 +76,28 @@ export async function GET(request: NextRequest) {
           .select("name email")
           .lean()
       : Promise.resolve([]),
+    unitIds.length
+      ? Unit.find({ _id: { $in: unitIds } })
+          .select("name blockName")
+          .lean()
+      : Promise.resolve([]),
   ]);
   const propertyTitleById = new Map(properties.map((p) => [String(p._id), String(p.title ?? "")]));
   const requesterNameById = new Map(
     requesters.map((r) => [String(r._id), String(r.name ?? r.email ?? "")]),
   );
+  const unitById = new Map(units.map((u) => [String(u._id), u]));
 
-  const enriched = items.map((m) => ({
-    ...m,
-    propertyTitle: propertyTitleById.get(String(m.propertyId)) ?? "",
-    requestedByName: requesterNameById.get(String(m.requestedById)) ?? "",
-  }));
+  const enriched = items.map((m) => {
+    const unit = unitById.get(String(m.unitId ?? ""));
+    return {
+      ...m,
+      propertyTitle: propertyTitleById.get(String(m.propertyId)) ?? "",
+      requestedByName: requesterNameById.get(String(m.requestedById)) ?? "",
+      unitName: unit ? String(unit.name ?? "") : "",
+      blockName: unit ? String(unit.blockName ?? "") : "",
+    };
+  });
 
   return NextResponse.json(buildPaginationResult(enriched, total, page, limit));
 }

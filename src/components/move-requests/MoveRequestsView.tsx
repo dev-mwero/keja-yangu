@@ -108,6 +108,7 @@ export function MoveRequestsView({ nav, roleName, canDecide = true }: Props) {
           <TableHeader>
             <TableRow>
               <TableHead>Type</TableHead>
+              <TableHead>Unit</TableHead>
               <TableHead>Property</TableHead>
               <TableHead>Requested by</TableHead>
               <TableHead>Date</TableHead>
@@ -119,13 +120,13 @@ export function MoveRequestsView({ nav, roleName, canDecide = true }: Props) {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                   Loading move requests…
                 </TableCell>
               </TableRow>
             ) : visible.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                   <ArrowLeftRight className="mx-auto mb-2 h-6 w-6 opacity-50" />
                   No move requests.
                 </TableCell>
@@ -134,6 +135,11 @@ export function MoveRequestsView({ nav, roleName, canDecide = true }: Props) {
               visible.map((mr) => (
                 <TableRow key={mr._id}>
                   <TableCell className="font-medium capitalize">{mr.type}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {mr.unitName
+                      ? `${mr.unitName}${mr.blockName ? ` · Block ${mr.blockName}` : ""}`
+                      : "—"}
+                  </TableCell>
                   <TableCell className="text-muted-foreground">{mr.propertyTitle || "—"}</TableCell>
                   <TableCell className="capitalize text-muted-foreground">
                     {mr.requestedByName || mr.requestedByRole}

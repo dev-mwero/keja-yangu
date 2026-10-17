@@ -18,6 +18,10 @@ export interface MoveRequest {
   requestedById: string;
   requestedByName?: string;
   requestedByRole: string;
+  /** Name of the requested unit, resolved by the API. Empty when unknown. */
+  unitName?: string;
+  /** Block of the requested unit, resolved by the API. Empty when unknown. */
+  blockName?: string;
   requestedFor: string;
   requestedDate?: string;
   note: string;
