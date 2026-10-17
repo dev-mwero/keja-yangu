@@ -29,11 +29,7 @@ const OBJECT_ID = /^[0-9a-fA-F]{24}$/;
 async function attachUnitHints<T extends { userId?: string; _id?: unknown }>(rows: T[]) {
   const userIds = [...new Set(rows.map((r) => r.userId).filter((v): v is string => !!v))];
   const tenantObjectIds = [
-    ...new Set(
-      rows
-        .map((r) => String(r._id ?? ""))
-        .filter((id) => id && OBJECT_ID.test(id)),
-    ),
+    ...new Set(rows.map((r) => String(r._id ?? "")).filter((id) => id && OBJECT_ID.test(id))),
   ];
   const occupiedByUser = new Map<string, UnitHint>();
   const requestedByTenant = new Map<string, string>();

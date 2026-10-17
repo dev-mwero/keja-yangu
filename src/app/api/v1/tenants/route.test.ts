@@ -23,8 +23,13 @@ vi.mock("@/lib/email", () => ({
 import { GET, POST } from "@/app/api/v1/tenants/route";
 import { sendInviteEmail } from "@/lib/email";
 
-const { user, property, tenant: tenantStub, unit: unitStub, moverrequest: moveRequestStub } =
-  getModelStubs();
+const {
+  user,
+  property,
+  tenant: tenantStub,
+  unit: unitStub,
+  moverrequest: moveRequestStub,
+} = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
