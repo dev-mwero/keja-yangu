@@ -8,7 +8,75 @@ import { getTenantScope, requirePermission } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { Property } from "@/models/Property";
 import { TENANT_SAFE_FIELDS, Tenant } from "@/models/Tenant";
+import { Unit } from "@/models/Unit";
+import { UnitPreference } from "@/models/UnitPreference";
 import { User } from "@/models/User";
+
+interface UnitHint {
+  _id: string;
+  name: string;
+  blockName: string;
+  propertyId: string;
+}
+
+/**
+ * Attach each tenant's currently-occupied unit and their preferred unit. The
+ * `userId` column is selected only to join, then stripped from the response.
+ */
+async function attachUnitHints<T extends { userId?: string }>(rows: T[]) {
+  const userIds = [...new Set(rows.map((r) => r.userId).filter((v): v is string => !!v))];
+  const occupiedByUser = new Map<string, UnitHint>();
+  const prefByUser = new Map<string, { unitId: string; blockName: string }>();
+  const nameByUnitId = new Map<string, { name: string; blockName: string }>();
+
+  if (userIds.length > 0) {
+    const prefs = await UnitPreference.find({ userId: { $in: userIds } })
+      .select("userId unitId blockName")
+      .lean();
+    const prefUnitIds = prefs
+      .map((p) => String(p.unitId))
+      .filter((unitId) => /^[0-9a-fA-F]{24}$/.test(unitId));
+
+    const units = await Unit.find({
+      $or: [{ tenantId: { $in: userIds } }, { _id: { $in: prefUnitIds } }],
+    })
+      .select("tenantId name blockName propertyId")
+      .lean();
+
+    for (const unit of units) {
+      const hint: UnitHint = {
+        _id: String(unit._id),
+        name: unit.name,
+        blockName: unit.blockName,
+        propertyId: String(unit.propertyId),
+      };
+      const occupant = String(unit.tenantId ?? "");
+      if (occupant && userIds.includes(occupant)) occupiedByUser.set(occupant, hint);
+      nameByUnitId.set(String(unit._id), { name: unit.name, blockName: unit.blockName });
+    }
+    for (const pref of prefs) {
+      prefByUser.set(String(pref.userId), {
+        unitId: String(pref.unitId),
+        blockName: String(pref.blockName ?? ""),
+      });
+    }
+  }
+
+  return rows.map((row) => {
+    const { userId, ...rest } = row;
+    const unit = userId ? (occupiedByUser.get(userId) ?? null) : null;
+    const pref = userId ? prefByUser.get(userId) : undefined;
+    const preferred = pref ? nameByUnitId.get(pref.unitId) : undefined;
+    const requestedUnit = pref
+      ? {
+          _id: pref.unitId,
+          name: preferred?.name ?? "",
+          blockName: preferred?.blockName ?? pref.blockName,
+        }
+      : null;
+    return { ...rest, unit, requestedUnit };
+  });
+}
 
 const tenantInput = z.object({
   name: z.string().trim().min(1),
@@ -54,9 +122,9 @@ export async function GET(request: NextRequest) {
   if (status) filter.status = status;
   if (propertyId) filter.propertyId = propertyId;
 
-  const [tenants, total] = await Promise.all([
+  const [rows, total] = await Promise.all([
     Tenant.find(filter)
-      .select(TENANT_SAFE_FIELDS)
+      .select(`${TENANT_SAFE_FIELDS} userId`)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
@@ -64,7 +132,11 @@ export async function GET(request: NextRequest) {
     Tenant.countDocuments(filter),
   ]);
 
-  return NextResponse.json(buildPaginationResult(tenants, total, page, limit));
+  const enriched = await attachUnitHints(
+    rows as Array<Record<string, unknown> & { userId?: string }>,
+  );
+
+  return NextResponse.json(buildPaginationResult(enriched, total, page, limit));
 }
 
 export async function POST(request: NextRequest) {

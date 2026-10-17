@@ -14,6 +14,8 @@ vi.mock("@/models/Tenant", () => ({
   TENANT_SAFE_FIELDS:
     "name email phone propertyId ownerId status joinedAt notes createdAt updatedAt",
 }));
+vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
+vi.mock("@/models/UnitPreference", () => ({ UnitPreference: getModelStubs().unitpreference }));
 vi.mock("@/lib/email", () => ({
   sendInviteEmail: vi.fn(),
 }));
@@ -88,7 +90,7 @@ describe("GET /api/v1/tenants", () => {
     expect(tenantStub.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
     expect(tenantStub.countDocuments).toHaveBeenCalledWith({ ownerId: OWNER_ID });
     expect(chain.select).toHaveBeenCalledWith(
-      "name email phone propertyId ownerId status joinedAt notes createdAt updatedAt",
+      "name email phone propertyId ownerId status joinedAt notes createdAt updatedAt userId",
     );
     const body = await json(res);
     expect((body.data as Array<{ ownerId: string }>)[0].ownerId).toBe(OWNER_ID);

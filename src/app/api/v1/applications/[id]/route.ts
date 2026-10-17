@@ -5,6 +5,7 @@ import { asSoftDeleteModel } from "@/lib/mongoose-soft-delete";
 import { authenticate, requirePermission } from "@/lib/permissions";
 import { applicationDecisionInput } from "@/lib/schemas/application";
 import { Application } from "@/models/Application";
+import { Tenant } from "@/models/Tenant";
 import { User } from "@/models/User";
 
 interface RouteContext {
@@ -37,13 +38,60 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
     );
   }
 
+  const previousStatus = application.status;
   application.status = parsed.data.status;
   application.decisionNote = parsed.data.decisionNote ?? "";
   application.decidedById = auth.userId;
   application.decidedAt = new Date();
   await application.save();
 
+  // Approving an application admits the applicant as a tenant of the property,
+  // so they appear in the Tenants list and can be assigned a unit. Re-approving
+  // or rejecting never removes an existing tenancy.
+  if (parsed.data.status === "approved" && previousStatus !== "approved") {
+    await admitApprovedApplicant(application);
+  }
+
   return NextResponse.json({ data: application.toObject() });
+}
+
+/** Create or bind the Tenant record for an approved application. */
+async function admitApprovedApplicant(application: {
+  propertyId: string;
+  ownerId: string;
+  applicantUserId: string;
+  applicantName: string;
+  applicantEmail: string;
+}) {
+  const email = application.applicantEmail.trim().toLowerCase();
+  const existing = await Tenant.findOne({
+    propertyId: application.propertyId,
+    email,
+  }).lean();
+
+  if (existing) {
+    await Tenant.updateOne(
+      { _id: existing._id },
+      {
+        $set: {
+          userId: application.applicantUserId,
+          status: "active",
+          ownerId: application.ownerId,
+        },
+      },
+    );
+    return;
+  }
+
+  await Tenant.create({
+    name: application.applicantName,
+    email,
+    propertyId: application.propertyId,
+    ownerId: application.ownerId,
+    status: "active",
+    userId: application.applicantUserId,
+    joinedAt: new Date(),
+  });
 }
 
 export async function DELETE(request: NextRequest, ctx: RouteContext) {
