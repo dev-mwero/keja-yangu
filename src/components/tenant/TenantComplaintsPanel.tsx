@@ -3,7 +3,6 @@
 import { AlertTriangle, CheckCircle2, Clock, Plus, Wrench } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { DashboardShell } from "@/components/DashboardShell";
 import { SearchInput } from "@/components/SearchInput";
 import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +25,6 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { tenantNav } from "@/config/dashboardNav";
 import { useComplaintMutations, useComplaints } from "@/hooks/use-complaints";
 import type { ComplaintCategory, ComplaintPriority, ComplaintStatus } from "@/lib/domain-enums";
 import { relativeTime } from "@/lib/format";
@@ -55,7 +53,8 @@ const categories: ComplaintCategory[] = [
 
 type Filter = "all" | ComplaintStatus;
 
-const TenantComplaintsPage = () => {
+/** Tenant complaints body — rendered on My Home. */
+export function TenantComplaintsPanel() {
   const { items, refetch } = useComplaints();
   const { createComplaint, pending } = useComplaintMutations();
   const [filter, setFilter] = useState<Filter>("all");
@@ -70,7 +69,17 @@ const TenantComplaintsPage = () => {
   const progressCount = items.filter((c) => c.status === "in-progress").length;
   const resolvedCount = items.filter((c) => c.status === "resolved").length;
   const visible = (filter === "all" ? items : items.filter((c) => c.status === filter)).filter(
-    (c) => matchesQuery(query, c.subject, c.category, c.property, c.message, c.status, c.priority),
+    (c) =>
+      matchesQuery(
+        query,
+        c.subject,
+        c.category,
+        c.property,
+        c.unitName,
+        c.message,
+        c.status,
+        c.priority,
+      ),
   );
 
   // Single-property tenants pin their property server-side; the page only
@@ -111,12 +120,7 @@ const TenantComplaintsPage = () => {
   };
 
   return (
-    <DashboardShell
-      roleName="Tenant"
-      nav={tenantNav}
-      title="Complaints"
-      subtitle="Log issues and track them until they're resolved."
-    >
+    <>
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard label="Open" value={openCount} icon={AlertTriangle} />
         <StatCard label="In progress" value={progressCount} icon={Clock} />
@@ -175,7 +179,8 @@ const TenantComplaintsPage = () => {
               </div>
               <h3 className="mt-3 font-display text-lg font-semibold">{c.subject}</h3>
               <p className="mt-1 text-xs text-muted-foreground">
-                {c.category} · {c.property} · {relativeTime(c.createdAt)}
+                {c.category} · {c.unitName ? `Unit ${c.unitName} · ` : ""}
+                {c.property} · {relativeTime(c.createdAt)}
               </p>
               <p className="mt-3 text-sm text-muted-foreground">{c.message}</p>
               {c.status === "resolved" && c.resolution && (
@@ -255,8 +260,6 @@ const TenantComplaintsPage = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </DashboardShell>
+    </>
   );
-};
-
-export default TenantComplaintsPage;
+}

@@ -69,21 +69,21 @@ const TenantDashboard = () => {
           label="Total applications"
           value={totalCount}
           icon={FileText}
-          href="/dashboard/tenant/applications"
+          href="/dashboard/tenant/requests"
         />
         <StatCard
           label="Pending review"
           value={pendingCount}
           icon={Clock}
           hint="Avg. response 18h"
-          href="/dashboard/tenant/applications"
+          href="/dashboard/tenant/requests"
         />
         <StatCard
           label="Approved"
           value={approvedCount}
           hint={approvedTitle}
           icon={CheckCircle2}
-          href="/dashboard/tenant/applications"
+          href="/dashboard/tenant/requests"
         />
       </div>
 

@@ -493,13 +493,13 @@ export async function notifyComplaintStatusChange(complaint: ComplaintLike): Pro
       title: "Complaint update",
       body: `Your complaint "${subject}" is now ${status}.`,
       data,
-      link: "/dashboard/tenant/complaints",
+      link: "/dashboard/tenant/home",
       channels: ["in-app", "email"],
       email: {
         subjectPrefix: `Complaint "${sanitizeHeader(subject)}" ${status} - Keja Yangu`,
         content: createComplaintStatusContent({ subject, status }),
         text: `Your complaint "${subject}" is now ${status}.`,
-        linkUrl: `${appUrl()}/dashboard/tenant/complaints`,
+        linkUrl: `${appUrl()}/dashboard/tenant/home`,
         preheader: "Your complaint status has changed",
       },
     });
@@ -527,7 +527,7 @@ export async function notifyMessageReply(
       title: "New message",
       body: message.text,
       data: { messageId: String(message._id), threadId: message.threadId },
-      link: "/dashboard/tenant/chat",
+      link: "/dashboard/tenant/messages",
       channels: ["in-app"],
     });
   } catch (_error) {
@@ -556,7 +556,7 @@ export async function notifyAnnouncement(
           title: announcement.title,
           body: announcement.body,
           data,
-          link: "/dashboard/tenant/announcements",
+          link: "/dashboard/tenant/messages",
           channels: ["in-app"],
         })) && ok;
     }
