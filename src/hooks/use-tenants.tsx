@@ -4,6 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 export type TenantStatus = "active" | "pending" | "rejected";
 
+export interface TenantUnitSummary {
+  _id: string;
+  name: string;
+  blockName: string;
+  propertyId?: string;
+}
+
 export interface Tenant {
   _id: string;
   name: string;
@@ -16,6 +23,10 @@ export interface Tenant {
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
+  /** The unit the tenant currently occupies, if any. */
+  unit?: TenantUnitSummary | null;
+  /** The vacant unit the tenant marked as preferred, if any. */
+  requestedUnit?: TenantUnitSummary | null;
 }
 
 export interface TenantInput {
@@ -130,5 +141,35 @@ export function useTenantMutations() {
     }
   };
 
-  return { createTenant, updateTenant, deleteTenant, pending };
+  const assignUnit = async (id: string, unitId: string): Promise<void> => {
+    setPending(true);
+    try {
+      const res = await fetch(`/api/v1/tenants/${id}/assignment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unitId }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to assign unit");
+      }
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const vacateUnit = async (id: string): Promise<void> => {
+    setPending(true);
+    try {
+      const res = await fetch(`/api/v1/tenants/${id}/assignment`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to vacate unit");
+      }
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return { createTenant, updateTenant, deleteTenant, assignUnit, vacateUnit, pending };
 }

@@ -9,10 +9,11 @@ vi.mock("@/lib/mongoose", () => ({
 }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Application", () => ({ Application: getModelStubs().application }));
+vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 
 import { DELETE, PATCH } from "@/app/api/v1/applications/[id]/route";
 
-const { user, application } = getModelStubs();
+const { user, application, tenant } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CUSTODIAN_ID = makeObjectId("custodian");
@@ -115,6 +116,8 @@ describe("PATCH /api/v1/applications/[id]", () => {
     authOwner();
     const doc = appDoc();
     application.findById.mockResolvedValue(doc);
+    tenant.findOne.mockReturnValue(buildQuery(null));
+    tenant.create.mockResolvedValue({ _id: makeObjectId("created-tenant") });
 
     const res = await PATCH(
       buildRequest(`/api/v1/applications/${APP_ID}`, {
@@ -130,6 +133,61 @@ describe("PATCH /api/v1/applications/[id]", () => {
     expect(doc.decidedById).toBe(OWNER_ID);
     expect(doc.decisionNote).toBe("Welcome");
     expect(doc.save).toHaveBeenCalled();
+    // Approving admits the applicant as a tenant of the property.
+    expect(tenant.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        propertyId: PROP_ID,
+        ownerId: OWNER_ID,
+        email: "amina@keja.co",
+        status: "active",
+        userId: TENANT_ID,
+      }),
+    );
+  });
+
+  it("binds an existing tenant instead of duplicating on approval", async () => {
+    authOwner();
+    const doc = appDoc();
+    application.findById.mockResolvedValue(doc);
+    tenant.findOne.mockReturnValue(buildQuery({ _id: makeObjectId("existing") }));
+    tenant.updateOne.mockResolvedValue({ modifiedCount: 1 });
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/applications/${APP_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { status: "approved" },
+      }),
+      withParams(APP_ID),
+    );
+
+    expect(res.status).toBe(200);
+    expect(tenant.create).not.toHaveBeenCalled();
+    expect(tenant.updateOne).toHaveBeenCalledWith(
+      { _id: makeObjectId("existing") },
+      expect.objectContaining({
+        $set: expect.objectContaining({ userId: TENANT_ID, status: "active" }),
+      }),
+    );
+  });
+
+  it("does not admit a tenant when rejecting", async () => {
+    authOwner();
+    const doc = appDoc();
+    application.findById.mockResolvedValue(doc);
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/applications/${APP_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { status: "rejected" },
+      }),
+      withParams(APP_ID),
+    );
+
+    expect(res.status).toBe(200);
+    expect(tenant.create).not.toHaveBeenCalled();
+    expect(tenant.updateOne).not.toHaveBeenCalled();
   });
 });
 

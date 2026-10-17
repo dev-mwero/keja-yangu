@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Plus, Users } from "lucide-react";
+import { DoorOpen, Loader2, Plus, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -52,6 +52,7 @@ import {
   useTenantMutations,
   useTenants,
 } from "@/hooks/use-tenants";
+import { useUnits } from "@/hooks/use-units";
 import { formatDate } from "@/lib/format";
 import { matchesQuery } from "@/lib/search";
 
@@ -86,6 +87,8 @@ interface TenantsManagerProps {
   roleName: string;
   canSetStatus: boolean;
   allowedProperties?: string[];
+  /** When false, hides the assign/vacate unit actions (defaults to canSetStatus). */
+  canAssignUnits?: boolean;
 }
 
 export const TenantsManager = ({
@@ -93,10 +96,12 @@ export const TenantsManager = ({
   roleName,
   canSetStatus,
   allowedProperties,
+  canAssignUnits = canSetStatus,
 }: TenantsManagerProps) => {
   const { tenants, loading, error, refetch } = useTenants();
   const { properties } = useProperties();
-  const { createTenant, updateTenant, deleteTenant, pending } = useTenantMutations();
+  const { createTenant, updateTenant, deleteTenant, assignUnit, vacateUnit, pending } =
+    useTenantMutations();
 
   const [tab, setTab] = useState<StatusFilter>("all");
   const [propertyFilter, setPropertyFilter] = useState("all");
@@ -110,6 +115,19 @@ export const TenantsManager = ({
     propertyId?: string;
   }>({});
   const [deleting, setDeleting] = useState<Tenant | null>(null);
+  const [assigning, setAssigning] = useState<Tenant | null>(null);
+  const [assignUnitId, setAssignUnitId] = useState("");
+  const [vacating, setVacating] = useState<Tenant | null>(null);
+
+  const assignPropertyId = assigning?.propertyId;
+  const {
+    units: vacantUnits,
+    loading: unitsLoading,
+    error: unitsError,
+  } = useUnits(
+    { propertyId: assignPropertyId, status: "available" },
+    { fetchAll: true, enabled: !!assignPropertyId },
+  );
 
   const propertyOptions = useMemo(() => {
     if (!allowedProperties) return properties;
@@ -219,6 +237,43 @@ export const TenantsManager = ({
     }
   };
 
+  const openAssign = (tenant: Tenant) => {
+    setAssignUnitId("");
+    setAssigning(tenant);
+  };
+
+  const handleAssign = async () => {
+    if (!assigning || !assignUnitId) return;
+    try {
+      await assignUnit(assigning._id, assignUnitId);
+      const unit = vacantUnits.find((u) => u._id === assignUnitId);
+      toast.success("Unit assigned", {
+        description: `${assigning.name} was moved into ${unit?.name ?? "the unit"}.`,
+      });
+      setAssigning(null);
+      setAssignUnitId("");
+      refetch();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to assign unit";
+      toast.error("Could not assign unit", { description: message });
+    }
+  };
+
+  const handleVacate = async () => {
+    if (!vacating) return;
+    try {
+      await vacateUnit(vacating._id);
+      toast.success("Unit vacated", {
+        description: `${vacating.name} was unassigned from their unit.`,
+      });
+      setVacating(null);
+      refetch();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to vacate unit";
+      toast.error("Could not vacate unit", { description: message });
+    }
+  };
+
   return (
     <DashboardShell
       roleName={roleName}
@@ -286,6 +341,8 @@ export const TenantsManager = ({
                   <TableHead>Tenant</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Property</TableHead>
+                  <TableHead>Unit</TableHead>
+                  <TableHead>Requested</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Joined</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -300,6 +357,22 @@ export const TenantsManager = ({
                       <TableCell className="font-medium">{t.name}</TableCell>
                       <TableCell className="text-muted-foreground">{t.email}</TableCell>
                       <TableCell className="text-muted-foreground">{propertyTitle}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {t.unit ? `${t.unit.name} · ${t.unit.blockName}` : "—"}
+                      </TableCell>
+                      <TableCell>
+                        {t.requestedUnit ? (
+                          <Badge
+                            variant="outline"
+                            className="gap-1 font-normal text-muted-foreground"
+                          >
+                            <DoorOpen className="h-3 w-3" />
+                            {t.requestedUnit.name} · {t.requestedUnit.blockName}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge className={`${statusClass[t.status]} capitalize hover:opacity-100`}>
                           {t.status}
@@ -310,6 +383,16 @@ export const TenantsManager = ({
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
+                          {canAssignUnits && !t.unit && (
+                            <Button size="sm" variant="outline" onClick={() => openAssign(t)}>
+                              Assign unit
+                            </Button>
+                          )}
+                          {canAssignUnits && t.unit && (
+                            <Button size="sm" variant="outline" onClick={() => setVacating(t)}>
+                              Vacate
+                            </Button>
+                          )}
                           <Button size="sm" variant="outline" onClick={() => openEdit(t)}>
                             Edit
                           </Button>
@@ -465,6 +548,99 @@ export const TenantsManager = ({
             <Button variant="destructive" disabled={pending} onClick={handleDelete}>
               {pending && <Loader2 className="h-4 w-4 animate-spin" />}
               Remove tenant
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog
+        open={assigning !== null}
+        onOpenChange={(next) => {
+          if (!pending) {
+            setAssigning(next ? assigning : null);
+            if (!next) setAssignUnitId("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign a unit</DialogTitle>
+            <DialogDescription>
+              {assigning
+                ? `Move ${assigning.name} into a vacant unit at their property.`
+                : "Select a vacant unit."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Vacant unit</Label>
+            {unitsLoading ? (
+              <p className="text-sm text-muted-foreground">Loading vacant units…</p>
+            ) : unitsError ? (
+              <p className="text-sm text-destructive">{unitsError}</p>
+            ) : vacantUnits.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No vacant units at this property. Add units to the property structure first.
+              </p>
+            ) : (
+              <Select value={assignUnitId} onValueChange={setAssignUnitId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Choose a unit" />
+                </SelectTrigger>
+                <SelectContent>
+                  {vacantUnits.map((u) => (
+                    <SelectItem key={u._id} value={u._id}>
+                      {u.name} · {u.blockName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              className="rounded-full"
+              disabled={pending}
+              onClick={() => {
+                setAssigning(null);
+                setAssignUnitId("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="rounded-full"
+              disabled={pending || !assignUnitId}
+              onClick={handleAssign}
+            >
+              {pending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Assign unit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={vacating !== null}
+        onOpenChange={(next) => {
+          if (!pending && !next) setVacating(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Vacate {vacating?.unit?.name ?? "this unit"} for {vacating?.name ?? "this tenant"}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This frees the unit and ends the tenant&apos;s active lease. The tenant record is
+              kept.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+            <Button variant="destructive" disabled={pending} onClick={handleVacate}>
+              {pending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Vacate unit
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
