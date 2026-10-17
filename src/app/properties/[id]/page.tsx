@@ -4,7 +4,7 @@ import { ArrowLeft, Bath, BedDouble, Check, MapPin, Maximize2, Send } from "luci
 import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PropertyMap } from "@/components/PropertyMap";
 import { PropertyLightbox } from "@/components/property/PropertyLightbox";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -25,14 +25,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useApplicationMutations, useApplications } from "@/hooks/use-applications";
 import { useAuth } from "@/hooks/use-auth";
-import { useProperties } from "@/hooks/use-properties";
+import { type PropertyUnit, useProperty } from "@/hooks/use-properties";
 import { useToast } from "@/hooks/use-toast";
+import { formatKES } from "@/lib/format";
 import { applicationFormSchema } from "@/lib/schemas/application";
 
 const PropertyDetails = () => {
   const { id } = useParams();
-  const { properties: apiProperties, loading } = useProperties();
-  const property = apiProperties.map((p) => ({ ...p, id: p._id })).find((p) => p.id === id);
+  const propertyId = typeof id === "string" ? id : undefined;
+  const { property, units, loading } = useProperty(propertyId);
   const [active, setActive] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const { toast } = useToast();
@@ -41,9 +42,19 @@ const PropertyDetails = () => {
   const { create } = useApplicationMutations();
   const { applications } = useApplications(undefined, { enabled: user?.role === "tenant" });
   const [open, setOpen] = useState(false);
+  const [selectedUnit, setSelectedUnit] = useState<PropertyUnit | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", message: "" });
   const [errors, setErrors] = useState<{ name?: string; email?: string; message?: string }>({});
+
+  // Prefill the applicant's details whenever the dialog opens, whether it was
+  // opened from the general button or a specific unit's "Request" button.
+  useEffect(() => {
+    if (!open || user?.role !== "tenant") return;
+    const name = user.name || "";
+    const email = user.email || "";
+    setForm((f) => (f.name === name && f.email === email ? f : { ...f, name, email }));
+  }, [open, user?.role, user?.name, user?.email]);
 
   if (loading) {
     return (
@@ -72,7 +83,7 @@ const PropertyDetails = () => {
 
   const alreadyPending =
     user?.role === "tenant" && property
-      ? applications.some((a) => a.propertyId === property.id && a.status === "pending")
+      ? applications.some((a) => a.propertyId === property._id && a.status === "pending")
       : false;
 
   const gallery = property.images.length > 0 ? property.images : ["/images/property-1.jpg"];
@@ -87,7 +98,7 @@ const PropertyDetails = () => {
         title: "Please sign in",
         description: "You need a tenant account to submit an application.",
       });
-      router.push(`/auth?from=/properties/${property.id}`);
+      router.push(`/auth?from=/properties/${property._id}`);
       return;
     }
     if (user.role !== "tenant") {
@@ -120,19 +131,22 @@ const PropertyDetails = () => {
     setSubmitting(true);
     try {
       await create({
-        propertyId: property.id,
+        propertyId: property._id,
+        unitId: selectedUnit?._id,
         name: result.data.name,
         email: result.data.email,
         message: result.data.message,
       });
       toast({
         title: "Application submitted",
-        description: `Your request for ${property.title} is now pending.`,
+        description: selectedUnit
+          ? `Your request for unit ${selectedUnit.name} at ${property.title} is now pending.`
+          : `Your request for ${property.title} is now pending.`,
       });
       setOpen(false);
       setForm({ name: "", email: "", message: "" });
       setErrors({});
-      router.push("/dashboard/tenant/applications");
+      router.push("/dashboard/tenant/requests");
     } catch (err) {
       toast({
         title: "Could not submit application",
@@ -261,6 +275,72 @@ const PropertyDetails = () => {
                 </TabsContent>
               </Tabs>
             </div>
+
+            <section className="mt-10" aria-labelledby="available-units-heading">
+              <h2
+                id="available-units-heading"
+                className="font-display text-2xl font-semibold tracking-tight"
+              >
+                Available units
+              </h2>
+              {property.status !== "available" ? (
+                <p className="mt-3 text-muted-foreground">
+                  This home is not accepting applications right now.
+                </p>
+              ) : units.length === 0 ? (
+                <p className="mt-3 text-muted-foreground">
+                  No units are listed right now. Submit a general request and the caretaker will
+                  suggest one.
+                </p>
+              ) : (
+                <ul aria-label="Available units" className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {units.map((unit) => (
+                    <li
+                      key={unit._id}
+                      className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-soft"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="font-display text-lg font-semibold">Unit {unit.name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {unit.blockName ? `Block ${unit.blockName} · ` : ""}
+                            Floor {unit.floorLabel || unit.floorLevel}
+                          </div>
+                        </div>
+                        <div className="text-right text-sm font-medium">
+                          {formatKES(unit.rent ?? property.price)}
+                          <div className="text-xs font-normal text-muted-foreground">/ month</div>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                        <span className="inline-flex items-center gap-1">
+                          <BedDouble className="h-3.5 w-3.5" /> {unit.beds} bed
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <Bath className="h-3.5 w-3.5" /> {unit.baths} bath
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <Maximize2 className="h-3.5 w-3.5" /> {unit.area} m²
+                        </span>
+                      </div>
+                      <Button
+                        size="sm"
+                        className="rounded-full"
+                        disabled={alreadyPending}
+                        aria-label={`Request ${unit.name}`}
+                        onClick={() => {
+                          setSelectedUnit(unit);
+                          setOpen(true);
+                        }}
+                      >
+                        <Send className="mr-2 h-3.5 w-3.5" />
+                        Request this unit
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
           </div>
 
           {/* Sticky sidebar */}
@@ -292,13 +372,6 @@ const PropertyDetails = () => {
                 open={open}
                 onOpenChange={(o) => {
                   setOpen(o);
-                  if (o && user?.role === "tenant") {
-                    setForm((f) => ({
-                      ...f,
-                      name: f.name || user.name || "",
-                      email: f.email || user.email || "",
-                    }));
-                  }
                 }}
               >
                 <DialogTrigger asChild>
@@ -306,6 +379,7 @@ const PropertyDetails = () => {
                     className="mt-6 w-full rounded-full"
                     size="lg"
                     disabled={property.status !== "available" || alreadyPending}
+                    onClick={() => setSelectedUnit(null)}
                   >
                     <Send className="mr-2 h-4 w-4" />
                     {property.status !== "available"
@@ -318,7 +392,9 @@ const PropertyDetails = () => {
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle className="font-display text-2xl">
-                      Apply for {property.title}
+                      {selectedUnit
+                        ? `Request ${selectedUnit.name} · ${property.title}`
+                        : `Apply for ${property.title}`}
                     </DialogTitle>
                     <DialogDescription>
                       Send a quick request. The caretaker will review within 24 hours.

@@ -156,6 +156,77 @@ export function useProperties(filters?: PropertyFilters) {
   return { properties, loading, error, refetch };
 }
 
+export interface PropertyUnit {
+  _id: string;
+  name: string;
+  letter?: string;
+  floorLevel: number;
+  floorLabel?: string;
+  blockName: string;
+  rent: number | null;
+  beds: number;
+  baths: number;
+  area: number;
+  status: string;
+}
+
+export interface PropertyDetail extends Property {
+  units: PropertyUnit[];
+}
+
+/**
+ * Fetches a single property together with its vacant units for the public
+ * property page. `GET /api/v1/properties/[id]` embeds `units` (available only)
+ * so the browse → pick-a-unit flow needs one round-trip.
+ */
+export function useProperty(id?: string) {
+  const [property, setProperty] = useState<PropertyDetail | null>(null);
+  const [loading, setLoading] = useState(Boolean(id));
+  const [error, setError] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
+
+  useEffect(() => {
+    if (!id) {
+      setProperty(null);
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    void reload;
+    const fetchProperty = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/v1/properties/${id}`);
+        const json = await res.json();
+        if (cancelled) return;
+        if (res.ok) {
+          setProperty(json.data as PropertyDetail);
+          setError(null);
+        } else {
+          setProperty(null);
+          setError(json.error || "Failed to fetch property");
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setProperty(null);
+          setError(err instanceof Error ? err.message : "Network error");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetchProperty();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, reload]);
+
+  const refetch = useCallback(() => setReload((n) => n + 1), []);
+  const units = property?.units ?? [];
+
+  return { property, units, loading, error, refetch };
+}
+
 export function usePropertyMutations() {
   const [pending, setPending] = useState(false);
 
