@@ -25,7 +25,7 @@ export interface Tenant {
   updatedAt?: string;
   /** The unit the tenant currently occupies, if any. */
   unit?: TenantUnitSummary | null;
-  /** The vacant unit the tenant marked as preferred, if any. */
+  /** The unit the tenant most recently requested (pending move-in), if any. */
   requestedUnit?: TenantUnitSummary | null;
 }
 
