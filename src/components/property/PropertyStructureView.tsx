@@ -1,6 +1,15 @@
 "use client";
 
-import { ArrowLeft, Building2, DoorOpen, Layers, Loader2, Save, Wallet } from "lucide-react";
+import {
+  ArrowLeft,
+  Building2,
+  DoorOpen,
+  Layers,
+  Loader2,
+  Pencil,
+  Save,
+  Wallet,
+} from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -8,9 +17,11 @@ import { toast } from "sonner";
 import { DashboardShell } from "@/components/DashboardShell";
 import {
   PropertyStructureEditor,
+  PropertyStructurePreview,
   summarizeStructure,
   validateBlocks,
 } from "@/components/property/PropertyStructureEditor";
+import { PropertyUnitsTable } from "@/components/property/PropertyUnitsTable";
 import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
 import type { DashNavItem } from "@/config/dashboardNav";
@@ -51,6 +62,8 @@ export function PropertyStructureView({ propertyId, nav, roleName, backHref }: P
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [counts, setCounts] = useState<UnitCounts | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [unitsRefreshKey, setUnitsRefreshKey] = useState(0);
 
   const loadCounts = useCallback(async () => {
     try {
@@ -115,6 +128,8 @@ export function PropertyStructureView({ propertyId, nav, roleName, backHref }: P
       const updated = await updateStructure(propertyId, blocks);
       setProperty(updated);
       setBlocks(toBlockPayloads(updated));
+      setEditing(false);
+      setUnitsRefreshKey((k) => k + 1);
       void loadCounts();
       toast.success("Structure saved", {
         description: "Blocks, floors and units have been updated.",
@@ -122,6 +137,11 @@ export function PropertyStructureView({ propertyId, nav, roleName, backHref }: P
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to save structure");
     }
+  };
+
+  const cancelEdit = () => {
+    if (property) setBlocks(toBlockPayloads(property));
+    setEditing(false);
   };
 
   return (
@@ -148,7 +168,7 @@ export function PropertyStructureView({ propertyId, nav, roleName, backHref }: P
           {loadError}
         </div>
       ) : (
-        <div className="max-w-3xl space-y-4">
+        <div className="max-w-5xl space-y-6">
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <StatCard label="Blocks" value={summary.blocks} icon={Layers} />
             <StatCard label="Floors" value={summary.floors} icon={Building2} />
@@ -185,25 +205,68 @@ export function PropertyStructureView({ propertyId, nav, roleName, backHref }: P
               </span>
             </div>
           )}
-          <PropertyStructureEditor
-            blocks={blocks}
-            onChange={setBlocks}
-            baseRent={property?.price ?? 0}
-            disabled={pending}
-          />
-          <div className="flex items-center gap-3">
-            <Button onClick={handleSave} disabled={pending || errors.length > 0}>
-              {pending ? (
-                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="mr-1 h-4 w-4" />
+
+          <section className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="font-display text-lg">Structure</h2>
+                <p className="text-xs text-muted-foreground">
+                  Blocks, floors and how many units each floor holds.
+                </p>
+              </div>
+              {!editing && (
+                <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+                  <Pencil className="mr-1 h-4 w-4" /> Edit
+                </Button>
               )}
-              Save structure
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              Occupied units are preserved; blocks and floors holding tenants cannot be removed.
-            </p>
-          </div>
+            </div>
+
+            {editing ? (
+              <>
+                <PropertyStructureEditor
+                  blocks={blocks}
+                  onChange={setBlocks}
+                  baseRent={property?.price ?? 0}
+                  disabled={pending}
+                />
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button onClick={handleSave} disabled={pending || errors.length > 0}>
+                    {pending ? (
+                      <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="mr-1 h-4 w-4" />
+                    )}
+                    Save structure
+                  </Button>
+                  <Button variant="outline" onClick={cancelEdit} disabled={pending}>
+                    Cancel
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Occupied units are preserved; blocks and floors holding tenants cannot be
+                    removed.
+                  </p>
+                </div>
+              </>
+            ) : (
+              <PropertyStructurePreview blocks={blocks} />
+            )}
+          </section>
+
+          <section className="space-y-3">
+            <div>
+              <h2 className="font-display text-lg">Units</h2>
+              <p className="text-xs text-muted-foreground">
+                Every unit in this property, with its details and per-unit actions.
+              </p>
+            </div>
+            <PropertyUnitsTable
+              propertyId={propertyId}
+              blocks={property?.blocks ?? []}
+              baseRent={property?.price ?? 0}
+              refreshKey={unitsRefreshKey}
+              onChanged={loadCounts}
+            />
+          </section>
         </div>
       )}
     </DashboardShell>

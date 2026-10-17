@@ -1,6 +1,10 @@
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { summarizeStructure } from "@/components/property/PropertyStructureEditor";
+import {
+  PropertyStructurePreview,
+  summarizeStructure,
+} from "@/components/property/PropertyStructureEditor";
 import type { BlockInputPayload } from "@/hooks/use-properties";
 
 const block = (over: Partial<BlockInputPayload> = {}): BlockInputPayload => ({
@@ -93,5 +97,30 @@ describe("summarizeStructure", () => {
       minRent: 0,
       maxRent: 0,
     });
+  });
+});
+
+describe("PropertyStructurePreview", () => {
+  it("prompts to edit when there are no blocks", () => {
+    render(<PropertyStructurePreview blocks={[]} />);
+    expect(screen.getByText(/No blocks yet/)).toBeInTheDocument();
+  });
+
+  it("lists blocks, floors and generated unit names", () => {
+    render(
+      <PropertyStructurePreview
+        blocks={[
+          block({
+            name: "Block A",
+            rentOverride: 25000,
+            floors: [{ level: 0, label: "Ground", unitsPerFloor: 2 }],
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Block A")).toBeInTheDocument();
+    expect(screen.getByText(/Rent Ksh 25,000/)).toBeInTheDocument();
+    expect(screen.getByText(/2 units · GA, GB/)).toBeInTheDocument();
   });
 });

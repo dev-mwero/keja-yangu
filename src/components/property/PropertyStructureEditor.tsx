@@ -2,10 +2,12 @@
 
 import { DoorOpen, Plus, Trash2 } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { BlockInputPayload, FloorInputPayload } from "@/hooks/use-properties";
+import { formatKES } from "@/lib/format";
 import { effectiveRent, MAX_UNITS_PER_PROPERTY } from "@/lib/schemas/structure";
 import { buildUnitNames } from "@/lib/unit-naming";
 
@@ -306,3 +308,66 @@ export const PropertyStructureEditor = ({
     </div>
   );
 };
+
+export interface PropertyStructurePreviewProps {
+  blocks: BlockInputPayload[];
+}
+
+/**
+ * Read-only rendering of a saved block/floor structure. This is what the
+ * structure page shows by default; the editable {@link PropertyStructureEditor}
+ * is only revealed after the user clicks Edit.
+ */
+export function PropertyStructurePreview({ blocks }: PropertyStructurePreviewProps) {
+  if (blocks.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+        <DoorOpen className="mx-auto mb-2 h-6 w-6 opacity-50" />
+        No blocks yet. Click <span className="font-medium text-foreground">Edit</span> to add blocks
+        and floors.
+      </div>
+    );
+  }
+
+  return (
+    <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
+      {blocks.map((block, blockIndex) => (
+        <div key={block.id ?? blockIndex} className="space-y-3 p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium">{block.name || `Block ${blockIndex + 1}`}</span>
+            {block.rentOverride != null && (
+              <Badge variant="secondary">Rent {formatKES(block.rentOverride)}</Badge>
+            )}
+          </div>
+          <ul className="space-y-1.5">
+            {block.floors.map((floor, floorIndex) => {
+              const names = buildUnitNames(floor.level, floor.unitsPerFloor, floor.unitNames);
+              const floorLabel =
+                floor.label?.trim() || (floor.level === 0 ? "Ground" : `Floor ${floor.level}`);
+              return (
+                <li
+                  key={floor.id ?? floorIndex}
+                  className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm"
+                >
+                  <span className="text-muted-foreground">
+                    {floorLabel}
+                    {floor.rentOverride != null && (
+                      <span className="ml-2 text-xs">· rent {formatKES(floor.rentOverride)}</span>
+                    )}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {names.length === 0
+                      ? "No units"
+                      : `${names.length} ${names.length === 1 ? "unit" : "units"} · ${
+                          names.length > 6 ? `${names.slice(0, 6).join(", ")}…` : names.join(", ")
+                        }`}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}

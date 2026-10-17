@@ -53,7 +53,7 @@ const STATUS_VARIANT: Record<UnitStatus, "default" | "secondary" | "outline"> = 
 };
 
 export function UnitsView({ nav, roleName, canManage = true }: Props) {
-  const { units, loading, refetch } = useUnits();
+  const { units, loading, refetch } = useUnits(undefined, { fetchAll: true });
   const { properties } = useProperties();
   const { updateUnit, deleteUnit, pending } = useUnitMutations();
   const [statusFilter, setStatusFilter] = useState<"all" | UnitStatus>("all");
