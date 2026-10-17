@@ -117,6 +117,20 @@ describe("tenant requests page", () => {
     expect(screen.getByRole("button", { name: /Request move-in/ })).toBeInTheDocument();
   });
 
+  it("shows the manager's decision note on a decided move request", () => {
+    mocks.moveRequests = [
+      {
+        ...approvedMoveOut,
+        decidedAt: "2026-10-07T09:00:00.000Z",
+        decisionNote: "Handover scheduled for 30 Nov",
+      },
+    ];
+
+    render(<TenantRequestsPage />);
+
+    expect(screen.getByText(/Handover scheduled for 30 Nov/)).toBeInTheDocument();
+  });
+
   it("filters by status", async () => {
     mocks.applications = [pendingApplication];
     mocks.moveRequests = [approvedMoveOut];

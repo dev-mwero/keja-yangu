@@ -401,8 +401,11 @@ export function TenantRequestsPanel() {
                         Withdraw
                       </Button>
                     ) : row.status !== "pending" && row.decidedAt ? (
-                      <span className="text-xs text-muted-foreground">
+                      <span className="block text-xs text-muted-foreground">
                         Decided {formatDate(row.decidedAt)}
+                        {row.decisionNote ? (
+                          <span className="mt-0.5 block max-w-xs truncate">{row.decisionNote}</span>
+                        ) : null}
                       </span>
                     ) : (
                       <span className="text-xs text-muted-foreground">
