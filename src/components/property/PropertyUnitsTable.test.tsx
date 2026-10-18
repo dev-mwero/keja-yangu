@@ -154,6 +154,37 @@ describe("PropertyUnitsTable", () => {
     expect(screen.queryByRole("button", { name: "Assign tenant to 1A" })).not.toBeInTheDocument();
   });
 
+  it("offers Unassign tenant for occupied units only", async () => {
+    render(<PropertyUnitsTable propertyId="prop-1" blocks={blocks} baseRent={20000} />);
+
+    expect(
+      await screen.findByRole("button", { name: "Unassign tenant from 1A" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Unassign tenant from GA" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("unassigns the tenant from an occupied unit", async () => {
+    const user = userEvent.setup();
+    render(<PropertyUnitsTable propertyId="prop-1" blocks={blocks} baseRent={20000} />);
+
+    await user.click(await screen.findByRole("button", { name: "Unassign tenant from 1A" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Unassign tenant" }));
+
+    await waitFor(() => {
+      const del = fetchMock.mock.calls.find(
+        ([url, init]) =>
+          String(url) === "/api/v1/tenants/ten-1/assignment" && init?.method === "DELETE",
+      );
+      if (!del) throw new Error("expected a DELETE to /api/v1/tenants/ten-1/assignment");
+    });
+    expect(
+      await screen.findByRole("button", { name: "Unassign tenant from 1A" }),
+    ).toBeInTheDocument();
+  });
+
   it("assigns an unassigned tenant to an available unit", async () => {
     const user = userEvent.setup();
     render(<PropertyUnitsTable propertyId="prop-1" blocks={blocks} baseRent={20000} />);

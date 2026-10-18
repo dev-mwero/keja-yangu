@@ -1,6 +1,6 @@
 "use client";
 
-import { DoorOpen, Loader2, Pencil, Trash2, UserPlus } from "lucide-react";
+import { DoorOpen, Loader2, Pencil, Trash2, UserMinus, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -89,9 +89,10 @@ export function PropertyUnitsTable({
   const { units, loading, error, refetch } = useUnits({ propertyId }, { fetchAll: true });
   const { updateUnit, deleteUnit, pending } = useUnitMutations();
   const { unassignedTenants, loading: tenantsLoading } = usePropertyTenants(propertyId);
-  const { assignUnit, pending: assignPending } = useTenantMutations();
+  const { assignUnit, pending: assignPending, vacateUnit } = useTenantMutations();
   const [editing, setEditing] = useState<Unit | null>(null);
   const [assigningUnit, setAssigningUnit] = useState<Unit | null>(null);
+  const [vacatingUnit, setVacatingUnit] = useState<Unit | null>(null);
   const [selectedTenantId, setSelectedTenantId] = useState("");
   const [form, setForm] = useState<EditForm>({
     name: "",
@@ -196,6 +197,23 @@ export function PropertyUnitsTable({
     }
   };
 
+  const vacate = async () => {
+    if (!vacatingUnit?.tenantId) return;
+    try {
+      await vacateUnit(vacatingUnit.tenantId);
+      toast.success("Tenant unassigned", {
+        description: `${vacatingUnit.name} is now vacant.`,
+      });
+      setVacatingUnit(null);
+      refetch();
+      onChanged?.();
+    } catch (err) {
+      toast.error("Could not unassign tenant", {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
+  };
+
   const seat = (value: number): string | number => (value > 0 ? value : "—");
   const colSpan = canManage ? 8 : 7;
 
@@ -264,6 +282,16 @@ export function PropertyUnitsTable({
                           }}
                         >
                           <UserPlus className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {unit.tenantId && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Unassign tenant from ${unit.name}`}
+                          onClick={() => setVacatingUnit(unit)}
+                        >
+                          <UserMinus className="h-4 w-4" />
                         </Button>
                       )}
                       <Button
@@ -437,6 +465,36 @@ export function PropertyUnitsTable({
             <Button onClick={assign} disabled={!selectedTenantId || assignPending}>
               {assignPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Assign tenant
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={vacatingUnit !== null}
+        onOpenChange={(o) => {
+          if (!o && !assignPending) setVacatingUnit(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Unassign tenant{vacatingUnit ? ` from ${vacatingUnit.name}` : ""}?
+            </DialogTitle>
+            <DialogDescription>
+              This frees the unit. The tenant keeps their account but no longer occupies this unit.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setVacatingUnit(null)}
+              disabled={assignPending}
+            >
+              Cancel
+            </Button>
+            <Button onClick={vacate} disabled={assignPending}>
+              {assignPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Unassign tenant
             </Button>
           </DialogFooter>
         </DialogContent>
