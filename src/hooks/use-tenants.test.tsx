@@ -53,6 +53,15 @@ describe("useTenants", () => {
     );
   });
 
+  it("skips fetching when disabled", async () => {
+    stubFetch({ json: { data: [tenant] } });
+    const { result } = renderHook(() => useTenants(undefined, { enabled: false }));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(fetch).not.toHaveBeenCalled();
+    expect(result.current.tenants).toEqual([]);
+  });
+
   it("surfaces an API error message", async () => {
     stubFetch({ ok: false, json: { error: "Forbidden" } });
     const { result } = renderHook(() => useTenants());
