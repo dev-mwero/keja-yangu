@@ -1,5 +1,7 @@
 # Assign tenant from Manage Structure Units table — Implementation Plan
 
+> **Status:** shipped (commits 6625e8e, d7de1f5, 66df8d3 on `dev`)
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add an "Assign tenant" action to available units in the Manage Structure → Units table so managers can assign an unassigned active tenant to a vacant unit without leaving the structure page.
@@ -40,14 +42,14 @@ We need a small hook to load tenants filtered by `propertyId` and `status="activ
 - Consumes: `GET /api/v1/tenants?propertyId=...&status=active`
 - Produces: `usePropertyTenants(propertyId)` returns `{ tenants: Tenant[], unassignedTenants: Tenant[], loading, error, refetch }` where `Tenant` matches `useTenants`' return shape (`unit?: TenantUnitSummary | null`, `requestedUnit?`, etc.). `unassignedTenants = tenants.filter(t => !t.unit)`.
 
-- [ ] **Step 1: Write the failing test (unit)**
+- [x] **Step 1: Write the failing test (unit)**
 Add a test in `src/hooks/use-tenants.test.tsx`. Mock `fetch` and assert the query includes `propertyId` and `status=active`, and that `unassignedTenants` excludes a tenant who already has `unit`.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 Run: `npx vitest run src/hooks/use-tenants.test.tsx -t "property tenants"`
 Expected: FAIL — hook doesn't exist or doesn't filter.
 
-- [ ] **Step 3: Implement `usePropertyTenants`**
+- [x] **Step 3: Implement `usePropertyTenants`**
 In `src/hooks/use-tenants.tsx`, add:
 ```ts
 export function usePropertyTenants(propertyId?: string) {
@@ -61,11 +63,11 @@ export function usePropertyTenants(propertyId?: string) {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 Run: `npx vitest run src/hooks/use-tenants.test.tsx`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 ```bash
 git add src/hooks/use-tenants.tsx src/hooks/use-tenants.test.tsx
 git commit -m "feat(tenants): add usePropertyTenants hook for unassigned active tenants"
@@ -85,14 +87,14 @@ Add UI: for `canManage && unit.status === "available"`, show an "Assign tenant" 
 - Consumes: `usePropertyTenants(propertyId)`, `useTenants().assignUnit`, `useUnits()` refetch, `onChanged()`.
 - Produces: no exported API change — UI-only.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 In `src/components/property/PropertyUnitsTable.test.tsx`, add test that shows Assign tenant action for available units and assigns a tenant; also add a case: occupied unit must NOT show Assign action.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 Run: `npx vitest run src/components/property/PropertyUnitsTable.test.tsx -t "Assign tenant"`
 Expected: FAIL — action/button/dialog not present.
 
-- [ ] **Step 3: Implement UI changes**
+- [x] **Step 3: Implement UI changes**
 In `src/components/property/PropertyUnitsTable.tsx`:
 - Import `UserPlus` from `lucide-react`, and `usePropertyTenants`, `useTenants` from `@/hooks/use-tenants`.
 - Destructure: `const { unassignedTenants, loading: tenantsLoading } = usePropertyTenants(propertyId)` and `const { assignUnit, pending: assignPending } = useTenants()`.
@@ -101,11 +103,11 @@ In `src/components/property/PropertyUnitsTable.tsx`:
 - Add a `Dialog` controlled by `assigningUnit !== null`. List `unassignedTenants` in `Select`; disable Confirm when `!selectedTenantId || assignPending`.
 - On confirm: call `assignUnit(selectedTenantId, assigningUnit._id)`, toast success, close dialog, clear selection, `refetch()`, `onChanged?.()`. On error: toast error.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 Run: `npx vitest run src/components/property/PropertyUnitsTable.test.tsx`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 ```bash
 git add src/components/property/PropertyUnitsTable.tsx src/components/property/PropertyUnitsTable.test.tsx src/hooks/use-tenants.tsx src/hooks/use-tenants.test.tsx
 git commit -m "feat(structure): add assign-tenant action to available units in manage structure"
@@ -117,9 +119,9 @@ git commit -m "feat(structure): add assign-tenant action to available units in m
 
 Verify the new action doesn't regress existing behavior and the full suite stays green.
 
-- [ ] **Step 1: Run focused checks**
+- [x] **Step 1: Run focused checks**
 Run: `npx tsc --noEmit && npx biome check src/components/property/PropertyUnitsTable.tsx src/hooks/use-tenants.tsx 2>&1 | tail -5`
 
-- [ ] **Step 2: Run full test suite**
+- [x] **Step 2: Run full test suite**
 Run: `npx vitest run`
 Expected: all tests pass (no new failures).
