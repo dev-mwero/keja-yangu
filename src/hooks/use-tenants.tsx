@@ -89,6 +89,16 @@ export function useTenants(filters?: TenantFilters) {
   return { tenants, loading, error, refetch };
 }
 
+export function usePropertyTenants(propertyId?: string) {
+  const filters = propertyId ? { propertyId, status: "active" as const } : undefined;
+  const { tenants, loading, error, refetch } = useTenants(filters);
+  const unassignedTenants = useMemo(
+    () => tenants.filter((t) => !t.unit),
+    [tenants],
+  );
+  return { tenants, unassignedTenants, loading, error, refetch };
+}
+
 export function useTenantMutations() {
   const [pending, setPending] = useState(false);
 

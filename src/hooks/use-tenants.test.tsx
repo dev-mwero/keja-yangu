@@ -127,3 +127,36 @@ describe("useTenantMutations", () => {
     expect(fetch).toHaveBeenCalledWith("/api/v1/tenants/ten-1", { method: "DELETE" });
   });
 });
+
+  it("fetches property tenants and returns unassigned only", async () => {
+    const assigned: Tenant = {
+      _id: "ten-2",
+      name: "John Kamau",
+      email: "john@keja.co",
+      propertyId: "prop-1",
+      ownerId: "owner-1",
+      status: "active",
+      unit: { _id: "unit-1", name: "1A", blockName: "Block A" },
+    };
+    const unassigned: Tenant = {
+      _id: "ten-3",
+      name: "Mary Njeri",
+      email: "mary@keja.co",
+      propertyId: "prop-1",
+      ownerId: "owner-1",
+      status: "active",
+    };
+    stubFetch({ json: { data: [assigned, unassigned] } });
+    const { usePropertyTenants } = await import("@/hooks/use-tenants");
+    const { result } = renderHook(() => usePropertyTenants("prop-1"));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining("status=active"),
+    );
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining("propertyId=prop-1"),
+    );
+    expect(result.current.unassignedTenants).toHaveLength(1);
+    expect(result.current.unassignedTenants[0]._id).toBe("ten-3");
+  });
