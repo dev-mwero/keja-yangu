@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PropertyUnitsTable } from "@/components/property/PropertyUnitsTable";
@@ -72,6 +72,23 @@ function stubFetch() {
         }),
       });
     }
+    if (href.includes("/api/v1/tenants")) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          data: [
+            {
+              _id: "ten-9",
+              name: "Mary Njeri",
+              email: "mary@keja.co",
+              propertyId: "prop-1",
+              ownerId: "owner-1",
+              status: "active",
+            },
+          ],
+        }),
+      });
+    }
     return Promise.resolve({ ok: true, json: async () => ({ data: [] }) });
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -128,5 +145,34 @@ describe("PropertyUnitsTable", () => {
       expect(body.beds).toBe(4);
       expect(body.baths).toBe(1);
     });
+  });
+
+  it("offers Assign tenant for available units only", async () => {
+    render(<PropertyUnitsTable propertyId="prop-1" blocks={blocks} baseRent={20000} />);
+
+    expect(await screen.findByRole("button", { name: "Assign tenant to GA" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Assign tenant to 1A" })).not.toBeInTheDocument();
+  });
+
+  it("assigns an unassigned tenant to an available unit", async () => {
+    const user = userEvent.setup();
+    render(<PropertyUnitsTable propertyId="prop-1" blocks={blocks} baseRent={20000} />);
+
+    await user.click(await screen.findByRole("button", { name: "Assign tenant to GA" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("combobox"));
+    await user.click(await screen.findByRole("option", { name: /Mary Njeri/ }));
+    await user.click(within(dialog).getByRole("button", { name: "Assign tenant" }));
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find(
+        ([url, init]) =>
+          String(url) === "/api/v1/tenants/ten-9/assignment" && init?.method === "POST",
+      );
+      if (!post) throw new Error("expected a POST to /api/v1/tenants/ten-9/assignment");
+      const body = JSON.parse((post[1] as RequestInit).body as string);
+      expect(body.unitId).toBe("u1");
+    });
+    expect(await screen.findByRole("button", { name: "Assign tenant to GA" })).toBeInTheDocument();
   });
 });

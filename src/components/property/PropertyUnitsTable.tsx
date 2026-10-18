@@ -1,6 +1,6 @@
 "use client";
 
-import { DoorOpen, Loader2, Pencil, Trash2 } from "lucide-react";
+import { DoorOpen, Loader2, Pencil, Trash2, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -32,6 +32,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { PropertyBlock } from "@/hooks/use-properties";
+import { usePropertyTenants, useTenantMutations } from "@/hooks/use-tenants";
 import { type Unit, type UnitStatus, useUnitMutations, useUnits } from "@/hooks/use-units";
 import { UNIT_STATUSES } from "@/lib/domain-enums";
 import { formatKES } from "@/lib/format";
@@ -87,7 +88,11 @@ export function PropertyUnitsTable({
 }: Props) {
   const { units, loading, error, refetch } = useUnits({ propertyId }, { fetchAll: true });
   const { updateUnit, deleteUnit, pending } = useUnitMutations();
+  const { unassignedTenants, loading: tenantsLoading } = usePropertyTenants(propertyId);
+  const { assignUnit, pending: assignPending } = useTenantMutations();
   const [editing, setEditing] = useState<Unit | null>(null);
+  const [assigningUnit, setAssigningUnit] = useState<Unit | null>(null);
+  const [selectedTenantId, setSelectedTenantId] = useState("");
   const [form, setForm] = useState<EditForm>({
     name: "",
     status: "available",
@@ -173,6 +178,24 @@ export function PropertyUnitsTable({
     }
   };
 
+  const assign = async () => {
+    if (!assigningUnit || !selectedTenantId) return;
+    try {
+      await assignUnit(selectedTenantId, assigningUnit._id);
+      toast.success("Tenant assigned", {
+        description: `${assigningUnit.name} is now assigned.`,
+      });
+      setAssigningUnit(null);
+      setSelectedTenantId("");
+      refetch();
+      onChanged?.();
+    } catch (err) {
+      toast.error("Could not assign tenant", {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
+  };
+
   const seat = (value: number): string | number => (value > 0 ? value : "—");
   const colSpan = canManage ? 8 : 7;
 
@@ -230,6 +253,19 @@ export function PropertyUnitsTable({
                   <TableCell>{formatKES(effectiveFor(unit))}</TableCell>
                   {canManage && (
                     <TableCell className="text-right">
+                      {unit.status === "available" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Assign tenant to ${unit.name}`}
+                          onClick={() => {
+                            setSelectedTenantId("");
+                            setAssigningUnit(unit);
+                          }}
+                        >
+                          <UserPlus className="h-4 w-4" />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
@@ -341,6 +377,66 @@ export function PropertyUnitsTable({
             <Button onClick={saveEdit} disabled={pending}>
               {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={assigningUnit !== null}
+        onOpenChange={(o) => {
+          if (!o && !assignPending) {
+            setAssigningUnit(null);
+            setSelectedTenantId("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Assign tenant{assigningUnit ? ` to ${assigningUnit.name}` : ""}
+            </DialogTitle>
+            <DialogDescription>
+              Move an unassigned active tenant at this property into this vacant unit.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Tenant</Label>
+            {tenantsLoading ? (
+              <p className="text-sm text-muted-foreground">Loading tenants…</p>
+            ) : unassignedTenants.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No unassigned active tenants at this property. Add a tenant first.
+              </p>
+            ) : (
+              <Select value={selectedTenantId} onValueChange={setSelectedTenantId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a tenant" />
+                </SelectTrigger>
+                <SelectContent>
+                  {unassignedTenants.map((t) => (
+                    <SelectItem key={t._id} value={t._id}>
+                      {t.name} · {t.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setAssigningUnit(null);
+                setSelectedTenantId("");
+              }}
+              disabled={assignPending}
+            >
+              Cancel
+            </Button>
+            <Button onClick={assign} disabled={!selectedTenantId || assignPending}>
+              {assignPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Assign tenant
             </Button>
           </DialogFooter>
         </DialogContent>
