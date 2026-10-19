@@ -25,6 +25,7 @@ const { user, property, tenant, chatthread, chatmessage } = getModelStubs();
 
 const USER_ID = makeObjectId("user");
 const OWNER_ID = makeObjectId("owner");
+const CUSTODIAN_ID = makeObjectId("custodian");
 const AGENT_ID = makeObjectId("agent");
 const TENANT_ID = makeObjectId("tenant");
 const PROPERTY_ID = makeObjectId("p1");
@@ -44,6 +45,14 @@ function caretakerUser(privileges: string[]) {
     role: "caretaker",
     managedByOwnerId: OWNER_ID,
     privileges: privileges as never,
+  });
+}
+
+function custodianUser() {
+  return makeUser({
+    _id: CUSTODIAN_ID,
+    role: "custodian",
+    managedByOwnerId: OWNER_ID,
   });
 }
 
@@ -145,6 +154,19 @@ describe("GET /api/v1/chat/threads", () => {
     const res = await GET(buildRequest("/api/v1/chat/threads", { token: signToken(AGENT_ID) }));
     expect(res.status).toBe(200);
     expect(chatthread.find).toHaveBeenCalledWith({ agentUserId: AGENT_ID });
+  });
+
+  it("custodian sees every thread in the managed owner's portfolio", async () => {
+    user.findById.mockReturnValue(buildQuery(custodianUser()));
+    chatthread.find.mockReturnValue(buildQuery([]).sort({ lastMessageAt: -1 }).skip(0).limit(20));
+    chatthread.countDocuments.mockResolvedValue(0);
+    user.find.mockReturnValue(buildQuery([]));
+    tenant.find.mockReturnValue(buildQuery([]));
+    property.find.mockReturnValue(buildQuery([]));
+
+    const res = await GET(buildRequest("/api/v1/chat/threads", { token: signToken(CUSTODIAN_ID) }));
+    expect(res.status).toBe(200);
+    expect(chatthread.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
   });
 
   it("tenant with no bound rows gets an empty page", async () => {

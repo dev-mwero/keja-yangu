@@ -18,6 +18,7 @@ function isParticipant(thread: ThreadRow, actor: DashboardActor): boolean {
   if (actor.role === "system-admin") return true;
   if (actor.role === "tenant") return actor.tenantIds.includes(thread.tenantId);
   if (actor.role === "owner") return thread.ownerId === actor.userId;
+  if (actor.role === "custodian") return thread.ownerId === actor.managedByOwnerId;
   return thread.agentUserId === actor.userId; // caretaker
 }
 

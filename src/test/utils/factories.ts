@@ -370,7 +370,7 @@ export interface TestChatMessage {
   _id: string;
   threadId: string;
   senderUserId: string;
-  senderRole: "tenant" | "owner" | "caretaker";
+  senderRole: "tenant" | "owner" | "caretaker" | "custodian";
   text: string;
   createdAt?: Date;
   updatedAt?: Date;

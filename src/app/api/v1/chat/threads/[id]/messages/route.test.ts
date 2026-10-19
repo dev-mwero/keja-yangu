@@ -25,6 +25,7 @@ const { user, tenant, property, chatthread, chatmessage } = getModelStubs();
 
 const USER_ID = makeObjectId("user");
 const OWNER_ID = makeObjectId("owner");
+const CUSTODIAN_ID = makeObjectId("custodian");
 const AGENT_ID = makeObjectId("agent");
 const TENANT_ID = makeObjectId("tenant");
 const PROPERTY_ID = makeObjectId("p1");
@@ -46,6 +47,14 @@ function caretakerUser(privileges: string[]) {
     role: "caretaker",
     managedByOwnerId: OWNER_ID,
     privileges: privileges as never,
+  });
+}
+
+function custodianUser() {
+  return makeUser({
+    _id: CUSTODIAN_ID,
+    role: "custodian",
+    managedByOwnerId: OWNER_ID,
   });
 }
 
@@ -296,5 +305,31 @@ describe("POST /api/v1/chat/threads/[id]/messages", () => {
     const update = chatthread.updateOne.mock.calls[0][1] as { $set: Record<string, unknown> };
     expect(update.$set.agentLastReadAt).toBeInstanceOf(Date);
     expect(update.$set.tenantLastReadAt).toBeUndefined();
+  });
+
+  it("a custodian sends on a thread in the managed portfolio", async () => {
+    user.findById
+      .mockReturnValueOnce(buildQuery(custodianUser()))
+      .mockReturnValueOnce(buildQuery(custodianUser()));
+    chatthread.findById.mockReturnValue(buildQuery(threadRow()));
+    const created = makeChatMessage({
+      _id: MESSAGE_ID,
+      threadId: THREAD_ID,
+      senderUserId: CUSTODIAN_ID,
+      senderRole: "custodian",
+      text: "Handled",
+    });
+    chatmessage.create.mockResolvedValue(created);
+    chatthread.updateOne.mockResolvedValue({ acknowledged: true });
+
+    const res = await POST(
+      buildRequest(`/api/v1/chat/threads/${THREAD_ID}/messages`, {
+        method: "POST",
+        token: signToken(CUSTODIAN_ID),
+        body: { text: "Handled" },
+      }),
+      withParams(THREAD_ID),
+    );
+    expect(res.status).toBe(201);
   });
 });

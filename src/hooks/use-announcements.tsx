@@ -47,3 +47,50 @@ export function useAnnouncements() {
 
   return { items, loading, error, refetch };
 }
+
+export interface AnnouncementInput {
+  title: string;
+  body: string;
+  audience: Announcement["audience"];
+  pinned: boolean;
+  /** Empty string (or omitted) posts portfolio-wide. */
+  propertyId?: string;
+}
+
+/** Announcement mutations for the staff Communications pages. */
+export function useAnnouncementMutations() {
+  const [pending, setPending] = useState(false);
+
+  const createAnnouncement = async (input: AnnouncementInput): Promise<Announcement> => {
+    setPending(true);
+    try {
+      const res = await fetch("/api/v1/announcements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to publish announcement");
+      }
+      return json.data as Announcement;
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const deleteAnnouncement = async (id: string): Promise<void> => {
+    setPending(true);
+    try {
+      const res = await fetch(`/api/v1/announcements/${id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to delete announcement");
+      }
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return { createAnnouncement, deleteAnnouncement, pending };
+}

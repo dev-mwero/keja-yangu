@@ -14,7 +14,7 @@ export type ComplaintStatus = (typeof COMPLAINT_STATUSES)[number];
 export const COMPLAINT_PRIORITIES = ["low", "medium", "high"] as const;
 export type ComplaintPriority = (typeof COMPLAINT_PRIORITIES)[number];
 
-export const MESSAGE_SENDER_ROLES = ["tenant", "owner", "caretaker"] as const;
+export const MESSAGE_SENDER_ROLES = ["tenant", "owner", "caretaker", "custodian"] as const;
 export type MessageSenderRole = (typeof MESSAGE_SENDER_ROLES)[number];
 
 export const ANNOUNCEMENT_AUDIENCES = ["all", "tenants", "staff"] as const;

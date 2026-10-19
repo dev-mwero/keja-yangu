@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { caretakerNav, ownerNav, tenantNav, tenantSubRoutes } from "@/config/dashboardNav";
+import {
+  caretakerNav,
+  custodianNav,
+  ownerNav,
+  tenantNav,
+  tenantSubRoutes,
+} from "@/config/dashboardNav";
 
 describe("tenant navigation", () => {
   it("consolidates the tenant IA into eight entries", () => {
@@ -49,6 +55,14 @@ describe("manager navigation is unaffected", () => {
   it("still hides applications from caretakers", () => {
     expect(caretakerNav.some((item) => item.to === "/dashboard/caretaker/applications")).toBe(
       false,
+    );
+  });
+});
+
+describe("custodian navigation", () => {
+  it("includes Communications", () => {
+    expect(custodianNav.some((item) => item.to === "/dashboard/custodian/communications")).toBe(
+      true,
     );
   });
 });

@@ -1,6 +1,12 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useChatMutations, useChatThreads, useThreadMessages } from "@/hooks/use-chat";
+import {
+  type ChatContact,
+  useChatContacts,
+  useChatMutations,
+  useChatThreads,
+  useThreadMessages,
+} from "@/hooks/use-chat";
 import type { ChatMessage, ChatThread } from "@/types/communications";
 
 const thread: ChatThread = {
@@ -192,5 +198,49 @@ describe("useChatMutations", () => {
       rejection = await result.current.sendMessage("missing", "hi").catch((err: unknown) => err);
     });
     expect((rejection as Error).message).toBe("Thread not found");
+  });
+});
+
+describe("useChatContacts", () => {
+  const contact: ChatContact = {
+    userId: "owner-1",
+    name: "Test Owner",
+    role: "owner",
+    propertyId: "prop-1",
+    property: "Sunset Villa",
+  };
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("loads contacts from GET /api/v1/chat/contacts", async () => {
+    stubFetch({ json: { data: [contact] } });
+    const { result } = renderHook(() => useChatContacts(true));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.items).toEqual([contact]);
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith("/api/v1/chat/contacts");
+  });
+
+  it("does not fetch when disabled", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useChatContacts(false));
+
+    await flush();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.current.items).toEqual([]);
+  });
+
+  it("surfaces a non-ok response error", async () => {
+    stubFetch({ ok: false, json: { error: "Forbidden" } });
+    const { result } = renderHook(() => useChatContacts(true));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.error).toBe("Forbidden");
   });
 });

@@ -19,6 +19,7 @@ const { user, property, tenant, announcement } = getModelStubs();
 const USER_ID = makeObjectId("user");
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
+const CUSTODIAN_ID = makeObjectId("custodian");
 const AGENT_ID = makeObjectId("agent");
 const TENANT_ID = makeObjectId("tenant");
 const PROPERTY_ID = makeObjectId("p1");
@@ -39,6 +40,14 @@ function caretakerUser(privileges: string[]) {
     role: "caretaker",
     managedByOwnerId: OWNER_ID,
     privileges: privileges as never,
+  });
+}
+
+function custodianUser() {
+  return makeUser({
+    _id: CUSTODIAN_ID,
+    role: "custodian",
+    managedByOwnerId: OWNER_ID,
   });
 }
 
@@ -155,7 +164,7 @@ describe("GET /api/v1/announcements", () => {
     expect(data[0].property).toBe("All properties");
   });
 
-  it("owner sees their own announcements", async () => {
+  it("owner sees their own announcements plus internal audiences", async () => {
     user.findById.mockReturnValue(buildQuery(ownerUser()));
     announcement.find.mockReturnValue(
       buildQuery([]).sort({ pinned: -1, createdAt: -1 }).skip(0).limit(20),
@@ -165,10 +174,13 @@ describe("GET /api/v1/announcements", () => {
 
     const res = await GET(buildRequest("/api/v1/announcements", { token: signToken(OWNER_ID) }));
     expect(res.status).toBe(200);
-    expect(announcement.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
+    expect(announcement.find).toHaveBeenCalledWith({
+      ownerId: OWNER_ID,
+      $or: [{ audience: { $in: ["all", "staff"] } }, { authorId: OWNER_ID }],
+    });
   });
 
-  it("caretaker sees only the managed owner's assigned properties", async () => {
+  it("caretaker sees assigned or portfolio-wide postings for the managed owner", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerUser(["manage_announcements"])));
     property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, title: "Sunlit Studio" }]));
     announcement.find.mockReturnValue(
@@ -182,7 +194,28 @@ describe("GET /api/v1/announcements", () => {
     expect(res.status).toBe(200);
     expect(announcement.find).toHaveBeenCalledWith({
       ownerId: OWNER_ID,
-      propertyId: { $in: [PROPERTY_ID] },
+      $and: [
+        { $or: [{ propertyId: { $in: [PROPERTY_ID] } }, { propertyId: "" }] },
+        { $or: [{ audience: { $in: ["all", "staff"] } }, { authorId: CARETAKER_ID }] },
+      ],
+    });
+  });
+
+  it("custodian sees the managed owner's whole portfolio", async () => {
+    user.findById.mockReturnValue(buildQuery(custodianUser()));
+    announcement.find.mockReturnValue(
+      buildQuery([]).sort({ pinned: -1, createdAt: -1 }).skip(0).limit(20),
+    );
+    announcement.countDocuments.mockResolvedValue(0);
+    property.find.mockReturnValue(buildQuery([]));
+
+    const res = await GET(
+      buildRequest("/api/v1/announcements", { token: signToken(CUSTODIAN_ID) }),
+    );
+    expect(res.status).toBe(200);
+    expect(announcement.find).toHaveBeenCalledWith({
+      ownerId: OWNER_ID,
+      $or: [{ audience: { $in: ["all", "staff"] } }, { authorId: CUSTODIAN_ID }],
     });
   });
 
@@ -377,6 +410,53 @@ describe("POST /api/v1/announcements", () => {
       buildRequest("/api/v1/announcements", {
         method: "POST",
         token: signToken(CARETAKER_ID),
+        body: { title: "Water works", body: "Tanks cleaned Thursday.", propertyId: PROPERTY_ID },
+      }),
+    );
+    expect(res.status).toBe(403);
+    expect(announcement.create).not.toHaveBeenCalled();
+  });
+
+  it("custodian posts for the managed owner", async () => {
+    user.findById
+      .mockReturnValueOnce(buildQuery(custodianUser()))
+      .mockReturnValueOnce(buildQuery(custodianUser()))
+      .mockReturnValueOnce(buildQuery({ _id: CUSTODIAN_ID, name: "Custodian" }));
+    property.find.mockReturnValue(buildQuery([]));
+    const created = makeAnnouncement({
+      _id: ANNOUNCEMENT_ID,
+      authorId: CUSTODIAN_ID,
+      authorName: "Custodian",
+      ownerId: OWNER_ID,
+      propertyId: "",
+    });
+    announcement.create.mockResolvedValue(created);
+    announcement.findById.mockReturnValue(buildQuery(created));
+
+    const res = await POST(
+      buildRequest("/api/v1/announcements", {
+        method: "POST",
+        token: signToken(CUSTODIAN_ID),
+        body: { title: "Water works", body: "Tanks cleaned Thursday." },
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect(announcement.create).toHaveBeenCalledWith(
+      expect.objectContaining({ ownerId: OWNER_ID, authorId: CUSTODIAN_ID, propertyId: "" }),
+    );
+  });
+
+  it("403 when a custodian targets a property outside the managed portfolio", async () => {
+    const otherOwnerId = makeObjectId("other-owner");
+    user.findById
+      .mockReturnValueOnce(buildQuery(custodianUser()))
+      .mockReturnValueOnce(buildQuery(custodianUser()));
+    property.findById.mockReturnValue(buildQuery({ _id: PROPERTY_ID, ownerId: otherOwnerId }));
+
+    const res = await POST(
+      buildRequest("/api/v1/announcements", {
+        method: "POST",
+        token: signToken(CUSTODIAN_ID),
         body: { title: "Water works", body: "Tanks cleaned Thursday.", propertyId: PROPERTY_ID },
       }),
     );

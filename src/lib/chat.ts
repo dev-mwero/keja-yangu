@@ -9,17 +9,20 @@ export interface ThreadEnrichment {
   unread: number;
 }
 
+export type ThreadViewerRole = "tenant" | "owner" | "caretaker" | "custodian" | "system-admin";
+
 /**
- * Copies a thread doc and appends the fields the chat pages render:
- * `contact`/`role` come from the agent snapshot plus the batched user lookup,
- * `lastAt` is the last message time as an ISO string, and `unread` is the
- * per-participant count computed by the route.
+ * Copies a thread doc and appends the fields the chat pages render. Tenants see
+ * the agent as the contact; staff see the tenant. `lastAt` is the last message
+ * time as an ISO string, and `unread` is the per-participant count computed by
+ * the route.
  */
 export function serializeThread<
   T extends { _id: unknown; agentRole: string; lastMessageAt?: Date },
 >(
   doc: T,
   enrichment: ThreadEnrichment,
+  viewerRole: ThreadViewerRole,
 ): T & {
   _id: string;
   contact: string;
@@ -28,11 +31,12 @@ export function serializeThread<
   lastAt: string;
   unread: number;
 } {
+  const staffView = viewerRole !== "tenant";
   return {
     ...doc,
     _id: String(doc._id),
-    contact: enrichment.agentName,
-    role: doc.agentRole === "owner" ? "Landlord" : "Caretaker",
+    contact: staffView ? enrichment.tenantName : enrichment.agentName,
+    role: staffView ? "Tenant" : doc.agentRole === "owner" ? "Landlord" : "Caretaker",
     property: enrichment.propertyTitle,
     lastAt: new Date(doc.lastMessageAt ?? new Date()).toISOString(),
     unread: enrichment.unread,

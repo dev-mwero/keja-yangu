@@ -43,6 +43,9 @@ export async function GET(request: NextRequest) {
     filter.ownerId = actor.userId;
   } else if (actor.role === "caretaker") {
     filter.agentUserId = actor.userId;
+  } else if (actor.role === "custodian") {
+    // Owner-delegate: every thread in the managed owner's portfolio.
+    filter.ownerId = actor.managedByOwnerId;
   }
 
   const [threads, total] = await Promise.all([
@@ -82,7 +85,7 @@ export async function GET(request: NextRequest) {
       propertyTitle: titles.get(thread.propertyId) ?? "",
       unread,
     };
-    data.push(serializeThread(thread, enrichment));
+    data.push(serializeThread(thread, enrichment, actor.role));
   }
 
   return NextResponse.json(buildPaginationResult(data, total, page, limit));
@@ -229,10 +232,14 @@ async function buildThreadResponse(
   };
   if (readAt) unreadFilter.createdAt = { $gt: readAt };
   const unread = await ChatMessage.countDocuments(unreadFilter);
-  return serializeThread(thread, {
-    agentName: agentUser?.name ?? "Property team",
-    tenantName: tenantRow?.name ?? "Tenant",
-    propertyTitle: titles.get(propertyId) ?? "",
-    unread,
-  });
+  return serializeThread(
+    thread,
+    {
+      agentName: agentUser?.name ?? "Property team",
+      tenantName: tenantRow?.name ?? "Tenant",
+      propertyTitle: titles.get(propertyId) ?? "",
+      unread,
+    },
+    actor.role,
+  );
 }
