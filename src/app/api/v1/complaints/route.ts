@@ -9,6 +9,7 @@ import {
 import { serializeComplaint } from "@/lib/complaints";
 import { COMPLAINT_STATUSES } from "@/lib/domain-enums";
 import { connectToDatabase } from "@/lib/mongoose";
+import { notifyComplaintCreated } from "@/lib/notifications";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
 import { requirePermission } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
@@ -149,6 +150,7 @@ export async function POST(request: NextRequest) {
   if (!created) {
     return NextResponse.json({ error: "Complaint not found" }, { status: 404 });
   }
+  await notifyComplaintCreated(created);
   const [titles, unitNames] = await Promise.all([
     propertyTitleMap([created.propertyId]),
     unitNameMap([created.unitId]),

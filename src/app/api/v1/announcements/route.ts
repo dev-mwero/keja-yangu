@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { propertyTitleMap, readJsonBody, resolveDashboardActor } from "@/app/api/v1/_helpers";
 import { serializeAnnouncement } from "@/lib/announcements";
 import { connectToDatabase } from "@/lib/mongoose";
+import { notifyAnnouncement, resolveAnnouncementRecipients } from "@/lib/notifications";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
 import { requirePermission } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
@@ -146,6 +147,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Announcement not found" }, { status: 404 });
   }
   const titles = await propertyTitleMap([created.propertyId]);
+
+  const recipients = await resolveAnnouncementRecipients(created);
+  await notifyAnnouncement(created, recipients);
 
   console.info(
     `[announcements] create actor=${actor.userId} role=${actor.role} announcement=${String(announcement._id)}`,

@@ -18,8 +18,12 @@ vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/ChatThread", () => ({ ChatThread: getModelStubs().chatthread }));
 vi.mock("@/models/ChatMessage", () => ({ ChatMessage: getModelStubs().chatmessage }));
+vi.mock("@/lib/notifications", () => ({
+  notifyMessageReply: vi.fn().mockResolvedValue(true),
+}));
 
 import { GET, POST } from "@/app/api/v1/chat/threads/[id]/messages/route";
+import { notifyMessageReply } from "@/lib/notifications";
 
 const { user, tenant, property, chatthread, chatmessage } = getModelStubs();
 
@@ -150,8 +154,11 @@ describe("GET /api/v1/chat/threads/[id]/messages", () => {
 });
 
 describe("POST /api/v1/chat/threads/[id]/messages", () => {
+  const notifyMessageReplyMock = vi.mocked(notifyMessageReply);
+
   beforeEach(() => {
     resetModelStubs();
+    notifyMessageReplyMock.mockReset().mockResolvedValue(true);
   });
 
   it("400 for an invalid thread id", async () => {
@@ -220,6 +227,7 @@ describe("POST /api/v1/chat/threads/[id]/messages", () => {
     );
     expect(res.status).toBe(404);
     expect(chatmessage.create).not.toHaveBeenCalled();
+    expect(notifyMessageReplyMock).not.toHaveBeenCalled();
   });
 
   it("creates a tenant message, bumps the thread and echoes sender me", async () => {
@@ -257,6 +265,11 @@ describe("POST /api/v1/chat/threads/[id]/messages", () => {
     expect(update.$set.tenantLastReadAt).toBeInstanceOf(Date);
     const body = await json(res);
     expect((body.data as { sender?: string }).sender).toBe("me");
+    expect(notifyMessageReplyMock).toHaveBeenCalledWith(
+      created,
+      AGENT_ID,
+      "/dashboard/caretaker/communications",
+    );
   });
 
   it("403 when a caretaker without send_messages posts", async () => {
@@ -276,12 +289,14 @@ describe("POST /api/v1/chat/threads/[id]/messages", () => {
     );
     expect(res.status).toBe(403);
     expect(chatmessage.create).not.toHaveBeenCalled();
+    expect(notifyMessageReplyMock).not.toHaveBeenCalled();
   });
 
   it("an owner sends on their own property thread", async () => {
     user.findById
       .mockReturnValueOnce(buildQuery(ownerUser()))
       .mockReturnValueOnce(buildQuery(ownerUser()));
+    tenant.findById.mockReturnValue(buildQuery({ _id: TENANT_ID, userId: USER_ID }));
     chatthread.findById.mockReturnValue(buildQuery(threadRow()));
     const created = makeChatMessage({
       _id: MESSAGE_ID,
@@ -305,12 +320,18 @@ describe("POST /api/v1/chat/threads/[id]/messages", () => {
     const update = chatthread.updateOne.mock.calls[0][1] as { $set: Record<string, unknown> };
     expect(update.$set.agentLastReadAt).toBeInstanceOf(Date);
     expect(update.$set.tenantLastReadAt).toBeUndefined();
+    expect(notifyMessageReplyMock).toHaveBeenCalledWith(
+      created,
+      USER_ID,
+      "/dashboard/tenant/messages",
+    );
   });
 
   it("a custodian sends on a thread in the managed portfolio", async () => {
     user.findById
       .mockReturnValueOnce(buildQuery(custodianUser()))
       .mockReturnValueOnce(buildQuery(custodianUser()));
+    tenant.findById.mockReturnValue(buildQuery({ _id: TENANT_ID, userId: USER_ID }));
     chatthread.findById.mockReturnValue(buildQuery(threadRow()));
     const created = makeChatMessage({
       _id: MESSAGE_ID,
@@ -331,5 +352,10 @@ describe("POST /api/v1/chat/threads/[id]/messages", () => {
       withParams(THREAD_ID),
     );
     expect(res.status).toBe(201);
+    expect(notifyMessageReplyMock).toHaveBeenCalledWith(
+      created,
+      USER_ID,
+      "/dashboard/tenant/messages",
+    );
   });
 });

@@ -5,7 +5,9 @@ export type NotificationType =
   | "complaint:created"
   | "complaint:status-changed"
   | "chat:reply"
-  | "announcement";
+  | "announcement"
+  | "move-request:created"
+  | "move-request:decided";
 
 export type NotificationChannel = "in-app" | "email";
 

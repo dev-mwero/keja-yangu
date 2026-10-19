@@ -36,13 +36,17 @@ function appUrl(): string {
 /**
  * Extracts the first event id from notification `data`; the dedupe key is the
  * event id namespaced by type, so `invoice:paid` and `invoice:overdue` for the
- * same invoice never collide.
+ * same invoice never collide. An explicit `eventId` wins, letting orchestrators
+ * key re-usable events per transition (e.g. each complaint status, each move
+ * request decision).
  */
 function resolveDedupeKey(type: NotificationType, data: Record<string, unknown>): string {
   const eventId =
+    data.eventId ??
     data.invoiceId ??
     data.leaseId ??
     data.complaintId ??
+    data.moveRequestId ??
     data.announcementId ??
     data.messageId ??
     data.threadId ??
@@ -164,6 +168,144 @@ async function resolveCaretakerIds(propertyId: string): Promise<string[]> {
     return property?.caretakerIds ?? [];
   } catch (_error) {
     console.warn(`[notifications] property lookup failed propertyId=${propertyId}`);
+    return [];
+  }
+}
+
+export interface StaffRecipient {
+  userId: string;
+  role: "owner" | "caretaker" | "custodian";
+}
+
+/**
+ * Resolves the staff who should hear about portfolio events: the owner, the
+ * owner's custodians, and the caretakers of one property (or of the whole
+ * portfolio when `propertyId` is omitted). `caretakerIds` may be passed by
+ * callers that already loaded the property to avoid a second read.
+ */
+export async function resolveStaffRecipients(scope: {
+  ownerId: string;
+  propertyId?: string;
+  caretakerIds?: string[];
+}): Promise<StaffRecipient[]> {
+  const recipients: StaffRecipient[] = [];
+  if (!scope.ownerId) return recipients;
+  recipients.push({ userId: scope.ownerId, role: "owner" });
+
+  try {
+    const custodians = await User.find({ role: "custodian", managedByOwnerId: scope.ownerId })
+      .select("_id")
+      .lean();
+    for (const custodian of custodians) {
+      recipients.push({ userId: String(custodian._id), role: "custodian" });
+    }
+  } catch (_error) {
+    console.warn(`[notifications] custodian lookup failed ownerId=${scope.ownerId}`);
+  }
+
+  let caretakerIds: string[] = [];
+  if (scope.caretakerIds) {
+    caretakerIds = scope.caretakerIds;
+  } else {
+    try {
+      if (scope.propertyId) {
+        const property = await Property.findById(scope.propertyId).select("caretakerIds").lean();
+        caretakerIds = property?.caretakerIds ?? [];
+      } else {
+        const properties = await Property.find({ ownerId: scope.ownerId })
+          .select("caretakerIds")
+          .lean();
+        caretakerIds = properties.flatMap((property) => property.caretakerIds ?? []);
+      }
+    } catch (_error) {
+      console.warn(`[notifications] caretaker lookup failed ownerId=${scope.ownerId}`);
+    }
+  }
+  for (const caretakerId of caretakerIds) {
+    if (caretakerId) recipients.push({ userId: caretakerId, role: "caretaker" });
+  }
+
+  const seen = new Set<string>();
+  return recipients.filter((recipient) => {
+    if (!recipient.userId || seen.has(recipient.userId)) return false;
+    seen.add(recipient.userId);
+    return true;
+  });
+}
+
+/** Server-composed role-aware deep link for a notification recipient. */
+function communicationLink(role: string | undefined): string {
+  if (role === "owner" || role === "caretaker" || role === "custodian") {
+    return `/dashboard/${role}/communications`;
+  }
+  if (role === "system-admin") return "/dashboard/system-admin";
+  // Tenants read announcements/messages under their Messages tab; unknown or
+  // missing roles fall back to the historical tenant link.
+  return "/dashboard/tenant/messages";
+}
+
+/** One batched role lookup so per-recipient links stay server-composed. */
+async function recipientRoles(userIds: string[]): Promise<Map<string, string>> {
+  const unique = [...new Set(userIds.filter(Boolean))];
+  if (unique.length === 0) return new Map();
+  try {
+    const users = await User.find({ _id: { $in: unique } })
+      .select("role")
+      .lean();
+    return new Map(users.map((user) => [String(user._id), String(user.role ?? "")]));
+  } catch (_error) {
+    console.warn("[notifications] recipient role lookup failed");
+    return new Map();
+  }
+}
+
+export interface AnnouncementRecipientScope {
+  ownerId: string;
+  propertyId: string;
+  audience: string;
+  authorId: string;
+}
+
+/**
+ * Resolves who an announcement reaches, mirroring the audience/scoping of the
+ * announcements GET filter: audience-gated tenants (property-scoped or the
+ * owner's whole portfolio) and/or staff (owner, custodians, caretakers). The
+ * author is never their own recipient.
+ */
+export async function resolveAnnouncementRecipients(
+  announcement: AnnouncementRecipientScope,
+): Promise<string[]> {
+  try {
+    const recipients: string[] = [];
+    const reachesStaff = announcement.audience === "all" || announcement.audience === "staff";
+    const reachesTenants = announcement.audience === "all" || announcement.audience === "tenants";
+
+    if (reachesStaff) {
+      const staff = await resolveStaffRecipients({
+        ownerId: announcement.ownerId,
+        propertyId: announcement.propertyId || undefined,
+      });
+      recipients.push(...staff.map((recipient) => recipient.userId));
+    }
+
+    if (reachesTenants) {
+      const filter: Record<string, unknown> = {
+        ownerId: announcement.ownerId,
+        deletedAt: null,
+        userId: { $ne: "" },
+      };
+      if (announcement.propertyId) filter.propertyId = announcement.propertyId;
+      const tenants = await Tenant.find(filter).select("userId").lean();
+      for (const tenant of tenants) {
+        if (tenant.userId) recipients.push(tenant.userId);
+      }
+    }
+
+    const authorId = announcement.authorId;
+    const unique = new Set(recipients.filter((userId) => userId && userId !== authorId));
+    return [...unique];
+  } catch (_error) {
+    console.warn("[notifications] resolveAnnouncementRecipients failed");
     return [];
   }
 }
@@ -436,7 +578,6 @@ export async function notifyComplaintCreated(complaint: ComplaintLike): Promise<
     const data = { complaintId: String(complaint._id), propertyId: complaint.propertyId };
     const title = "New complaint";
     const body = `New ${complaint.priority ?? "medium"} priority complaint: ${complaint.subject}`;
-    let ok = true;
 
     let property: { ownerId?: string; caretakerIds?: string[] } | null = null;
     try {
@@ -446,27 +587,23 @@ export async function notifyComplaintCreated(complaint: ComplaintLike): Promise<
     } catch (_error) {
       console.warn(`[notifications] property lookup failed propertyId=${complaint.propertyId}`);
     }
-    if (!property) return false;
+    if (!property?.ownerId) return false;
 
-    if (property.ownerId) {
+    const recipients = await resolveStaffRecipients({
+      ownerId: property.ownerId,
+      propertyId: complaint.propertyId,
+      caretakerIds: property.caretakerIds ?? [],
+    });
+
+    let ok = true;
+    for (const recipient of recipients) {
       ok =
-        (await notifyUser(property.ownerId, {
+        (await notifyUser(recipient.userId, {
           type: "complaint:created",
           title,
           body,
           data,
-          link: "/dashboard/owner/communications",
-          channels: ["in-app"],
-        })) && ok;
-    }
-    for (const caretakerId of property.caretakerIds ?? []) {
-      ok =
-        (await notifyUser(caretakerId, {
-          type: "complaint:created",
-          title,
-          body,
-          data,
-          link: "/dashboard/caretaker/communications",
+          link: communicationLink(recipient.role),
           channels: ["in-app"],
         })) && ok;
     }
@@ -481,9 +618,11 @@ export async function notifyComplaintCreated(complaint: ComplaintLike): Promise<
 export async function notifyComplaintStatusChange(complaint: ComplaintLike): Promise<boolean> {
   try {
     const complaintId = String(complaint._id);
-    const data = { complaintId };
-    const subject = complaint.subject;
     const status = complaint.status ?? "updated";
+    // Keyed per status so open → in-progress → resolved notifies each step
+    // exactly once instead of only the first transition.
+    const data = { complaintId, status, eventId: `${complaintId}:${status}` };
+    const subject = complaint.subject;
 
     const tenantUserId = await resolveTenantUserId(complaint.tenantId);
     if (!tenantUserId) return true;
@@ -519,6 +658,7 @@ export interface MessageLike {
 export async function notifyMessageReply(
   message: MessageLike,
   recipientUserId: string,
+  link = "/dashboard/tenant/messages",
 ): Promise<boolean> {
   try {
     if (!recipientUserId || recipientUserId === message.senderUserId) return true;
@@ -527,7 +667,7 @@ export async function notifyMessageReply(
       title: "New message",
       body: message.text,
       data: { messageId: String(message._id), threadId: message.threadId },
-      link: "/dashboard/tenant/messages",
+      link,
       channels: ["in-app"],
     });
   } catch (_error) {
@@ -548,6 +688,7 @@ export async function notifyAnnouncement(
 ): Promise<boolean> {
   try {
     const data = { announcementId: String(announcement._id) };
+    const roles = await recipientRoles(recipientUserIds);
     let ok = true;
     for (const userId of recipientUserIds) {
       ok =
@@ -556,13 +697,102 @@ export async function notifyAnnouncement(
           title: announcement.title,
           body: announcement.body,
           data,
-          link: "/dashboard/tenant/messages",
+          link: communicationLink(roles.get(userId)),
           channels: ["in-app"],
         })) && ok;
     }
     return ok;
   } catch (_error) {
     console.warn("[notifications] notifyAnnouncement failed");
+    return false;
+  }
+}
+
+export interface MoveRequestLike {
+  _id: unknown;
+  type: string;
+  ownerId: string;
+  propertyId: string;
+  requestedById: string;
+  requestedByRole: string;
+  requestedFor?: string;
+  status?: string;
+  decidedById?: string;
+  decisionNote?: string;
+}
+
+function moveTypeLabel(type: string): string {
+  return type === "move-in" ? "move-in" : "move-out";
+}
+
+/** Staff (owner + custodians + property caretakers) learn about new requests. */
+export async function notifyMoveRequestCreated(request: MoveRequestLike): Promise<boolean> {
+  try {
+    const moveRequestId = String(request._id);
+    const data = { moveRequestId, propertyId: request.propertyId };
+    const typeLabel = moveTypeLabel(request.type);
+    const title = `New ${typeLabel} request`;
+    const body = request.requestedFor
+      ? `A ${typeLabel} request is awaiting review (requested for ${request.requestedFor}).`
+      : `A ${typeLabel} request is awaiting review.`;
+
+    const recipients = await resolveStaffRecipients({
+      ownerId: request.ownerId,
+      propertyId: request.propertyId,
+    });
+
+    let ok = true;
+    for (const recipient of recipients) {
+      if (recipient.userId === request.requestedById) continue;
+      ok =
+        (await notifyUser(recipient.userId, {
+          type: "move-request:created",
+          title,
+          body,
+          data,
+          link: `/dashboard/${recipient.role}/move-requests`,
+          channels: ["in-app"],
+        })) && ok;
+    }
+    return ok;
+  } catch (_error) {
+    console.warn("[notifications] notifyMoveRequestCreated failed");
+    return false;
+  }
+}
+
+/** The requester learns the outcome — never the decider themselves. */
+export async function notifyMoveRequestDecided(request: MoveRequestLike): Promise<boolean> {
+  try {
+    const recipientUserId = request.requestedById;
+    if (!recipientUserId || recipientUserId === (request.decidedById ?? "")) return true;
+
+    const moveRequestId = String(request._id);
+    const status = request.status ?? "updated";
+    const typeLabel = moveTypeLabel(request.type);
+    const role = request.requestedByRole;
+    const link =
+      role === "owner" || role === "caretaker" || role === "custodian"
+        ? `/dashboard/${role}/move-requests`
+        : role === "tenant"
+          ? "/dashboard/tenant/requests"
+          : "/dashboard/system-admin";
+    const decisionNote = (request.decisionNote ?? "").trim();
+    const body = decisionNote
+      ? `Your ${typeLabel} request was ${status}. ${decisionNote}`
+      : `Your ${typeLabel} request was ${status}.`;
+
+    return notifyUser(recipientUserId, {
+      type: "move-request:decided",
+      title: `Move request ${status}`,
+      body,
+      // Keyed per status so a re-decision to a different status notifies again.
+      data: { moveRequestId, status, eventId: `${moveRequestId}:${status}` },
+      link,
+      channels: ["in-app"],
+    });
+  } catch (_error) {
+    console.warn("[notifications] notifyMoveRequestDecided failed");
     return false;
   }
 }

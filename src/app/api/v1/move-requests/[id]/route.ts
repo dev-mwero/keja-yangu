@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { AllocationError, allocateUnit, vacateUnit } from "@/lib/allocation";
 import { connectToDatabase } from "@/lib/mongoose";
+import { notifyMoveRequestDecided } from "@/lib/notifications";
 import { authenticate, requirePermission } from "@/lib/permissions";
 import { moveRequestDecisionInput } from "@/lib/schemas/move-request";
 import { MoveRequest } from "@/models/MoveRequest";
@@ -70,6 +71,10 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
   moveRequest.decidedById = actor?.userId ?? "";
   moveRequest.decidedAt = new Date();
   await moveRequest.save();
+
+  if (previousStatus !== moveRequest.status) {
+    await notifyMoveRequestDecided(moveRequest);
+  }
 
   return NextResponse.json({ data: moveRequest.toObject() });
 }

@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongoose";
+import { notifyMoveRequestCreated } from "@/lib/notifications";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
 import { authenticate } from "@/lib/permissions";
 import { moveRequestCreateInput } from "@/lib/schemas/move-request";
@@ -153,6 +154,7 @@ export async function POST(request: NextRequest) {
       tenantId: parsed.data.tenantId ?? String(tenant._id),
       status: "pending",
     });
+    await notifyMoveRequestCreated(created);
     return NextResponse.json({ data: created }, { status: 201 });
   }
 
@@ -169,5 +171,6 @@ export async function POST(request: NextRequest) {
     requestedByRole: role,
     status: "pending",
   });
+  await notifyMoveRequestCreated(created);
   return NextResponse.json({ data: created }, { status: 201 });
 }

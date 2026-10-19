@@ -39,8 +39,12 @@ import {
   notifyInvoicePaid,
   notifyLeaseExpiry,
   notifyMessageReply,
+  notifyMoveRequestCreated,
+  notifyMoveRequestDecided,
   notifyOverdueInvoices,
   notifyUser,
+  resolveAnnouncementRecipients,
+  resolveStaffRecipients,
   wantsEmailNotifications,
 } from "@/lib/notifications";
 
@@ -60,6 +64,8 @@ const PROPERTY_ID = makeObjectId("prop");
 const INVOICE_ID = makeObjectId("invoice");
 const LEASE_ID = makeObjectId("lease");
 const COMPLAINT_ID = makeObjectId("complaint");
+const CUSTODIAN_ID = makeObjectId("custodian");
+const MOVE_REQUEST_ID = makeObjectId("moverequest");
 
 describe("notifyUser", () => {
   beforeEach(() => {
@@ -101,6 +107,18 @@ describe("notifyUser", () => {
     });
     const doc = notification.create.mock.calls[0][0] as Record<string, unknown>;
     expect(doc.dedupeKey).toBe("");
+  });
+
+  it("honours an explicit eventId over the embedded event ids", async () => {
+    notification.create.mockResolvedValue({ _id: "n1" });
+    await notifyUser(USER_ID, {
+      type: "invoice:paid",
+      title: "Invoice paid",
+      body: "Payment received.",
+      data: { eventId: "custom-123", invoiceId: INVOICE_ID },
+    });
+    const doc = notification.create.mock.calls[0][0] as Record<string, unknown>;
+    expect(doc.dedupeKey).toBe(`invoice:paid:custom-123`);
   });
 
   it("treats an E11000 duplicate as a silent success", async () => {
@@ -436,10 +454,11 @@ describe("complaint, message and announcement seams", () => {
     notification.create.mockResolvedValue({ _id: "n1" });
   });
 
-  it("notifies complaint-created to the property owner and caretakers", async () => {
+  it("notifies complaint-created to the property owner, custodians and caretakers", async () => {
     property.findById.mockReturnValue(
       buildQuery({ _id: PROPERTY_ID, ownerId: OWNER_ID, caretakerIds: [CARETAKER_ID] }),
     );
+    user.find.mockReturnValue(buildQuery([{ _id: CUSTODIAN_ID, role: "custodian" }]));
     const ok = await notifyComplaintCreated({
       _id: COMPLAINT_ID,
       tenantId: TENANT_ID,
@@ -448,11 +467,38 @@ describe("complaint, message and announcement seams", () => {
       priority: "high",
     });
     expect(ok).toBe(true);
+    expect(notification.create).toHaveBeenCalledTimes(3);
+    const ownerRow = notification.create.mock.calls[0][0] as Record<string, unknown>;
+    expect(ownerRow.recipientUserId).toBe(OWNER_ID);
+    expect(ownerRow.link).toBe("/dashboard/owner/communications");
+    const custodianRow = notification.create.mock.calls[1][0] as Record<string, unknown>;
+    expect(custodianRow.recipientUserId).toBe(CUSTODIAN_ID);
+    expect(custodianRow.link).toBe("/dashboard/custodian/communications");
+    const caretakerRow = notification.create.mock.calls[2][0] as Record<string, unknown>;
+    expect(caretakerRow.recipientUserId).toBe(CARETAKER_ID);
+    expect(caretakerRow.link).toBe("/dashboard/caretaker/communications");
+    expect(ownerRow.dedupeKey).toBe(`complaint:created:${COMPLAINT_ID}`);
+    expect(ownerRow.type).toBe("complaint:created");
+  });
+
+  it("notifies complaint-created to staff only (no caretakers)", async () => {
+    property.findById.mockReturnValue(
+      buildQuery({ _id: PROPERTY_ID, ownerId: OWNER_ID, caretakerIds: [] }),
+    );
+    user.find.mockReturnValue(buildQuery([{ _id: CUSTODIAN_ID, role: "custodian" }]));
+    await notifyComplaintCreated({
+      _id: COMPLAINT_ID,
+      tenantId: TENANT_ID,
+      propertyId: PROPERTY_ID,
+      subject: "Leaking tap",
+    });
     expect(notification.create).toHaveBeenCalledTimes(2);
-    const row = notification.create.mock.calls[0][0] as Record<string, unknown>;
-    expect(row.dedupeKey).toBe(`complaint:created:${COMPLAINT_ID}`);
-    expect(row.type).toBe("complaint:created");
-    expect(row.link).toBe("/dashboard/owner/communications");
+    expect((notification.create.mock.calls[0][0] as Record<string, unknown>).recipientUserId).toBe(
+      OWNER_ID,
+    );
+    expect((notification.create.mock.calls[1][0] as Record<string, unknown>).recipientUserId).toBe(
+      CUSTODIAN_ID,
+    );
   });
 
   it("returns false when the complaint property lookup fails", async () => {
@@ -467,7 +513,7 @@ describe("complaint, message and announcement seams", () => {
     ).resolves.toBe(false);
   });
 
-  it("notifies complaint status changes to the tenant", async () => {
+  it("notifies complaint status changes to the tenant, keyed per status", async () => {
     tenant.findById.mockReturnValue(buildQuery({ _id: TENANT_ID, userId: USER_ID }));
     const ok = await notifyComplaintStatusChange({
       _id: COMPLAINT_ID,
@@ -479,7 +525,7 @@ describe("complaint, message and announcement seams", () => {
     expect(ok).toBe(true);
     const row = notification.create.mock.calls[0][0] as Record<string, unknown>;
     expect(row.type).toBe("complaint:status-changed");
-    expect(row.dedupeKey).toBe(`complaint:status-changed:${COMPLAINT_ID}`);
+    expect(row.dedupeKey).toBe(`complaint:status-changed:${COMPLAINT_ID}:resolved`);
     expect(row.channels).toEqual(["in-app", "email"]);
     expect(createComplaintStatusContentMock).toHaveBeenCalledWith({
       subject: "Leaking tap",
@@ -533,15 +579,348 @@ describe("complaint, message and announcement seams", () => {
     expect(notification.create).not.toHaveBeenCalled();
   });
 
-  it("announcements fan out to each audience member", async () => {
+  it("message replies use the caller-supplied link", async () => {
+    const ok = await notifyMessageReply(
+      { _id: makeObjectId("msg"), threadId: "t1", senderUserId: USER_ID, text: "hello" },
+      OWNER_ID,
+      "/dashboard/caretaker/communications",
+    );
+    expect(ok).toBe(true);
+    const row = notification.create.mock.calls[0][0] as Record<string, unknown>;
+    expect(row.recipientUserId).toBe(OWNER_ID);
+    expect(row.link).toBe("/dashboard/caretaker/communications");
+  });
+
+  it("announcements fan out to each audience member with role-aware links", async () => {
+    user.find.mockReturnValue(
+      buildQuery([
+        { _id: USER_ID, role: "tenant" },
+        { _id: OWNER_ID, role: "owner" },
+      ]),
+    );
     const ok = await notifyAnnouncement(
       { _id: makeObjectId("ann"), title: "Water works", body: "Sunday 9am" },
       [USER_ID, OWNER_ID],
     );
     expect(ok).toBe(true);
     expect(notification.create).toHaveBeenCalledTimes(2);
+    const tenantRow = notification.create.mock.calls[0][0] as Record<string, unknown>;
+    expect(tenantRow.recipientUserId).toBe(USER_ID);
+    expect(tenantRow.link).toBe("/dashboard/tenant/messages");
+    const ownerRow = notification.create.mock.calls[1][0] as Record<string, unknown>;
+    expect(ownerRow.recipientUserId).toBe(OWNER_ID);
+    expect(ownerRow.link).toBe("/dashboard/owner/communications");
+    expect(tenantRow.dedupeKey).toBe(`announcement:${makeObjectId("ann")}`);
+  });
+});
+
+describe("resolveStaffRecipients", () => {
+  beforeEach(() => {
+    resetModelStubs();
+  });
+
+  it("resolves the owner, custodians and the property's caretakers", async () => {
+    property.findById.mockReturnValue(
+      buildQuery({ _id: PROPERTY_ID, caretakerIds: [CARETAKER_ID] }),
+    );
+    user.find.mockReturnValue(buildQuery([{ _id: CUSTODIAN_ID, role: "custodian" }]));
+
+    const staff = await resolveStaffRecipients({
+      ownerId: OWNER_ID,
+      propertyId: PROPERTY_ID,
+    });
+
+    expect(staff).toEqual([
+      { userId: OWNER_ID, role: "owner" },
+      { userId: CUSTODIAN_ID, role: "custodian" },
+      { userId: CARETAKER_ID, role: "caretaker" },
+    ]);
+    expect(property.findById).toHaveBeenCalledWith(PROPERTY_ID);
+  });
+
+  it("resolves portfolio-wide caretakers when propertyId is omitted", async () => {
+    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, caretakerIds: [CARETAKER_ID] }]));
+    user.find.mockReturnValue(buildQuery([]));
+
+    const staff = await resolveStaffRecipients({ ownerId: OWNER_ID });
+
+    expect(staff).toEqual([
+      { userId: OWNER_ID, role: "owner" },
+      { userId: CARETAKER_ID, role: "caretaker" },
+    ]);
+    expect(property.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
+  });
+
+  it("deduplicates the owner when they also appear as a caretaker", async () => {
+    property.findById.mockReturnValue(
+      buildQuery({ _id: PROPERTY_ID, caretakerIds: [OWNER_ID, CARETAKER_ID] }),
+    );
+    user.find.mockReturnValue(buildQuery([]));
+
+    const staff = await resolveStaffRecipients({ ownerId: OWNER_ID, propertyId: PROPERTY_ID });
+
+    expect(staff).toEqual([
+      { userId: OWNER_ID, role: "owner" },
+      { userId: CARETAKER_ID, role: "caretaker" },
+    ]);
+  });
+
+  it("returns an empty list for an empty ownerId without touching the database", async () => {
+    const staff = await resolveStaffRecipients({ ownerId: "" });
+    expect(staff).toEqual([]);
+    expect(user.find).not.toHaveBeenCalled();
+    expect(property.find).not.toHaveBeenCalled();
+    expect(property.findById).not.toHaveBeenCalled();
+  });
+
+  it("keeps the owner even when custodian/caretaker lookups fail", async () => {
+    user.find.mockRejectedValue(new Error("db down"));
+    property.findById.mockRejectedValue(new Error("db down"));
+
+    const staff = await resolveStaffRecipients({ ownerId: OWNER_ID, propertyId: PROPERTY_ID });
+
+    expect(staff).toEqual([{ userId: OWNER_ID, role: "owner" }]);
+  });
+});
+
+describe("resolveAnnouncementRecipients", () => {
+  beforeEach(() => {
+    resetModelStubs();
+  });
+
+  it("audience tenants returns only claimed tenants of the owner", async () => {
+    tenant.find.mockReturnValue(
+      buildQuery([
+        { _id: TENANT_ID, userId: USER_ID },
+        { _id: "t2", userId: "" },
+      ]),
+    );
+
+    const recipients = await resolveAnnouncementRecipients({
+      ownerId: OWNER_ID,
+      propertyId: "",
+      audience: "tenants",
+      authorId: "author",
+    });
+
+    expect(recipients).toEqual([USER_ID]);
+    expect(tenant.find).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ownerId: OWNER_ID,
+        deletedAt: null,
+        userId: { $ne: "" },
+      }),
+    );
+  });
+
+  it("scopes property-scoped announcements to that property's tenants", async () => {
+    tenant.find.mockReturnValue(buildQuery([{ _id: TENANT_ID, userId: USER_ID }]));
+
+    await resolveAnnouncementRecipients({
+      ownerId: OWNER_ID,
+      propertyId: PROPERTY_ID,
+      audience: "tenants",
+      authorId: "author",
+    });
+
+    expect(tenant.find).toHaveBeenCalledWith(expect.objectContaining({ propertyId: PROPERTY_ID }));
+  });
+
+  it("audience staff returns owner, custodians and caretakers", async () => {
+    property.findById.mockReturnValue(
+      buildQuery({ _id: PROPERTY_ID, caretakerIds: [CARETAKER_ID] }),
+    );
+    user.find.mockReturnValue(buildQuery([{ _id: CUSTODIAN_ID, role: "custodian" }]));
+
+    const recipients = await resolveAnnouncementRecipients({
+      ownerId: OWNER_ID,
+      propertyId: PROPERTY_ID,
+      audience: "staff",
+      authorId: "author",
+    });
+
+    expect(recipients).toEqual([OWNER_ID, CUSTODIAN_ID, CARETAKER_ID]);
+  });
+
+  it("audience all merges both sides and excludes the author", async () => {
+    tenant.find.mockReturnValue(buildQuery([{ _id: TENANT_ID, userId: USER_ID }]));
+    property.findById.mockReturnValue(buildQuery({ _id: PROPERTY_ID, caretakerIds: [] }));
+    user.find.mockReturnValue(buildQuery([]));
+
+    const recipients = await resolveAnnouncementRecipients({
+      ownerId: OWNER_ID,
+      propertyId: PROPERTY_ID,
+      audience: "all",
+      authorId: USER_ID,
+    });
+
+    // The tenant row is excluded (author); only the owner remains.
+    expect(recipients).toEqual([OWNER_ID]);
+  });
+
+  it("returns an empty list on failure", async () => {
+    tenant.find.mockRejectedValue(new Error("db down"));
+    await expect(
+      resolveAnnouncementRecipients({
+        ownerId: OWNER_ID,
+        propertyId: "",
+        audience: "tenants",
+        authorId: "author",
+      }),
+    ).resolves.toEqual([]);
+  });
+});
+
+describe("notifyMoveRequestCreated", () => {
+  beforeEach(() => {
+    resetModelStubs();
+    notification.create.mockResolvedValue({ _id: "n1" });
+  });
+
+  it("fans out to staff minus the requester with move-request links", async () => {
+    property.findById.mockReturnValue(
+      buildQuery({ _id: PROPERTY_ID, caretakerIds: [CARETAKER_ID] }),
+    );
+    user.find.mockReturnValue(buildQuery([{ _id: CUSTODIAN_ID, role: "custodian" }]));
+
+    const ok = await notifyMoveRequestCreated({
+      _id: MOVE_REQUEST_ID,
+      type: "move-in",
+      ownerId: OWNER_ID,
+      propertyId: PROPERTY_ID,
+      requestedById: CARETAKER_ID,
+      requestedByRole: "caretaker",
+      requestedFor: "2026-11-01",
+    });
+    expect(ok).toBe(true);
+    expect(notification.create).toHaveBeenCalledTimes(2);
+
+    const ownerRow = notification.create.mock.calls[0][0] as Record<string, unknown>;
+    expect(ownerRow.recipientUserId).toBe(OWNER_ID);
+    expect(ownerRow.type).toBe("move-request:created");
+    expect(ownerRow.link).toBe("/dashboard/owner/move-requests");
+    expect(ownerRow.dedupeKey).toBe(`move-request:created:${MOVE_REQUEST_ID}`);
+    expect(ownerRow.data).toEqual({ moveRequestId: MOVE_REQUEST_ID, propertyId: PROPERTY_ID });
+    expect(ownerRow.body).toContain("2026-11-01");
+
+    const custodianRow = notification.create.mock.calls[1][0] as Record<string, unknown>;
+    expect(custodianRow.link).toBe("/dashboard/custodian/move-requests");
+  });
+
+  it("skips the requester when they are the owner", async () => {
+    property.findById.mockReturnValue(
+      buildQuery({ _id: PROPERTY_ID, caretakerIds: [CARETAKER_ID] }),
+    );
+    user.find.mockReturnValue(buildQuery([]));
+
+    await notifyMoveRequestCreated({
+      _id: MOVE_REQUEST_ID,
+      type: "move-out",
+      ownerId: OWNER_ID,
+      propertyId: PROPERTY_ID,
+      requestedById: OWNER_ID,
+      requestedByRole: "owner",
+    });
+    expect(notification.create).toHaveBeenCalledTimes(1);
     const row = notification.create.mock.calls[0][0] as Record<string, unknown>;
-    expect(row.type).toBe("announcement");
-    expect(row.link).toBe("/dashboard/tenant/messages");
+    expect(row.recipientUserId).toBe(CARETAKER_ID);
+    expect(row.link).toBe("/dashboard/caretaker/move-requests");
+  });
+});
+
+describe("notifyMoveRequestDecided", () => {
+  beforeEach(() => {
+    resetModelStubs();
+    notification.create.mockResolvedValue({ _id: "n1" });
+  });
+
+  it("notifies the requester of the decision with the decision note", async () => {
+    const ok = await notifyMoveRequestDecided({
+      _id: MOVE_REQUEST_ID,
+      type: "move-in",
+      ownerId: OWNER_ID,
+      propertyId: PROPERTY_ID,
+      requestedById: USER_ID,
+      requestedByRole: "tenant",
+      status: "approved",
+      decidedById: OWNER_ID,
+      decisionNote: "Unit B2 is ready.",
+    });
+    expect(ok).toBe(true);
+    expect(notification.create).toHaveBeenCalledTimes(1);
+    const row = notification.create.mock.calls[0][0] as Record<string, unknown>;
+    expect(row.recipientUserId).toBe(USER_ID);
+    expect(row.type).toBe("move-request:decided");
+    expect(row.title).toBe("Move request approved");
+    expect(row.body).toContain("Unit B2 is ready.");
+    expect(row.link).toBe("/dashboard/tenant/requests");
+    expect(row.dedupeKey).toBe(`move-request:decided:${MOVE_REQUEST_ID}:approved`);
+  });
+
+  it("does not notify the decider of their own decision", async () => {
+    await notifyMoveRequestDecided({
+      _id: MOVE_REQUEST_ID,
+      type: "move-out",
+      ownerId: OWNER_ID,
+      propertyId: PROPERTY_ID,
+      requestedById: OWNER_ID,
+      requestedByRole: "owner",
+      status: "approved",
+      decidedById: OWNER_ID,
+    });
+    expect(notification.create).not.toHaveBeenCalled();
+  });
+
+  it("skips when the requester is unknown", async () => {
+    await notifyMoveRequestDecided({
+      _id: MOVE_REQUEST_ID,
+      type: "move-in",
+      ownerId: OWNER_ID,
+      propertyId: PROPERTY_ID,
+      requestedById: "",
+      requestedByRole: "tenant",
+      status: "approved",
+      decidedById: OWNER_ID,
+    });
+    expect(notification.create).not.toHaveBeenCalled();
+  });
+
+  it("notifies again when a request is re-decided to a different status", async () => {
+    user.find.mockReturnValue(buildQuery([]));
+    property.findById.mockReturnValue(buildQuery({ _id: PROPERTY_ID, caretakerIds: [] }));
+
+    const base = {
+      _id: MOVE_REQUEST_ID,
+      type: "move-in",
+      ownerId: OWNER_ID,
+      propertyId: PROPERTY_ID,
+      requestedById: USER_ID,
+      requestedByRole: "caretaker",
+      decidedById: OWNER_ID,
+    };
+    await notifyMoveRequestDecided({ ...base, status: "approved" });
+    await notifyMoveRequestDecided({ ...base, status: "rejected" });
+
+    expect(notification.create).toHaveBeenCalledTimes(2);
+    const rows = notification.create.mock.calls.map(
+      (call) => call[0] as { dedupeKey?: string },
+    );
+    expect(rows[0].dedupeKey).toBe(`move-request:decided:${MOVE_REQUEST_ID}:approved`);
+    expect(rows[1].dedupeKey).toBe(`move-request:decided:${MOVE_REQUEST_ID}:rejected`);
+  });
+
+  it("falls back to /dashboard/system-admin for system-admin requesters", async () => {
+    await notifyMoveRequestDecided({
+      _id: MOVE_REQUEST_ID,
+      type: "move-in",
+      ownerId: OWNER_ID,
+      propertyId: PROPERTY_ID,
+      requestedById: USER_ID,
+      requestedByRole: "system-admin",
+      status: "rejected",
+      decidedById: OWNER_ID,
+    });
+    const row = notification.create.mock.calls[0][0] as Record<string, unknown>;
+    expect(row.link).toBe("/dashboard/system-admin");
   });
 });

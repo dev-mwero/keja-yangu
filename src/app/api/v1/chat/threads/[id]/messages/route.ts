@@ -4,12 +4,14 @@ import { NextResponse } from "next/server";
 import { type DashboardActor, readJsonBody, resolveDashboardActor } from "@/app/api/v1/_helpers";
 import { serializeMessage } from "@/lib/chat";
 import { connectToDatabase } from "@/lib/mongoose";
+import { notifyMessageReply } from "@/lib/notifications";
 import { buildPaginationResult } from "@/lib/pagination";
 import { requirePermission } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { chatMessageInput } from "@/lib/schemas";
 import { ChatMessage } from "@/models/ChatMessage";
 import { ChatThread } from "@/models/ChatThread";
+import { Tenant } from "@/models/Tenant";
 import { User } from "@/models/User";
 
 type ThreadRow = { tenantId: string; ownerId: string; agentUserId: string };
@@ -109,6 +111,26 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     { _id: id },
     { $set: { lastMessageAt: now, lastMessageText: parsed.data.text, ...readAtSet } },
   );
+
+  // Two-sided thread: a tenant message reaches the agent, anything else
+  // reaches the tenant. The link follows the recipient's side of the thread.
+  let recipientUserId = "";
+  let link = "/dashboard/tenant/messages";
+  if (actor.role === "tenant") {
+    recipientUserId = thread.agentUserId;
+    link =
+      thread.agentRole === "owner"
+        ? "/dashboard/owner/communications"
+        : "/dashboard/caretaker/communications";
+  } else {
+    try {
+      const tenantRow = await Tenant.findById(thread.tenantId).select("userId").lean();
+      recipientUserId = tenantRow?.userId ?? "";
+    } catch (_error) {
+      console.warn(`[chat] tenant lookup failed thread=${id}`);
+    }
+  }
+  await notifyMessageReply(message, recipientUserId, link);
 
   console.info(`[chat] send-message actor=${actor.userId} role=${actor.role} thread=${id}`);
 

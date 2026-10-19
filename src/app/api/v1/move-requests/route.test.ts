@@ -12,8 +12,12 @@ vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 vi.mock("@/models/MoveRequest", () => ({ MoveRequest: getModelStubs().moverrequest }));
+vi.mock("@/lib/notifications", () => ({
+  notifyMoveRequestCreated: vi.fn().mockResolvedValue(true),
+}));
 
 import { GET, POST } from "@/app/api/v1/move-requests/route";
+import { notifyMoveRequestCreated } from "@/lib/notifications";
 
 const { user, property, tenant, unit, moverrequest } = getModelStubs();
 
@@ -139,8 +143,11 @@ describe("GET /api/v1/move-requests", () => {
 });
 
 describe("POST /api/v1/move-requests", () => {
+  const notifyMoveRequestCreatedMock = vi.mocked(notifyMoveRequestCreated);
+
   beforeEach(() => {
     resetModelStubs();
+    notifyMoveRequestCreatedMock.mockReset().mockResolvedValue(true);
   });
 
   it("401 when unauthenticated", async () => {
@@ -204,6 +211,7 @@ describe("POST /api/v1/move-requests", () => {
         status: "pending",
       }),
     );
+    expect(notifyMoveRequestCreatedMock).toHaveBeenCalledTimes(1);
   });
 
   it("lets a tenant file by email match and heals the tenancy link", async () => {
@@ -236,6 +244,7 @@ describe("POST /api/v1/move-requests", () => {
     expect(moverrequest.create).toHaveBeenCalledWith(
       expect.objectContaining({ tenantId: TENANT_DOC_ID, ownerId: OWNER_ID }),
     );
+    expect(notifyMoveRequestCreatedMock).toHaveBeenCalledTimes(1);
   });
 
   it("lets an owner file against their own property", async () => {
@@ -258,6 +267,7 @@ describe("POST /api/v1/move-requests", () => {
         requestedByRole: "owner",
       }),
     );
+    expect(notifyMoveRequestCreatedMock).toHaveBeenCalledTimes(1);
   });
 
   it("403 when an owner files against a foreign property", async () => {
@@ -272,6 +282,7 @@ describe("POST /api/v1/move-requests", () => {
       }),
     );
     expect(res.status).toBe(403);
+    expect(notifyMoveRequestCreatedMock).not.toHaveBeenCalled();
   });
 
   it("lets a custodian file against their managing owner's property", async () => {
@@ -289,5 +300,6 @@ describe("POST /api/v1/move-requests", () => {
       }),
     );
     expect(res.status).toBe(201);
+    expect(notifyMoveRequestCreatedMock).toHaveBeenCalledTimes(1);
   });
 });
