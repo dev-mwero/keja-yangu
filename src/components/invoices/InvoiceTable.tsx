@@ -46,23 +46,45 @@ export const InvoiceTable = ({ invoices, tenantNames, renderActions }: InvoiceTa
           </TableRow>
         </TableHeader>
         <TableBody>
-          {invoices.map((invoice) => (
-            <TableRow key={invoice._id}>
-              <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
-              <TableCell>
-                <p className="font-medium">{tenantNames?.[invoice.tenantId] ?? invoice.tenantId}</p>
-                <p className="text-xs text-muted-foreground">{formatPeriod(invoice.period)}</p>
-              </TableCell>
-              <TableCell className="font-medium">{formatKES(invoice.amountDue)}</TableCell>
-              <TableCell className="text-muted-foreground">{formatDate(invoice.dueDate)}</TableCell>
-              <TableCell>
-                <Badge className={`${statusClass[invoice.status]} capitalize hover:opacity-100`}>
-                  {invoice.status}
-                </Badge>
-              </TableCell>
-              <TableCell className="text-right">{renderActions?.(invoice)}</TableCell>
-            </TableRow>
-          ))}
+          {invoices.map((invoice) => {
+            const amountPaid = invoice.amountPaid ?? 0;
+            const partial = amountPaid > 0 && amountPaid < invoice.amountDue;
+            return (
+              <TableRow key={invoice._id}>
+                <TableCell className="font-medium">
+                  {invoice.invoiceNumber}
+                  {invoice.paymentReference && (
+                    <p className="text-xs font-normal text-muted-foreground">
+                      Ref: {invoice.paymentReference}
+                    </p>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <p className="font-medium">
+                    {tenantNames?.[invoice.tenantId] ?? invoice.tenantId}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{formatPeriod(invoice.period)}</p>
+                </TableCell>
+                <TableCell className="font-medium">
+                  {formatKES(invoice.amountDue)}
+                  {partial && (
+                    <p className="text-xs font-normal text-muted-foreground">
+                      {formatKES(amountPaid)} received
+                    </p>
+                  )}
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {formatDate(invoice.dueDate)}
+                </TableCell>
+                <TableCell>
+                  <Badge className={`${statusClass[invoice.status]} capitalize hover:opacity-100`}>
+                    {invoice.status}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-right">{renderActions?.(invoice)}</TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </div>

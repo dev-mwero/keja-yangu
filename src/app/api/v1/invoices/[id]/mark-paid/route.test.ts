@@ -199,7 +199,11 @@ describe("POST /api/v1/invoices/[id]/mark-paid", () => {
       unknown,
       Record<string, unknown>,
     ];
-    expect(filter).toEqual({ _id: INVOICE_ID, status: { $in: ["pending", "draft"] } });
+    expect(filter).toEqual({
+      _id: INVOICE_ID,
+      status: { $in: ["pending", "draft"] },
+      amountPaid: 0,
+    });
     expect(updateData.status).toBe("paid");
     expect(updateData.amountPaid).toBe(25000);
     expect(updateData.paidAt).toBeInstanceOf(Date);
@@ -240,9 +244,80 @@ describe("POST /api/v1/invoices/[id]/mark-paid", () => {
     expect(res.status).toBe(200);
     const updateData = invoiceStub.findOneAndUpdate.mock.calls[0][1] as Record<string, unknown>;
     expect(updateData.amountPaid).toBe(12000);
+    expect(updateData.status).toBe("pending");
     expect(updateData.paidAt).toEqual(new Date("2026-09-15T10:00:00.000Z"));
     expect(updateData.paymentReference).toBe("REF123");
     expect(updateData.paymentDescription).toBe("September rent");
+  });
+
+  it("keeps a partially paid invoice pending and skips the paid notification", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    invoiceStub.findById.mockReturnValue(buildQuery(pendingInvoice()));
+    invoiceStub.findOneAndUpdate.mockReturnValue(
+      buildQuery({ ...pendingInvoice(), status: "pending", amountPaid: 5000 }),
+    );
+
+    const res = await POST(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}/mark-paid`, {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { method: "Cash", amount: 5000 },
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(200);
+    const updateData = invoiceStub.findOneAndUpdate.mock.calls[0][1] as Record<string, unknown>;
+    expect(updateData.status).toBe("pending");
+    expect(updateData.amountPaid).toBe(5000);
+    expect(notifyInvoicePaidMock).not.toHaveBeenCalled();
+  });
+
+  it("accumulates onto an existing partial balance and settles when complete", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    invoiceStub.findById.mockReturnValue(buildQuery({ ...pendingInvoice(), amountPaid: 5000 }));
+    invoiceStub.findOneAndUpdate.mockReturnValue(
+      buildQuery({ ...pendingInvoice(), status: "paid", amountPaid: 25000 }),
+    );
+
+    const res = await POST(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}/mark-paid`, {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { method: "Cash", amount: 20000 },
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(200);
+    const [filter, updateData] = invoiceStub.findOneAndUpdate.mock.calls[0] as [
+      unknown,
+      Record<string, unknown>,
+    ];
+    expect(filter).toEqual({
+      _id: INVOICE_ID,
+      status: { $in: ["pending", "draft"] },
+      amountPaid: 5000,
+    });
+    expect(updateData.status).toBe("paid");
+    expect(updateData.amountPaid).toBe(25000);
+    expect(notifyInvoicePaidMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("400 when the amount exceeds the outstanding balance", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    invoiceStub.findById.mockReturnValue(buildQuery(pendingInvoice()));
+
+    const res = await POST(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}/mark-paid`, {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { method: "Cash", amount: 30000 },
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(400);
+    const body = await json(res);
+    expect(body.error).toBe("Amount exceeds the outstanding balance");
+    expect(invoiceStub.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
   it("rejects a future paidAt with 400", async () => {

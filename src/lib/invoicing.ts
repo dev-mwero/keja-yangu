@@ -2,7 +2,7 @@ export const INVOICE_STATUSES = ["draft", "pending", "paid", "void"] as const;
 export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 export type DerivedInvoiceStatus = InvoiceStatus | "overdue";
 
-export const INVOICE_METHODS = ["M-Pesa", "Card", "Bank", "Cash", "Other"] as const;
+export const INVOICE_METHODS = ["M-Pesa", "Card", "Bank", "Cash", "Cheque", "Other"] as const;
 export type InvoiceMethod = (typeof INVOICE_METHODS)[number];
 
 /** Matches a UTC calendar month identifier, e.g. `"2026-09"`. */
@@ -118,4 +118,30 @@ export function canVoid(status: DerivedInvoiceStatus): boolean {
 
 export function canDelete(status: DerivedInvoiceStatus): boolean {
   return status === "draft";
+}
+
+export type ManualPaymentResolution =
+  | { ok: true; amountPaid: number; status: "paid" | "pending" }
+  | { ok: false; reason: "already-settled" | "exceeds-balance" };
+
+/**
+ * Resolves a manual (offline) payment against an invoice. `requestedAmount`
+ * omitted settles the full remaining balance; a smaller amount records a
+ * partial payment that keeps the invoice `"pending"` until the balance reaches
+ * `amountDue`. Amounts above the outstanding balance are rejected so
+ * `amountPaid` can never exceed `amountDue`.
+ */
+export function resolveManualPayment(
+  invoice: { amountDue: number; amountPaid?: number | null },
+  requestedAmount?: number,
+): ManualPaymentResolution {
+  const alreadyPaid = invoice.amountPaid ?? 0;
+  const remaining = invoice.amountDue - alreadyPaid;
+  if (remaining <= 0) return { ok: false, reason: "already-settled" };
+
+  const amount = requestedAmount ?? remaining;
+  if (amount > remaining) return { ok: false, reason: "exceeds-balance" };
+
+  const amountPaid = alreadyPaid + amount;
+  return { ok: true, amountPaid, status: amountPaid >= invoice.amountDue ? "paid" : "pending" };
 }

@@ -10,6 +10,7 @@ import {
   isLeaseActiveForPeriod,
   lastDayOf,
   periodRange,
+  resolveManualPayment,
   serializeInvoice,
 } from "@/lib/invoicing";
 
@@ -181,6 +182,46 @@ describe("currentPeriod", () => {
     expect(currentPeriod(new Date("2026-09-24T00:00:00.000Z"))).toBe("2026-09");
     expect(currentPeriod(new Date("2026-01-01T00:00:00.000Z"))).toBe("2026-01");
     expect(currentPeriod(new Date("2026-12-31T23:59:59.000Z"))).toBe("2026-12");
+  });
+});
+
+describe("resolveManualPayment", () => {
+  it("defaults to the full outstanding balance and settles the invoice", () => {
+    expect(resolveManualPayment({ amountDue: 25000, amountPaid: 0 })).toEqual({
+      ok: true,
+      amountPaid: 25000,
+      status: "paid",
+    });
+  });
+
+  it("records a partial payment and keeps the invoice open", () => {
+    expect(resolveManualPayment({ amountDue: 25000, amountPaid: 0 }, 5000)).toEqual({
+      ok: true,
+      amountPaid: 5000,
+      status: "pending",
+    });
+  });
+
+  it("accumulates onto an existing partial balance and settles when complete", () => {
+    expect(resolveManualPayment({ amountDue: 25000, amountPaid: 5000 }, 20000)).toEqual({
+      ok: true,
+      amountPaid: 25000,
+      status: "paid",
+    });
+  });
+
+  it("rejects an amount greater than the outstanding balance", () => {
+    expect(resolveManualPayment({ amountDue: 25000, amountPaid: 5000 }, 30000)).toEqual({
+      ok: false,
+      reason: "exceeds-balance",
+    });
+  });
+
+  it("rejects payment on an invoice with no outstanding balance", () => {
+    expect(resolveManualPayment({ amountDue: 25000, amountPaid: 25000 })).toEqual({
+      ok: false,
+      reason: "already-settled",
+    });
   });
 });
 

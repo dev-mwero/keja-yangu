@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { formatPeriod } from "@/lib/format";
+import { formatKES, formatPeriod } from "@/lib/format";
 import { INVOICE_METHODS, type InvoiceMethod } from "@/lib/invoicing";
 import { manualMethodRequiresReference } from "@/lib/payments/methods";
 import type { InvoiceMarkPaidInput } from "@/lib/schemas";
@@ -54,8 +54,9 @@ export const RecordPaymentDialog = ({
 
   useEffect(() => {
     if (open) {
+      const outstanding = invoice ? Math.max(0, invoice.amountDue - (invoice.amountPaid ?? 0)) : 0;
       setMethod(invoice?.method ?? "M-Pesa");
-      setAmount(invoice ? String(invoice.amountDue) : "");
+      setAmount(invoice ? String(outstanding) : "");
       setPaidDate(toLocalDateInput(new Date()));
       setDescription("");
       setReference("");
@@ -63,13 +64,17 @@ export const RecordPaymentDialog = ({
     }
   }, [open, invoice]);
 
+  const outstanding = invoice ? Math.max(0, invoice.amountDue - (invoice.amountPaid ?? 0)) : 0;
+  const parsedAmount = Number(amount);
+  const amountInvalid = amount.trim() === "" || !Number.isFinite(parsedAmount) || parsedAmount <= 0;
+  const amountExceeds = !amountInvalid && parsedAmount > outstanding;
+
   const handleSubmit = async () => {
     if (!invoice) return;
     try {
-      const parsedAmount = Number(amount);
       await onSubmit(invoice._id, {
         method,
-        amount: Number.isFinite(parsedAmount) && amount.trim() !== "" ? parsedAmount : undefined,
+        amount: amountInvalid ? undefined : parsedAmount,
         paidAt: paidDate ? new Date(`${paidDate}T00:00:00`).toISOString() : undefined,
         description: description.trim() || undefined,
         reference: reference.trim() || undefined,
@@ -80,8 +85,7 @@ export const RecordPaymentDialog = ({
     }
   };
 
-  const showReferenceHint =
-    method === "M-Pesa" || method === "Card" || method === "Bank" || method === "Other";
+  const showReferenceHint = manualMethodRequiresReference(method);
   const referenceRequired = manualMethodRequiresReference(method) && reference.trim() === "";
 
   return (
@@ -96,8 +100,8 @@ export const RecordPaymentDialog = ({
           <DialogTitle>Record payment</DialogTitle>
           <DialogDescription>
             {invoice
-              ? `Mark ${invoice.invoiceNumber} as paid (${formatPeriod(invoice.period)}).`
-              : "Mark this invoice as paid."}
+              ? `Record a payment against ${invoice.invoiceNumber} (${formatPeriod(invoice.period)}).`
+              : "Record a payment against this invoice."}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -107,9 +111,19 @@ export const RecordPaymentDialog = ({
               id="payment-amount"
               type="number"
               min={0}
+              max={outstanding}
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
             />
+            <p className="text-xs text-muted-foreground">
+              Outstanding balance: {formatKES(outstanding)}. Enter a smaller amount to record a
+              partial payment.
+            </p>
+            {amountExceeds && (
+              <p className="text-xs text-destructive">
+                Amount exceeds the outstanding balance of {formatKES(outstanding)}.
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label>Payment method</Label>
@@ -181,7 +195,7 @@ export const RecordPaymentDialog = ({
           </Button>
           <Button
             className="rounded-full"
-            disabled={pending || referenceRequired}
+            disabled={pending || referenceRequired || amountInvalid || amountExceeds}
             onClick={handleSubmit}
           >
             {pending && <Loader2 className="h-4 w-4 animate-spin" />}

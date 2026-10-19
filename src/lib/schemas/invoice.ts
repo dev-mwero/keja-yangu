@@ -73,15 +73,16 @@ export const invoiceGenerateInput = z.object({
 });
 
 // Client-supplied `amountPaid` is stripped (unknown key): offline mark-paid
-// settles the validated `amount` (defaulting to `amountDue` server-side). The
-// field exists only for the Paystack path.
+// records the validated `amount` (defaulting to the outstanding balance
+// server-side) and accumulates it onto `amountPaid`. The field exists only for
+// the Paystack path.
 //
 // Manual payments need a transaction code/reference for reconciliation unless
 // they are cash — a non-cash method without a reference is rejected here so
 // both the staff and tenant mark-paid routes enforce the same rule.
 export const invoiceMarkPaidInput = z
   .object({
-    amount: z.coerce.number().min(0).optional(),
+    amount: z.coerce.number().positive().optional(),
     method: z.enum(INVOICE_METHODS).optional(),
     paidAt: z.iso.datetime().optional(),
     description: z.string().max(500).optional(),

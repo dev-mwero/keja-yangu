@@ -136,7 +136,7 @@ export const InvoicesManager = (props: InvoicesManagerProps) => {
     try {
       await markPaid(id, input);
       toast.success("Payment recorded", {
-        description: `Invoice settled via ${input.method ?? "the recorded method"}.`,
+        description: `Recorded via ${input.method ?? "the selected method"}.`,
       });
       setRecording(null);
       refetch();

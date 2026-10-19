@@ -184,7 +184,7 @@ describe("POST /api/v1/tenant/me/invoices/[id]", () => {
     );
     expect(res.status).toBe(200);
     expect(invoiceStub.findOneAndUpdate).toHaveBeenCalledWith(
-      { _id: INVOICE_ID, status: { $in: ["pending", "draft"] } },
+      { _id: INVOICE_ID, status: { $in: ["pending", "draft"] }, amountPaid: 0 },
       expect.any(Object),
       expect.any(Object),
     );
@@ -205,7 +205,7 @@ describe("POST /api/v1/tenant/me/invoices/[id]", () => {
     tenantStub.find.mockReturnValue(buildQuery([{ _id: TENANT_A }]));
     invoiceStub.findOne.mockReturnValue(buildQuery(pendingInvoice()));
     invoiceStub.findOneAndUpdate.mockReturnValue(
-      buildQuery({ ...pendingInvoice(), status: "paid", amountPaid: 5000 }),
+      buildQuery({ ...pendingInvoice(), status: "pending", amountPaid: 5000 }),
     );
 
     const res = await POST(
@@ -225,9 +225,30 @@ describe("POST /api/v1/tenant/me/invoices/[id]", () => {
     expect(res.status).toBe(200);
     const updateData = invoiceStub.findOneAndUpdate.mock.calls[0][1] as Record<string, unknown>;
     expect(updateData.amountPaid).toBe(5000);
+    expect(updateData.status).toBe("pending");
     expect(updateData.paidAt).toEqual(new Date("2026-09-10T08:30:00.000Z"));
     expect(updateData.paymentReference).toBe("CARD-9");
     expect(updateData.paymentDescription).toBe("Part payment");
+    expect(notifyInvoicePaidMock).not.toHaveBeenCalled();
+  });
+
+  it("400 when the amount exceeds the outstanding balance", async () => {
+    user.findById.mockReturnValue(buildQuery(tenantDoc()));
+    tenantStub.find.mockReturnValue(buildQuery([{ _id: TENANT_A }]));
+    invoiceStub.findOne.mockReturnValue(buildQuery(pendingInvoice()));
+
+    const res = await POST(
+      buildRequest(`/api/v1/tenant/me/invoices/${INVOICE_ID}`, {
+        method: "POST",
+        token: signToken(TENANT_USER_ID),
+        body: { method: "Cash", amount: 30000 },
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(400);
+    const body = await json(res);
+    expect(body.error).toBe("Amount exceeds the outstanding balance");
+    expect(invoiceStub.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
   it("rejects a future paidAt with 400", async () => {
