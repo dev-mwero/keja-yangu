@@ -308,6 +308,33 @@ describe("notifyInvoicePaid", () => {
     expect(caretakerRow.link).toBe("/dashboard/caretaker/accounting");
   });
 
+  it("also notifies the owner's custodians", async () => {
+    user.findById.mockReturnValue(buildQuery({ _id: USER_ID, role: "tenant", email: "t@keja.co" }));
+    tenant.findById.mockReturnValue(buildQuery({ _id: TENANT_ID, userId: USER_ID }));
+    property.findById.mockReturnValue(
+      buildQuery({ _id: PROPERTY_ID, caretakerIds: [CARETAKER_ID] }),
+    );
+    user.find.mockReturnValue(buildQuery([{ _id: CUSTODIAN_ID, role: "custodian" }]));
+
+    const ok = await notifyInvoicePaid({
+      _id: INVOICE_ID,
+      invoiceNumber: "INV-202609-0001",
+      tenantId: TENANT_ID,
+      propertyId: PROPERTY_ID,
+      ownerId: OWNER_ID,
+      period: "2026-09",
+      amountDue: 25000,
+    });
+    expect(ok).toBe(true);
+    expect(notification.create).toHaveBeenCalledTimes(4);
+    const custodianRow = notification.create.mock.calls[3][0] as Record<string, unknown>;
+    expect(custodianRow.recipientUserId).toBe(CUSTODIAN_ID);
+    expect(custodianRow.type).toBe("invoice:paid");
+    expect(custodianRow.channels).toEqual(["in-app"]);
+    expect(custodianRow.link).toBe("/dashboard/custodian/accounting");
+    expect(custodianRow.dedupeKey).toBe(`invoice:paid:${INVOICE_ID}`);
+  });
+
   it("skips the tenant branch when the tenant row has no userId", async () => {
     tenant.findById.mockReturnValue(buildQuery({ _id: TENANT_ID, userId: "" }));
     property.findById.mockReturnValue(buildQuery({ _id: PROPERTY_ID, caretakerIds: [] }));
@@ -443,6 +470,34 @@ describe("notifyLeaseExpiry", () => {
     expect(ownerRow.channels).toEqual(["in-app", "email"]);
     const caretakerRow = notification.create.mock.calls[2][0] as Record<string, unknown>;
     expect(caretakerRow.channels).toEqual(["in-app"]);
+  });
+
+  it("also notifies the owner's custodians", async () => {
+    user.findById.mockReturnValue(buildQuery({ _id: USER_ID, role: "tenant", email: "t@keja.co" }));
+    tenant.findById.mockReturnValue(buildQuery({ _id: TENANT_ID, userId: USER_ID }));
+    property.findById.mockReturnValue(
+      buildQuery({ _id: PROPERTY_ID, caretakerIds: [CARETAKER_ID] }),
+    );
+    user.find.mockReturnValue(buildQuery([{ _id: CUSTODIAN_ID, role: "custodian" }]));
+
+    const ok = await notifyLeaseExpiry(
+      {
+        _id: LEASE_ID,
+        tenantId: TENANT_ID,
+        propertyId: PROPERTY_ID,
+        ownerId: OWNER_ID,
+        rentAmount: 25000,
+        endDate: new Date("2026-10-01T00:00:00.000Z"),
+      },
+      7,
+    );
+    expect(ok).toBe(true);
+    expect(notification.create).toHaveBeenCalledTimes(4);
+    const custodianRow = notification.create.mock.calls[3][0] as Record<string, unknown>;
+    expect(custodianRow.recipientUserId).toBe(CUSTODIAN_ID);
+    expect(custodianRow.type).toBe("lease:expiring");
+    expect(custodianRow.link).toBe("/dashboard/custodian/accounting");
+    expect(custodianRow.dedupeKey).toBe(`lease:expiring:${LEASE_ID}`);
   });
 });
 
@@ -902,9 +957,7 @@ describe("notifyMoveRequestDecided", () => {
     await notifyMoveRequestDecided({ ...base, status: "rejected" });
 
     expect(notification.create).toHaveBeenCalledTimes(2);
-    const rows = notification.create.mock.calls.map(
-      (call) => call[0] as { dedupeKey?: string },
-    );
+    const rows = notification.create.mock.calls.map((call) => call[0] as { dedupeKey?: string });
     expect(rows[0].dedupeKey).toBe(`move-request:decided:${MOVE_REQUEST_ID}:approved`);
     expect(rows[1].dedupeKey).toBe(`move-request:decided:${MOVE_REQUEST_ID}:rejected`);
   });

@@ -172,6 +172,20 @@ async function resolveCaretakerIds(propertyId: string): Promise<string[]> {
   }
 }
 
+/** Custodians are owner-scoped delegates; a failed lookup must not fail the event. */
+async function resolveCustodianIds(ownerId: string): Promise<string[]> {
+  if (!ownerId) return [];
+  try {
+    const custodians = await User.find({ role: "custodian", managedByOwnerId: ownerId })
+      .select("_id")
+      .lean();
+    return custodians.map((custodian) => String(custodian._id));
+  } catch (_error) {
+    console.warn(`[notifications] custodian lookup failed ownerId=${ownerId}`);
+    return [];
+  }
+}
+
 export interface StaffRecipient {
   userId: string;
   role: "owner" | "caretaker" | "custodian";
@@ -192,15 +206,9 @@ export async function resolveStaffRecipients(scope: {
   if (!scope.ownerId) return recipients;
   recipients.push({ userId: scope.ownerId, role: "owner" });
 
-  try {
-    const custodians = await User.find({ role: "custodian", managedByOwnerId: scope.ownerId })
-      .select("_id")
-      .lean();
-    for (const custodian of custodians) {
-      recipients.push({ userId: String(custodian._id), role: "custodian" });
-    }
-  } catch (_error) {
-    console.warn(`[notifications] custodian lookup failed ownerId=${scope.ownerId}`);
+  const custodianIds = await resolveCustodianIds(scope.ownerId);
+  for (const custodianId of custodianIds) {
+    recipients.push({ userId: custodianId, role: "custodian" });
   }
 
   let caretakerIds: string[] = [];
@@ -378,6 +386,19 @@ export async function notifyInvoicePaid(invoice: InvoiceLike): Promise<boolean> 
         })) && ok;
     }
 
+    const custodianIds = await resolveCustodianIds(invoice.ownerId);
+    for (const custodianId of custodianIds) {
+      ok =
+        (await notifyUser(custodianId, {
+          type: "invoice:paid",
+          title: "Payment received",
+          body: `A payment of ${amount} was recorded for invoice ${invoiceNumber} (${periodLabel})`,
+          data,
+          link: "/dashboard/custodian/accounting",
+          channels: ["in-app"],
+        })) && ok;
+    }
+
     return ok;
   } catch (_error) {
     console.warn("[notifications] notifyInvoicePaid failed");
@@ -439,6 +460,19 @@ export async function notifyInvoiceOverdue(invoice: InvoiceLike): Promise<boolea
           body: staffBody,
           data,
           link: "/dashboard/caretaker/accounting",
+          channels: ["in-app"],
+        })) && ok;
+    }
+
+    const custodianIds = await resolveCustodianIds(invoice.ownerId);
+    for (const custodianId of custodianIds) {
+      ok =
+        (await notifyUser(custodianId, {
+          type: "invoice:overdue",
+          title: staffTitle,
+          body: staffBody,
+          data,
+          link: "/dashboard/custodian/accounting",
           channels: ["in-app"],
         })) && ok;
     }
@@ -553,6 +587,19 @@ export async function notifyLeaseExpiry(lease: LeaseLike, daysUntil: number): Pr
           body: staffBody,
           data,
           link: "/dashboard/caretaker/accounting",
+          channels: ["in-app"],
+        })) && ok;
+    }
+
+    const custodianIds = await resolveCustodianIds(lease.ownerId);
+    for (const custodianId of custodianIds) {
+      ok =
+        (await notifyUser(custodianId, {
+          type: "lease:expiring",
+          title,
+          body: staffBody,
+          data,
+          link: "/dashboard/custodian/accounting",
           channels: ["in-app"],
         })) && ok;
     }
