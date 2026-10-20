@@ -222,8 +222,8 @@ Repo rules: colocated `*.test.ts(x)`, Vitest + globals, model stubs from `src/te
 
 ## 13. Open questions
 
-1. **Custodians on invoice/lease notifications** — `notifyInvoicePaid`/`notifyInvoiceOverdue`/`notifyLeaseExpiry` still notify only tenant+owner+caretaker, yet custodians have the Accounting page. Retrofitting them via `resolveStaffRecipients` is a 20-line follow-up but changes existing tested behavior; deferred unless requested.
-2. **Adjacent bug (security):** `GET /api/v1/complaints` (`complaints/route.ts:39-51`) has no `custodian` branch, so custodians receive an unscoped complaint list (all owners). Recommend a separate fix: `filter.ownerId = actor.managedByOwnerId`. Not addressed here to keep the diff scoped.
+1. **Custodians on invoice/lease notifications** — **Resolved** (70439dc): `notifyInvoicePaid`/`notifyInvoiceOverdue`/`notifyLeaseExpiry` now fan out to the owner's custodians via a shared `resolveCustodianIds` helper (in-app, `/dashboard/custodian/accounting`).
+2. **Adjacent bug (security):** `GET /api/v1/complaints` (`complaints/route.ts:39-51`) had no `custodian` branch, so custodians received an unscoped complaint list (all owners). **Resolved** (0c23c86): `filter.ownerId = actor.managedByOwnerId`, matching caretaker scoping, with a route test.
 3. **Move-request POST rate limiting** — route has no `rateLimit`/`checkSameOrigin` unlike sibling POSTs; should be a separate hardening PR.
 4. **Pending-item widgets on dashboard home** — explicitly out (user chose bell + dropdown); revisit if the bell alone doesn't surface workload fast enough.
 5. **Chat: owner-vs-agent double notify** — threads model one staff side (`agentLastReadAt` shared); if a caretaker thread's owner also replies, only the tenant (other side) is notified, not fellow staff. Matches the existing read model; flag if product wants staff-to-staff notify.
