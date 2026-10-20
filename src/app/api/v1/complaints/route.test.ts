@@ -134,6 +134,22 @@ describe("GET /api/v1/complaints", () => {
     });
   });
 
+  it("custodian scopes to the managing owner only", async () => {
+    user.findById.mockReturnValue(
+      buildQuery(
+        makeUser({ _id: makeObjectId("custodian"), role: "custodian", managedByOwnerId: OWNER_ID }),
+      ),
+    );
+    complaint.find.mockReturnValue(buildQuery([]).sort({ createdAt: -1 }).skip(0).limit(20));
+    complaint.countDocuments.mockResolvedValue(0);
+
+    const res = await GET(
+      buildRequest("/api/v1/complaints", { token: signToken(makeObjectId("custodian")) }),
+    );
+    expect(res.status).toBe(200);
+    expect(complaint.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
+  });
+
   it("tenant with no bound rows gets an empty page", async () => {
     user.findById.mockReturnValue(buildQuery(tenantUser()));
     tenant.find.mockReturnValue(buildQuery([]));

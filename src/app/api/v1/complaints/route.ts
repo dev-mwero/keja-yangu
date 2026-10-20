@@ -48,6 +48,9 @@ export async function GET(request: NextRequest) {
   } else if (actor.role === "caretaker") {
     filter.ownerId = actor.managedByOwnerId;
     filter.propertyId = { $in: actor.assignedPropertyIds };
+  } else if (actor.role === "custodian") {
+    // Custodians are owner-delegates: only the managing owner's portfolio.
+    filter.ownerId = actor.managedByOwnerId;
   }
   if (status) filter.status = status;
 
