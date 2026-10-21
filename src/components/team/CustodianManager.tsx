@@ -1,9 +1,10 @@
 "use client";
 
-import { Loader2, Plus, UserCog } from "lucide-react";
+import { Loader2, Plus, UserCog, Users } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { SearchInput } from "@/components/SearchInput";
+import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -93,6 +94,14 @@ export const CustodianManager = ({ systemAdmin = false }: Props) => {
 
   return (
     <div className="space-y-4">
+      <div className="mb-2 grid gap-4 sm:max-w-xs">
+        <StatCard
+          label="Custodians"
+          value={loading ? "…" : custodians.length}
+          icon={Users}
+          hint="Managing your portfolio"
+        />
+      </div>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h3 className="font-display text-lg">Custodians</h3>

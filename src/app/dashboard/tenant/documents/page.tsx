@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { DashboardShell } from "@/components/DashboardShell";
 import { SearchInput } from "@/components/SearchInput";
+import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -61,6 +62,26 @@ const TenantDocumentsPage = () => {
       title="Documents"
       subtitle="Your lease, receipts and property documents in one place."
     >
+      <div className="mb-6 grid gap-4 md:grid-cols-3">
+        <StatCard label="Total documents" value={items.length} icon={FileStack} />
+        <StatCard
+          label="Categories"
+          value={new Set(items.map((d) => d.category)).size}
+          icon={FileText}
+        />
+        <StatCard
+          label="Added this month"
+          value={
+            items.filter((d) => {
+              const date = new Date(d.uploadedAt);
+              const now = new Date();
+              return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+            }).length
+          }
+          icon={Upload}
+        />
+      </div>
+
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="font-display text-xl font-semibold">My documents</h2>

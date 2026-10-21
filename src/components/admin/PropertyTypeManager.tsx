@@ -1,10 +1,11 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Layers, Loader2, ToggleLeft, ToggleRight } from "lucide-react";
 import type { FormEvent } from "react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { SearchInput } from "@/components/SearchInput";
+import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,6 +68,20 @@ export const PropertyTypeManager = () => {
 
   return (
     <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatCard label="Property types" value={loading ? "…" : types.length} icon={Layers} />
+        <StatCard
+          label="Active"
+          value={loading ? "…" : types.filter((t) => t.active).length}
+          icon={ToggleRight}
+        />
+        <StatCard
+          label="Inactive"
+          value={loading ? "…" : types.filter((t) => !t.active).length}
+          icon={ToggleLeft}
+        />
+      </div>
+
       <form
         onSubmit={handleAdd}
         className="rounded-2xl border border-border bg-card p-6 shadow-soft"

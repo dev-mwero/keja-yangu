@@ -1,10 +1,11 @@
 "use client";
 
-import { ArrowLeft, MessagesSquare, Plus, Send } from "lucide-react";
+import { ArrowLeft, Mail, MessagesSquare, Plus, Send } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { SearchInput } from "@/components/SearchInput";
+import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -71,6 +72,8 @@ export function ChatInbox({
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const selected = items.find((t) => t._id === selectedId) ?? null;
+  const totalThreads = items.length;
+  const unreadThreads = items.filter((t) => t.unread > 0).length;
 
   const openThreadAndMarkRead = (id: string) => {
     setSelectedId(id);
@@ -111,6 +114,21 @@ export function ChatInbox({
 
   return (
     <>
+      <div className="mb-6 grid gap-4 md:grid-cols-2">
+        <StatCard
+          label="Conversations"
+          value={totalThreads}
+          icon={MessagesSquare}
+          hint="Active message threads"
+        />
+        <StatCard
+          label="Unread threads"
+          value={unreadThreads}
+          icon={Mail}
+          hint="Waiting for your reply"
+        />
+      </div>
+
       <div className="grid overflow-hidden rounded-2xl border border-border bg-card shadow-soft md:grid-cols-[320px_1fr]">
         <div className={`border-r border-border ${selected ? "hidden md:block" : "block"}`}>
           <div className="border-b border-border p-4">
