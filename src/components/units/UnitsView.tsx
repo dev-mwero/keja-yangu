@@ -1,11 +1,22 @@
 "use client";
 
-import { DoorOpen, Loader2, Pencil, Trash2, UserMinus, UserPlus } from "lucide-react";
+import {
+  CheckCircle2,
+  Clock,
+  DoorOpen,
+  Loader2,
+  Pencil,
+  Trash2,
+  UserMinus,
+  UserPlus,
+  Wrench,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { DashboardShell } from "@/components/DashboardShell";
 import { SearchInput } from "@/components/SearchInput";
+import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -82,6 +93,13 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
       (statusFilter === "all" || u.status === statusFilter) &&
       matchesQuery(query, u.name, propertyById[u.propertyId]?.title, u.blockName, u.floorLabel),
   );
+
+  const statusCounts = {
+    all: units.length,
+    occupied: units.filter((u) => u.status === "occupied").length,
+    available: units.filter((u) => u.status === "available").length,
+    maintenance: units.filter((u) => u.status === "maintenance").length,
+  };
 
   const openEdit = (unit: Unit) => {
     setEditing(unit);
@@ -167,6 +185,21 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
       title="Units"
       subtitle="Every unit across your blocks and floors."
     >
+      <div className="mb-6 grid gap-4 md:grid-cols-4">
+        <StatCard label="Total units" value={loading ? "…" : statusCounts.all} icon={DoorOpen} />
+        <StatCard
+          label="Occupied"
+          value={loading ? "…" : statusCounts.occupied}
+          icon={CheckCircle2}
+        />
+        <StatCard label="Vacant" value={loading ? "…" : statusCounts.available} icon={Clock} />
+        <StatCard
+          label="Maintenance"
+          value={loading ? "…" : statusCounts.maintenance}
+          icon={Wrench}
+        />
+      </div>
+
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Select

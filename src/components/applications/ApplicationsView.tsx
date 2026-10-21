@@ -1,11 +1,12 @@
 "use client";
 
-import { FileText } from "lucide-react";
+import { CheckCircle2, Clock, FileText, XCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { DashboardShell } from "@/components/DashboardShell";
 import { SearchInput } from "@/components/SearchInput";
+import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,7 +52,12 @@ export function ApplicationsView({ nav, roleName, canDecide = true }: Props) {
   const { applications, loading, refetch } = useApplications(
     statusFilter === "all" ? undefined : { status: statusFilter },
   );
+  // Unfiltered fetch so the stat cards reflect every status, not just the current filter.
+  const { applications: allApplications, loading: allLoading } = useApplications();
   const { decide, pending } = useApplicationMutations();
+
+  const statusCount = (status: ApplicationStatus) =>
+    allApplications.filter((a) => a.status === status).length;
 
   const visible = applications.filter((a) =>
     matchesQuery(
@@ -84,6 +90,29 @@ export function ApplicationsView({ nav, roleName, canDecide = true }: Props) {
       title="Applications"
       subtitle="Review tenancy applications and approve or reject them."
     >
+      <div className="mb-6 grid gap-4 md:grid-cols-4">
+        <StatCard
+          label="Total applications"
+          value={allLoading ? "…" : allApplications.length}
+          icon={FileText}
+        />
+        <StatCard
+          label="Pending review"
+          value={allLoading ? "…" : statusCount("pending")}
+          icon={Clock}
+        />
+        <StatCard
+          label="Approved"
+          value={allLoading ? "…" : statusCount("approved")}
+          icon={CheckCircle2}
+        />
+        <StatCard
+          label="Rejected"
+          value={allLoading ? "…" : statusCount("rejected")}
+          icon={XCircle}
+        />
+      </div>
+
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Select
           value={statusFilter}

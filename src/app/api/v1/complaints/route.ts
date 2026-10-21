@@ -9,6 +9,7 @@ import {
 import { serializeComplaint } from "@/lib/complaints";
 import { COMPLAINT_STATUSES } from "@/lib/domain-enums";
 import { connectToDatabase } from "@/lib/mongoose";
+import { notifyComplaintCreated } from "@/lib/notifications";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
 import { requirePermission } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
@@ -47,6 +48,9 @@ export async function GET(request: NextRequest) {
   } else if (actor.role === "caretaker") {
     filter.ownerId = actor.managedByOwnerId;
     filter.propertyId = { $in: actor.assignedPropertyIds };
+  } else if (actor.role === "custodian") {
+    // Custodians are owner-delegates: only the managing owner's portfolio.
+    filter.ownerId = actor.managedByOwnerId;
   }
   if (status) filter.status = status;
 
@@ -149,6 +153,7 @@ export async function POST(request: NextRequest) {
   if (!created) {
     return NextResponse.json({ error: "Complaint not found" }, { status: 404 });
   }
+  await notifyComplaintCreated(created);
   const [titles, unitNames] = await Promise.all([
     propertyTitleMap([created.propertyId]),
     unitNameMap([created.unitId]),

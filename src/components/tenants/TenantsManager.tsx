@@ -1,11 +1,12 @@
 "use client";
 
-import { DoorOpen, Loader2, Plus, Users } from "lucide-react";
+import { CheckCircle2, Clock, DoorOpen, Loader2, Plus, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { DashboardShell } from "@/components/DashboardShell";
 import { SearchInput } from "@/components/SearchInput";
+import { StatCard } from "@/components/StatCard";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -281,6 +282,18 @@ export const TenantsManager = ({
       title="Tenants"
       subtitle="Manage the tenants across your properties."
     >
+      <div className="mb-6 grid gap-4 md:grid-cols-4">
+        <StatCard label="Total tenants" value={loading ? "…" : counts.all} icon={Users} />
+        <StatCard label="Active" value={loading ? "…" : counts.active} icon={CheckCircle2} />
+        <StatCard label="Pending" value={loading ? "…" : counts.pending} icon={Clock} />
+        <StatCard
+          label="Without a unit"
+          value={loading ? "…" : tenants.filter((t) => !t.unit).length}
+          icon={DoorOpen}
+          hint="Not assigned yet"
+        />
+      </div>
+
       <div className="flex flex-wrap items-center justify-between gap-4">
         <Tabs value={tab} onValueChange={(v) => setTab(v as StatusFilter)}>
           <TabsList>

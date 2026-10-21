@@ -1,9 +1,10 @@
 "use client";
 
-import { Megaphone, Pin, Plus, Send, Trash2 } from "lucide-react";
+import { Megaphone, Pin, Plus, Send, Trash2, Users } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { SearchInput } from "@/components/SearchInput";
+import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -56,6 +57,11 @@ export function StaffAnnouncementsPanel() {
     return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
   });
 
+  const pinnedCount = items.filter((a) => a.pinned).length;
+  const tenantVisibleCount = items.filter(
+    (a) => a.audience === "tenants" || a.audience === "all",
+  ).length;
+
   const canDelete = (announcement: Announcement) =>
     user?.role !== "caretaker" || announcement.authorId === user?.id;
 
@@ -99,6 +105,17 @@ export function StaffAnnouncementsPanel() {
 
   return (
     <>
+      <div className="mb-6 grid gap-4 md:grid-cols-3">
+        <StatCard label="Published" value={items.length} icon={Megaphone} />
+        <StatCard label="Pinned" value={pinnedCount} icon={Pin} hint="Shown at the top" />
+        <StatCard
+          label="Visible to tenants"
+          value={tenantVisibleCount}
+          icon={Users}
+          hint="Tenant or everyone audience"
+        />
+      </div>
+
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="font-display text-xl font-semibold">Announcements</h2>

@@ -18,8 +18,12 @@ vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 vi.mock("@/models/Complaint", () => ({ Complaint: getModelStubs().complaint }));
+vi.mock("@/lib/notifications", () => ({
+  notifyComplaintCreated: vi.fn().mockResolvedValue(true),
+}));
 
 import { GET, POST } from "@/app/api/v1/complaints/route";
+import { notifyComplaintCreated } from "@/lib/notifications";
 
 const { user, property, tenant, unit, complaint } = getModelStubs();
 
@@ -130,6 +134,22 @@ describe("GET /api/v1/complaints", () => {
     });
   });
 
+  it("custodian scopes to the managing owner only", async () => {
+    user.findById.mockReturnValue(
+      buildQuery(
+        makeUser({ _id: makeObjectId("custodian"), role: "custodian", managedByOwnerId: OWNER_ID }),
+      ),
+    );
+    complaint.find.mockReturnValue(buildQuery([]).sort({ createdAt: -1 }).skip(0).limit(20));
+    complaint.countDocuments.mockResolvedValue(0);
+
+    const res = await GET(
+      buildRequest("/api/v1/complaints", { token: signToken(makeObjectId("custodian")) }),
+    );
+    expect(res.status).toBe(200);
+    expect(complaint.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
+  });
+
   it("tenant with no bound rows gets an empty page", async () => {
     user.findById.mockReturnValue(buildQuery(tenantUser()));
     tenant.find.mockReturnValue(buildQuery([]));
@@ -144,8 +164,11 @@ describe("GET /api/v1/complaints", () => {
 });
 
 describe("POST /api/v1/complaints", () => {
+  const notifyComplaintCreatedMock = vi.mocked(notifyComplaintCreated);
+
   beforeEach(() => {
     resetModelStubs();
+    notifyComplaintCreatedMock.mockReset().mockResolvedValue(true);
   });
 
   it("401 when unauthenticated", async () => {
@@ -250,6 +273,8 @@ describe("POST /api/v1/complaints", () => {
     );
     const body = await json(res);
     expect((body.data as { status?: string }).status).toBe("open");
+    expect(notifyComplaintCreatedMock).toHaveBeenCalledTimes(1);
+    expect(notifyComplaintCreatedMock).toHaveBeenCalledWith(created);
   });
 
   it("stores the occupied unit on the complaint", async () => {
@@ -282,6 +307,7 @@ describe("POST /api/v1/complaints", () => {
     );
     expect(res.status).toBe(201);
     expect(complaint.create).toHaveBeenCalledWith(expect.objectContaining({ unitId: UNIT_ID }));
+    expect(notifyComplaintCreatedMock).toHaveBeenCalledWith(created);
     const body = await json(res);
     expect((body.data as { unitName?: string }).unitName).toBe("3A");
   });
@@ -330,6 +356,7 @@ describe("POST /api/v1/complaints", () => {
     expect(complaint.create).toHaveBeenCalledWith(
       expect.objectContaining({ unitId: UNIT_ID, propertyId: p2 }),
     );
+    expect(notifyComplaintCreatedMock).toHaveBeenCalledWith(created);
   });
 
   it("enriches unitName on GET", async () => {

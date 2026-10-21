@@ -9,6 +9,7 @@ import {
 } from "@/app/api/v1/_helpers";
 import { serializeComplaint } from "@/lib/complaints";
 import { connectToDatabase } from "@/lib/mongoose";
+import { notifyComplaintStatusChange } from "@/lib/notifications";
 import { requirePermission } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { complaintUpdate } from "@/lib/schemas";
@@ -76,6 +77,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   ).lean();
   if (!updated) {
     return NextResponse.json({ error: "Complaint not found" }, { status: 404 });
+  }
+  if (parsed.data.status !== undefined && parsed.data.status !== complaint.status) {
+    await notifyComplaintStatusChange(updated);
   }
   const [titles, unitNames] = await Promise.all([
     propertyTitleMap([updated.propertyId]),

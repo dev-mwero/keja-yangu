@@ -1,8 +1,10 @@
 "use client";
 
+import { ShieldCheck, ShieldOff, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { SearchInput } from "@/components/SearchInput";
+import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -76,8 +78,17 @@ export const CaretakerPrivilegesTable = () => {
 
   const visible = rows.filter((c) => matchesQuery(query, c.name, c.email));
 
+  const allPrivileges = PRIVILEGES.length;
+  const fullAccess = rows.filter((c) => c.privileges.length === allPrivileges).length;
+  const noAccess = rows.filter((c) => c.privileges.length === 0).length;
+
   return (
     <div className="space-y-4">
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatCard label="Caretakers" value={rows.length} icon={Users} />
+        <StatCard label="Full access" value={fullAccess} icon={ShieldCheck} hint="All privileges" />
+        <StatCard label="No access" value={noAccess} icon={ShieldOff} hint="Needs setup" />
+      </div>
       <SearchInput
         value={query}
         onChange={setQuery}

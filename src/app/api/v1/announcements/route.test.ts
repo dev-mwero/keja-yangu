@@ -11,8 +11,13 @@ vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Announcement", () => ({ Announcement: getModelStubs().announcement }));
+vi.mock("@/lib/notifications", () => ({
+  notifyAnnouncement: vi.fn().mockResolvedValue(true),
+  resolveAnnouncementRecipients: vi.fn().mockResolvedValue([]),
+}));
 
 import { GET, POST } from "@/app/api/v1/announcements/route";
+import { notifyAnnouncement, resolveAnnouncementRecipients } from "@/lib/notifications";
 
 const { user, property, tenant, announcement } = getModelStubs();
 
@@ -232,8 +237,13 @@ describe("GET /api/v1/announcements", () => {
 });
 
 describe("POST /api/v1/announcements", () => {
+  const notifyAnnouncementMock = vi.mocked(notifyAnnouncement);
+  const resolveAnnouncementRecipientsMock = vi.mocked(resolveAnnouncementRecipients);
+
   beforeEach(() => {
     resetModelStubs();
+    notifyAnnouncementMock.mockReset().mockResolvedValue(true);
+    resolveAnnouncementRecipientsMock.mockReset().mockResolvedValue([]);
   });
 
   it("401 when unauthenticated", async () => {
@@ -305,6 +315,8 @@ describe("POST /api/v1/announcements", () => {
     );
     const body = await json(res);
     expect((body.data as { _id?: string })._id).toBe(ANNOUNCEMENT_ID);
+    expect(resolveAnnouncementRecipientsMock).toHaveBeenCalledTimes(1);
+    expect(notifyAnnouncementMock).toHaveBeenCalledTimes(1);
   });
 
   it("404 when an owner targets a property that does not exist", async () => {
@@ -323,6 +335,7 @@ describe("POST /api/v1/announcements", () => {
     expect(res.status).toBe(404);
     await expect(json(res)).resolves.toEqual({ error: "Property not found" });
     expect(announcement.create).not.toHaveBeenCalled();
+    expect(notifyAnnouncementMock).not.toHaveBeenCalled();
   });
 
   it("403 when an owner targets another owner's property", async () => {
@@ -381,6 +394,8 @@ describe("POST /api/v1/announcements", () => {
         propertyId: PROPERTY_ID,
       }),
     );
+    expect(resolveAnnouncementRecipientsMock).toHaveBeenCalledTimes(1);
+    expect(notifyAnnouncementMock).toHaveBeenCalledTimes(1);
   });
 
   it("403 when a caretaker lacks manage_announcements", async () => {
@@ -397,6 +412,7 @@ describe("POST /api/v1/announcements", () => {
     );
     expect(res.status).toBe(403);
     expect(announcement.create).not.toHaveBeenCalled();
+    expect(notifyAnnouncementMock).not.toHaveBeenCalled();
   });
 
   it("403 when a caretaker pins a property outside their assignment", async () => {
@@ -444,6 +460,8 @@ describe("POST /api/v1/announcements", () => {
     expect(announcement.create).toHaveBeenCalledWith(
       expect.objectContaining({ ownerId: OWNER_ID, authorId: CUSTODIAN_ID, propertyId: "" }),
     );
+    expect(resolveAnnouncementRecipientsMock).toHaveBeenCalledTimes(1);
+    expect(notifyAnnouncementMock).toHaveBeenCalledTimes(1);
   });
 
   it("403 when a custodian targets a property outside the managed portfolio", async () => {

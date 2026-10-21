@@ -57,6 +57,25 @@ const TenantDashboard = () => {
   const approvedTitle = applications.find((a) => a.status === "approved")?.propertyTitle;
   const recent = applications.slice(0, 5);
 
+  // Average time from submission to decision across decided applications.
+  const decided = applications.filter((a) => a.decidedAt);
+  const avgResponseHours =
+    decided.length > 0
+      ? Math.round(
+          decided.reduce(
+            (sum, a) =>
+              sum + (new Date(a.decidedAt as string).getTime() - new Date(a.submittedAt).getTime()),
+            0,
+          ) /
+            decided.length /
+            3_600_000,
+        )
+      : null;
+  const responseHint =
+    avgResponseHours === null
+      ? "Awaiting your first decision"
+      : `Avg. response ${avgResponseHours}h`;
+
   return (
     <DashboardShell
       roleName="Tenant"
@@ -75,7 +94,7 @@ const TenantDashboard = () => {
           label="Pending review"
           value={pendingCount}
           icon={Clock}
-          hint="Avg. response 18h"
+          hint={responseHint}
           href="/dashboard/tenant/requests"
         />
         <StatCard

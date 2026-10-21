@@ -8,6 +8,8 @@ export const NOTIFICATION_TYPES = [
   "complaint:status-changed",
   "chat:reply",
   "announcement",
+  "move-request:created",
+  "move-request:decided",
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];

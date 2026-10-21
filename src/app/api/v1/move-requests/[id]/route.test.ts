@@ -13,10 +13,15 @@ vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
+vi.mock("@/lib/notifications", () => ({
+  notifyMoveRequestDecided: vi.fn().mockResolvedValue(true),
+}));
 
 import { PATCH } from "@/app/api/v1/move-requests/[id]/route";
+import { notifyMoveRequestDecided } from "@/lib/notifications";
 
 const { user, moverrequest, unit, lease, tenant, property } = getModelStubs();
+const notifyMoveRequestDecidedMock = vi.mocked(notifyMoveRequestDecided);
 
 const OWNER_ID = makeObjectId("owner");
 const CUSTODIAN_ID = makeObjectId("custodian");
@@ -59,6 +64,7 @@ function authOwner() {
 describe("PATCH /api/v1/move-requests/[id]", () => {
   beforeEach(() => {
     resetModelStubs();
+    notifyMoveRequestDecidedMock.mockReset().mockResolvedValue(true);
   });
 
   it("404 when the request does not exist", async () => {
@@ -73,6 +79,7 @@ describe("PATCH /api/v1/move-requests/[id]", () => {
       withParams(MR_ID),
     );
     expect(res.status).toBe(404);
+    expect(notifyMoveRequestDecidedMock).not.toHaveBeenCalled();
   });
 
   it("400 for an invalid decision payload", async () => {
@@ -87,6 +94,7 @@ describe("PATCH /api/v1/move-requests/[id]", () => {
       withParams(MR_ID),
     );
     expect(res.status).toBe(400);
+    expect(notifyMoveRequestDecidedMock).not.toHaveBeenCalled();
   });
 
   it("403 when a custodian decides a foreign owner's request", async () => {
@@ -105,6 +113,7 @@ describe("PATCH /api/v1/move-requests/[id]", () => {
       withParams(MR_ID),
     );
     expect(res.status).toBe(403);
+    expect(notifyMoveRequestDecidedMock).not.toHaveBeenCalled();
   });
 
   it("approving a move-out frees the unit and ends the active lease", async () => {
@@ -150,6 +159,8 @@ describe("PATCH /api/v1/move-requests/[id]", () => {
       { tenantId: TENANT_DOC_ID, status: "active" },
       expect.objectContaining({ $set: expect.objectContaining({ status: "ended" }) }),
     );
+    expect(notifyMoveRequestDecidedMock).toHaveBeenCalledTimes(1);
+    expect(notifyMoveRequestDecidedMock).toHaveBeenCalledWith(mr);
   });
 
   it("approving a move-in occupies the unit, activates the tenant, and opens a lease", async () => {
@@ -207,6 +218,8 @@ describe("PATCH /api/v1/move-requests/[id]", () => {
         unitId: String(UNIT_ID),
       }),
     );
+    expect(notifyMoveRequestDecidedMock).toHaveBeenCalledTimes(1);
+    expect(notifyMoveRequestDecidedMock).toHaveBeenCalledWith(mr);
   });
 
   it("does not duplicate a lease when the tenant already has an active one", async () => {
@@ -251,6 +264,7 @@ describe("PATCH /api/v1/move-requests/[id]", () => {
     );
     expect(res.status).toBe(200);
     expect(lease.create).not.toHaveBeenCalled();
+    expect(notifyMoveRequestDecidedMock).toHaveBeenCalledTimes(1);
   });
 
   it("does not re-apply occupancy effects when re-approving", async () => {
@@ -269,5 +283,6 @@ describe("PATCH /api/v1/move-requests/[id]", () => {
     expect(res.status).toBe(200);
     expect(unit.findById).not.toHaveBeenCalled();
     expect(lease.updateMany).not.toHaveBeenCalled();
+    expect(notifyMoveRequestDecidedMock).not.toHaveBeenCalled();
   });
 });
