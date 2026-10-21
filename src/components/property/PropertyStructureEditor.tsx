@@ -222,7 +222,7 @@ export const PropertyStructureEditor = ({
                   className="grid grid-cols-[1fr_1fr_1fr_auto_auto] items-end gap-2"
                 >
                   <div className="space-y-1">
-                    <Label htmlFor={`floor-level-${blockIndex}-${floorIndex}`}>Level</Label>
+                    <Label htmlFor={`floor-level-${blockIndex}-${floorIndex}`}>Floor</Label>
                     <Input
                       id={`floor-level-${blockIndex}-${floorIndex}`}
                       type="number"
