@@ -202,7 +202,11 @@ describe("POST /api/auth — verify-email", () => {
   });
 
   it("binds unbound tenant rows to the verified tenant user by normalized email", async () => {
-    const doc = mutableUser();
+    const doc = mutableUser({
+      name: "Tenant Person",
+      phone: "+254712345678",
+      nationalId: "12345678",
+    });
     user.findOne.mockResolvedValue(doc);
 
     const res = await POST(
@@ -211,12 +215,38 @@ describe("POST /api/auth — verify-email", () => {
     expect(res.status).toBe(200);
     const body = await json(res);
     expect(body.message).toBe("Email verified successfully");
+    expect(body.user).toEqual({ email: "TENANT@Keja.co", name: "Tenant Person", role: "tenant" });
+    expect(body.redirectTo).toBe("/dashboard/tenant");
+    expect(res.cookies.get("keja-token")?.value).toBeTruthy();
 
     expect(doc.save).toHaveBeenCalledTimes(1);
     expect(tenantStub.updateMany).toHaveBeenCalledWith(
       { email: "tenant@keja.co", userId: "" },
       { $set: { userId: USER_ID } },
     );
+  });
+
+  it("activates pending invite and redirects an incomplete profile to settings with ?next", async () => {
+    const doc = mutableUser({
+      role: "custodian",
+      email: "custodian@keja.co",
+      name: "custodian@keja.co",
+      phone: "",
+      nationalId: "",
+      isActive: false,
+      managedByOwnerId: "owner_123",
+    }) as unknown as { isActive: boolean; isVerified: boolean };
+    user.findOne.mockResolvedValue(doc);
+
+    const res = await POST(
+      buildRequest("/api/auth", { method: "POST", body: { action: "verify-email", token: "tok" } }),
+    );
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    expect(body.redirectTo).toBe("/dashboard/custodian/settings?next=%2Fdashboard%2Fcustodian");
+    expect(res.cookies.get("keja-token")?.value).toBeTruthy();
+    expect(doc.isActive).toBe(true);
+    expect(doc.isVerified).toBe(true);
   });
 
   it("does not bind tenant rows for a verified owner", async () => {

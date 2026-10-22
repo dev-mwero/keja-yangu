@@ -2,7 +2,7 @@
 
 import { CheckCircle2, Loader2, Mail, XCircle } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -13,10 +13,11 @@ import { Label } from "@/components/ui/label";
 
 type VerifyState =
   | { status: "checking" }
-  | { status: "success" }
+  | { status: "success"; redirectTo: string }
   | { status: "error"; message: string };
 
 const VerifyForm = () => {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const [state, setState] = useState<VerifyState>({ status: "checking" });
@@ -44,7 +45,7 @@ const VerifyForm = () => {
           setState({ status: "error", message: data.error || "Verification failed" });
           return;
         }
-        setState({ status: "success" });
+        setState({ status: "success", redirectTo: data.redirectTo || "/dashboard" });
       } catch {
         if (!cancelled) {
           setState({ status: "error", message: "Something went wrong. Please try again." });
@@ -57,6 +58,14 @@ const VerifyForm = () => {
       cancelled = true;
     };
   }, [token]);
+
+  useEffect(() => {
+    if (state.status !== "success") return;
+    const timer = setTimeout(() => {
+      router.replace(state.redirectTo);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [state, router]);
 
   const onResend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,11 +109,11 @@ const VerifyForm = () => {
           <div>
             <h2 className="font-display text-xl font-semibold">Email verified</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Your account is now active. Sign in to get started.
+              Your account is active and you are now signed in. Redirecting to your dashboard…
             </p>
           </div>
           <Button asChild className="w-full rounded-full">
-            <Link href="/auth">Sign in</Link>
+            <Link href={state.redirectTo}>Continue to dashboard</Link>
           </Button>
         </div>
       )}

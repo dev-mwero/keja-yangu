@@ -14,8 +14,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { type Role, useAuth } from "@/hooks/use-auth";
+import { useAuth } from "@/hooks/use-auth";
 import { DEFAULT_COUNTRY, isValidE164, normalizeNationalId, toE164 } from "@/lib/phone";
+import { roleRoute } from "@/lib/role-routes";
 
 const signInSchema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -38,14 +39,6 @@ const isInvitedRole = (value: string | null): value is (typeof INVITED_ROLES)[nu
 
 type SignInValues = z.infer<typeof signInSchema>;
 type SignUpValues = z.infer<typeof signUpSchema>;
-
-const roleRoute: Record<Role, string> = {
-  tenant: "/dashboard/tenant",
-  caretaker: "/dashboard/caretaker",
-  custodian: "/dashboard/custodian",
-  owner: "/dashboard/owner",
-  "system-admin": "/dashboard/system-admin",
-};
 
 const AuthForm = () => {
   const router = useRouter();

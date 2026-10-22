@@ -7,7 +7,9 @@ import { isEmailConfigured, sendPasswordResetEmail, sendVerificationEmail } from
 import { getJwtSecret } from "@/lib/jwt";
 import { connectToDatabase } from "@/lib/mongoose";
 import { isValidE164, isValidNationalId, normalizeNationalId } from "@/lib/phone";
+import { isProfileComplete } from "@/lib/profile-completion";
 import { rateLimitAuth } from "@/lib/rate-limit-auth";
+import { type Role, roleRoute } from "@/lib/role-routes";
 import { Tenant } from "@/models/Tenant";
 import { User } from "@/models/User";
 
@@ -55,6 +57,27 @@ const DEFAULT_AUTH_RATE_LIMIT = { windowMs: 15 * 60_000, limit: 20 };
 
 async function generateVerificationToken(): Promise<string> {
   return crypto.randomUUID();
+}
+
+function issueSession(
+  response: NextResponse,
+  user: { _id?: unknown; id?: string; email: string; role: string; name?: string },
+): NextResponse {
+  const userId = user._id ? String(user._id) : (user.id ?? "");
+  const token = jwt.sign(
+    { userId, email: user.email, role: user.role, name: user.name },
+    getJwtSecret(),
+    { expiresIn: "7d" },
+  );
+
+  response.cookies.set("keja-token", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 60 * 60 * 24 * 7,
+    path: "/",
+  });
+  return response;
 }
 
 export async function POST(request: Request) {
@@ -106,23 +129,10 @@ export async function POST(request: Request) {
         );
       }
 
-      const token = jwt.sign(
-        { userId: user._id, email: user.email, role: user.role, name: user.name },
-        getJwtSecret(),
-        { expiresIn: "7d" },
-      );
-
       const response = NextResponse.json({
         user: { email: user.email, name: user.name, role: user.role },
       });
-      response.cookies.set("keja-token", token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 60 * 60 * 24 * 7,
-        path: "/",
-      });
-      return response;
+      return issueSession(response, user);
     }
 
     if (action === "signup") {
@@ -144,7 +154,9 @@ export async function POST(request: Request) {
           !existing.isActive &&
           !existing.isVerified &&
           existing.managedByOwnerId &&
-          (existing.role === "caretaker" || existing.role === "tenant");
+          (existing.role === "caretaker" ||
+            existing.role === "tenant" ||
+            existing.role === "custodian");
         if (adoptable) {
           const passwordHash = await bcrypt.hash(parsed.data.password, 12);
           const verificationToken = await generateVerificationToken();
@@ -244,6 +256,12 @@ export async function POST(request: Request) {
         );
       }
 
+      // Activate pending invited accounts (created inactive)
+      const isPendingInvite = !user.isActive || Boolean(user.managedByOwnerId);
+      if (isPendingInvite) {
+        user.isActive = true;
+      }
+
       user.isVerified = true;
       user.verificationToken = undefined;
       user.verificationTokenExpiry = undefined;
@@ -259,7 +277,20 @@ export async function POST(request: Request) {
         );
       }
 
-      return NextResponse.json({ message: "Email verified successfully" });
+      const role = user.role as Role;
+      const baseDashboard = roleRoute[role] ?? "/dashboard";
+      const complete = isProfileComplete(user);
+      const redirectTo = complete
+        ? baseDashboard
+        : `${baseDashboard}/settings?next=${encodeURIComponent(baseDashboard)}`;
+
+      const response = NextResponse.json({
+        message: "Email verified successfully",
+        user: { email: user.email, name: user.name, role: user.role },
+        redirectTo,
+      });
+
+      return issueSession(response, user);
     }
 
     if (action === "resend-verification") {
