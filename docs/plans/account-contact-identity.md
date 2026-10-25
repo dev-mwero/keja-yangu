@@ -68,6 +68,9 @@ No infra, CI, or dependency changes.
 - Component: `AccountDetailsForm` — prefill, WhatsApp-same-as-mobile toggle, submit payload.
 
 ## Out of scope (proposed follow-ups)
-- Capturing mobile + national ID **at signup** (fields are editable immediately after verification).
-- Field-level encryption of `nationalId`.
-- Backfilling/formatting legacy `phone` values.
+- ~~Capturing mobile + national ID **at signup**~~ — done: signup captures name, email,
+  password, phone (E.164) and national ID; verify-email binds tenant rows by email.
+- ~~Field-level encryption of `nationalId`~~ — done: `encryptField` is used on write
+  (`src/lib/crypto.ts`, `PATCH /api/v1/users/me`); national ID is returned only to the
+  authenticated subject.
+- Backfilling/formatting legacy `phone` values — **data task, not code** (left open).
