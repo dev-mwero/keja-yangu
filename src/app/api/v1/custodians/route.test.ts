@@ -203,4 +203,43 @@ describe("POST /api/v1/custodians", () => {
     );
     expect(res.status).toBe(400);
   });
+
+  it("creates a phone-only custodian that can sign in immediately", async () => {
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findOne.mockReturnValue(buildQuery(null));
+    user.create.mockResolvedValue({
+      _id: CUSTODIAN_ID,
+      name: "Jane Custodian",
+      email: undefined,
+      phone: "+254712345678",
+      role: "custodian",
+      managedByOwnerId: OWNER_ID,
+      isActive: true,
+      isVerified: true,
+    });
+
+    const res = await POST(
+      buildRequest("/api/v1/custodians", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { name: "Jane Custodian", phone: "+254712345678" },
+      }),
+    );
+    expect(res.status).toBe(201);
+    const body = await json(res);
+    expect(body.created).toBe(true);
+    expect(body.password).toBeDefined();
+    expect(body.data.phone).toBe("+254712345678");
+    expect(user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phone: "+254712345678",
+        role: "custodian",
+        managedByOwnerId: OWNER_ID,
+        isActive: true,
+        isVerified: true,
+        email: undefined,
+      }),
+    );
+    expect(sendInviteEmail).not.toHaveBeenCalled();
+  });
 });

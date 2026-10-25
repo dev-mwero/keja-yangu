@@ -10,12 +10,12 @@ import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { User } from "@/models/User";
 
 const custodianInviteSchema = z.object({
-  email: z.string().trim().toLowerCase().email(),
+  email: z.string().trim().toLowerCase().email().optional(),
   name: z.string().trim().min(1).optional(),
   phone: z.string().optional(),
   // Only meaningful for system-admin invites (bind to a specific owner).
   ownerId: z.string().trim().optional(),
-});
+}).refine((data) => data.email || data.phone, "Email or phone is required");
 
 export async function GET(request: NextRequest) {
   const auth = authenticate(request);
@@ -111,6 +111,65 @@ export async function POST(request: NextRequest) {
   }
 
   const email = parsed.data.email;
+
+  // Phone-only path: no email — create an active, verified custodian that
+  // signs in with phone + password. Credentials are returned so the admin
+  // can share them out-of-band (no SMS/WhatsApp yet).
+  if (!email) {
+    const phone = parsed.data.phone!;
+    const existing = await User.findOne({ phone }).lean();
+    if (existing) {
+      if (existing.role !== "custodian") {
+        return NextResponse.json(
+          { error: "Phone is already registered to a non-custodian account" },
+          { status: 409 },
+        );
+      }
+      existing.managedByOwnerId = boundOwnerId;
+      existing.isActive = true;
+      if (parsed.data.name && existing.name !== parsed.data.name) existing.name = parsed.data.name;
+      await existing.save();
+      return NextResponse.json({
+        linked: true,
+        data: {
+          id: String(existing._id),
+          name: existing.name,
+          email: existing.email,
+          phone: existing.phone ?? "",
+          managedByOwnerId: existing.managedByOwnerId,
+        },
+      });
+    }
+
+    const plainPassword = crypto.randomBytes(12).toString("base64url");
+    const passwordHash = await bcrypt.hash(plainPassword, 12);
+    const created = await User.create({
+      email: undefined,
+      name: parsed.data.name ?? "Custodian",
+      phone,
+      passwordHash,
+      role: "custodian",
+      managedByOwnerId: boundOwnerId,
+      isActive: true,
+      isVerified: true,
+    });
+
+    return NextResponse.json(
+      {
+        created: true,
+        password: plainPassword,
+        data: {
+          id: String(created._id),
+          name: created.name,
+          email: created.email,
+          phone: created.phone,
+          managedByOwnerId: created.managedByOwnerId,
+        },
+      },
+      { status: 201 },
+    );
+  }
+
   const existing = await User.findOne({ email }).lean();
   if (existing) {
     if (existing.role !== "custodian") {
