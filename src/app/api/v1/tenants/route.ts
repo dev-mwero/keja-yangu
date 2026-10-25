@@ -94,14 +94,16 @@ async function attachUnitHints<T extends { userId?: string; _id?: unknown }>(row
   });
 }
 
-const tenantInput = z.object({
-  name: z.string().trim().min(1),
-  email: z.string().trim().toLowerCase().email().optional(),
-  phone: z.string().optional(),
-  propertyId: z.string().regex(/^[0-9a-fA-F]{24}$/),
-  status: z.enum(["active", "pending", "rejected"]).optional(),
-  notes: z.string().optional(),
-}).refine((data) => data.email || data.phone, "Email or phone is required");
+const tenantInput = z
+  .object({
+    name: z.string().trim().min(1),
+    email: z.string().trim().toLowerCase().email().optional(),
+    phone: z.string().optional(),
+    propertyId: z.string().regex(/^[0-9a-fA-F]{24}$/),
+    status: z.enum(["active", "pending", "rejected"]).optional(),
+    notes: z.string().optional(),
+  })
+  .refine((data) => data.email || data.phone, "Email or phone is required");
 
 export async function GET(request: NextRequest) {
   const { page, limit } = parsePagination({
@@ -200,9 +202,7 @@ export async function POST(request: NextRequest) {
   if (parsed.data.email) duplicateQuery.email = parsed.data.email;
   if (parsed.data.phone) duplicateQuery.phone = parsed.data.phone;
 
-  const duplicate = await Tenant.findOne(duplicateQuery)
-    .select("_id")
-    .lean();
+  const duplicate = await Tenant.findOne(duplicateQuery).select("_id").lean();
   if (duplicate) {
     return NextResponse.json(
       { error: "A tenant with this email or phone already exists on this property" },
@@ -217,9 +217,7 @@ export async function POST(request: NextRequest) {
   if (parsed.data.email) existingUserQuery.email = parsed.data.email;
   if (parsed.data.phone) existingUserQuery.phone = parsed.data.phone;
 
-  const existingUser = await User.findOne(existingUserQuery)
-    .select("_id")
-    .lean();
+  const existingUser = await User.findOne(existingUserQuery).select("_id").lean();
 
   // Phone-only path: no email — create an active, verified tenant user and bind
   // the Tenant row to it immediately (no verify-email activation step needed).

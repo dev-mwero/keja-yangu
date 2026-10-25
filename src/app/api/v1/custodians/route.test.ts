@@ -229,7 +229,8 @@ describe("POST /api/v1/custodians", () => {
     const body = await json(res);
     expect(body.created).toBe(true);
     expect(body.password).toBeDefined();
-    expect(body.data.phone).toBe("+254712345678");
+    const data = body.data as { phone: string };
+    expect(data.phone).toBe("+254712345678");
     expect(user.create).toHaveBeenCalledWith(
       expect.objectContaining({
         phone: "+254712345678",

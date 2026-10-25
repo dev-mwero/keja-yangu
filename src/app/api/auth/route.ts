@@ -13,11 +13,13 @@ import { type Role, roleRoute } from "@/lib/role-routes";
 import { Tenant } from "@/models/Tenant";
 import { User } from "@/models/User";
 
-const signInSchema = z.object({
-  identifier: z.string().min(1, "Email or phone required").optional(),
-  email: z.string().email("Enter a valid email").optional(),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-}).refine((data) => data.identifier || data.email, "Email or phone required");
+const signInSchema = z
+  .object({
+    identifier: z.string().min(1, "Email or phone required").optional(),
+    email: z.string().email("Enter a valid email").optional(),
+    password: z.string().min(6, "Password must be at least 6 characters"),
+  })
+  .refine((data) => data.identifier || data.email, "Email or phone required");
 
 const signUpSchema = z.object({
   name: z.string().min(2, "Tell us your name"),
@@ -108,7 +110,7 @@ export async function POST(request: Request) {
       // Emails are stored lowercased, so normalise before lookup.
       let user = await User.findOne({ email: emailLookup }).lean();
       // Fall back to phone lookup when no email match (plain E.164, indexed).
-      if (!user && /^\+?[\d\s\-]+$/.test(rawId)) {
+      if (!user && /^\+?[\d\s-]+$/.test(rawId)) {
         user = await User.findOne({ phone: rawId }).lean();
       }
       // biome-ignore lint/complexity: useOptionalChain
@@ -137,10 +139,7 @@ export async function POST(request: Request) {
             { $set: { userId } },
           );
         } else if (user.phone) {
-          await Tenant.updateMany(
-            { phone: user.phone, userId: "" },
-            { $set: { userId } },
-          );
+          await Tenant.updateMany({ phone: user.phone, userId: "" }, { $set: { userId } });
         }
       }
 

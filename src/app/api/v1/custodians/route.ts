@@ -9,13 +9,15 @@ import { authenticate } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { User } from "@/models/User";
 
-const custodianInviteSchema = z.object({
-  email: z.string().trim().toLowerCase().email().optional(),
-  name: z.string().trim().min(1).optional(),
-  phone: z.string().optional(),
-  // Only meaningful for system-admin invites (bind to a specific owner).
-  ownerId: z.string().trim().optional(),
-}).refine((data) => data.email || data.phone, "Email or phone is required");
+const custodianInviteSchema = z
+  .object({
+    email: z.string().trim().toLowerCase().email().optional(),
+    name: z.string().trim().min(1).optional(),
+    phone: z.string().optional(),
+    // Only meaningful for system-admin invites (bind to a specific owner).
+    ownerId: z.string().trim().optional(),
+  })
+  .refine((data) => data.email || data.phone, "Email or phone is required");
 
 export async function GET(request: NextRequest) {
   const auth = authenticate(request);
@@ -116,7 +118,10 @@ export async function POST(request: NextRequest) {
   // signs in with phone + password. Credentials are returned so the admin
   // can share them out-of-band (no SMS/WhatsApp yet).
   if (!email) {
-    const phone = parsed.data.phone!;
+    const phone = parsed.data.phone;
+    if (!phone) {
+      return NextResponse.json({ error: "Phone is required" }, { status: 400 });
+    }
     const existing = await User.findOne({ phone }).lean();
     if (existing) {
       if (existing.role !== "custodian") {

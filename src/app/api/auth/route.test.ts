@@ -362,8 +362,9 @@ describe("POST /api/auth — signin by phone", () => {
     );
     expect(res.status).toBe(200);
     const body = await json(res);
-    expect(body.user.role).toBe("caretaker");
-    expect(body.user.phone).toBe("+254712345678");
+    const signedInUser = body.user as { role: string; phone: string };
+    expect(signedInUser.role).toBe("caretaker");
+    expect(signedInUser.phone).toBe("+254712345678");
   });
 
   it("still signs in with email for backward compatibility", async () => {
