@@ -14,9 +14,10 @@ import { Tenant } from "@/models/Tenant";
 import { User } from "@/models/User";
 
 const signInSchema = z.object({
-  email: z.string().email("Invalid email"),
+  identifier: z.string().min(1, "Email or phone required").optional(),
+  email: z.string().email("Enter a valid email").optional(),
   password: z.string().min(6, "Password must be at least 6 characters"),
-});
+}).refine((data) => data.identifier || data.email, "Email or phone required");
 
 const signUpSchema = z.object({
   name: z.string().min(2, "Tell us your name"),
@@ -102,8 +103,14 @@ export async function POST(request: Request) {
       }
 
       await connectToDatabase();
-      // Emails are stored lowercased (see signup), so normalise before lookup.
-      const user = await User.findOne({ email: parsed.data.email.trim().toLowerCase() }).lean();
+      const rawId = (parsed.data.identifier ?? parsed.data.email ?? "").trim();
+      const emailLookup = rawId.toLowerCase();
+      // Emails are stored lowercased, so normalise before lookup.
+      let user = await User.findOne({ email: emailLookup }).lean();
+      // Fall back to phone lookup when no email match (plain E.164, indexed).
+      if (!user && /^\+?[\d\s\-]+$/.test(rawId)) {
+        user = await User.findOne({ phone: rawId }).lean();
+      }
       // biome-ignore lint/complexity: useOptionalChain
       if (!user || !user.isActive) {
         return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
@@ -120,17 +127,30 @@ export async function POST(request: Request) {
       // Bind tenant signups to any unbound Tenant rows carrying the same
       // email (normalised to match signup storage). This heals tenancies
       // created before the verify-email bind existed or where verification
-      // ran before the Tenant row was added.
+      // ran before the Tenant row was added. Phone-only accounts bind by
+      // phone instead.
       if (user.role === "tenant") {
         const userId = user._id?.toString() ?? user.id ?? "";
-        await Tenant.updateMany(
-          { email: user.email.trim().toLowerCase(), userId: "" },
-          { $set: { userId } },
-        );
+        if (user.email) {
+          await Tenant.updateMany(
+            { email: user.email.trim().toLowerCase(), userId: "" },
+            { $set: { userId } },
+          );
+        } else if (user.phone) {
+          await Tenant.updateMany(
+            { phone: user.phone, userId: "" },
+            { $set: { userId } },
+          );
+        }
       }
 
       const response = NextResponse.json({
-        user: { email: user.email, name: user.name, role: user.role },
+        user: {
+          email: user.email,
+          phone: user.phone,
+          name: user.name,
+          role: user.role,
+        },
       });
       return issueSession(response, user);
     }

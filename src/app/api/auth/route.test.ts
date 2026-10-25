@@ -334,6 +334,73 @@ describe("POST /api/auth — signin tenant binding", () => {
   });
 });
 
+describe("POST /api/auth — signin by phone", () => {
+  beforeEach(() => {
+    resetModelStubs();
+    resetAuthRateLimits();
+  });
+
+  it("signs in a user by phone number when email lookup misses", async () => {
+    const phoneUser = {
+      _id: USER_ID,
+      email: undefined,
+      phone: "+254712345678",
+      name: "Jane",
+      role: "caretaker",
+      isActive: true,
+      isVerified: true,
+      passwordHash: await bcrypt.hash("secret123", 12),
+    };
+    user.findOne.mockReturnValueOnce(buildQuery(null));
+    user.findOne.mockReturnValueOnce(buildQuery(phoneUser));
+
+    const res = await POST(
+      buildRequest("/api/auth", {
+        method: "POST",
+        body: { action: "signin", identifier: "+254712345678", password: "secret123" },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    expect(body.user.role).toBe("caretaker");
+    expect(body.user.phone).toBe("+254712345678");
+  });
+
+  it("still signs in with email for backward compatibility", async () => {
+    const emailUser = {
+      _id: USER_ID,
+      email: "tenant@keja.co",
+      name: "Amina",
+      role: "tenant",
+      isActive: true,
+      isVerified: true,
+      passwordHash: await bcrypt.hash("secret123", 12),
+    };
+    user.findOne.mockReturnValue(buildQuery(emailUser));
+
+    const res = await POST(
+      buildRequest("/api/auth", {
+        method: "POST",
+        body: { action: "signin", email: "TENANT@Keja.co", password: "secret123" },
+      }),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("401 when phone lookup finds no active verified user", async () => {
+    user.findOne.mockReturnValueOnce(buildQuery(null));
+    user.findOne.mockReturnValueOnce(buildQuery(null));
+
+    const res = await POST(
+      buildRequest("/api/auth", {
+        method: "POST",
+        body: { action: "signin", identifier: "+254712345678", password: "secret123" },
+      }),
+    );
+    expect(res.status).toBe(401);
+  });
+});
+
 describe("POST /api/auth — rate limiting", () => {
   beforeEach(() => {
     resetModelStubs();
