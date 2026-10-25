@@ -19,7 +19,7 @@ import { DEFAULT_COUNTRY, isValidE164, normalizeNationalId, toE164 } from "@/lib
 import { roleRoute } from "@/lib/role-routes";
 
 const signInSchema = z.object({
-  email: z.string().email("Enter a valid email"),
+  identifier: z.string().min(1, "Enter email or phone"),
   password: z.string().min(6, "At least 6 characters"),
 });
 
@@ -57,7 +57,7 @@ const AuthForm = () => {
 
   const signInForm = useForm<SignInValues>({
     resolver: zodResolver(signInSchema),
-    defaultValues: { email: "", password: "" },
+    defaultValues: { identifier: "", password: "" },
   });
 
   const signUpForm = useForm<SignUpValues>({
@@ -75,7 +75,7 @@ const AuthForm = () => {
   const onSignIn = async (values: SignInValues) => {
     setSubmitting(true);
     try {
-      const signedInUser = await signIn(values.email, values.password);
+      const signedInUser = await signIn(values.identifier, values.password);
       router.push(roleRoute[signedInUser.role]);
     } catch {
       // Error handled by toast in hook
@@ -179,16 +179,16 @@ const AuthForm = () => {
           <TabsContent value="signin" className="mt-6">
             <form onSubmit={signInForm.handleSubmit(onSignIn)} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="si-email">Email</Label>
+                <Label htmlFor="si-email">Email or phone</Label>
                 <Input
                   id="si-email"
-                  type="email"
-                  placeholder="you@keja.co"
-                  {...signInForm.register("email")}
+                  type="text"
+                  placeholder="you@keja.co or +254712345678"
+                  {...signInForm.register("identifier")}
                 />
-                {signInForm.formState.errors.email && (
+                {signInForm.formState.errors.identifier && (
                   <p className="text-xs text-destructive">
-                    {signInForm.formState.errors.email.message}
+                    {signInForm.formState.errors.identifier.message}
                   </p>
                 )}
               </div>
