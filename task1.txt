@@ -1,1 +1,0 @@
-i have realized that all preview dashbaords do not show new/unread/unopened annoucemnts/messages/new requests/ etc. we need some notifications probably so that when a tenant/caretaker/custodian/onwer can see pedning things that amtter as notifications on their dashbaord. plan this before dpoing it 
