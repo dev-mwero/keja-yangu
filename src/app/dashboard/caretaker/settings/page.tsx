@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/use-auth";
 import { useCaretakerNav } from "@/hooks/use-caretaker-nav";
 import { useSettings } from "@/hooks/use-settings";
+import { isProfileComplete } from "@/lib/profile-completion";
 import type { UserSettings } from "@/lib/schemas";
 
 interface SettingsItem {
@@ -84,7 +85,12 @@ const CaretakerSettingsPage = () => {
               </span>
             </div>
           </div>
-          <AccountDetailsForm user={user} onSave={updateProfile} onSignOut={signOut} />
+          <AccountDetailsForm
+            user={user}
+            onSave={updateProfile}
+            onSignOut={signOut}
+            isFirstRun={user ? !isProfileComplete(user) : false}
+          />
         </section>
 
         <section className="rounded-2xl border border-border bg-card p-6 shadow-soft">

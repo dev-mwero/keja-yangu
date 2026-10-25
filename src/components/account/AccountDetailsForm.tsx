@@ -15,13 +15,20 @@ interface AccountDetailsFormProps {
   user: KejaUser | null;
   onSave: (patch: ProfilePatch) => Promise<boolean>;
   onSignOut: () => void;
+  /** When true (first-run / invited account), show the set-password field. */
+  isFirstRun?: boolean;
 }
 
 /**
  * Editable contact + identity details for the signed-in account: mobile number
  * (with country code), an optional separate WhatsApp number, and a national ID.
  */
-export const AccountDetailsForm = ({ user, onSave, onSignOut }: AccountDetailsFormProps) => {
+export const AccountDetailsForm = ({
+  user,
+  onSave,
+  onSignOut,
+  isFirstRun = false,
+}: AccountDetailsFormProps) => {
   const [name, setName] = useState(user?.name ?? "");
   const [dial, setDial] = useState(DEFAULT_COUNTRY.dial);
   const [national, setNational] = useState("");
@@ -29,6 +36,7 @@ export const AccountDetailsForm = ({ user, onSave, onSignOut }: AccountDetailsFo
   const [waDial, setWaDial] = useState(DEFAULT_COUNTRY.dial);
   const [waNational, setWaNational] = useState("");
   const [nationalId, setNationalId] = useState(user?.nationalId ?? "");
+  const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
 
   // Re-seed the fields whenever the underlying account changes (initial load,
@@ -55,6 +63,7 @@ export const AccountDetailsForm = ({ user, onSave, onSignOut }: AccountDetailsFo
         phone: toE164(dial, national),
         whatsapp: sameWhatsapp ? "" : toE164(waDial, waNational),
         nationalId: normalizeNationalId(nationalId),
+        ...(isFirstRun && password ? { password } : {}),
       });
     } finally {
       setSaving(false);
@@ -120,6 +129,22 @@ export const AccountDetailsForm = ({ user, onSave, onSignOut }: AccountDetailsFo
           Your ID is private to your account and never shown to other users.
         </p>
       </div>
+
+      {isFirstRun && (
+        <div className="space-y-1.5">
+          <Label htmlFor="profile-password">Set password</Label>
+          <Input
+            id="profile-password"
+            type="password"
+            placeholder="At least 8 characters"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Choose a password — this is your first time signing in.
+          </p>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2 pt-1">
         <Button type="submit" className="rounded-full" disabled={saving}>

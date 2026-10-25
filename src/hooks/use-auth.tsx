@@ -26,6 +26,7 @@ export interface ProfilePatch {
   phone?: string;
   whatsapp?: string;
   nationalId?: string;
+  password?: string;
 }
 
 interface AuthContextValue {

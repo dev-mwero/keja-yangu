@@ -62,6 +62,7 @@ const custodianSections = baseSections.filter((s) =>
     "/team",
     "/accounting",
     "/communications",
+    "/settings",
   ].includes(s.slug),
 );
 const systemAdminSections = baseSections.filter((s) =>

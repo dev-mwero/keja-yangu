@@ -145,6 +145,8 @@ export async function POST(request: NextRequest) {
 
   const randomPassword = crypto.randomBytes(24).toString("base64url").slice(0, 32);
   const passwordHash = await bcrypt.hash(randomPassword, 12);
+  const verificationToken = crypto.randomUUID();
+  const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
   const created = await User.create({
     email,
@@ -155,9 +157,11 @@ export async function POST(request: NextRequest) {
     managedByOwnerId: boundOwnerId,
     isActive: false,
     isVerified: false,
+    verificationToken,
+    verificationTokenExpiry,
   });
 
-  await sendInviteEmail(email, created.name, "custodian");
+  await sendInviteEmail(email, created.name, "custodian", verificationToken);
 
   return NextResponse.json(
     {

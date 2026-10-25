@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+import bcrypt from "bcryptjs";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -228,7 +230,27 @@ export async function POST(request: NextRequest) {
   });
 
   if (!existingUser) {
-    await sendInviteEmail(parsed.data.email, parsed.data.name, "tenant");
+    // Pre-create an inactive, unverified User so the invite can be a magic-link
+    // verify flow (same mechanism as custodian invites). The tenant row keeps
+    // userId empty until the invitee verifies and binds on verify-email.
+    const randomPassword = crypto.randomBytes(24).toString("base64url").slice(0, 32);
+    const passwordHash = await bcrypt.hash(randomPassword, 12);
+    const verificationToken = crypto.randomUUID();
+    const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    await User.create({
+      email: parsed.data.email,
+      name: parsed.data.name,
+      phone: parsed.data.phone ?? "",
+      passwordHash,
+      role: "tenant",
+      isActive: false,
+      isVerified: false,
+      verificationToken,
+      verificationTokenExpiry,
+    });
+
+    await sendInviteEmail(parsed.data.email, parsed.data.name, "tenant", verificationToken);
   }
 
   const created = await Tenant.findById(tenant._id).select(TENANT_SAFE_FIELDS).lean();

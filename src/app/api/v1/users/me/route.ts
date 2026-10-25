@@ -1,3 +1,4 @@
+import bcrypt from "bcryptjs";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { readJsonBody } from "@/app/api/v1/_helpers";
@@ -81,6 +82,9 @@ export async function PATCH(request: NextRequest) {
   if (parsed.data.whatsapp !== undefined) set.whatsapp = parsed.data.whatsapp;
   if (parsed.data.nationalId !== undefined) {
     set.nationalId = encryptField(normalizeNationalId(parsed.data.nationalId));
+  }
+  if (parsed.data.password !== undefined) {
+    set.passwordHash = await bcrypt.hash(parsed.data.password, 12);
   }
 
   if (Object.keys(set).length > 0) {

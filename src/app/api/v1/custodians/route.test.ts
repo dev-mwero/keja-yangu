@@ -151,7 +151,12 @@ describe("POST /api/v1/custodians", () => {
     expect(user.create).toHaveBeenCalledWith(
       expect.objectContaining({ role: "custodian", managedByOwnerId: OWNER_ID, isActive: false }),
     );
-    expect(sendInviteEmail).toHaveBeenCalledWith("new@keja.co", expect.any(String), "custodian");
+    expect(sendInviteEmail).toHaveBeenCalledWith(
+      "new@keja.co",
+      expect.any(String),
+      "custodian",
+      expect.any(String),
+    );
   });
 
   it("409 when the email belongs to a non-custodian account", async () => {

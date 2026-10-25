@@ -469,6 +469,11 @@ describe("POST /api/v1/tenants", () => {
     );
     expect(res.status).toBe(201);
     expect(tenantStub.create).toHaveBeenCalledWith(expect.objectContaining({ userId: "" }));
-    expect(sendInviteEmail).toHaveBeenCalledWith(tenantInput.email, tenantInput.name, "tenant");
+    expect(sendInviteEmail).toHaveBeenCalledWith(
+      tenantInput.email,
+      tenantInput.name,
+      "tenant",
+      expect.any(String),
+    );
   });
 });
