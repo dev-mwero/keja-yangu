@@ -125,6 +125,8 @@ describe("PropertyDialog", () => {
       baths: 0,
       caretakerIds: [],
       published: false,
+      dateCompleted: null,
+      purpose: "residential",
     });
     expect(mocks.toast.success).toHaveBeenCalledWith("Property created", expect.any(Object));
     expect(onSuccess).toHaveBeenCalled();
@@ -186,6 +188,34 @@ describe("PropertyDialog", () => {
     expect(mocks.updateProperty).toHaveBeenCalledWith(
       editProperty._id,
       expect.objectContaining({ title: "Renamed Villa", status: "available" }),
+    );
+  });
+
+  it("submits custom purpose and dateCompleted values", async () => {
+    const user = userEvent.setup();
+    mocks.createProperty.mockResolvedValue(editProperty);
+    openDialog();
+
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Commercial Hub" } });
+    fireEvent.change(screen.getByLabelText("Location"), {
+      target: { value: "Westlands, Nairobi" },
+    });
+    fireEvent.change(screen.getByLabelText("Price (KES/month)"), { target: { value: "100000" } });
+
+    const purposeTrigger = screen.getByRole("combobox", { name: "Property Purpose" });
+    await user.click(purposeTrigger);
+    await user.click(await screen.findByRole("option", { name: "commercial" }));
+
+    fireEvent.change(screen.getByLabelText("Date Completed"), { target: { value: "2024-06-15" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create property" }));
+
+    await waitFor(() => expect(mocks.createProperty).toHaveBeenCalled());
+    expect(mocks.createProperty).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Commercial Hub",
+        purpose: "commercial",
+        dateCompleted: "2024-06-15",
+      }),
     );
   });
 

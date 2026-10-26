@@ -6,7 +6,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { BlockInputPayload, FloorInputPayload } from "@/hooks/use-properties";
+import { PROPERTY_PURPOSES, type PropertyPurpose } from "@/lib/domain-enums";
 import { formatKES } from "@/lib/format";
 import { effectiveRent, MAX_UNITS_PER_PROPERTY } from "@/lib/schemas/structure";
 import { buildUnitNames } from "@/lib/unit-naming";
@@ -201,6 +209,30 @@ export const PropertyStructureEditor = ({
                 }
               />
             </div>
+            <div className="w-36 space-y-1">
+              <Label>Purpose</Label>
+              <Select
+                value={block.purpose ?? "inherit"}
+                disabled={disabled}
+                onValueChange={(val) =>
+                  updateBlock(blockIndex, {
+                    purpose: val === "inherit" ? null : (val as PropertyPurpose),
+                  })
+                }
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Inherit" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="inherit">Inherit</SelectItem>
+                  {PROPERTY_PURPOSES.map((p) => (
+                    <SelectItem key={p} value={p} className="capitalize">
+                      {p}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <Button
               type="button"
               variant="ghost"
@@ -219,7 +251,7 @@ export const PropertyStructureEditor = ({
               return (
                 <div
                   key={floorIndex}
-                  className="grid grid-cols-[1fr_1fr_1fr_auto_auto] items-end gap-2"
+                  className="grid grid-cols-[1fr_1fr_1fr_110px_auto_auto] items-end gap-2"
                 >
                   <div className="space-y-1">
                     <Label htmlFor={`floor-level-${blockIndex}-${floorIndex}`}>Floor</Label>
@@ -260,6 +292,30 @@ export const PropertyStructureEditor = ({
                         })
                       }
                     />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Purpose</Label>
+                    <Select
+                      value={floor.purpose ?? "inherit"}
+                      disabled={disabled}
+                      onValueChange={(val) =>
+                        updateFloor(blockIndex, floorIndex, {
+                          purpose: val === "inherit" ? null : (val as PropertyPurpose),
+                        })
+                      }
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Inherit" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="inherit">Inherit</SelectItem>
+                        {PROPERTY_PURPOSES.map((p) => (
+                          <SelectItem key={p} value={p} className="capitalize">
+                            {p}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <span className="pb-2 text-xs text-muted-foreground" title={preview.join(", ")}>
                     {preview.length > 0
@@ -335,6 +391,11 @@ export function PropertyStructurePreview({ blocks }: PropertyStructurePreviewPro
         <div key={block.id ?? blockIndex} className="space-y-3 p-4">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium">{block.name || `Block ${blockIndex + 1}`}</span>
+            {block.purpose != null && (
+              <Badge variant="outline" className="capitalize text-xs">
+                {block.purpose}
+              </Badge>
+            )}
             {block.rentOverride != null && (
               <Badge variant="secondary">Rent {formatKES(block.rentOverride)}</Badge>
             )}
@@ -351,6 +412,9 @@ export function PropertyStructurePreview({ blocks }: PropertyStructurePreviewPro
                 >
                   <span className="text-muted-foreground">
                     {floorLabel}
+                    {floor.purpose != null && (
+                      <span className="ml-2 text-xs capitalize">· {floor.purpose}</span>
+                    )}
                     {floor.rentOverride != null && (
                       <span className="ml-2 text-xs">· rent {formatKES(floor.rentOverride)}</span>
                     )}

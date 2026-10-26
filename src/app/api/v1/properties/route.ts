@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { normalizeAmenities } from "@/lib/amenities";
+import { DEFAULT_PROPERTY_PURPOSE, PROPERTY_PURPOSES } from "@/lib/domain-enums";
 import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
 import { authenticate, requirePermission } from "@/lib/permissions";
@@ -23,6 +24,8 @@ const propertyInput = z.object({
   images: z.array(z.string()).optional(),
   amenities: z.array(z.string()).optional(),
   status: z.enum(["available", "occupied", "maintenance"]).optional(),
+  dateCompleted: z.coerce.date().nullable().optional(),
+  purpose: z.enum(PROPERTY_PURPOSES).optional().default(DEFAULT_PROPERTY_PURPOSE),
   caretakerIds: z.array(z.string()).optional(),
   targetOwnerId: z.string().optional(),
   description: z.string().optional(),
@@ -235,11 +238,13 @@ export async function POST(request: NextRequest) {
       name: block.name,
       order,
       rentOverride: block.rentOverride ?? null,
+      purpose: block.purpose ?? null,
       floors: block.floors.map((floor) => ({
         level: floor.level,
         label: floor.label ?? "",
         unitsPerFloor: floor.unitsPerFloor ?? 0,
         rentOverride: floor.rentOverride ?? null,
+        purpose: floor.purpose ?? null,
       })),
     })),
   });

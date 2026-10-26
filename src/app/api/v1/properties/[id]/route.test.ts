@@ -307,6 +307,30 @@ describe("PATCH /api/v1/properties/[id]", () => {
     expect(updateData.caretakerIds).toEqual([CARETAKER_ID]);
   });
 
+  it("owner can update purpose and dateCompleted", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    property.findById.mockReturnValue(buildQuery(ownProperty()));
+    const updated = {
+      ...ownProperty(),
+      purpose: "commercial",
+      dateCompleted: new Date("2025-01-01"),
+    };
+    property.findOneAndUpdate.mockReturnValue(buildQuery(updated));
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { purpose: "commercial", dateCompleted: "2025-01-01" },
+      }),
+      withParams(PROPERTY_ID),
+    );
+    expect(res.status).toBe(200);
+    const updateData = property.findOneAndUpdate.mock.calls[0][1] as Record<string, unknown>;
+    expect(updateData.purpose).toBe("commercial");
+    expect(updateData.dateCompleted).toEqual(new Date("2025-01-01"));
+  });
+
   it("403 for owner editing a foreign property", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     property.findById.mockReturnValue(

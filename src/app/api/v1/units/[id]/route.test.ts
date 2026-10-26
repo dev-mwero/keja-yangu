@@ -117,6 +117,24 @@ describe("PATCH /api/v1/units/[id]", () => {
     expect(doc.save).toHaveBeenCalled();
   });
 
+  it("owner updates unit purpose override", async () => {
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    const doc = persistedUnit();
+    unit.findById.mockResolvedValue(doc);
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/units/${UNIT_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { purpose: "commercial" },
+      }),
+      withParams(UNIT_ID),
+    );
+    expect(res.status).toBe(200);
+    expect(doc.purpose).toBe("commercial");
+    expect(doc.save).toHaveBeenCalled();
+  });
+
   it("409 when renaming to a name already used in the block", async () => {
     user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
     const doc = persistedUnit({ name: "3A" });

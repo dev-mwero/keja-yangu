@@ -47,3 +47,7 @@ export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 
 export const APPLICATION_DECISION_STATUSES = ["approved", "rejected"] as const;
 export type ApplicationDecisionStatus = (typeof APPLICATION_DECISION_STATUSES)[number];
+
+export const PROPERTY_PURPOSES = ["residential", "commercial", "storage", "other"] as const;
+export type PropertyPurpose = (typeof PROPERTY_PURPOSES)[number];
+export const DEFAULT_PROPERTY_PURPOSE: PropertyPurpose = "residential";

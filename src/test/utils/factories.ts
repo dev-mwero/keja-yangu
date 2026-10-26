@@ -1,3 +1,4 @@
+import type { PropertyPurpose } from "@/lib/domain-enums";
 import type { CaretakerPrivilege, Role } from "@/lib/permissions";
 
 const HEX_CHARS = "abcdef0123456789";
@@ -40,6 +41,8 @@ export interface TestProperty {
   amenities: string[];
   status: "available" | "occupied" | "maintenance";
   published: boolean;
+  dateCompleted?: Date | string | null;
+  purpose?: PropertyPurpose;
   ownerId: string;
   caretakerIds: string[];
   createdById: string;
@@ -108,6 +111,7 @@ export interface TestUnit {
   name: string;
   letter: string;
   status: "available" | "occupied" | "maintenance";
+  purpose?: PropertyPurpose | null;
   rent: number | null;
   beds: number;
   baths: number;

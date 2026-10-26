@@ -98,6 +98,7 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
     }
     unit.status = requestedStatus;
   }
+  if (updates.purpose !== undefined) unit.purpose = updates.purpose;
   if (updates.rent !== undefined) unit.rent = updates.rent;
   if (updates.beds !== undefined) unit.beds = updates.beds;
   if (updates.baths !== undefined) unit.baths = updates.baths;

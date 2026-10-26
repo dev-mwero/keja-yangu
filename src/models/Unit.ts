@@ -1,9 +1,9 @@
 import { type InferSchemaType, model, models, Schema } from "mongoose";
-import { UNIT_STATUSES } from "@/lib/domain-enums";
+import { PROPERTY_PURPOSES, UNIT_STATUSES } from "@/lib/domain-enums";
 import { softDeletePlugin } from "@/lib/mongoose-soft-delete";
 
-export type { UnitStatus } from "@/lib/domain-enums";
-export { UNIT_STATUSES };
+export type { PropertyPurpose, UnitStatus } from "@/lib/domain-enums";
+export { PROPERTY_PURPOSES, UNIT_STATUSES };
 
 const unitSchema = new Schema(
   {
@@ -18,6 +18,8 @@ const unitSchema = new Schema(
     name: { type: String, required: true, trim: true },
     letter: { type: String, trim: true, default: "" },
     status: { type: String, enum: [...UNIT_STATUSES], default: "available" },
+    // Optional purpose override; falls back to floor/block/property purpose.
+    purpose: { type: String, enum: [...PROPERTY_PURPOSES, null], default: null },
     // Optional rent override; falls back to floor/block/property rent.
     rent: { type: Number, min: 0, default: null },
     beds: { type: Number, min: 0, default: 0 },

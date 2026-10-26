@@ -1,4 +1,5 @@
 import { Types } from "mongoose";
+import type { PropertyPurpose } from "@/lib/domain-enums";
 import {
   MAX_UNITS_PER_PROPERTY,
   type PersistedBlock,
@@ -40,6 +41,7 @@ export interface NextFloor {
   label: string;
   unitsPerFloor: number;
   rentOverride: number | null;
+  purpose: PropertyPurpose | null;
 }
 
 export interface NextBlock {
@@ -47,6 +49,7 @@ export interface NextBlock {
   name: string;
   order: number;
   rentOverride: number | null;
+  purpose: PropertyPurpose | null;
   floors: NextFloor[];
 }
 
@@ -264,6 +267,7 @@ export function planStructureUpdate(input: StructurePlanInput): StructurePlan {
           label,
           unitsPerFloor: desired,
           rentOverride: floorSpec.rentOverride ?? null,
+          purpose: floorSpec.purpose ?? null,
         };
       }
 
@@ -279,6 +283,7 @@ export function planStructureUpdate(input: StructurePlanInput): StructurePlan {
         label,
         unitsPerFloor: desired,
         rentOverride: floorSpec.rentOverride ?? null,
+        purpose: floorSpec.purpose ?? null,
       };
     });
 
@@ -287,6 +292,7 @@ export function planStructureUpdate(input: StructurePlanInput): StructurePlan {
       name: spec.name,
       order,
       rentOverride: spec.rentOverride ?? null,
+      purpose: spec.purpose ?? null,
       floors,
     };
   });

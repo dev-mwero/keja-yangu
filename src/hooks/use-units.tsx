@@ -1,10 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { PropertyPurpose, UnitStatus } from "@/lib/domain-enums";
 
-import type { UnitStatus } from "@/lib/domain-enums";
-
-export type { UnitStatus };
+export type { PropertyPurpose, UnitStatus };
 
 export interface Unit {
   _id: string;
@@ -18,6 +17,7 @@ export interface Unit {
   name: string;
   letter: string;
   status: UnitStatus;
+  purpose?: PropertyPurpose | null;
   rent: number | null;
   beds: number;
   baths: number;
@@ -51,6 +51,7 @@ const MAX_FETCH_ALL_PAGES = 25;
 
 export interface UnitInput {
   status?: UnitStatus;
+  purpose?: PropertyPurpose | null;
   rent?: number | null;
   beds?: number;
   baths?: number;

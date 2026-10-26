@@ -1,4 +1,5 @@
 import { type InferSchemaType, model, models, Schema } from "mongoose";
+import { DEFAULT_PROPERTY_PURPOSE, PROPERTY_PURPOSES } from "@/lib/domain-enums";
 import { softDeletePlugin } from "@/lib/mongoose-soft-delete";
 
 const floorSchema = new Schema(
@@ -10,6 +11,8 @@ const floorSchema = new Schema(
     unitsPerFloor: { type: Number, min: 0, default: 0 },
     // Optional rent override for every unit on this floor.
     rentOverride: { type: Number, min: 0, default: null },
+    // Optional purpose override for every unit on this floor.
+    purpose: { type: String, enum: [...PROPERTY_PURPOSES, null], default: null },
   },
   { _id: true },
 );
@@ -20,6 +23,8 @@ const blockSchema = new Schema(
     order: { type: Number, default: 0 },
     // Optional rent override for every unit in this block.
     rentOverride: { type: Number, min: 0, default: null },
+    // Optional purpose override for every unit in this block.
+    purpose: { type: String, enum: [...PROPERTY_PURPOSES, null], default: null },
     floors: { type: [floorSchema], default: [] },
   },
   { _id: true },
@@ -44,6 +49,14 @@ const propertySchema = new Schema(
     baths: { type: Number, required: true, min: 0 },
     area: { type: Number, default: 0 },
     published: { type: Boolean, default: false },
+    // Date the property construction / project was completed.
+    dateCompleted: { type: Date, default: null },
+    // Baseline purpose of the property; can be overridden at block, floor, unit levels.
+    purpose: {
+      type: String,
+      enum: [...PROPERTY_PURPOSES],
+      default: DEFAULT_PROPERTY_PURPOSE,
+    },
     // Physical hierarchy: Property -> blocks -> floors -> units (units live in
     // the separate `Unit` collection and reference block/floor subdoc ids).
     blocks: { type: [blockSchema], default: [] },

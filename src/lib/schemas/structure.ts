@@ -1,9 +1,15 @@
 import { z } from "zod";
+import {
+  DEFAULT_PROPERTY_PURPOSE,
+  PROPERTY_PURPOSES,
+  type PropertyPurpose,
+} from "@/lib/domain-enums";
 
 export const floorInput = z.object({
   level: z.coerce.number().int().min(-5).max(200),
   label: z.string().trim().max(60).optional(),
   rentOverride: z.coerce.number().nonnegative().nullable().optional(),
+  purpose: z.enum(PROPERTY_PURPOSES).nullable().optional(),
   unitsPerFloor: z.coerce.number().int().min(0).max(200).default(0),
   // Optional custom unit names for this floor (overrides generated GA/GB/3A).
   unitNames: z.array(z.string().trim().min(1).max(24)).optional(),
@@ -12,6 +18,7 @@ export const floorInput = z.object({
 export const blockInput = z.object({
   name: z.string().trim().min(1).max(80),
   rentOverride: z.coerce.number().nonnegative().nullable().optional(),
+  purpose: z.enum(PROPERTY_PURPOSES).nullable().optional(),
   floors: z.array(floorInput).min(1).max(200),
 });
 
@@ -53,12 +60,14 @@ export interface PersistedFloor {
   label?: string;
   unitsPerFloor?: number;
   rentOverride?: number | null;
+  purpose?: PropertyPurpose | null;
 }
 
 export interface PersistedBlock {
   _id: unknown;
   name: string;
   rentOverride?: number | null;
+  purpose?: PropertyPurpose | null;
   floors: PersistedFloor[];
 }
 
@@ -74,6 +83,7 @@ export interface UnitInsert {
   letter: string;
   status: "available";
   rent: number | null;
+  purpose?: PropertyPurpose | null;
   /** Array of occupant user ids. Empty = vacant. */
   tenantId: string[];
 }
@@ -91,4 +101,17 @@ export function effectiveRent(
   propertyRent: number,
 ): number {
   return unitRent ?? floorRentOverride ?? blockRentOverride ?? propertyRent ?? 0;
+}
+
+/**
+ * Effective purpose for a unit, resolving the override chain
+ * unit -> floor -> block -> property.
+ */
+export function effectivePurpose(
+  unitPurpose?: PropertyPurpose | null,
+  floorPurpose?: PropertyPurpose | null,
+  blockPurpose?: PropertyPurpose | null,
+  propertyPurpose?: PropertyPurpose | null,
+): PropertyPurpose {
+  return unitPurpose ?? floorPurpose ?? blockPurpose ?? propertyPurpose ?? DEFAULT_PROPERTY_PURPOSE;
 }
