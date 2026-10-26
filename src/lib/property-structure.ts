@@ -30,7 +30,8 @@ export interface ExistingUnit {
   name: string;
   letter: string;
   status: string;
-  tenantId?: string;
+  /** Array of occupant user ids. Empty = vacant. */
+  tenantId?: string[];
 }
 
 export interface NextFloor {
@@ -81,7 +82,7 @@ export class StructureError extends Error {
 }
 
 function isOccupied(unit: ExistingUnit): boolean {
-  return unit.status === "occupied" || (unit.tenantId ?? "") !== "";
+  return unit.status === "occupied" || (unit.tenantId?.length ?? 0) > 0;
 }
 
 /** Zero-based index encoded in a unit letter: "A" -> 0, "Z" -> 25, "AA" -> 26. */
@@ -211,7 +212,7 @@ export function planStructureUpdate(input: StructurePlanInput): StructurePlan {
             letter: letterLabel(index),
             status: "available",
             rent: null,
-            tenantId: "",
+            tenantId: [],
           };
         });
 

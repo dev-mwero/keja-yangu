@@ -49,7 +49,9 @@ import type { DashNavItem } from "@/config/dashboardNav";
 import { useProperties } from "@/hooks/use-properties";
 import {
   type Tenant,
+  type TenantInput,
   type TenantStatus,
+  type TenantType,
   useTenantMutations,
   useTenants,
 } from "@/hooks/use-tenants";
@@ -64,6 +66,7 @@ interface TenantFormState {
   email: string;
   phone: string;
   propertyId: string;
+  type: TenantType;
   status: TenantStatus;
   notes: string;
 }
@@ -73,6 +76,7 @@ const emptyForm: TenantFormState = {
   email: "",
   phone: "",
   propertyId: "",
+  type: "residential",
   status: "pending",
   notes: "",
 };
@@ -172,6 +176,7 @@ export const TenantsManager = ({
       email: tenant.email,
       phone: tenant.phone ?? "",
       propertyId: tenant.propertyId ?? "",
+      type: tenant.type ?? "residential",
       status: tenant.status,
       notes: tenant.notes ?? "",
     });
@@ -194,11 +199,12 @@ export const TenantsManager = ({
 
   const handleSubmit = async () => {
     if (!validate()) return;
-    const input = {
+    const input: TenantInput = {
       name: form.name.trim(),
       email: form.email.trim().toLowerCase(),
       phone: form.phone.trim() || undefined,
       propertyId: form.propertyId,
+      type: form.type,
       notes: form.notes.trim() || undefined,
     };
     try {
@@ -367,7 +373,17 @@ export const TenantsManager = ({
                     properties.find((p) => p._id === t.propertyId)?.title ?? t.propertyId;
                   return (
                     <TableRow key={t._id}>
-                      <TableCell className="font-medium">{t.name}</TableCell>
+                      <TableCell className="font-medium">
+                        <div>{t.name}</div>
+                        <div className="mt-0.5">
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] font-normal capitalize px-1.5 py-0 text-muted-foreground"
+                          >
+                            {t.type ?? "residential"}
+                          </Badge>
+                        </div>
+                      </TableCell>
                       <TableCell className="text-muted-foreground">{t.email}</TableCell>
                       <TableCell className="text-muted-foreground">{propertyTitle}</TableCell>
                       <TableCell className="text-muted-foreground">
@@ -476,26 +492,44 @@ export const TenantsManager = ({
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Property</Label>
-              <Select
-                value={form.propertyId}
-                onValueChange={(v) => setForm({ ...form, propertyId: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select property" />
-                </SelectTrigger>
-                <SelectContent>
-                  {propertyOptions.map((p) => (
-                    <SelectItem key={p._id} value={p._id}>
-                      {p.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {formErrors.propertyId && (
-                <p className="text-xs text-destructive">{formErrors.propertyId}</p>
-              )}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Property</Label>
+                <Select
+                  value={form.propertyId}
+                  onValueChange={(v) => setForm({ ...form, propertyId: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select property" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {propertyOptions.map((p) => (
+                      <SelectItem key={p._id} value={p._id}>
+                        {p.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {formErrors.propertyId && (
+                  <p className="text-xs text-destructive">{formErrors.propertyId}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label>Tenant Type</Label>
+                <Select
+                  value={form.type}
+                  onValueChange={(v) => setForm({ ...form, type: v as TenantType })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="residential">Residential</SelectItem>
+                    <SelectItem value="commercial">Commercial</SelectItem>
+                    <SelectItem value="owning">Owning</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             {canSetStatus && (
               <div className="space-y-2">

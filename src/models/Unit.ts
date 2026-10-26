@@ -23,8 +23,9 @@ const unitSchema = new Schema(
     beds: { type: Number, min: 0, default: 0 },
     baths: { type: Number, min: 0, default: 0 },
     area: { type: Number, min: 0, default: 0 },
-    // Current occupant (tenant user id); empty when vacant.
-    tenantId: { type: String, default: "" },
+    // Current occupants (tenant ids); empty when vacant. A tenant may hold
+    // multiple units, so this is an array rather than a single id.
+    tenantId: { type: [String], default: [] },
     // Set when the unit is soft-deleted (hidden from reads, restorable).
     deletedAt: { type: Date, default: null },
   },

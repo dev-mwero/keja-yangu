@@ -17,12 +17,14 @@ const TenantHomePage = () => {
     enabled: Boolean(tenancy?.propertyId),
   });
 
-  // The occupant's unit: bound to their userId (Phase 2), or their tenant
-  // record id / an unlinked legacy unit.
+  // The occupant's unit: bound to their userId (array includes their userId), or
+  // their tenant record id / an unlinked legacy unit.
   const unit = units.find(
     (u) =>
       u.status === "occupied" &&
-      (!u.tenantId || u.tenantId === tenancy?.userId || u.tenantId === tenancy?._id),
+      (!u.tenantId.length ||
+        u.tenantId.includes(tenancy?.userId ?? "") ||
+        u.tenantId.includes(tenancy?._id ?? "")),
   );
 
   return (

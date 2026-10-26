@@ -42,10 +42,14 @@ describe("allocateUnit", () => {
     );
     unitStub.findOneAndUpdate.mockReturnValue(
       buildQuery(
-        makeUnit({ _id: UNIT_ID, propertyId: PROPERTY_ID, status: "occupied", tenantId: OCCUPANT }),
+        makeUnit({
+          _id: UNIT_ID,
+          propertyId: PROPERTY_ID,
+          status: "occupied",
+          tenantId: [OCCUPANT],
+        }),
       ),
     );
-    unitStub.updateMany.mockResolvedValue({ modifiedCount: 0 });
     tenantStub.updateOne.mockResolvedValue({ modifiedCount: 1 });
     tenantStub.findById.mockReturnValue(buildQuery({ ...tenant, status: "active" }));
     lease.findOne.mockReturnValue(buildQuery(null));
@@ -55,6 +59,11 @@ describe("allocateUnit", () => {
     const result = await allocateUnit({ tenantId: String(TENANT_ID), unitId: String(UNIT_ID) });
 
     expect(result.unit.status).toBe("occupied");
+    expect(unitStub.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: String(UNIT_ID), status: "available", deletedAt: null },
+      { $addToSet: { tenantId: OCCUPANT }, $set: { status: "occupied" } },
+      { new: true },
+    );
     expect(lease.create).toHaveBeenCalledWith(
       expect.objectContaining({
         tenantId: TENANT_ID,
@@ -100,10 +109,14 @@ describe("allocateUnit", () => {
     unitStub.findById.mockReturnValue(buildQuery(makeUnit({ propertyId: PROPERTY_ID })));
     unitStub.findOneAndUpdate.mockReturnValue(
       buildQuery(
-        makeUnit({ _id: UNIT_ID, propertyId: PROPERTY_ID, status: "occupied", tenantId: OCCUPANT }),
+        makeUnit({
+          _id: UNIT_ID,
+          propertyId: PROPERTY_ID,
+          status: "occupied",
+          tenantId: [OCCUPANT],
+        }),
       ),
     );
-    unitStub.updateMany.mockResolvedValue({ modifiedCount: 0 });
     tenantStub.updateOne.mockResolvedValue({ modifiedCount: 1 });
     tenantStub.findById.mockReturnValue(buildQuery(tenant));
     lease.findOne.mockReturnValue(buildQuery({ _id: makeObjectId("lease") }));
@@ -127,12 +140,11 @@ describe("allocateUnit", () => {
             _id: UNIT_ID,
             propertyId: PROPERTY_ID,
             status: "occupied",
-            tenantId: OCCUPANT,
+            tenantId: [OCCUPANT],
           }),
         ),
       )
       .mockReturnValueOnce(buildQuery(null));
-    unitStub.updateMany.mockResolvedValue({ modifiedCount: 0 });
     tenantStub.updateOne.mockResolvedValue({ modifiedCount: 1 });
     tenantStub.findById.mockReturnValue(buildQuery(tenant));
     lease.findOne.mockReturnValue(buildQuery(null));
@@ -152,10 +164,14 @@ describe("allocateUnit", () => {
     unitStub.findById.mockReturnValue(buildQuery(makeUnit({ propertyId: PROPERTY_ID })));
     unitStub.findOneAndUpdate.mockReturnValue(
       buildQuery(
-        makeUnit({ _id: UNIT_ID, propertyId: PROPERTY_ID, status: "occupied", tenantId: OCCUPANT }),
+        makeUnit({
+          _id: UNIT_ID,
+          propertyId: PROPERTY_ID,
+          status: "occupied",
+          tenantId: [OCCUPANT],
+        }),
       ),
     );
-    unitStub.updateMany.mockResolvedValue({ modifiedCount: 0 });
     tenantStub.updateOne.mockResolvedValue({ modifiedCount: 1 });
     tenantStub.findById.mockReturnValue(buildQuery(tenant));
     lease.findOne.mockReturnValue(buildQuery(null));
@@ -165,9 +181,10 @@ describe("allocateUnit", () => {
     await expect(
       allocateUnit({ tenantId: String(TENANT_ID), unitId: String(UNIT_ID) }),
     ).rejects.toThrow("lease write failed");
+    // Compensation: pull the occupant and mark vacant
     expect(unitStub.updateOne).toHaveBeenCalledWith(
       { _id: UNIT_ID, status: "occupied" },
-      { $set: { tenantId: "", status: "available" } },
+      { $pull: { tenantId: OCCUPANT }, $set: { status: "available" } },
     );
   });
 });
@@ -187,15 +204,17 @@ describe("vacateUnit", () => {
       _id: UNIT_ID,
       propertyId: PROPERTY_ID,
       status: "occupied",
+      tenantId: [OCCUPANT],
     });
     unitStub.updateOne.mockResolvedValue({ modifiedCount: 1 });
     lease.updateMany.mockResolvedValue({ modifiedCount: 1 });
     tenantStub.findById.mockReturnValue(buildQuery(tenant));
 
     await vacateUnit({ tenantId: String(TENANT_ID) });
+    // Last occupant removed → mark available
     expect(unitStub.updateOne).toHaveBeenCalledWith(
-      { _id: UNIT_ID, status: "occupied" },
-      { $set: { tenantId: "", status: "available" } },
+      { _id: UNIT_ID },
+      { $pull: { tenantId: OCCUPANT }, $set: { status: "available" } },
     );
   });
 
@@ -210,17 +229,20 @@ describe("vacateUnit", () => {
   it("frees a legacy unit that points at the tenant doc id", async () => {
     tenantStub.findById.mockReturnValue(buildQuery(tenant));
     // First lookup (occupant userId) finds nothing; second (legacy) matches.
-    unitStub.findOne
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ _id: UNIT_ID, propertyId: PROPERTY_ID, status: "occupied" });
+    unitStub.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      _id: UNIT_ID,
+      propertyId: PROPERTY_ID,
+      status: "occupied",
+      tenantId: [String(TENANT_ID)],
+    });
     unitStub.updateOne.mockResolvedValue({ modifiedCount: 1 });
     lease.updateMany.mockResolvedValue({ modifiedCount: 1 });
     tenantStub.findById.mockReturnValue(buildQuery(tenant));
 
     await vacateUnit({ tenantId: String(TENANT_ID) });
     expect(unitStub.updateOne).toHaveBeenCalledWith(
-      { _id: UNIT_ID, status: "occupied" },
-      { $set: { tenantId: "", status: "available" } },
+      { _id: UNIT_ID },
+      { $pull: { tenantId: String(TENANT_ID) }, $set: { status: "available" } },
     );
   });
 });

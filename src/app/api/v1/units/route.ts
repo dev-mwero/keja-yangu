@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
   }
   if (blockId) filter.blockId = blockId;
   if (status) filter.status = status;
-  if (tenantId && role !== "tenant") filter.tenantId = tenantId;
+  if (tenantId && role !== "tenant") filter.tenantId = { $elemMatch: { $eq: tenantId } };
 
   const [units, total] = await Promise.all([
     Unit.find(filter)

@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
     );
   }
   const occupantUserId = tenant.userId || "";
-  if (unit.status !== "occupied" || unit.tenantId !== occupantUserId) {
+  if (unit.status !== "occupied" || !unit.tenantId.includes(occupantUserId)) {
     return NextResponse.json({ error: "Tenant does not occupy this unit" }, { status: 409 });
   }
 

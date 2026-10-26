@@ -66,7 +66,7 @@ const unitA = {
   floorLevel: 0,
   rent: 10000,
   status: "available",
-  tenantId: "",
+  tenantId: [] as string[],
 } as Unit;
 
 const unitB = {
@@ -78,7 +78,7 @@ const unitB = {
   floorLevel: 2,
   rent: 20000,
   status: "occupied",
-  tenantId: "ten-1",
+  tenantId: ["ten-1"],
 } as Unit;
 
 describe("UnitsView search", () => {

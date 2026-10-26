@@ -91,9 +91,8 @@ describe("assignUnitToTenant", () => {
     tenantStub.findById.mockReturnValue(buildQuery(tenant));
     unitStub.findById.mockReturnValue(buildQuery(makeUnit({ propertyId: PROPERTY_ID })));
     unitStub.findOneAndUpdate.mockReturnValue(
-      buildQuery(makeUnit({ propertyId: PROPERTY_ID, status: "occupied", tenantId: OCCUPANT })),
+      buildQuery(makeUnit({ propertyId: PROPERTY_ID, status: "occupied", tenantId: [OCCUPANT] })),
     );
-    unitStub.updateMany.mockResolvedValue({ modifiedCount: 0 });
     tenantStub.updateOne.mockResolvedValue({ modifiedCount: 1 });
     tenantStub.findById.mockReturnValue(buildQuery({ ...tenant, status: "active" }));
     lease.findOne.mockReturnValue(buildQuery(null));
@@ -122,9 +121,8 @@ describe("assignUnitToTenant", () => {
     tenantStub.findById.mockReturnValue(buildQuery(tenant));
     unitStub.findById.mockReturnValue(buildQuery(makeUnit({ propertyId: PROPERTY_ID })));
     unitStub.findOneAndUpdate.mockReturnValue(
-      buildQuery(makeUnit({ propertyId: PROPERTY_ID, status: "occupied", tenantId: OCCUPANT })),
+      buildQuery(makeUnit({ propertyId: PROPERTY_ID, status: "occupied", tenantId: [OCCUPANT] })),
     );
-    unitStub.updateMany.mockResolvedValue({ modifiedCount: 0 });
     tenantStub.updateOne.mockResolvedValue({ modifiedCount: 1 });
     tenantStub.findById.mockReturnValue(buildQuery(tenant));
     lease.findOne.mockReturnValue(buildQuery({ _id: makeObjectId("lease") }));
@@ -146,7 +144,7 @@ describe("vacateTenantFromUnit", () => {
 
   it("frees the occupied unit and ends the lease", async () => {
     const occupied = {
-      ...makeUnit({ propertyId: PROPERTY_ID, status: "occupied", tenantId: OCCUPANT }),
+      ...makeUnit({ propertyId: PROPERTY_ID, status: "occupied", tenantId: [OCCUPANT] }),
     };
     tenantStub.findById.mockReturnValue(buildQuery(tenant));
     unitStub.findOne.mockResolvedValue(occupied);
@@ -156,9 +154,10 @@ describe("vacateTenantFromUnit", () => {
 
     await vacateTenantFromUnit({ tenant });
 
+    // Last occupant removed → status set to available
     expect(unitStub.updateOne).toHaveBeenCalledWith(
-      { _id: occupied._id, status: "occupied" },
-      { $set: { tenantId: "", status: "available" } },
+      { _id: occupied._id },
+      { $pull: { tenantId: OCCUPANT }, $set: { status: "available" } },
     );
     expect(lease.updateMany).toHaveBeenCalledWith(
       { tenantId: TENANT_ID, status: "active" },

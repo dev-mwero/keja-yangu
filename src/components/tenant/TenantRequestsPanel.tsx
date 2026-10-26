@@ -82,9 +82,11 @@ export function TenantRequestsPanel() {
   const [moveInUnitId, setMoveInUnitId] = useState("");
   const [moveInNote, setMoveInNote] = useState("");
 
-  // A unit is "mine" if it is unlinked (legacy) or bound to my userId.
+  // A unit is "mine" if it is unlinked (legacy) or contains my userId.
   const occupiedUnit = units.find(
-    (u) => u.status === "occupied" && (!u.tenantId || u.tenantId === tenancy?.userId),
+    (u) =>
+      u.status === "occupied" &&
+      (u.tenantId.length === 0 || u.tenantId.includes(tenancy?.userId ?? "")),
   );
   const availableUnits = units.filter((u) => u.status === "available");
 

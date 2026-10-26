@@ -74,7 +74,8 @@ export interface UnitInsert {
   letter: string;
   status: "available";
   rent: number | null;
-  tenantId: string;
+  /** Array of occupant user ids. Empty = vacant. */
+  tenantId: string[];
 }
 
 export const MAX_UNITS_PER_PROPERTY = 2000;

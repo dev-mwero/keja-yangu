@@ -4,6 +4,7 @@ export interface InvoiceLease {
   _id?: string | { toString(): string };
   id?: string;
   tenantId: string;
+  tenantType?: "residential" | "commercial" | "owning";
   propertyId: string;
   ownerId: string;
   rentAmount: number;
@@ -28,7 +29,7 @@ export interface InvoiceDraft {
   issuedAt: Date;
 }
 
-export type SkipReason = "already-generated" | "non-monthly" | "ended" | "future";
+export type SkipReason = "already-generated" | "non-monthly" | "ended" | "future" | "owning-tenant";
 
 export interface SkippedLease {
   leaseId: string;
@@ -84,6 +85,10 @@ export function generateForPeriod(input: {
 
   for (const lease of input.leases) {
     const leaseId = leaseIdOf(lease);
+    if (lease.tenantType === "owning") {
+      skipped.push({ leaseId, reason: "owning-tenant" });
+      continue;
+    }
     if (existingIds.has(leaseId)) {
       skipped.push({ leaseId, reason: "already-generated" });
       continue;

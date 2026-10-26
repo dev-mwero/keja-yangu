@@ -22,7 +22,7 @@ export interface Unit {
   beds: number;
   baths: number;
   area: number;
-  tenantId: string;
+  tenantId: string[];
 }
 
 export interface UnitFilters {

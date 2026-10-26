@@ -112,7 +112,8 @@ export interface TestUnit {
   beds: number;
   baths: number;
   area: number;
-  tenantId: string;
+  /** Array of occupant user ids. Empty = vacant. */
+  tenantId: string[];
 }
 
 export function makeUnit(overrides: Partial<TestUnit> = {}): TestUnit {
@@ -132,7 +133,7 @@ export function makeUnit(overrides: Partial<TestUnit> = {}): TestUnit {
     beds: 2,
     baths: 1,
     area: 60,
-    tenantId: "",
+    tenantId: [],
     ...overrides,
   };
 }

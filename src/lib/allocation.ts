@@ -44,7 +44,8 @@ export interface AllocatedUnit {
   name: string;
   blockName: string;
   status: string;
-  tenantId: string;
+  /** Array of occupant user ids (matches Unit.tenantId schema). */
+  tenantId: string[];
 }
 
 /**
@@ -80,8 +81,9 @@ export interface AllocateUnitInput {
 
 /**
  * Place a tenant into a vacant unit: claim the unit atomically, bind the tenant,
- * open/refresh the active lease, and release any other unit the occupant still
- * holds. Throws `AllocationError` (404/409/422) when the unit is not assignable.
+ * open/refresh the active lease. Multi-unit tenancy is supported — the tenant
+ * id is pushed into the array rather than overwriting it. Throws
+ * `AllocationError` (404/409/422) when the unit is not assignable.
  *
  * Steps 5–7 run sequentially with compensation: if persisting the lease fails
  * after the claim, the unit is released so an occupied unit never exists without
@@ -113,7 +115,7 @@ export async function allocateUnit(
   // concurrent allocations cannot both win the same unit.
   const claimed = (await Unit.findOneAndUpdate(
     { _id: input.unitId, status: "available", deletedAt: null },
-    { $set: { tenantId: occupantUserId, status: "occupied" } },
+    { $addToSet: { tenantId: occupantUserId }, $set: { status: "occupied" } },
     { new: true },
   ).lean()) as AllocatedUnit | null;
   if (!claimed) {
@@ -121,13 +123,6 @@ export async function allocateUnit(
   }
 
   try {
-    // Relocate: release any other unit this occupant still holds so one tenant
-    // cannot occupy two units.
-    await Unit.updateMany(
-      { tenantId: occupantUserId, _id: { $ne: input.unitId }, status: "occupied" },
-      { $set: { tenantId: "", status: "available" } },
-    );
-
     const tenantSet: Record<string, unknown> = { userId: occupantUserId, status: "active" };
     if (tenant.status !== "active") tenantSet.joinedAt = new Date();
     await Tenant.updateOne({ _id: tenant._id }, { $set: tenantSet });
@@ -162,7 +157,7 @@ export async function allocateUnit(
     // Compensate: a failed lease/bind must not leave the unit occupied.
     await Unit.updateOne(
       { _id: claimed._id, status: "occupied" },
-      { $set: { tenantId: "", status: "available" } },
+      { $pull: { tenantId: occupantUserId }, $set: { status: "available" } },
     );
     throw error;
   }
@@ -180,6 +175,7 @@ export async function vacateUnit(input: { tenantId: string }): Promise<{ tenant:
 
   const occupantUserId = await resolveOccupantUserId(tenant);
 
+  // Find a unit occupied by this user (array contains their userId).
   let unit = occupantUserId
     ? await Unit.findOne({
         tenantId: occupantUserId,
@@ -188,7 +184,7 @@ export async function vacateUnit(input: { tenantId: string }): Promise<{ tenant:
       })
     : null;
 
-  // Fall back to a unit pointing at the tenant record id (legacy data).
+  // Fall back to a unit containing the tenant record id (legacy / phone-only data).
   if (!unit) {
     unit = await Unit.findOne({ tenantId: String(tenant._id), propertyId: tenant.propertyId });
   }
@@ -196,9 +192,20 @@ export async function vacateUnit(input: { tenantId: string }): Promise<{ tenant:
     throw new AllocationError(404, "This tenant is not assigned to a unit");
   }
 
+  // Pull the occupant from the array; mark vacant only when no occupants remain.
+  const occupantIds: string[] = Array.isArray(unit.tenantId)
+    ? (unit.tenantId as string[])
+    : unit.tenantId
+      ? [String(unit.tenantId)]
+      : [];
+  const vacatingId =
+    occupantUserId && occupantIds.includes(occupantUserId) ? occupantUserId : String(tenant._id);
+  const remaining = occupantIds.filter((id) => id !== vacatingId);
   await Unit.updateOne(
-    { _id: unit._id, status: "occupied" },
-    { $set: { tenantId: "", status: "available" } },
+    { _id: unit._id },
+    remaining.length === 0
+      ? { $pull: { tenantId: vacatingId }, $set: { status: "available" } }
+      : { $pull: { tenantId: vacatingId } },
   );
 
   await Lease.updateMany(

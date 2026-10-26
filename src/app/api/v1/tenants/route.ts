@@ -67,8 +67,11 @@ async function attachUnitHints<T extends { userId?: string; _id?: unknown }>(row
         blockName: unit.blockName,
         propertyId: String(unit.propertyId),
       };
-      const occupant = String(unit.tenantId ?? "");
-      if (occupant && userIds.includes(occupant)) occupiedByUser.set(occupant, hint);
+      // tenantId is now an array; find which of our userIds is in it
+      const tenantIds = unit.tenantId as unknown as string[];
+      for (const occupant of tenantIds) {
+        if (userIds.includes(occupant)) occupiedByUser.set(occupant, hint);
+      }
       nameByUnitId.set(String(unit._id), { name: unit.name, blockName: unit.blockName });
     }
     for (const moveIn of moveIns) {
@@ -100,6 +103,7 @@ const tenantInput = z
     email: z.string().trim().toLowerCase().email().optional(),
     phone: z.string().optional(),
     propertyId: z.string().regex(/^[0-9a-fA-F]{24}$/),
+    type: z.enum(["residential", "commercial", "owning"]).default("residential"),
     status: z.enum(["active", "pending", "rejected"]).optional(),
     notes: z.string().optional(),
   })
@@ -240,6 +244,7 @@ export async function POST(request: NextRequest) {
       phone: parsed.data.phone,
       propertyId: parsed.data.propertyId,
       ownerId: property.ownerId,
+      type: parsed.data.type,
       status: "active",
       joinedAt: new Date(),
       notes: parsed.data.notes,
@@ -263,6 +268,7 @@ export async function POST(request: NextRequest) {
     phone: parsed.data.phone,
     propertyId: parsed.data.propertyId,
     ownerId: property.ownerId,
+    type: parsed.data.type,
     status,
     joinedAt: status === "active" ? new Date() : undefined,
     notes: parsed.data.notes,

@@ -112,6 +112,21 @@ describe("generateForPeriod", () => {
     expect(second.skipped).toEqual([{ leaseId: "l1", reason: "already-generated" }]);
   });
 
+  it("skips leases for owning tenants (owning tenants do not pay rent)", () => {
+    const result = generateForPeriod({
+      leases: [
+        lease({ _id: "l1", tenantType: "owning" }),
+        lease({ _id: "l2", tenantType: "residential" }),
+      ],
+      existing: [],
+      period: "2026-09",
+      now: new Date(),
+    });
+    expect(result.toCreate).toHaveLength(1);
+    expect(result.toCreate[0].leaseId).toBe("l2");
+    expect(result.skipped).toEqual([{ leaseId: "l1", reason: "owning-tenant" }]);
+  });
+
   it("skips non-monthly leases", () => {
     const result = generateForPeriod({
       leases: [lease({ _id: "l1", frequency: "quarterly" })],

@@ -38,7 +38,7 @@ export function buildUnitInserts(
           letter: letterLabel(unitIndex),
           status: "available",
           rent: null,
-          tenantId: "",
+          tenantId: [],
         });
       });
     });

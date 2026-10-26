@@ -237,7 +237,7 @@ describe("PATCH /api/v1/applications/[id]", () => {
     expect(doc.save).toHaveBeenCalled();
     expect(unit.findOneAndUpdate).toHaveBeenCalledWith(
       { _id: UNIT_ID, status: "available", deletedAt: null },
-      { $set: { tenantId: TENANT_ID, status: "occupied" } },
+      { $addToSet: { tenantId: TENANT_ID }, $set: { status: "occupied" } },
       { new: true },
     );
     expect(lease.create).toHaveBeenCalledWith(

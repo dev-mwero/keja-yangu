@@ -11,6 +11,7 @@ import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { invoiceGenerateInput } from "@/lib/schemas";
 import { Invoice } from "@/models/Invoice";
 import { Lease } from "@/models/Lease";
+import { Tenant } from "@/models/Tenant";
 
 export async function POST(request: NextRequest) {
   const limit = await rateLimit(request, { windowMs: 60_000, limit: 20 });
@@ -88,7 +89,31 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const { toCreate, skipped } = generateForPeriod({ leases, existing, period, now });
+  const tenantIds = [...new Set(leases.map((lease) => String(lease.tenantId)))];
+  const tenants =
+    tenantIds.length > 0
+      ? await Tenant.find({ _id: { $in: tenantIds } })
+          .select("_id type")
+          .lean()
+      : [];
+  const tenantTypeById = new Map<string, "residential" | "commercial" | "owning">();
+  for (const tenant of tenants as Array<{
+    _id: unknown;
+    type?: "residential" | "commercial" | "owning";
+  }>) {
+    tenantTypeById.set(String(tenant._id), tenant.type ?? "residential");
+  }
+  const leasesWithTenantType = leases.map((lease) => ({
+    ...lease,
+    tenantType: tenantTypeById.get(String(lease.tenantId)) ?? "residential",
+  }));
+
+  const { toCreate, skipped } = generateForPeriod({
+    leases: leasesWithTenantType,
+    existing,
+    period,
+    now,
+  });
 
   let created = 0;
   let skippedCount = skipped.length;

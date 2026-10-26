@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 export type TenantStatus = "active" | "pending" | "rejected";
+export type TenantType = "residential" | "commercial" | "owning";
 
 export interface TenantUnitSummary {
   _id: string;
@@ -18,12 +19,15 @@ export interface Tenant {
   phone?: string;
   propertyId: string;
   ownerId: string;
+  type?: TenantType;
   status: TenantStatus;
   joinedAt?: string;
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
-  /** The unit the tenant currently occupies, if any. */
+  /** All units the tenant occupies. */
+  units?: TenantUnitSummary[];
+  /** The unit the tenant currently occupies (first unit if multi-unit), if any. */
   unit?: TenantUnitSummary | null;
   /** The unit the tenant most recently requested (pending move-in), if any. */
   requestedUnit?: TenantUnitSummary | null;
@@ -34,6 +38,7 @@ export interface TenantInput {
   email: string;
   phone?: string;
   propertyId: string;
+  type?: TenantType;
   status?: TenantStatus;
   notes?: string;
 }
