@@ -8,7 +8,7 @@ import {
 } from "@/config/dashboardNav";
 
 describe("tenant navigation", () => {
-  it("consolidates the tenant IA into eight entries", () => {
+  it("consolidates the tenant IA into nine entries", () => {
     expect(tenantNav.map((item) => item.label)).toEqual([
       "Overview",
       "Browse",
@@ -17,6 +17,7 @@ describe("tenant navigation", () => {
       "Payments",
       "Messages",
       "Documents",
+      "Notifications",
       "Settings",
     ]);
   });
@@ -30,6 +31,7 @@ describe("tenant navigation", () => {
       "/dashboard/tenant/payments",
       "/dashboard/tenant/messages",
       "/dashboard/tenant/documents",
+      "/dashboard/tenant/notifications",
       "/dashboard/tenant/settings",
     ]);
   });
@@ -41,6 +43,7 @@ describe("tenant navigation", () => {
       "/dashboard/tenant/payments",
       "/dashboard/tenant/messages",
       "/dashboard/tenant/documents",
+      "/dashboard/tenant/notifications",
       "/dashboard/tenant/settings",
     ]);
   });
