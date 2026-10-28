@@ -1,7 +1,8 @@
 # Floor naming + magic-link onboarding — Implementation Plan
 
-Status: **PROPOSED** · Risk: **medium** (auth cookie changes + one new
-token-based invite path) · Depends on: nothing shipped beyond current `dev`.
+Status: **IMPLEMENTED** · All phases shipped — Phase 1 (floor label rename,
+`d5c0d20`), Phase 2 (verify-email issues session + redirect), Phase 3 (custodian
+settings page + invite activation), Phase 4 (docs reconciled).
 
 **Request (verbatim scope):**
 1. The floor field is currently called **"Level"** in the UI — rename it to
