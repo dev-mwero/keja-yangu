@@ -6,6 +6,7 @@ const stubs: Record<
   | "tenant"
   | "lease"
   | "invoice"
+  | "lead"
   | "notification"
   | "payment"
   | "complaint"
@@ -25,6 +26,7 @@ const stubs: Record<
   tenant: createModelStub(),
   lease: createModelStub(),
   invoice: createModelStub(),
+  lead: createModelStub(),
   notification: createModelStub(),
   payment: createModelStub(),
   complaint: createModelStub(),

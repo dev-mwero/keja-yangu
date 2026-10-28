@@ -154,6 +154,41 @@ export function makeTenant(overrides: Partial<TestTenant> = {}): TestTenant {
   };
 }
 
+export interface TestLead {
+  _id: string;
+  name: string;
+  phone: string;
+  email: string;
+  propertyId: string;
+  unitId: string;
+  ownerId: string;
+  status: "new" | "contacted" | "approved" | "rejected" | "converted";
+  source: string;
+  notes: string;
+  createdBy: string;
+  convertedAt: Date | null;
+  convertedTenantId: string;
+}
+
+export function makeLead(overrides: Partial<TestLead> = {}): TestLead {
+  return {
+    _id: makeObjectId("lead"),
+    name: "John Doe",
+    phone: "+254712345678",
+    email: "john@example.com",
+    propertyId: makeObjectId("prop"),
+    unitId: "",
+    ownerId: makeObjectId("user"),
+    status: "new",
+    source: "walk-in",
+    notes: "",
+    createdBy: makeObjectId("user"),
+    convertedAt: null,
+    convertedTenantId: "",
+    ...overrides,
+  };
+}
+
 export interface TestLease {
   _id: string;
   tenantId: string;

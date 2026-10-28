@@ -51,3 +51,6 @@ export type ApplicationDecisionStatus = (typeof APPLICATION_DECISION_STATUSES)[n
 export const PROPERTY_PURPOSES = ["residential", "commercial", "storage", "other"] as const;
 export type PropertyPurpose = (typeof PROPERTY_PURPOSES)[number];
 export const DEFAULT_PROPERTY_PURPOSE: PropertyPurpose = "residential";
+
+export const LEAD_STATUSES = ["new", "contacted", "approved", "rejected", "converted"] as const;
+export type LeadStatus = (typeof LEAD_STATUSES)[number];

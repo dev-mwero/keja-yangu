@@ -44,4 +44,3 @@ describe("structure helpers", () => {
     });
   });
 });
-

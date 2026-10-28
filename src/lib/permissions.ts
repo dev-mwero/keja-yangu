@@ -43,6 +43,8 @@ export type Action =
   | "invoice:mark-paid"
   | "invoice:generate"
   | "invoice:read-own"
+  | "lead:manage"
+  | "lead:read"
   | "notification:read-own"
   | "notification:manage"
   | "settings:read"
@@ -201,7 +203,9 @@ export async function requirePermission(
         action === "complaint:manage" ||
         action === "chat:manage" ||
         action === "announcement:manage" ||
-        action === "document:manage");
+        action === "document:manage" ||
+        action === "lead:manage" ||
+        action === "lead:read");
     if (scopeOwnerId && ownsResource && resource.ownerId !== scopeOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -351,6 +355,12 @@ export async function requirePermission(
         !resource ||
         resource.ownerId !== managedByOwnerId
       ) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      return null;
+    case "lead:read":
+    case "lead:manage":
+      if (!privileges.includes("manage_tenants")) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
       return null;
