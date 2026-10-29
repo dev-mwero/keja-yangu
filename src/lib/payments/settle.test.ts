@@ -8,11 +8,22 @@ vi.mock("@/lib/notifications", () => ({
 }));
 vi.mock("@/models/Payment", () => ({ Payment: getModelStubs().payment }));
 vi.mock("@/models/Invoice", () => ({ Invoice: getModelStubs().invoice }));
+vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
+vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
+vi.mock("@/models/PaymentSplit", () => ({
+  PaymentSplit: getModelStubs().paymentSplit,
+}));
 
 import { notifyInvoicePaid } from "@/lib/notifications";
 import { applyProviderPayment } from "@/lib/payments/settle";
 
-const { payment: paymentStub, invoice: invoiceStub } = getModelStubs();
+const {
+  payment: paymentStub,
+  invoice: invoiceStub,
+  lease: leaseStub,
+  unit: unitStub,
+  paymentSplit: paymentSplitStub,
+} = getModelStubs();
 const notifyInvoicePaidMock = vi.mocked(notifyInvoicePaid);
 
 const INVOICE_ID = makeObjectId("invoice");
@@ -202,6 +213,143 @@ describe("applyProviderPayment", () => {
     expect(results.map((r) => r.outcome).sort()).toEqual(["already-settled", "settled"]);
     expect(invoiceStub.findOneAndUpdate).toHaveBeenCalledTimes(2);
     expect(paymentStub.updateOne).toHaveBeenCalledTimes(2);
+    expect(notifyInvoicePaidMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("records a payment split when settling an inclusive unit", async () => {
+    const leaseId = makeObjectId("lease");
+    const unitId = makeObjectId("unit");
+    const pending = makeInvoice({
+      _id: INVOICE_ID,
+      tenantId: TENANT_A,
+      status: "pending",
+      amountDue: 25000,
+      amountPaid: 0,
+      leaseId,
+      period: "2026-09",
+    });
+    const paid = makeInvoice({ ...pending, status: "paid", amountPaid: 25000 });
+    paymentStub.findOne.mockReturnValue(buildQuery(paymentDoc()));
+    invoiceStub.findById.mockReturnValue(buildQuery(pending));
+    invoiceStub.findOneAndUpdate.mockReturnValue(buildQuery(paid));
+    paymentStub.updateOne.mockResolvedValue(undefined);
+    leaseStub.findById.mockReturnValue(buildQuery({ _id: leaseId, unitId }));
+    unitStub.findById.mockReturnValue(
+      buildQuery({
+        _id: unitId,
+        rentIncludesServiceCharge: true,
+        rentSharePercent: 80,
+        serviceChargeSharePercent: 20,
+      }),
+    );
+    paymentSplitStub.create.mockResolvedValue({});
+
+    const result = await applyProviderPayment(input);
+
+    expect(result.outcome).toBe("settled");
+    expect(paymentSplitStub.create).toHaveBeenCalledTimes(1);
+    const [split] = paymentSplitStub.create.mock.calls[0] as [
+      {
+        paymentId: string;
+        invoiceId: string;
+        unitId: string;
+        propertyId: string;
+        ownerId: string;
+        period: string;
+        rentMinor: number;
+        serviceChargeMinor: number;
+      },
+    ];
+    expect(split.paymentId).toBe(String(PAYMENT_ID));
+    expect(split.invoiceId).toBe(String(INVOICE_ID));
+    expect(split.unitId).toBe(unitId);
+    expect(split.period).toBe("2026-09");
+    expect(split.rentMinor).toBe(2_000_000);
+    expect(split.serviceChargeMinor).toBe(500_000);
+    expect(split.rentMinor + split.serviceChargeMinor).toBe(input.amountMinor);
+  });
+
+  it("records all rent as the split when the unit is not inclusive", async () => {
+    const leaseId = makeObjectId("lease");
+    const unitId = makeObjectId("unit");
+    const pending = makeInvoice({
+      _id: INVOICE_ID,
+      tenantId: TENANT_A,
+      status: "pending",
+      amountDue: 25000,
+      amountPaid: 0,
+      leaseId,
+      period: "2026-09",
+    });
+    const paid = makeInvoice({ ...pending, status: "paid", amountPaid: 25000 });
+    paymentStub.findOne.mockReturnValue(buildQuery(paymentDoc()));
+    invoiceStub.findById.mockReturnValue(buildQuery(pending));
+    invoiceStub.findOneAndUpdate.mockReturnValue(buildQuery(paid));
+    paymentStub.updateOne.mockResolvedValue(undefined);
+    leaseStub.findById.mockReturnValue(buildQuery({ _id: leaseId, unitId }));
+    unitStub.findById.mockReturnValue(
+      buildQuery({ _id: unitId, rentIncludesServiceCharge: false }),
+    );
+    paymentSplitStub.create.mockResolvedValue({});
+
+    await applyProviderPayment(input);
+
+    expect(paymentSplitStub.create).toHaveBeenCalledTimes(1);
+    const [split] = paymentSplitStub.create.mock.calls[0] as [
+      { rentMinor: number; serviceChargeMinor: number },
+    ];
+    expect(split.rentMinor).toBe(input.amountMinor);
+    expect(split.serviceChargeMinor).toBe(0);
+  });
+
+  it("skips the payment split when the invoice has no lease", async () => {
+    const pending = makeInvoice({
+      _id: INVOICE_ID,
+      tenantId: TENANT_A,
+      status: "pending",
+      amountDue: 25000,
+      amountPaid: 0,
+      leaseId: "",
+    });
+    const paid = makeInvoice({ ...pending, status: "paid", amountPaid: 25000 });
+    paymentStub.findOne.mockReturnValue(buildQuery(paymentDoc()));
+    invoiceStub.findById.mockReturnValue(buildQuery(pending));
+    invoiceStub.findOneAndUpdate.mockReturnValue(buildQuery(paid));
+    paymentStub.updateOne.mockResolvedValue(undefined);
+
+    const result = await applyProviderPayment(input);
+
+    expect(result.outcome).toBe("settled");
+    expect(paymentSplitStub.create).not.toHaveBeenCalled();
+  });
+
+  it("split recording failure does not block settlement", async () => {
+    const leaseId = makeObjectId("lease");
+    const unitId = makeObjectId("unit");
+    const pending = makeInvoice({
+      _id: INVOICE_ID,
+      tenantId: TENANT_A,
+      status: "pending",
+      amountDue: 25000,
+      amountPaid: 0,
+      leaseId,
+      period: "2026-09",
+    });
+    const paid = makeInvoice({ ...pending, status: "paid", amountPaid: 25000 });
+    paymentStub.findOne.mockReturnValue(buildQuery(paymentDoc()));
+    invoiceStub.findById.mockReturnValue(buildQuery(pending));
+    invoiceStub.findOneAndUpdate.mockReturnValue(buildQuery(paid));
+    paymentStub.updateOne.mockResolvedValue(undefined);
+    leaseStub.findById.mockReturnValue(buildQuery({ _id: leaseId, unitId }));
+    unitStub.findById.mockReturnValue(
+      buildQuery({ _id: unitId, rentIncludesServiceCharge: false }),
+    );
+    paymentSplitStub.create.mockRejectedValue(new Error("db down"));
+
+    const result = await applyProviderPayment(input);
+
+    expect(result.outcome).toBe("settled");
+    expect(paymentSplitStub.create).toHaveBeenCalledTimes(1);
     expect(notifyInvoicePaidMock).toHaveBeenCalledTimes(1);
   });
 });

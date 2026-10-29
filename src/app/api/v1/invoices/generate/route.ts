@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { isDuplicateKeyError, readJsonBody, resolveInvoiceActor } from "@/app/api/v1/_helpers";
-import { generateForPeriod } from "@/lib/invoice-generation";
+import { generateForPeriod, type UnitCharge } from "@/lib/invoice-generation";
 import { nextInvoiceNumber } from "@/lib/invoice-numbering";
 import { currentPeriod } from "@/lib/invoicing";
 import { connectToDatabase } from "@/lib/mongoose";
@@ -12,6 +12,7 @@ import { invoiceGenerateInput } from "@/lib/schemas";
 import { Invoice } from "@/models/Invoice";
 import { Lease } from "@/models/Lease";
 import { Tenant } from "@/models/Tenant";
+import { Unit } from "@/models/Unit";
 
 export async function POST(request: NextRequest) {
   const limit = await rateLimit(request, { windowMs: 60_000, limit: 20 });
@@ -65,6 +66,39 @@ export async function POST(request: NextRequest) {
     .select("leaseId")
     .lean();
 
+  // Resolve each lease's unit service-charge configuration so generated
+  // invoices carry the rent / service-charge breakdown.
+  const unitIds = [...new Set(leases.map((l) => l.unitId).filter(Boolean))] as string[];
+  const units = unitIds.length > 0 ? await Unit.find({ _id: { $in: unitIds } }).lean() : [];
+  const unitById = new Map<
+    string,
+    {
+      serviceCharge: number;
+      rentIncludesServiceCharge: boolean;
+      rentSharePercent: number;
+      serviceChargeSharePercent: number;
+    }
+  >();
+  for (const unit of units) {
+    unitById.set(String(unit._id), {
+      serviceCharge: unit.serviceCharge ?? 0,
+      rentIncludesServiceCharge: unit.rentIncludesServiceCharge ?? false,
+      rentSharePercent: unit.rentSharePercent ?? 100,
+      serviceChargeSharePercent: unit.serviceChargeSharePercent ?? 0,
+    });
+  }
+  const unitChargeByLeaseId = new Map<string, UnitCharge>();
+  for (const lease of leases) {
+    const unit = lease.unitId ? unitById.get(String(lease.unitId)) : undefined;
+    if (!unit) continue;
+    unitChargeByLeaseId.set(String(lease._id), {
+      serviceChargeAmount: unit.serviceCharge,
+      rentIncludesServiceCharge: unit.rentIncludesServiceCharge,
+      rentSharePercent: unit.rentSharePercent,
+      serviceChargeSharePercent: unit.serviceChargeSharePercent,
+    });
+  }
+
   // Lazy lease-expiry seam: notify owners, their caretakers and the tenant
   // when a lease ends within the next 30 days. Dedupe keeps repeat generations
   // from re-firing within a lease's lifetime.
@@ -113,6 +147,7 @@ export async function POST(request: NextRequest) {
     existing,
     period,
     now,
+    unitChargeByLeaseId,
   });
 
   let created = 0;

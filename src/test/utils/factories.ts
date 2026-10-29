@@ -113,6 +113,10 @@ export interface TestUnit {
   status: "available" | "occupied" | "maintenance";
   purpose?: PropertyPurpose | null;
   rent: number | null;
+  serviceCharge: number;
+  rentIncludesServiceCharge: boolean;
+  rentSharePercent: number;
+  serviceChargeSharePercent: number;
   beds: number;
   baths: number;
   area: number;
@@ -134,6 +138,10 @@ export function makeUnit(overrides: Partial<TestUnit> = {}): TestUnit {
     letter: "A",
     status: "available",
     rent: null,
+    serviceCharge: 0,
+    rentIncludesServiceCharge: false,
+    rentSharePercent: 100,
+    serviceChargeSharePercent: 0,
     beds: 2,
     baths: 1,
     area: 60,

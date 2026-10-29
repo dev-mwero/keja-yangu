@@ -18,7 +18,8 @@ const stubs: Record<
   | "unit"
   | "moverrequest"
   | "application"
-  | "ownerpaymentconfig",
+  | "ownerpaymentconfig"
+  | "paymentSplit",
   ModelStub
 > = {
   user: createModelStub(),
@@ -39,6 +40,7 @@ const stubs: Record<
   moverrequest: createModelStub(),
   application: createModelStub(),
   ownerpaymentconfig: createModelStub(),
+  paymentSplit: createModelStub(),
 };
 
 /**

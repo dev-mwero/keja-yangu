@@ -100,6 +100,12 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
   }
   if (updates.purpose !== undefined) unit.purpose = updates.purpose;
   if (updates.rent !== undefined) unit.rent = updates.rent;
+  if (updates.serviceCharge !== undefined) unit.serviceCharge = updates.serviceCharge;
+  if (updates.rentIncludesServiceCharge !== undefined)
+    unit.rentIncludesServiceCharge = updates.rentIncludesServiceCharge;
+  if (updates.rentSharePercent !== undefined) unit.rentSharePercent = updates.rentSharePercent;
+  if (updates.serviceChargeSharePercent !== undefined)
+    unit.serviceChargeSharePercent = updates.serviceChargeSharePercent;
   if (updates.beds !== undefined) unit.beds = updates.beds;
   if (updates.baths !== undefined) unit.baths = updates.baths;
   if (updates.area !== undefined) unit.area = updates.area;

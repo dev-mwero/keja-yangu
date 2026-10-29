@@ -1,8 +1,12 @@
 import { notifyInvoicePaid } from "@/lib/notifications";
+import { computePaymentSplit } from "@/lib/payment-split";
 import type { PaymentProviderName } from "@/lib/payments/provider";
 import { mapChannelToMethod, PROVIDER_LABELS, toMinorUnits } from "@/lib/payments/provider";
 import { Invoice } from "@/models/Invoice";
+import { Lease } from "@/models/Lease";
 import { Payment } from "@/models/Payment";
+import { PaymentSplit } from "@/models/PaymentSplit";
+import { Unit } from "@/models/Unit";
 
 export type PaymentSettlementSource = "webhook" | "verify";
 
@@ -36,6 +40,10 @@ interface InvoiceLike {
   amountDue: number;
   amountPaid: number;
   tenantId: string;
+  leaseId: string;
+  propertyId: string;
+  ownerId: string;
+  period: string;
   notes?: string;
 }
 
@@ -94,6 +102,50 @@ async function recordMismatch(
     );
   } catch (error) {
     console.warn(`[payments] mismatch invoice update failed invoice=${String(invoice._id)}`, error);
+  }
+}
+
+/**
+ * Best-effort record of how a settled payment divides between rent (→ owner)
+ * and service charge (→ caretaker). Never throws: a failure here must not
+ * block or overturn a successful settlement.
+ */
+async function recordPaymentSplit(
+  payment: PaymentLike,
+  invoice: InvoiceLike,
+  amountMinor: number,
+): Promise<void> {
+  try {
+    if (!invoice.leaseId) return; // manual invoices have no unit → no split
+    const lease = await Lease.findById(invoice.leaseId).select("unitId").lean();
+    if (!lease?.unitId) return;
+    const unit = await Unit.findById(lease.unitId).lean();
+    if (!unit) return;
+
+    const { rentMinor, serviceChargeMinor } = computePaymentSplit(
+      {
+        rentIncludesServiceCharge: !!unit.rentIncludesServiceCharge,
+        rentSharePercent: unit.rentSharePercent ?? 0,
+        serviceChargeSharePercent: unit.serviceChargeSharePercent ?? 0,
+      },
+      amountMinor,
+    );
+
+    await PaymentSplit.create({
+      paymentId: String(payment._id),
+      invoiceId: String(invoice._id),
+      unitId: String(lease.unitId),
+      propertyId: invoice.propertyId,
+      ownerId: invoice.ownerId,
+      period: invoice.period,
+      rentMinor,
+      serviceChargeMinor,
+    });
+  } catch (error) {
+    console.warn(
+      `[payments] payment-split record failed payment=${String(payment._id)} invoice=${String(invoice._id)}`,
+      error,
+    );
   }
 }
 
@@ -186,6 +238,9 @@ export async function applyProviderPayment(
       error,
     );
   }
+
+  // Record how the settled payment divides between rent and service charge.
+  await recordPaymentSplit(payment, invoice, input.amountMinor);
 
   return { outcome: "settled" };
 }

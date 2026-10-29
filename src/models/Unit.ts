@@ -22,6 +22,17 @@ const unitSchema = new Schema(
     purpose: { type: String, enum: [...PROPERTY_PURPOSES, null], default: null },
     // Optional rent override; falls back to floor/block/property rent.
     rent: { type: Number, min: 0, default: null },
+    // Service charge per period (major units, KES), used by the caretaker for
+    // water, garbage collection, minor repairs, etc.
+    serviceCharge: { type: Number, min: 0, default: 0 },
+    // When true, the collected rent already includes the service charge and
+    // managers split it into rent + service fee by the share percentages below.
+    rentIncludesServiceCharge: { type: Boolean, default: false },
+    // Share of the collected amount that is rent (→ owner). Only meaningful
+    // when rentIncludesServiceCharge is true.
+    rentSharePercent: { type: Number, min: 0, max: 100, default: 100 },
+    // Share of the collected amount that is the service fee (→ caretaker).
+    serviceChargeSharePercent: { type: Number, min: 0, max: 100, default: 0 },
     beds: { type: Number, min: 0, default: 0 },
     baths: { type: Number, min: 0, default: 0 },
     area: { type: Number, min: 0, default: 0 },
@@ -35,6 +46,28 @@ const unitSchema = new Schema(
     timestamps: true,
   },
 );
+
+// When rent already includes the service charge, the rent and service-fee
+// shares must sum to 100 so the collected amount can be split exactly.
+unitSchema.pre("validate", function validateServiceChargeShares() {
+  const unit = this as {
+    rentIncludesServiceCharge?: boolean;
+    rentSharePercent?: number;
+    serviceChargeSharePercent?: number;
+  };
+  if (!unit.rentIncludesServiceCharge) return;
+  const total = (unit.rentSharePercent ?? 0) + (unit.serviceChargeSharePercent ?? 0);
+  if (total !== 100) {
+    this.invalidate(
+      "rentSharePercent",
+      "rentSharePercent and serviceChargeSharePercent must sum to 100 when rent includes the service charge",
+    );
+    this.invalidate(
+      "serviceChargeSharePercent",
+      "rentSharePercent and serviceChargeSharePercent must sum to 100 when rent includes the service charge",
+    );
+  }
+});
 
 // Unit names are unique per block (not per property) among live units only.
 unitSchema.index(

@@ -61,6 +61,42 @@ describe("buildInvoiceForLease", () => {
     expect(draft.dueDate.toISOString()).toBe(computeDueDate("2026-09").toISOString());
     expect(draft.issuedAt).toBe(now);
   });
+
+  it("inclusive unit: amountDue is the collected rent, split into rent + service charge", () => {
+    const draft = buildInvoiceForLease(lease(), "2026-09", new Date(), {
+      serviceChargeAmount: 5000,
+      rentIncludesServiceCharge: true,
+      rentSharePercent: 80,
+      serviceChargeSharePercent: 20,
+    });
+    expect(draft.amountDue).toBe(25000);
+    expect(draft.rentAmount).toBe(20000);
+    expect(draft.serviceChargeAmount).toBe(5000);
+    expect(draft.rentAmount + draft.serviceChargeAmount).toBe(draft.amountDue);
+    expect(draft.rentIncludesServiceCharge).toBe(true);
+  });
+
+  it("separate unit: amountDue is rent + service charge", () => {
+    const draft = buildInvoiceForLease(lease(), "2026-09", new Date(), {
+      serviceChargeAmount: 5000,
+      rentIncludesServiceCharge: false,
+      rentSharePercent: 100,
+      serviceChargeSharePercent: 0,
+    });
+    expect(draft.amountDue).toBe(30000);
+    expect(draft.rentAmount).toBe(25000);
+    expect(draft.serviceChargeAmount).toBe(5000);
+    expect(draft.rentAmount + draft.serviceChargeAmount).toBe(draft.amountDue);
+    expect(draft.rentIncludesServiceCharge).toBe(false);
+  });
+
+  it("no unit charge: service charge is zero and not inclusive", () => {
+    const draft = buildInvoiceForLease(lease({ rentAmount: 45000 }), "2026-09", new Date());
+    expect(draft.amountDue).toBe(45000);
+    expect(draft.rentAmount).toBe(45000);
+    expect(draft.serviceChargeAmount).toBe(0);
+    expect(draft.rentIncludesServiceCharge).toBe(false);
+  });
 });
 
 describe("generateForPeriod", () => {
