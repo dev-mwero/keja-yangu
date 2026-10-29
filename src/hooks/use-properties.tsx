@@ -186,8 +186,8 @@ export interface PropertyDetail extends Property {
 
 /**
  * Fetches a single property together with its vacant units for the public
- * property page. `GET /api/v1/properties/[id]` embeds `units` (available only)
- * so the browse → pick-a-unit flow needs one round-trip.
+ * property page. Unit details are loaded separately when a user expands the
+ * unit list; the initial property response stays compact.
  */
 export function useProperty(id?: string) {
   const [property, setProperty] = useState<PropertyDetail | null>(null);
@@ -206,7 +206,7 @@ export function useProperty(id?: string) {
     const fetchProperty = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/v1/properties/${id}`);
+        const res = await fetch(`/api/v1/properties/${id}?includeUnits=0`);
         const json = await res.json();
         if (cancelled) return;
         if (res.ok) {

@@ -120,6 +120,20 @@ describe("GET /api/v1/properties/[id]", () => {
     expect((body.data as { status?: string }).status).toBe("available");
   });
 
+  it("omits unit details when the compact property view is requested", async () => {
+    property.findOne.mockReturnValue(buildQuery(makeProperty({ _id: PROPERTY_ID })));
+
+    const res = await GET(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}`, { query: { includeUnits: "0" } }),
+      withParams(PROPERTY_ID),
+    );
+    const body = await json(res);
+
+    expect(res.status).toBe(200);
+    expect(unit.find).not.toHaveBeenCalled();
+    expect((body.data as { units?: unknown[] }).units).toEqual([]);
+  });
+
   it("200 with the full doc for an authenticated owner on their own property", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     property.findOne.mockReturnValue(buildQuery(ownProperty()));

@@ -19,7 +19,9 @@ const stubs: Record<
   | "moverrequest"
   | "application"
   | "ownerpaymentconfig"
-  | "paymentSplit",
+  | "paymentSplit"
+  | "propertyFavorite"
+  | "propertyView",
   ModelStub
 > = {
   user: createModelStub(),
@@ -41,6 +43,8 @@ const stubs: Record<
   application: createModelStub(),
   ownerpaymentconfig: createModelStub(),
   paymentSplit: createModelStub(),
+  propertyFavorite: createModelStub(),
+  propertyView: createModelStub(),
 };
 
 /**

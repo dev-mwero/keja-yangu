@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => {
     create,
     push,
     toast,
+    unitDetails: [] as unknown[],
     useProperty: vi.fn(),
     useApplications: vi.fn(),
   };
@@ -81,6 +82,29 @@ describe("Property details page", () => {
   beforeEach(() => {
     mocks.create.mockClear();
     mocks.push.mockClear();
+    mocks.unitDetails = UNITS;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("unit-summary")) {
+          return {
+            ok: true,
+            json: async () => ({
+              data: {
+                totalUnits: 1,
+                byStatus: { available: 1, occupied: 0, maintenance: 0 },
+                floors: [],
+              },
+            }),
+          };
+        }
+        if (url.includes("includeUnits=1")) {
+          return { ok: true, json: async () => ({ data: { units: mocks.unitDetails } }) };
+        }
+        return { ok: true, json: async () => ({ data: { viewed: true } }) };
+      }),
+    );
     mocks.useApplications.mockReturnValue({ applications: [], loading: false, refetch: vi.fn() });
     mocks.useProperty.mockReturnValue({
       property: { ...PROPERTY, units: UNITS },
@@ -90,16 +114,19 @@ describe("Property details page", () => {
     });
   });
 
-  it("lists available units with rent", () => {
+  it("loads available unit details only when expanded", async () => {
     render(<PropertyDetails />);
     expect(screen.getByText("Available units")).toBeInTheDocument();
-    expect(screen.getByText("Unit 3A")).toBeInTheDocument();
+    expect(screen.queryByText("Unit 3A")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByText(/View and request a specific unit/i));
+    expect(await screen.findByText("Unit 3A")).toBeInTheDocument();
     expect(screen.getAllByText(/45,000/).length).toBeGreaterThan(0);
   });
 
   it("opens a unit-scoped dialog and submits the unitId", async () => {
     render(<PropertyDetails />);
 
+    await userEvent.click(screen.getByText(/View and request a specific unit/i));
     await userEvent.click(screen.getByRole("button", { name: /request 3a/i }));
 
     expect(await screen.findByText("Request 3A · Sunset Villa")).toBeInTheDocument();
@@ -113,7 +140,8 @@ describe("Property details page", () => {
     });
   });
 
-  it("falls back to a general request when no units are listed", () => {
+  it("falls back to a general request when no units are listed", async () => {
+    mocks.unitDetails = [];
     mocks.useProperty.mockReturnValue({
       property: { ...PROPERTY, units: [] },
       units: [],
@@ -121,6 +149,7 @@ describe("Property details page", () => {
       error: null,
     });
     render(<PropertyDetails />);
-    expect(screen.getByText(/No units are listed right now/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByText(/View and request a specific unit/i));
+    expect(await screen.findByText(/No units are listed right now/i)).toBeInTheDocument();
   });
 });

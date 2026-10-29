@@ -76,10 +76,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     return NextResponse.json({ error: "Property not found" }, { status: 404 });
   }
 
-  const units = await Unit.find({ propertyId: id, status: "available" })
-    .select("name letter floorLevel floorLabel blockName rent beds baths area status")
-    .sort({ floorLevel: 1, name: 1 })
-    .lean();
+  const units =
+    request.nextUrl.searchParams.get("includeUnits") === "0"
+      ? []
+      : await Unit.find({ propertyId: id, status: "available" })
+          .select("name letter floorLevel floorLabel blockName rent beds baths area status")
+          .sort({ floorLevel: 1, name: 1 })
+          .lean();
 
   return NextResponse.json({ data: { ...property, units } });
 }

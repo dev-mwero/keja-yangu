@@ -3,6 +3,7 @@
 import { Bath, BedDouble, MapPin, Maximize2 } from "lucide-react";
 import Link from "next/link";
 import { PropertyCover } from "@/components/property/PropertyCover";
+import { PropertyFavoriteButton } from "@/components/property/PropertyFavoriteButton";
 import { Badge } from "@/components/ui/badge";
 import type { Property } from "@/data/properties";
 import { cn } from "@/lib/utils";
@@ -13,70 +14,90 @@ const statusStyles: Record<Property["status"], string> = {
   maintenance: "bg-warning/15 text-warning border-warning/40",
 };
 
-export const PropertyCard = ({ property }: { property: Property }) => {
+export const PropertyCard = ({
+  property,
+  showFavouriteButton,
+  onFavouriteChange,
+}: {
+  property: Property;
+  showFavouriteButton?: boolean;
+  onFavouriteChange?: (favourited: boolean) => void;
+}) => {
+  const canFavourite = property.published && property.status === "available";
   return (
-    <Link href={`/properties/${property.id}`} className="group block">
-      <div className="relative overflow-hidden rounded-2xl bg-muted shadow-soft transition-all duration-500 hover:shadow-elevated">
-        <div className="relative aspect-[4/3] overflow-hidden">
-          <PropertyCover
-            images={property.images}
-            title={property.title}
-            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-            imageClassName="transition-transform duration-700 ease-out group-hover:scale-105"
+    <article className="group relative">
+      {(showFavouriteButton ?? canFavourite) && (
+        <div className="absolute right-3 top-3 z-20">
+          <PropertyFavoriteButton
+            propertyId={property.id}
+            canAdd={canFavourite}
+            onChange={onFavouriteChange}
           />
         </div>
-        <div className="absolute left-4 top-4 z-10 flex gap-2">
-          <Badge
-            variant="outline"
-            className={cn(
-              "rounded-full border bg-background/90 backdrop-blur capitalize",
-              statusStyles[property.status],
-            )}
-          >
-            {property.status}
-          </Badge>
-          {!property.published && (
+      )}
+      <Link href={`/properties/${property.id}`} className="block">
+        <div className="relative overflow-hidden rounded-2xl bg-muted shadow-soft transition-all duration-500 hover:shadow-elevated">
+          <div className="relative aspect-[4/3] overflow-hidden">
+            <PropertyCover
+              images={property.images}
+              title={property.title}
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              imageClassName="transition-transform duration-700 ease-out group-hover:scale-105"
+            />
+          </div>
+          <div className="absolute left-4 top-4 z-10 flex gap-2">
             <Badge
               variant="outline"
-              className="rounded-full border border-border bg-background/90 text-muted-foreground backdrop-blur"
+              className={cn(
+                "rounded-full border bg-background/90 backdrop-blur capitalize",
+                statusStyles[property.status],
+              )}
             >
-              Unpublished
+              {property.status}
             </Badge>
-          )}
+            {!property.published && (
+              <Badge
+                variant="outline"
+                className="rounded-full border border-border bg-background/90 text-muted-foreground backdrop-blur"
+              >
+                Unpublished
+              </Badge>
+            )}
+          </div>
+          <div className="absolute bottom-4 right-4 rounded-full bg-background/95 px-3 py-1.5 text-sm font-semibold shadow-soft backdrop-blur">
+            KES {property.price.toLocaleString()}
+            <span className="text-muted-foreground">/mo</span>
+          </div>
         </div>
-        <div className="absolute bottom-4 right-4 rounded-full bg-background/95 px-3 py-1.5 text-sm font-semibold shadow-soft backdrop-blur">
-          KES {property.price.toLocaleString()}
-          <span className="text-muted-foreground">/mo</span>
+        <div className="mt-4 space-y-2">
+          <div className="flex items-start justify-between gap-3">
+            <h3 className="font-display text-lg font-semibold leading-snug tracking-tight transition-colors group-hover:text-primary">
+              {property.title}
+            </h3>
+            <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs font-medium capitalize text-muted-foreground">
+              {property.type}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <MapPin className="h-3.5 w-3.5" />
+            <span>{property.location}</span>
+          </div>
+          <div className="flex items-center gap-4 pt-1 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <BedDouble className="h-3.5 w-3.5" />
+              {property.beds}
+            </span>
+            <span className="flex items-center gap-1">
+              <Bath className="h-3.5 w-3.5" />
+              {property.baths}
+            </span>
+            <span className="flex items-center gap-1">
+              <Maximize2 className="h-3.5 w-3.5" />
+              {property.area}m²
+            </span>
+          </div>
         </div>
-      </div>
-      <div className="mt-4 space-y-2">
-        <div className="flex items-start justify-between gap-3">
-          <h3 className="font-display text-lg font-semibold leading-snug tracking-tight transition-colors group-hover:text-primary">
-            {property.title}
-          </h3>
-          <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs font-medium capitalize text-muted-foreground">
-            {property.type}
-          </span>
-        </div>
-        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <MapPin className="h-3.5 w-3.5" />
-          <span>{property.location}</span>
-        </div>
-        <div className="flex items-center gap-4 pt-1 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <BedDouble className="h-3.5 w-3.5" />
-            {property.beds}
-          </span>
-          <span className="flex items-center gap-1">
-            <Bath className="h-3.5 w-3.5" />
-            {property.baths}
-          </span>
-          <span className="flex items-center gap-1">
-            <Maximize2 className="h-3.5 w-3.5" />
-            {property.area}m²
-          </span>
-        </div>
-      </div>
-    </Link>
+      </Link>
+    </article>
   );
 };

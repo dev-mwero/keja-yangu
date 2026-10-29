@@ -8,10 +8,11 @@ import {
 } from "@/config/dashboardNav";
 
 describe("tenant navigation", () => {
-  it("consolidates the tenant IA into nine entries", () => {
+  it("includes the tenant discovery and favourites entries", () => {
     expect(tenantNav.map((item) => item.label)).toEqual([
       "Overview",
       "Browse",
+      "Favourites",
       "My Home",
       "Requests",
       "Payments",
@@ -26,6 +27,7 @@ describe("tenant navigation", () => {
     expect(tenantNav.map((item) => item.to)).toEqual([
       "/dashboard/tenant",
       "/properties",
+      "/dashboard/tenant/favourites",
       "/dashboard/tenant/home",
       "/dashboard/tenant/requests",
       "/dashboard/tenant/payments",
@@ -38,6 +40,7 @@ describe("tenant navigation", () => {
 
   it("derives sub-routes from the internal entries only", () => {
     expect(tenantSubRoutes).toEqual([
+      "/dashboard/tenant/favourites",
       "/dashboard/tenant/home",
       "/dashboard/tenant/requests",
       "/dashboard/tenant/payments",

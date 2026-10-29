@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PropertyMap } from "@/components/PropertyMap";
+import { PropertyFavoriteButton } from "@/components/property/PropertyFavoriteButton";
 import { PropertyLightbox } from "@/components/property/PropertyLightbox";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Badge } from "@/components/ui/badge";
@@ -33,11 +34,12 @@ import { applicationFormSchema } from "@/lib/schemas/application";
 const PropertyDetails = () => {
   const { id } = useParams();
   const propertyId = typeof id === "string" ? id : undefined;
-  const { property, units, loading } = useProperty(propertyId);
+  const { property, loading } = useProperty(propertyId);
   const [active, setActive] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
+  const userId = user?.id;
   const router = useRouter();
   const { create } = useApplicationMutations();
   const { applications } = useApplications(undefined, { enabled: user?.role === "tenant" });
@@ -46,6 +48,102 @@ const PropertyDetails = () => {
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", message: "" });
   const [errors, setErrors] = useState<{ name?: string; email?: string; message?: string }>({});
+  const [unitSummary, setUnitSummary] = useState<{
+    totalUnits: number;
+    byStatus: { available: number; occupied: number; maintenance: number };
+    floors: Array<{
+      label: string;
+      level: number;
+      block: string | null;
+      total: number;
+      available: number;
+      occupied: number;
+      maintenance: number;
+    }>;
+  } | null>(null);
+  const [unitSummaryError, setUnitSummaryError] = useState<string | null>(null);
+  const [unitDetailsByProperty, setUnitDetailsByProperty] = useState<
+    Record<string, PropertyUnit[]>
+  >({});
+  const [unitLoadingByProperty, setUnitLoadingByProperty] = useState<Record<string, boolean>>({});
+  const [unitErrorsByProperty, setUnitErrorsByProperty] = useState<Record<string, string>>({});
+  const unitDetails = propertyId ? (unitDetailsByProperty[propertyId] ?? []) : [];
+  const unitsLoaded = Boolean(propertyId && Object.hasOwn(unitDetailsByProperty, propertyId));
+  const unitsLoading = Boolean(propertyId && unitLoadingByProperty[propertyId]);
+  const unitsError = propertyId ? unitErrorsByProperty[propertyId] : null;
+
+  useEffect(() => {
+    if (!propertyId) return;
+    let cancelled = false;
+    fetch(`/api/v1/properties/${propertyId}/unit-summary`)
+      .then(async (response) => {
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || "Could not load unit summary");
+        if (!cancelled) setUnitSummary(body.data);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setUnitSummaryError(
+            error instanceof Error ? error.message : "Could not load unit summary",
+          );
+        }
+      });
+
+    if (userId) {
+      fetch(`/api/v1/properties/${propertyId}/view`, { method: "POST" })
+        .then(async (response) => {
+          const body = await response.json();
+          if (!response.ok) throw new Error(body.error || "Could not update recently viewed homes");
+        })
+        .catch((error: unknown) => {
+          if (!cancelled) {
+            toast({
+              title: "Could not update recently viewed homes",
+              description: error instanceof Error ? error.message : "Please try again.",
+              variant: "destructive",
+            });
+          }
+        });
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [propertyId, userId, toast]);
+
+  const loadUnitDetails = async () => {
+    if (
+      !propertyId ||
+      Object.hasOwn(unitDetailsByProperty, propertyId) ||
+      unitLoadingByProperty[propertyId]
+    ) {
+      return;
+    }
+    const loadingPropertyId = propertyId;
+    setUnitLoadingByProperty((current) => ({ ...current, [loadingPropertyId]: true }));
+    setUnitErrorsByProperty((current) => {
+      const next = { ...current };
+      delete next[loadingPropertyId];
+      return next;
+    });
+    try {
+      const response = await fetch(`/api/v1/properties/${loadingPropertyId}?includeUnits=1`);
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "Could not load available units");
+      setUnitDetailsByProperty((current) => ({
+        ...current,
+        [loadingPropertyId]: body.data.units ?? [],
+      }));
+    } catch (error) {
+      setUnitErrorsByProperty((current) => ({
+        ...current,
+        [loadingPropertyId]:
+          error instanceof Error ? error.message : "Could not load available units",
+      }));
+    } finally {
+      setUnitLoadingByProperty((current) => ({ ...current, [loadingPropertyId]: false }));
+    }
+  };
 
   // Prefill the applicant's details whenever the dialog opens, whether it was
   // opened from the general button or a specific unit's "Request" button.
@@ -221,6 +319,11 @@ const PropertyDetails = () => {
               <h1 className="mt-3 font-display text-4xl font-semibold tracking-tight md:text-5xl text-balance">
                 {property.title}
               </h1>
+              {property.status === "available" && property.published && (
+                <div className="mt-4">
+                  <PropertyFavoriteButton propertyId={property._id} />
+                </div>
+              )}
               <p className="mt-3 inline-flex items-center gap-2 text-muted-foreground">
                 <MapPin className="h-4 w-4" /> {property.location}
               </p>
@@ -283,62 +386,127 @@ const PropertyDetails = () => {
               >
                 Available units
               </h2>
+              {unitSummaryError && (
+                <p role="alert" className="mt-3 text-sm text-destructive">
+                  {unitSummaryError}
+                </p>
+              )}
+              {unitSummary && (
+                <div className="mt-4 space-y-4 rounded-2xl border border-border bg-card p-4">
+                  <div className="flex flex-wrap gap-2 text-sm">
+                    <span className="rounded-full bg-muted px-3 py-1">
+                      {unitSummary.totalUnits} total units
+                    </span>
+                    <span className="rounded-full bg-success/15 px-3 py-1 text-success">
+                      {unitSummary.byStatus.available} available
+                    </span>
+                    <span className="rounded-full bg-muted px-3 py-1 text-muted-foreground">
+                      {unitSummary.byStatus.occupied} occupied
+                    </span>
+                    <span className="rounded-full bg-warning/15 px-3 py-1 text-warning">
+                      {unitSummary.byStatus.maintenance} maintenance
+                    </span>
+                  </div>
+                  <ul className="grid gap-2 sm:grid-cols-2" aria-label="Unit availability by floor">
+                    {unitSummary.floors.map((floor) => (
+                      <li
+                        key={`${floor.block ?? "none"}-${floor.level}-${floor.label}`}
+                        className="rounded-xl border border-border px-3 py-2 text-sm"
+                      >
+                        <span className="font-medium">
+                          {floor.block ? `Block ${floor.block} · ` : ""}
+                          {floor.label === "Ground" ? "Ground floor" : `Floor ${floor.label}`}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {" "}
+                          · {floor.available} of {floor.total} available
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {property.status !== "available" ? (
                 <p className="mt-3 text-muted-foreground">
                   This home is not accepting applications right now.
                 </p>
-              ) : units.length === 0 ? (
-                <p className="mt-3 text-muted-foreground">
-                  No units are listed right now. Submit a general request and the caretaker will
-                  suggest one.
-                </p>
               ) : (
-                <ul aria-label="Available units" className="mt-4 grid gap-3 sm:grid-cols-2">
-                  {units.map((unit) => (
-                    <li
-                      key={unit._id}
-                      className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-soft"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="font-display text-lg font-semibold">Unit {unit.name}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {unit.blockName ? `Block ${unit.blockName} · ` : ""}
-                            Floor {unit.floorLabel || unit.floorLevel}
+                <details
+                  className="mt-4"
+                  onToggle={(event) => {
+                    if (event.currentTarget.open) void loadUnitDetails();
+                  }}
+                >
+                  <summary className="cursor-pointer text-sm font-medium text-primary">
+                    View and request a specific unit
+                  </summary>
+                  {unitsLoading && (
+                    <p className="mt-3 text-sm text-muted-foreground">Loading units...</p>
+                  )}
+                  {unitsError && (
+                    <p role="alert" className="mt-3 text-sm text-destructive">
+                      {unitsError}
+                    </p>
+                  )}
+                  {unitsLoaded && unitDetails.length === 0 && (
+                    <p className="mt-3 text-muted-foreground">
+                      No units are listed right now. Submit a general request and the caretaker will
+                      suggest one.
+                    </p>
+                  )}
+                  {unitsLoaded && unitDetails.length > 0 && (
+                    <ul aria-label="Available units" className="mt-4 grid gap-3 sm:grid-cols-2">
+                      {unitDetails.map((unit) => (
+                        <li
+                          key={unit._id}
+                          className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-soft"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <div className="font-display text-lg font-semibold">
+                                Unit {unit.name}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {unit.blockName ? `Block ${unit.blockName} · ` : ""}
+                                Floor {unit.floorLabel || unit.floorLevel}
+                              </div>
+                            </div>
+                            <div className="text-right text-sm font-medium">
+                              {formatKES(unit.rent ?? property.price)}
+                              <div className="text-xs font-normal text-muted-foreground">
+                                / month
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                        <div className="text-right text-sm font-medium">
-                          {formatKES(unit.rent ?? property.price)}
-                          <div className="text-xs font-normal text-muted-foreground">/ month</div>
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                        <span className="inline-flex items-center gap-1">
-                          <BedDouble className="h-3.5 w-3.5" /> {unit.beds} bed
-                        </span>
-                        <span className="inline-flex items-center gap-1">
-                          <Bath className="h-3.5 w-3.5" /> {unit.baths} bath
-                        </span>
-                        <span className="inline-flex items-center gap-1">
-                          <Maximize2 className="h-3.5 w-3.5" /> {unit.area} m²
-                        </span>
-                      </div>
-                      <Button
-                        size="sm"
-                        className="rounded-full"
-                        disabled={alreadyPending}
-                        aria-label={`Request ${unit.name}`}
-                        onClick={() => {
-                          setSelectedUnit(unit);
-                          setOpen(true);
-                        }}
-                      >
-                        <Send className="mr-2 h-3.5 w-3.5" />
-                        Request this unit
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
+                          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                            <span className="inline-flex items-center gap-1">
+                              <BedDouble className="h-3.5 w-3.5" /> {unit.beds} bed
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                              <Bath className="h-3.5 w-3.5" /> {unit.baths} bath
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                              <Maximize2 className="h-3.5 w-3.5" /> {unit.area} m²
+                            </span>
+                          </div>
+                          <Button
+                            size="sm"
+                            className="rounded-full"
+                            disabled={alreadyPending}
+                            aria-label={`Request ${unit.name}`}
+                            onClick={() => {
+                              setSelectedUnit(unit);
+                              setOpen(true);
+                            }}
+                          >
+                            <Send className="mr-2 h-3.5 w-3.5" />
+                            Request this unit
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </details>
               )}
             </section>
           </div>
