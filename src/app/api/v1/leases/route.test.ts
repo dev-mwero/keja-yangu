@@ -335,7 +335,7 @@ describe("POST /api/v1/leases", () => {
           _id: UNIT_ID,
           propertyId: PROPERTY_ID,
           status: "occupied",
-          tenantId: TENANT_USER_ID,
+          tenantId: [TENANT_USER_ID],
         }),
       ),
     );
@@ -381,7 +381,7 @@ describe("POST /api/v1/leases", () => {
     leaseStub.findOne.mockReturnValue(buildQuery(null));
     unitStub.findById.mockReturnValue(
       buildQuery(
-        makeUnit({ _id: UNIT_ID, propertyId: PROPERTY_ID, status: "available", tenantId: "" }),
+        makeUnit({ _id: UNIT_ID, propertyId: PROPERTY_ID, status: "available", tenantId: [] }),
       ),
     );
 
@@ -420,7 +420,7 @@ describe("POST /api/v1/leases", () => {
           _id: UNIT_ID,
           propertyId: PROPERTY_ID,
           status: "occupied",
-          tenantId: TENANT_USER_ID,
+          tenantId: [TENANT_USER_ID],
         }),
       ),
     );

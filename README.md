@@ -37,10 +37,12 @@ A modern property rental and tenant management platform built with Next.js, Type
 - **Move requests** (move-in / move-out) with approval that occupies/frees units
   and opens/ends leases
 - Global dashboard **search** across properties, units, tenants, and invoices
-- Email verification with Nodemailer
+- Email verification with Nodemailer (phone-only staff accounts skip email verification; credentials are shared out-of-band)
+- Sign in with email or phone number
 - Protected dashboard routes with AuthGuard
 - Property listings with search, filters, and pagination
 - Rate-limited API endpoints (in-memory)
+- **Dashboard notifications** — unread in-app notifications (payments, overdue invoices, lease expiry, complaints, chat replies, announcements, move requests) surface via a bell on every dashboard with an unread count badge and mark-as-read
 - Responsive design with mobile navigation
 - Dark/light theme support
 
@@ -237,7 +239,10 @@ custodians.
 `custodian` and `system-admin` are invite/seed-only and cannot be selected at
 public signup.
 
-Email verification is required for all accounts.
+Phone-only accounts: staff roles (custodian, caretaker, tenant) can be created
+without an email — the admin creates an active, verified user and shares the
+generated password out-of-band. Sign in accepts either email or phone.
+Email verification is required for email-based accounts.
 
 ## Deployment
 

@@ -117,6 +117,24 @@ describe("PATCH /api/v1/units/[id]", () => {
     expect(doc.save).toHaveBeenCalled();
   });
 
+  it("owner updates unit purpose override", async () => {
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    const doc = persistedUnit();
+    unit.findById.mockResolvedValue(doc);
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/units/${UNIT_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { purpose: "commercial" },
+      }),
+      withParams(UNIT_ID),
+    );
+    expect(res.status).toBe(200);
+    expect(doc.purpose).toBe("commercial");
+    expect(doc.save).toHaveBeenCalled();
+  });
+
   it("409 when renaming to a name already used in the block", async () => {
     user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
     const doc = persistedUnit({ name: "3A" });
@@ -203,6 +221,32 @@ describe("PATCH /api/v1/units/[id]", () => {
     );
     expect(res.status).toBe(409);
     expect(doc.save).not.toHaveBeenCalled();
+  });
+
+  it("owner updates unit service-charge configuration", async () => {
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    const doc = persistedUnit();
+    unit.findById.mockResolvedValue(doc);
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/units/${UNIT_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: {
+          serviceCharge: 5000,
+          rentIncludesServiceCharge: true,
+          rentSharePercent: 80,
+          serviceChargeSharePercent: 20,
+        },
+      }),
+      withParams(UNIT_ID),
+    );
+    expect(res.status).toBe(200);
+    expect(doc.serviceCharge).toBe(5000);
+    expect(doc.rentIncludesServiceCharge).toBe(true);
+    expect(doc.rentSharePercent).toBe(80);
+    expect(doc.serviceChargeSharePercent).toBe(20);
+    expect(doc.save).toHaveBeenCalled();
   });
 });
 

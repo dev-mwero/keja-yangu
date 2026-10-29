@@ -48,7 +48,7 @@ function unitDoc(overrides: Record<string, unknown> = {}) {
     propertyId: PROPERTY_ID,
     ownerId: OWNER_ID,
     status: "available",
-    tenantId: "",
+    tenantId: [],
     ...overrides,
   });
 }
@@ -106,7 +106,7 @@ describe("POST /api/v1/tenants/[id]/assignment", () => {
     tenantStub.findById.mockReturnValue(buildQuery(tenantDoc()));
     unitStub.findById.mockReturnValue(buildQuery(unitDoc()));
     unitStub.findOneAndUpdate.mockReturnValue(
-      buildQuery(unitDoc({ status: "occupied", tenantId: OCCUPANT_USER_ID })),
+      buildQuery(unitDoc({ status: "occupied", tenantId: [OCCUPANT_USER_ID] })),
     );
     tenantStub.updateOne.mockResolvedValue({ modifiedCount: 1 });
     lease.findOne.mockReturnValue(buildQuery(null));
@@ -120,7 +120,7 @@ describe("POST /api/v1/tenants/[id]/assignment", () => {
     expect(body.data?.unit).toMatchObject({ _id: UNIT_ID, name: "3A" });
     expect(unitStub.findOneAndUpdate).toHaveBeenCalledWith(
       { _id: UNIT_ID, status: "available", deletedAt: null },
-      { $set: { tenantId: OCCUPANT_USER_ID, status: "occupied" } },
+      { $addToSet: { tenantId: OCCUPANT_USER_ID }, $set: { status: "occupied" } },
       { new: true },
     );
     expect(lease.create).toHaveBeenCalledWith(
@@ -167,7 +167,7 @@ describe("DELETE /api/v1/tenants/[id]/assignment", () => {
   it("vacates the tenant's unit and ends the lease", async () => {
     tenantStub.findById.mockReturnValue(buildQuery(tenantDoc()));
     const occupied = {
-      ...unitDoc({ status: "occupied", tenantId: OCCUPANT_USER_ID }),
+      ...unitDoc({ status: "occupied", tenantId: [OCCUPANT_USER_ID] }),
     };
     unitStub.findOne.mockResolvedValue(occupied);
     unitStub.updateOne.mockResolvedValue({ modifiedCount: 1 });

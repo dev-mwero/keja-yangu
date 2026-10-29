@@ -30,6 +30,11 @@ export interface IInvoice {
   paymentDescription?: string;
   paidBy?: string;
   paidByRole?: string;
+  // Breakdown of amountDue into rent (→ owner) and service charge (→ caretaker).
+  // Populated at generation time from the unit's service-charge configuration.
+  rentAmount: number;
+  serviceChargeAmount: number;
+  rentIncludesServiceCharge: boolean;
   deletedAt?: Date | null;
 }
 
@@ -53,6 +58,9 @@ const invoiceSchema = new Schema<IInvoice>(
     paymentDescription: { type: String, trim: true, default: "" },
     paidBy: { type: String },
     paidByRole: { type: String },
+    rentAmount: { type: Number, required: true, min: 0, default: 0 },
+    serviceChargeAmount: { type: Number, required: true, min: 0, default: 0 },
+    rentIncludesServiceCharge: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
   },
   {

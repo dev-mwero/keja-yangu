@@ -60,18 +60,15 @@ custodian, or caretaker with `edit_property` on the managed owner's property.
 **Verification**: `tsc` clean, `biome` clean, 1125/1125 tests pass (+20 new), build
 succeeds; live `PUT` returns 401 unauthenticated.
 
-## 4. Part B — Client vacant-unit browse + prefer (TODO)
-- **Page**: `/dashboard/tenant/units` (slug `units`) — grid/table of `status="available"`
-  units for the tenant's context, showing name, block, floor, rent, beds/baths/area.
-- **Prefer action**: `PUT /api/v1/units/[id]/prefer` — tenant may prefer a vacant unit.
-  Store the preference in a small `UnitPreference` collection
-  (`userId, propertyId, unitId, blockId, floorId, deletedAt`, unique `{userId, propertyId}`
-  on `deletedAt:null`) so duplicates are impossible and a manager can read it.
-- **Permission**: add `unit:prefer` (tenant-only) to `src/lib/permissions.ts`.
-- **Nav**: add `units` slug to `tenantSections` in `src/config/dashboardNav.ts`.
+## 4. Part B — Client vacant-unit browse + prefer (WITHDRAWN)
+- **Status**: WITHDRAWN — superseded by `simplify-user-flows` Phase 6.
+  `UnitPreference`, `unit:prefer`, `use-unit-preferences` and `PUT /units/[id]/prefer`
+  were all retired in Phase 6 (`32bc470`). The client vacant-unit browse/prefer flow
+  is superseded by the prospect-picks-a-unit flow (Phase 1 of that programme).
+  No code from this section was ever built; nothing to remove.
 
 ## 5. Delivery / Ops
-- No DB schema changes for Part A. Part B adds one small collection (+ optional index).
+- No DB schema changes for Part A. Part B is WITHDRAWN (§4) — no new collection.
 - Docker: `output: isVercel ? undefined : "standalone"` already fixed in `next.config.ts`.
 - `tsc --noEmit` and `biome check` must stay clean; route tests mock `@/lib/mongoose`
   and `@/models/*` and import the route after mocks.
@@ -79,7 +76,7 @@ succeeds; live `PUT` returns 401 unauthenticated.
 ## 6. Test strategy
 - Planner unit tests: `src/lib/property-structure.test.ts` (11 cases).
 - Route tests: `src/app/api/v1/properties/[id]/structure/route.test.ts` (9 cases).
-- Part B: `PUT /api/v1/units/[id]/prefer` route tests + a `UnitsView`-style client test.
+- Part B: WITHDRAWN (§4) — no `PUT /units/[id]/prefer` route, no `UnitsView` client test.
 - No regressions: full suite green (currently 1125).
 
 ## 7. Risk flags
@@ -94,6 +91,6 @@ succeeds; live `PUT` returns 401 unauthenticated.
 
 ## 8. Next steps
 1. Commit Part A on this branch.
-2. Implement Part B (model + route + tests + tenant page + nav).
+2. Part B is WITHDRAWN (§4) — nothing to implement.
 3. Run `tsc`, `biome`, targeted tests, full suite, build.
 4. Merge `dev` → `main` when approved.

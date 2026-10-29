@@ -40,6 +40,11 @@ import {
   usePropertyMutations,
 } from "@/hooks/use-properties";
 import { usePropertyTypes } from "@/hooks/use-property-types";
+import {
+  DEFAULT_PROPERTY_PURPOSE,
+  PROPERTY_PURPOSES,
+  type PropertyPurpose,
+} from "@/lib/domain-enums";
 import { mergeImageUrls } from "@/lib/images";
 import { propertyTypeLabel } from "@/lib/property-types";
 import { useUploadThing } from "@/lib/uploadthing";
@@ -57,6 +62,8 @@ const formSchema = z.object({
   baths: z.number().int().min(0, "Baths cannot be negative"),
   area: z.number().min(0, "Area cannot be negative"),
   status: z.enum(["available", "occupied", "maintenance"]),
+  purpose: z.enum(PROPERTY_PURPOSES),
+  dateCompleted: z.string().optional(),
   caretakerIds: z.array(z.string()),
   targetOwnerId: z.string(),
   published: z.boolean(),
@@ -125,6 +132,8 @@ export const PropertyDialog = ({
       baths: property?.baths ?? 0,
       area: property?.area ?? 0,
       status: property?.status ?? "available",
+      purpose: property?.purpose ?? DEFAULT_PROPERTY_PURPOSE,
+      dateCompleted: property?.dateCompleted ? property.dateCompleted.slice(0, 10) : "",
       caretakerIds: property?.caretakerIds ?? [],
       targetOwnerId: "",
       published: property?.published ?? false,
@@ -209,6 +218,8 @@ export const PropertyDialog = ({
       amenities: values.amenities,
       beds: values.beds,
       baths: values.baths,
+      purpose: values.purpose,
+      dateCompleted: values.dateCompleted ? values.dateCompleted : null,
     };
     if (values.area > 0) payload.area = values.area;
     payload.published = values.published;
@@ -309,6 +320,31 @@ export const PropertyDialog = ({
             {errors.location && (
               <p className="text-xs text-destructive">{errors.location.message}</p>
             )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="property-purpose">Property Purpose</Label>
+              <Select
+                value={watch("purpose")}
+                onValueChange={(val) => setValue("purpose", val as PropertyPurpose)}
+              >
+                <SelectTrigger id="property-purpose" aria-label="Property Purpose">
+                  <SelectValue placeholder="Select purpose" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PROPERTY_PURPOSES.map((p) => (
+                    <SelectItem key={p} value={p} className="capitalize">
+                      {p}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="property-date-completed">Date Completed</Label>
+              <Input id="property-date-completed" type="date" {...register("dateCompleted")} />
+            </div>
           </div>
 
           <div className="space-y-2">

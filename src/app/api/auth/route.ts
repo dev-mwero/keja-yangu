@@ -7,14 +7,19 @@ import { isEmailConfigured, sendPasswordResetEmail, sendVerificationEmail } from
 import { getJwtSecret } from "@/lib/jwt";
 import { connectToDatabase } from "@/lib/mongoose";
 import { isValidE164, isValidNationalId, normalizeNationalId } from "@/lib/phone";
+import { isProfileComplete } from "@/lib/profile-completion";
 import { rateLimitAuth } from "@/lib/rate-limit-auth";
+import { type Role, roleRoute } from "@/lib/role-routes";
 import { Tenant } from "@/models/Tenant";
 import { User } from "@/models/User";
 
-const signInSchema = z.object({
-  email: z.string().email("Invalid email"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-});
+const signInSchema = z
+  .object({
+    identifier: z.string().min(1, "Email or phone required").optional(),
+    email: z.string().email("Enter a valid email").optional(),
+    password: z.string().min(6, "Password must be at least 6 characters"),
+  })
+  .refine((data) => data.identifier || data.email, "Email or phone required");
 
 const signUpSchema = z.object({
   name: z.string().min(2, "Tell us your name"),
@@ -57,6 +62,27 @@ async function generateVerificationToken(): Promise<string> {
   return crypto.randomUUID();
 }
 
+function issueSession(
+  response: NextResponse,
+  user: { _id?: unknown; id?: string; email: string; role: string; name?: string },
+): NextResponse {
+  const userId = user._id ? String(user._id) : (user.id ?? "");
+  const token = jwt.sign(
+    { userId, email: user.email, role: user.role, name: user.name },
+    getJwtSecret(),
+    { expiresIn: "7d" },
+  );
+
+  response.cookies.set("keja-token", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 60 * 60 * 24 * 7,
+    path: "/",
+  });
+  return response;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -79,8 +105,14 @@ export async function POST(request: Request) {
       }
 
       await connectToDatabase();
-      // Emails are stored lowercased (see signup), so normalise before lookup.
-      const user = await User.findOne({ email: parsed.data.email.trim().toLowerCase() }).lean();
+      const rawId = (parsed.data.identifier ?? parsed.data.email ?? "").trim();
+      const emailLookup = rawId.toLowerCase();
+      // Emails are stored lowercased, so normalise before lookup.
+      let user = await User.findOne({ email: emailLookup }).lean();
+      // Fall back to phone lookup when no email match (plain E.164, indexed).
+      if (!user && /^\+?[\d\s-]+$/.test(rawId)) {
+        user = await User.findOne({ phone: rawId }).lean();
+      }
       // biome-ignore lint/complexity: useOptionalChain
       if (!user || !user.isActive) {
         return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
@@ -97,32 +129,29 @@ export async function POST(request: Request) {
       // Bind tenant signups to any unbound Tenant rows carrying the same
       // email (normalised to match signup storage). This heals tenancies
       // created before the verify-email bind existed or where verification
-      // ran before the Tenant row was added.
+      // ran before the Tenant row was added. Phone-only accounts bind by
+      // phone instead.
       if (user.role === "tenant") {
         const userId = user._id?.toString() ?? user.id ?? "";
-        await Tenant.updateMany(
-          { email: user.email.trim().toLowerCase(), userId: "" },
-          { $set: { userId } },
-        );
+        if (user.email) {
+          await Tenant.updateMany(
+            { email: user.email.trim().toLowerCase(), userId: "" },
+            { $set: { userId } },
+          );
+        } else if (user.phone) {
+          await Tenant.updateMany({ phone: user.phone, userId: "" }, { $set: { userId } });
+        }
       }
 
-      const token = jwt.sign(
-        { userId: user._id, email: user.email, role: user.role, name: user.name },
-        getJwtSecret(),
-        { expiresIn: "7d" },
-      );
-
       const response = NextResponse.json({
-        user: { email: user.email, name: user.name, role: user.role },
+        user: {
+          email: user.email,
+          phone: user.phone,
+          name: user.name,
+          role: user.role,
+        },
       });
-      response.cookies.set("keja-token", token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 60 * 60 * 24 * 7,
-        path: "/",
-      });
-      return response;
+      return issueSession(response, user);
     }
 
     if (action === "signup") {
@@ -144,7 +173,9 @@ export async function POST(request: Request) {
           !existing.isActive &&
           !existing.isVerified &&
           existing.managedByOwnerId &&
-          (existing.role === "caretaker" || existing.role === "tenant");
+          (existing.role === "caretaker" ||
+            existing.role === "tenant" ||
+            existing.role === "custodian");
         if (adoptable) {
           const passwordHash = await bcrypt.hash(parsed.data.password, 12);
           const verificationToken = await generateVerificationToken();
@@ -244,6 +275,12 @@ export async function POST(request: Request) {
         );
       }
 
+      // Activate pending invited accounts (created inactive)
+      const isPendingInvite = !user.isActive || Boolean(user.managedByOwnerId);
+      if (isPendingInvite) {
+        user.isActive = true;
+      }
+
       user.isVerified = true;
       user.verificationToken = undefined;
       user.verificationTokenExpiry = undefined;
@@ -259,7 +296,20 @@ export async function POST(request: Request) {
         );
       }
 
-      return NextResponse.json({ message: "Email verified successfully" });
+      const role = user.role as Role;
+      const baseDashboard = roleRoute[role] ?? "/dashboard";
+      const complete = isProfileComplete(user);
+      const redirectTo = complete
+        ? baseDashboard
+        : `${baseDashboard}/settings?next=${encodeURIComponent(baseDashboard)}`;
+
+      const response = NextResponse.json({
+        message: "Email verified successfully",
+        user: { email: user.email, name: user.name, role: user.role },
+        redirectTo,
+      });
+
+      return issueSession(response, user);
     }
 
     if (action === "resend-verification") {

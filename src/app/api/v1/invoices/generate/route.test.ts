@@ -29,11 +29,21 @@ vi.mock("@/models/Invoice", async () => {
   const { getModelStubs: get } = await import("@/test/utils/model-mocks");
   return { Invoice: get().invoice };
 });
+vi.mock("@/models/Tenant", async () => {
+  const { getModelStubs: get } = await import("@/test/utils/model-mocks");
+  return { Tenant: get().tenant };
+});
 
 import { POST } from "@/app/api/v1/invoices/generate/route";
 import { notifyLeaseExpiry } from "@/lib/notifications";
 
-const { user, property, lease: leaseStub, invoice: invoiceStub } = getModelStubs();
+const {
+  user,
+  property,
+  lease: leaseStub,
+  invoice: invoiceStub,
+  tenant: tenantStub,
+} = getModelStubs();
 const notifyLeaseExpiryMock = vi.mocked(notifyLeaseExpiry);
 
 const OWNER_ID = makeObjectId("owner");
@@ -71,6 +81,7 @@ describe("POST /api/v1/invoices/generate", () => {
   beforeEach(() => {
     resetModelStubs();
     notifyLeaseExpiryMock.mockClear();
+    tenantStub.find.mockReturnValue(buildQuery([]));
   });
 
   it("403 for a mismatched origin", async () => {
@@ -226,6 +237,37 @@ describe("POST /api/v1/invoices/generate", () => {
       expect.objectContaining({ _id: LEASE_A, endDate: inTenDays }),
       expect.any(Number),
     );
+  });
+
+  it("skips leases belonging to owning tenants", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    const leases = [
+      makeLease({ _id: LEASE_A, ownerId: OWNER_ID, propertyId: PROPERTY_ID, tenantId: "owning-t" }),
+      makeLease({ _id: LEASE_B, ownerId: OWNER_ID, propertyId: PROPERTY_ID, tenantId: "res-t" }),
+    ];
+    leaseStub.find.mockReturnValue(buildQuery(leases));
+    invoiceStub.find.mockReturnValue(buildQuery([]).select("leaseId"));
+    tenantStub.find.mockReturnValue(
+      buildQuery([
+        { _id: "owning-t", type: "owning" },
+        { _id: "res-t", type: "residential" },
+      ]).select("_id type"),
+    );
+    const period = currentPeriod();
+    user.findOneAndUpdate.mockReturnValue(buildQuery({ invoiceCounters: { [period]: 1 } }));
+    invoiceStub.create.mockResolvedValue({});
+
+    const res = await POST(
+      buildRequest("/api/v1/invoices/generate", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: {},
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await json(res)) as { data: { created: number; skipped: number } };
+    expect(body.data.created).toBe(1);
+    expect(body.data.skipped).toBe(1);
   });
 
   it("skips leases that already have an invoice for the period", async () => {

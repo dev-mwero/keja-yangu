@@ -26,13 +26,14 @@ export interface ProfilePatch {
   phone?: string;
   whatsapp?: string;
   nationalId?: string;
+  password?: string;
 }
 
 interface AuthContextValue {
   user: KejaUser | null;
   loading: boolean;
   refreshFailed: boolean;
-  signIn: (email: string, password: string) => Promise<KejaUser>;
+  signIn: (identifier: string, password: string) => Promise<KejaUser>;
   signUp: (
     name: string,
     email: string,
@@ -76,12 +77,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     refresh();
   }, [refresh]);
 
-  const signIn = async (email: string, password: string): Promise<KejaUser> => {
+  const signIn = async (identifier: string, password: string): Promise<KejaUser> => {
     try {
       const res = await fetch("/api/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "signin", email, password }),
+        body: JSON.stringify({ action: "signin", identifier, password }),
       });
       if (!res.ok) {
         const data = await res.json();

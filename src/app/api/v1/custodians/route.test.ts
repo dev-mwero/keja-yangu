@@ -151,7 +151,12 @@ describe("POST /api/v1/custodians", () => {
     expect(user.create).toHaveBeenCalledWith(
       expect.objectContaining({ role: "custodian", managedByOwnerId: OWNER_ID, isActive: false }),
     );
-    expect(sendInviteEmail).toHaveBeenCalledWith("new@keja.co", expect.any(String), "custodian");
+    expect(sendInviteEmail).toHaveBeenCalledWith(
+      "new@keja.co",
+      expect.any(String),
+      "custodian",
+      expect.any(String),
+    );
   });
 
   it("409 when the email belongs to a non-custodian account", async () => {
@@ -197,5 +202,45 @@ describe("POST /api/v1/custodians", () => {
       }),
     );
     expect(res.status).toBe(400);
+  });
+
+  it("creates a phone-only custodian that can sign in immediately", async () => {
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findOne.mockReturnValue(buildQuery(null));
+    user.create.mockResolvedValue({
+      _id: CUSTODIAN_ID,
+      name: "Jane Custodian",
+      email: undefined,
+      phone: "+254712345678",
+      role: "custodian",
+      managedByOwnerId: OWNER_ID,
+      isActive: true,
+      isVerified: true,
+    });
+
+    const res = await POST(
+      buildRequest("/api/v1/custodians", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { name: "Jane Custodian", phone: "+254712345678" },
+      }),
+    );
+    expect(res.status).toBe(201);
+    const body = await json(res);
+    expect(body.created).toBe(true);
+    expect(body.password).toBeDefined();
+    const data = body.data as { phone: string };
+    expect(data.phone).toBe("+254712345678");
+    expect(user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phone: "+254712345678",
+        role: "custodian",
+        managedByOwnerId: OWNER_ID,
+        isActive: true,
+        isVerified: true,
+        email: undefined,
+      }),
+    );
+    expect(sendInviteEmail).not.toHaveBeenCalled();
   });
 });

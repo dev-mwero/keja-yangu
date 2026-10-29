@@ -263,6 +263,7 @@ export function PropertyStructureView({ propertyId, nav, roleName, backHref }: P
               propertyId={propertyId}
               blocks={property?.blocks ?? []}
               baseRent={property?.price ?? 0}
+              propertyPurpose={property?.purpose}
               refreshKey={unitsRefreshKey}
               onChanged={loadCounts}
             />

@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { normalizeAmenities } from "@/lib/amenities";
+import { PROPERTY_PURPOSES } from "@/lib/domain-enums";
 import { connectToDatabase } from "@/lib/mongoose";
 import { asSoftDeleteModel } from "@/lib/mongoose-soft-delete";
 import { authenticate, isFullControlRole, requirePermission } from "@/lib/permissions";
@@ -23,6 +24,8 @@ const propertyUpdate = z.object({
   images: z.array(z.string()).optional(),
   amenities: z.array(z.string()).optional(),
   status: z.enum(["available", "occupied", "maintenance"]).optional(),
+  dateCompleted: z.coerce.date().nullable().optional(),
+  purpose: z.enum(PROPERTY_PURPOSES).optional(),
   published: z.boolean().optional(),
   caretakerIds: z.array(z.string()).optional(),
   description: z.string().optional(),

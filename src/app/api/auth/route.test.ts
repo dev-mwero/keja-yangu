@@ -202,7 +202,11 @@ describe("POST /api/auth — verify-email", () => {
   });
 
   it("binds unbound tenant rows to the verified tenant user by normalized email", async () => {
-    const doc = mutableUser();
+    const doc = mutableUser({
+      name: "Tenant Person",
+      phone: "+254712345678",
+      nationalId: "12345678",
+    });
     user.findOne.mockResolvedValue(doc);
 
     const res = await POST(
@@ -211,12 +215,38 @@ describe("POST /api/auth — verify-email", () => {
     expect(res.status).toBe(200);
     const body = await json(res);
     expect(body.message).toBe("Email verified successfully");
+    expect(body.user).toEqual({ email: "TENANT@Keja.co", name: "Tenant Person", role: "tenant" });
+    expect(body.redirectTo).toBe("/dashboard/tenant");
+    expect(res.cookies.get("keja-token")?.value).toBeTruthy();
 
     expect(doc.save).toHaveBeenCalledTimes(1);
     expect(tenantStub.updateMany).toHaveBeenCalledWith(
       { email: "tenant@keja.co", userId: "" },
       { $set: { userId: USER_ID } },
     );
+  });
+
+  it("activates pending invite and redirects an incomplete profile to settings with ?next", async () => {
+    const doc = mutableUser({
+      role: "custodian",
+      email: "custodian@keja.co",
+      name: "custodian@keja.co",
+      phone: "",
+      nationalId: "",
+      isActive: false,
+      managedByOwnerId: "owner_123",
+    }) as unknown as { isActive: boolean; isVerified: boolean };
+    user.findOne.mockResolvedValue(doc);
+
+    const res = await POST(
+      buildRequest("/api/auth", { method: "POST", body: { action: "verify-email", token: "tok" } }),
+    );
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    expect(body.redirectTo).toBe("/dashboard/custodian/settings?next=%2Fdashboard%2Fcustodian");
+    expect(res.cookies.get("keja-token")?.value).toBeTruthy();
+    expect(doc.isActive).toBe(true);
+    expect(doc.isVerified).toBe(true);
   });
 
   it("does not bind tenant rows for a verified owner", async () => {
@@ -301,6 +331,74 @@ describe("POST /api/auth — signin tenant binding", () => {
     );
     expect(res.status).toBe(200);
     expect(tenantStub.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/auth — signin by phone", () => {
+  beforeEach(() => {
+    resetModelStubs();
+    resetAuthRateLimits();
+  });
+
+  it("signs in a user by phone number when email lookup misses", async () => {
+    const phoneUser = {
+      _id: USER_ID,
+      email: undefined,
+      phone: "+254712345678",
+      name: "Jane",
+      role: "caretaker",
+      isActive: true,
+      isVerified: true,
+      passwordHash: await bcrypt.hash("secret123", 12),
+    };
+    user.findOne.mockReturnValueOnce(buildQuery(null));
+    user.findOne.mockReturnValueOnce(buildQuery(phoneUser));
+
+    const res = await POST(
+      buildRequest("/api/auth", {
+        method: "POST",
+        body: { action: "signin", identifier: "+254712345678", password: "secret123" },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    const signedInUser = body.user as { role: string; phone: string };
+    expect(signedInUser.role).toBe("caretaker");
+    expect(signedInUser.phone).toBe("+254712345678");
+  });
+
+  it("still signs in with email for backward compatibility", async () => {
+    const emailUser = {
+      _id: USER_ID,
+      email: "tenant@keja.co",
+      name: "Amina",
+      role: "tenant",
+      isActive: true,
+      isVerified: true,
+      passwordHash: await bcrypt.hash("secret123", 12),
+    };
+    user.findOne.mockReturnValue(buildQuery(emailUser));
+
+    const res = await POST(
+      buildRequest("/api/auth", {
+        method: "POST",
+        body: { action: "signin", email: "TENANT@Keja.co", password: "secret123" },
+      }),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("401 when phone lookup finds no active verified user", async () => {
+    user.findOne.mockReturnValueOnce(buildQuery(null));
+    user.findOne.mockReturnValueOnce(buildQuery(null));
+
+    const res = await POST(
+      buildRequest("/api/auth", {
+        method: "POST",
+        body: { action: "signin", identifier: "+254712345678", password: "secret123" },
+      }),
+    );
+    expect(res.status).toBe(401);
   });
 });
 

@@ -61,6 +61,42 @@ describe("buildInvoiceForLease", () => {
     expect(draft.dueDate.toISOString()).toBe(computeDueDate("2026-09").toISOString());
     expect(draft.issuedAt).toBe(now);
   });
+
+  it("inclusive unit: amountDue is the collected rent, split into rent + service charge", () => {
+    const draft = buildInvoiceForLease(lease(), "2026-09", new Date(), {
+      serviceChargeAmount: 5000,
+      rentIncludesServiceCharge: true,
+      rentSharePercent: 80,
+      serviceChargeSharePercent: 20,
+    });
+    expect(draft.amountDue).toBe(25000);
+    expect(draft.rentAmount).toBe(20000);
+    expect(draft.serviceChargeAmount).toBe(5000);
+    expect(draft.rentAmount + draft.serviceChargeAmount).toBe(draft.amountDue);
+    expect(draft.rentIncludesServiceCharge).toBe(true);
+  });
+
+  it("separate unit: amountDue is rent + service charge", () => {
+    const draft = buildInvoiceForLease(lease(), "2026-09", new Date(), {
+      serviceChargeAmount: 5000,
+      rentIncludesServiceCharge: false,
+      rentSharePercent: 100,
+      serviceChargeSharePercent: 0,
+    });
+    expect(draft.amountDue).toBe(30000);
+    expect(draft.rentAmount).toBe(25000);
+    expect(draft.serviceChargeAmount).toBe(5000);
+    expect(draft.rentAmount + draft.serviceChargeAmount).toBe(draft.amountDue);
+    expect(draft.rentIncludesServiceCharge).toBe(false);
+  });
+
+  it("no unit charge: service charge is zero and not inclusive", () => {
+    const draft = buildInvoiceForLease(lease({ rentAmount: 45000 }), "2026-09", new Date());
+    expect(draft.amountDue).toBe(45000);
+    expect(draft.rentAmount).toBe(45000);
+    expect(draft.serviceChargeAmount).toBe(0);
+    expect(draft.rentIncludesServiceCharge).toBe(false);
+  });
 });
 
 describe("generateForPeriod", () => {
@@ -110,6 +146,21 @@ describe("generateForPeriod", () => {
     expect(first.toCreate).toHaveLength(1);
     expect(second.toCreate).toEqual([]);
     expect(second.skipped).toEqual([{ leaseId: "l1", reason: "already-generated" }]);
+  });
+
+  it("skips leases for owning tenants (owning tenants do not pay rent)", () => {
+    const result = generateForPeriod({
+      leases: [
+        lease({ _id: "l1", tenantType: "owning" }),
+        lease({ _id: "l2", tenantType: "residential" }),
+      ],
+      existing: [],
+      period: "2026-09",
+      now: new Date(),
+    });
+    expect(result.toCreate).toHaveLength(1);
+    expect(result.toCreate[0].leaseId).toBe("l2");
+    expect(result.skipped).toEqual([{ leaseId: "l1", reason: "owning-tenant" }]);
   });
 
   it("skips non-monthly leases", () => {

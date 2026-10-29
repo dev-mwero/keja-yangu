@@ -35,7 +35,7 @@ export async function GET(request: NextRequest, ctx: RouteContext) {
   if (authError) return authError;
 
   // Tenants may only read the unit they occupy.
-  if (auth.role === "tenant" && unit.tenantId !== auth.userId) {
+  if (auth.role === "tenant" && !(unit.tenantId as unknown as string[]).includes(auth.userId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -98,7 +98,14 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
     }
     unit.status = requestedStatus;
   }
+  if (updates.purpose !== undefined) unit.purpose = updates.purpose;
   if (updates.rent !== undefined) unit.rent = updates.rent;
+  if (updates.serviceCharge !== undefined) unit.serviceCharge = updates.serviceCharge;
+  if (updates.rentIncludesServiceCharge !== undefined)
+    unit.rentIncludesServiceCharge = updates.rentIncludesServiceCharge;
+  if (updates.rentSharePercent !== undefined) unit.rentSharePercent = updates.rentSharePercent;
+  if (updates.serviceChargeSharePercent !== undefined)
+    unit.serviceChargeSharePercent = updates.serviceChargeSharePercent;
   if (updates.beds !== undefined) unit.beds = updates.beds;
   if (updates.baths !== undefined) unit.baths = updates.baths;
   if (updates.area !== undefined) unit.area = updates.area;
@@ -121,7 +128,7 @@ export async function DELETE(request: NextRequest, ctx: RouteContext) {
   });
   if (authError) return authError;
 
-  if (unit.status === "occupied" || unit.tenantId) {
+  if (unit.status === "occupied" || (unit.tenantId as unknown as string[]).length > 0) {
     return NextResponse.json(
       { error: "Cannot delete an occupied unit. Move the tenant out first." },
       { status: 409 },

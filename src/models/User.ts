@@ -41,7 +41,7 @@ const userSettingsSchema = new Schema<IUserSettings>(
 
 const userSchema = new Schema<IUser>(
   {
-    email: { type: String, required: true, unique: true, trim: true, lowercase: true },
+    email: { type: String, required: false, trim: true, lowercase: true },
     name: { type: String, required: true, trim: true },
     passwordHash: { type: String, required: true },
     role: {
@@ -88,6 +88,7 @@ const userSchema = new Schema<IUser>(
 
 userSchema.index({ role: 1, managedByOwnerId: 1 });
 userSchema.index({ phone: 1 });
+userSchema.index({ email: 1 }, { unique: true, sparse: true });
 
 export type UserDocument = InferSchemaType<IUser>;
 

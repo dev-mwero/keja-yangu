@@ -537,4 +537,51 @@ describe("POST /api/v1/properties", () => {
     expect(res.status).toBe(400);
     expect(property.deleteOne).toHaveBeenCalledWith({ _id: validCreatedProperty._id });
   });
+
+  it("persists purpose and dateCompleted with block/floor purpose overrides", async () => {
+    const owner = makeUser({ _id: OWNER_ID, role: "owner" });
+    user.findById.mockReturnValue(buildQuery(owner));
+    property.create.mockResolvedValue({
+      ...validCreatedProperty,
+      purpose: "commercial",
+      dateCompleted: new Date("2024-05-01"),
+      blocks: [
+        {
+          _id: "block-1",
+          name: "Plaza",
+          order: 0,
+          purpose: "commercial",
+          floors: [{ _id: "floor-1", level: 1, label: "", unitsPerFloor: 1, purpose: "storage" }],
+        },
+      ],
+    });
+    unit.insertMany.mockResolvedValue([]);
+
+    const res = await POST(
+      buildRequest("/api/v1/properties", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: {
+          ...validPropertyBody,
+          purpose: "commercial",
+          dateCompleted: "2024-05-01",
+          blocks: [
+            {
+              name: "Plaza",
+              purpose: "commercial",
+              floors: [{ level: 1, unitsPerFloor: 1, purpose: "storage" }],
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(res.status).toBe(201);
+    expect(property.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        purpose: "commercial",
+        dateCompleted: expect.any(Date),
+      }),
+    );
+  });
 });

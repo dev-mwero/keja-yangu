@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+import bcrypt from "bcryptjs";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -65,8 +67,11 @@ async function attachUnitHints<T extends { userId?: string; _id?: unknown }>(row
         blockName: unit.blockName,
         propertyId: String(unit.propertyId),
       };
-      const occupant = String(unit.tenantId ?? "");
-      if (occupant && userIds.includes(occupant)) occupiedByUser.set(occupant, hint);
+      // tenantId is now an array; find which of our userIds is in it
+      const tenantIds = unit.tenantId as unknown as string[];
+      for (const occupant of tenantIds) {
+        if (userIds.includes(occupant)) occupiedByUser.set(occupant, hint);
+      }
       nameByUnitId.set(String(unit._id), { name: unit.name, blockName: unit.blockName });
     }
     for (const moveIn of moveIns) {
@@ -92,14 +97,17 @@ async function attachUnitHints<T extends { userId?: string; _id?: unknown }>(row
   });
 }
 
-const tenantInput = z.object({
-  name: z.string().trim().min(1),
-  email: z.string().trim().toLowerCase().email(),
-  phone: z.string().optional(),
-  propertyId: z.string().regex(/^[0-9a-fA-F]{24}$/),
-  status: z.enum(["active", "pending", "rejected"]).optional(),
-  notes: z.string().optional(),
-});
+const tenantInput = z
+  .object({
+    name: z.string().trim().min(1),
+    email: z.string().trim().toLowerCase().email().optional(),
+    phone: z.string().optional(),
+    propertyId: z.string().regex(/^[0-9a-fA-F]{24}$/),
+    type: z.enum(["residential", "commercial", "owning"]).default("residential"),
+    status: z.enum(["active", "pending", "rejected"]).optional(),
+    notes: z.string().optional(),
+  })
+  .refine((data) => data.email || data.phone, "Email or phone is required");
 
 export async function GET(request: NextRequest) {
   const { page, limit } = parsePagination({
@@ -194,26 +202,65 @@ export async function POST(request: NextRequest) {
 
   const status = scope.role === "caretaker" ? "pending" : (parsed.data.status ?? "pending");
 
-  const duplicate = await Tenant.findOne({
-    propertyId: parsed.data.propertyId,
-    email: parsed.data.email,
-  })
-    .select("_id")
-    .lean();
+  const duplicateQuery: Record<string, unknown> = { propertyId: parsed.data.propertyId };
+  if (parsed.data.email) duplicateQuery.email = parsed.data.email;
+  if (parsed.data.phone) duplicateQuery.phone = parsed.data.phone;
+
+  const duplicate = await Tenant.findOne(duplicateQuery).select("_id").lean();
   if (duplicate) {
     return NextResponse.json(
-      { error: "A tenant with this email already exists on this property" },
+      { error: "A tenant with this email or phone already exists on this property" },
       { status: 409 },
     );
   }
 
-  const existingUser = await User.findOne({
-    email: parsed.data.email,
+  const existingUserQuery: Record<string, unknown> = {
     isActive: true,
     isVerified: true,
-  })
-    .select("_id")
-    .lean();
+  };
+  if (parsed.data.email) existingUserQuery.email = parsed.data.email;
+  if (parsed.data.phone) existingUserQuery.phone = parsed.data.phone;
+
+  const existingUser = await User.findOne(existingUserQuery).select("_id").lean();
+
+  // Phone-only path: no email — create an active, verified tenant user and bind
+  // the Tenant row to it immediately (no verify-email activation step needed).
+  if (!parsed.data.email) {
+    const plainPassword = crypto.randomBytes(12).toString("base64url");
+    const passwordHash = await bcrypt.hash(plainPassword, 12);
+    const createdUser = await User.create({
+      email: undefined,
+      name: parsed.data.name,
+      phone: parsed.data.phone,
+      passwordHash,
+      role: "tenant",
+      isActive: true,
+      isVerified: true,
+    });
+
+    const tenant = await Tenant.create({
+      name: parsed.data.name,
+      email: undefined,
+      phone: parsed.data.phone,
+      propertyId: parsed.data.propertyId,
+      ownerId: property.ownerId,
+      type: parsed.data.type,
+      status: "active",
+      joinedAt: new Date(),
+      notes: parsed.data.notes,
+      userId: String(createdUser._id),
+    });
+
+    const created = await Tenant.findById(tenant._id).select(TENANT_SAFE_FIELDS).lean();
+    return NextResponse.json(
+      {
+        created: true,
+        password: plainPassword,
+        data: { ...created, userId: String(createdUser._id) },
+      },
+      { status: 201 },
+    );
+  }
 
   const tenant = await Tenant.create({
     name: parsed.data.name,
@@ -221,6 +268,7 @@ export async function POST(request: NextRequest) {
     phone: parsed.data.phone,
     propertyId: parsed.data.propertyId,
     ownerId: property.ownerId,
+    type: parsed.data.type,
     status,
     joinedAt: status === "active" ? new Date() : undefined,
     notes: parsed.data.notes,
@@ -228,7 +276,27 @@ export async function POST(request: NextRequest) {
   });
 
   if (!existingUser) {
-    await sendInviteEmail(parsed.data.email, parsed.data.name, "tenant");
+    // Pre-create an inactive, unverified User so the invite can be a magic-link
+    // verify flow (same mechanism as custodian invites). The tenant row keeps
+    // userId empty until the invitee verifies and binds on verify-email.
+    const randomPassword = crypto.randomBytes(24).toString("base64url").slice(0, 32);
+    const passwordHash = await bcrypt.hash(randomPassword, 12);
+    const verificationToken = crypto.randomUUID();
+    const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    await User.create({
+      email: parsed.data.email,
+      name: parsed.data.name,
+      phone: parsed.data.phone ?? "",
+      passwordHash,
+      role: "tenant",
+      isActive: false,
+      isVerified: false,
+      verificationToken,
+      verificationTokenExpiry,
+    });
+
+    await sendInviteEmail(parsed.data.email, parsed.data.name, "tenant", verificationToken);
   }
 
   const created = await Tenant.findById(tenant._id).select(TENANT_SAFE_FIELDS).lean();

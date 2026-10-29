@@ -469,6 +469,65 @@ describe("POST /api/v1/tenants", () => {
     );
     expect(res.status).toBe(201);
     expect(tenantStub.create).toHaveBeenCalledWith(expect.objectContaining({ userId: "" }));
-    expect(sendInviteEmail).toHaveBeenCalledWith(tenantInput.email, tenantInput.name, "tenant");
+    expect(sendInviteEmail).toHaveBeenCalledWith(
+      tenantInput.email,
+      tenantInput.name,
+      "tenant",
+      expect.any(String),
+    );
+  });
+
+  it("creates a phone-only tenant with an active verified user bound immediately", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    property.findById.mockReturnValue(buildQuery(ownedProperty()));
+    tenantStub.findOne.mockReturnValue(buildQuery(null));
+    user.findOne.mockReturnValue(buildQuery(null));
+    const phoneUser = {
+      _id: makeObjectId("user"),
+      name: "Amina Phone",
+      email: undefined,
+      phone: "+254712345678",
+      role: "tenant",
+      isActive: true,
+      isVerified: true,
+    };
+    user.create.mockResolvedValue(phoneUser);
+    const createdTenant = makeTenant({
+      _id: TENANT_ID,
+      propertyId: PROPERTY_ID,
+      ownerId: OWNER_ID,
+      status: "active",
+      joinedAt: expect.any(Date),
+      userId: String(makeObjectId("user")),
+    });
+    tenantStub.create.mockResolvedValue(createdTenant);
+    tenantStub.findById.mockReturnValue(buildQuery(createdTenant));
+
+    const res = await POST(
+      buildRequest("/api/v1/tenants", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        headers: { "x-forwarded-for": "203.0.113.81" },
+        body: { name: "Amina Phone", phone: "+254712345678", propertyId: PROPERTY_ID },
+      }),
+    );
+    expect(res.status).toBe(201);
+    const body = await json(res);
+    expect(body.created).toBe(true);
+    expect(body.password).toBeDefined();
+    expect(user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phone: "+254712345678",
+        role: "tenant",
+        isActive: true,
+        isVerified: true,
+        email: undefined,
+      }),
+    );
+    // Tenant row bound immediately (no verify-email step needed)
+    expect(tenantStub.create).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: phoneUser._id }),
+    );
+    expect(sendInviteEmail).not.toHaveBeenCalled();
   });
 });

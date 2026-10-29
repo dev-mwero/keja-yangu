@@ -1,5 +1,6 @@
 import {
   ArrowLeftRight,
+  Bell,
   Building2,
   Calculator,
   CreditCard,
@@ -45,6 +46,7 @@ const baseSections = [
   { slug: "/reports", label: "Reports", icon: FileBarChart },
   { slug: "/communications", label: "Communications", icon: MessagesSquare },
   { slug: "/documents", label: "Tenant Documents", icon: FileText },
+  { slug: "/notifications", label: "Notifications", icon: Bell },
   { slug: "/settings", label: "Settings", icon: Settings },
 ] satisfies readonly Section[];
 
@@ -62,10 +64,12 @@ const custodianSections = baseSections.filter((s) =>
     "/team",
     "/accounting",
     "/communications",
+    "/notifications",
+    "/settings",
   ].includes(s.slug),
 );
 const systemAdminSections = baseSections.filter((s) =>
-  ["", "/portfolio", "/tenants", "/accounting"].includes(s.slug),
+  ["", "/portfolio", "/tenants", "/notifications", "/accounting"].includes(s.slug),
 );
 
 export const buildDashboardNav = (role: Exclude<Role, "tenant">): DashNavItem[] => {
@@ -116,6 +120,7 @@ const tenantSections: TenantSection[] = [
   { slug: "/payments", label: "Payments", icon: CreditCard },
   { slug: "/messages", label: "Messages", icon: MessagesSquare },
   { slug: "/documents", label: "Documents", icon: FileText },
+  { slug: "/notifications", label: "Notifications", icon: Bell },
   { slug: "/settings", label: "Settings", icon: Settings },
 ];
 

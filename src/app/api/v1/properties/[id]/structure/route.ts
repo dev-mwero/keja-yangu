@@ -56,7 +56,11 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     name: String(unit.name ?? ""),
     letter: String(unit.letter ?? ""),
     status: String(unit.status ?? "available"),
-    tenantId: unit.tenantId ? String(unit.tenantId) : "",
+    tenantId: Array.isArray(unit.tenantId)
+      ? unit.tenantId.map(String)
+      : unit.tenantId
+        ? [String(unit.tenantId)]
+        : [],
   }));
 
   let plan: ReturnType<typeof planStructureUpdate>;

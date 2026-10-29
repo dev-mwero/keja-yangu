@@ -158,9 +158,10 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
   };
 
   const vacate = async () => {
-    if (!vacatingUnit?.tenantId) return;
+    const occupantId = vacatingUnit?.tenantId[0];
+    if (!occupantId) return;
     try {
-      await vacateUnit(vacatingUnit.tenantId);
+      await vacateUnit(occupantId);
       toast.success("Tenant unassigned", {
         description: `${vacatingUnit.name} is now vacant.`,
       });
@@ -287,7 +288,7 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
                           <UserPlus className="h-4 w-4" />
                         </Button>
                       )}
-                      {unit.tenantId && (
+                      {unit.tenantId.length > 0 && (
                         <Button
                           variant="ghost"
                           size="icon"

@@ -1,3 +1,4 @@
+import type { PropertyPurpose } from "@/lib/domain-enums";
 import type { CaretakerPrivilege, Role } from "@/lib/permissions";
 
 const HEX_CHARS = "abcdef0123456789";
@@ -40,6 +41,8 @@ export interface TestProperty {
   amenities: string[];
   status: "available" | "occupied" | "maintenance";
   published: boolean;
+  dateCompleted?: Date | string | null;
+  purpose?: PropertyPurpose;
   ownerId: string;
   caretakerIds: string[];
   createdById: string;
@@ -108,11 +111,17 @@ export interface TestUnit {
   name: string;
   letter: string;
   status: "available" | "occupied" | "maintenance";
+  purpose?: PropertyPurpose | null;
   rent: number | null;
+  serviceCharge: number;
+  rentIncludesServiceCharge: boolean;
+  rentSharePercent: number;
+  serviceChargeSharePercent: number;
   beds: number;
   baths: number;
   area: number;
-  tenantId: string;
+  /** Array of occupant user ids. Empty = vacant. */
+  tenantId: string[];
 }
 
 export function makeUnit(overrides: Partial<TestUnit> = {}): TestUnit {
@@ -129,10 +138,14 @@ export function makeUnit(overrides: Partial<TestUnit> = {}): TestUnit {
     letter: "A",
     status: "available",
     rent: null,
+    serviceCharge: 0,
+    rentIncludesServiceCharge: false,
+    rentSharePercent: 100,
+    serviceChargeSharePercent: 0,
     beds: 2,
     baths: 1,
     area: 60,
-    tenantId: "",
+    tenantId: [],
     ...overrides,
   };
 }
@@ -145,6 +158,41 @@ export function makeTenant(overrides: Partial<TestTenant> = {}): TestTenant {
     propertyId: makeObjectId("prop"),
     ownerId: makeObjectId("user"),
     status: "active",
+    ...overrides,
+  };
+}
+
+export interface TestLead {
+  _id: string;
+  name: string;
+  phone: string;
+  email: string;
+  propertyId: string;
+  unitId: string;
+  ownerId: string;
+  status: "new" | "contacted" | "approved" | "rejected" | "converted";
+  source: string;
+  notes: string;
+  createdBy: string;
+  convertedAt: Date | null;
+  convertedTenantId: string;
+}
+
+export function makeLead(overrides: Partial<TestLead> = {}): TestLead {
+  return {
+    _id: makeObjectId("lead"),
+    name: "John Doe",
+    phone: "+254712345678",
+    email: "john@example.com",
+    propertyId: makeObjectId("prop"),
+    unitId: "",
+    ownerId: makeObjectId("user"),
+    status: "new",
+    source: "walk-in",
+    notes: "",
+    createdBy: makeObjectId("user"),
+    convertedAt: null,
+    convertedTenantId: "",
     ...overrides,
   };
 }

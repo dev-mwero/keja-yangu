@@ -141,6 +141,7 @@ const tenants: Tenant[] = [
     email: "amina@keja.co",
     propertyId: "prop-1",
     ownerId: "o1",
+    type: "residential",
     status: "active",
     joinedAt: "2026-01-01T00:00:00.000Z",
   },
@@ -150,6 +151,7 @@ const tenants: Tenant[] = [
     email: "brian@keja.co",
     propertyId: "prop-2",
     ownerId: "o1",
+    type: "commercial",
     status: "pending",
   },
 ];
@@ -203,6 +205,8 @@ describe("TenantsManager", () => {
     expect(screen.getByText("Brian Mwangi")).toBeInTheDocument();
     expect(screen.getByText("amina@keja.co")).toBeInTheDocument();
     expect(screen.getByText("Sunset Villa")).toBeInTheDocument();
+    expect(screen.getByText("residential")).toBeInTheDocument();
+    expect(screen.getByText("commercial")).toBeInTheDocument();
   });
 
   it("shows status counts on the tabs", () => {
@@ -320,6 +324,32 @@ describe("TenantsManager", () => {
     await waitFor(() => expect(mocks.createTenant).toHaveBeenCalled());
     const payload = mocks.createTenant.mock.calls[0][0] as { status?: string };
     expect(payload.status).toBe("pending");
+  });
+
+  it("allows selecting a tenant type (e.g. owning)", async () => {
+    const user = userEvent.setup();
+    mocks.properties.push(...properties);
+    mocks.createTenant.mockResolvedValue(tenants[0]);
+    renderManager();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add tenant" }));
+    const dialog = await screen.findByRole("dialog");
+
+    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: addInputs.name } });
+    fireEvent.change(within(dialog).getByLabelText("Email"), {
+      target: { value: addInputs.email },
+    });
+    await user.click(comboboxByText(dialog, "Select property"));
+    await user.click(await screen.findByRole("option", { name: "Sunset Villa" }));
+
+    await user.click(comboboxByText(dialog, "Residential"));
+    await user.click(await screen.findByRole("option", { name: "Owning" }));
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add tenant" }));
+
+    await waitFor(() => expect(mocks.createTenant).toHaveBeenCalled());
+    const payload = mocks.createTenant.mock.calls[0][0] as { type?: string };
+    expect(payload.type).toBe("owning");
   });
 
   it("edits an existing tenant", async () => {

@@ -3,6 +3,7 @@ export * from "./chat";
 export * from "./complaint";
 export * from "./documents";
 export * from "./invoice";
+export * from "./lead";
 export * from "./lease";
 export * from "./move-request";
 export * from "./notifications";

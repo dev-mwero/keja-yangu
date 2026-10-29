@@ -35,7 +35,7 @@ const availableUnit = {
   beds: 2,
   baths: 1,
   area: 0,
-  tenantId: "",
+  tenantId: [] as string[],
 };
 
 const occupiedUnit = {
@@ -49,7 +49,7 @@ const occupiedUnit = {
   rent: 15000,
   beds: 0,
   baths: 0,
-  tenantId: "ten-1",
+  tenantId: ["ten-1"],
 };
 
 let fetchMock: ReturnType<typeof vi.fn>;

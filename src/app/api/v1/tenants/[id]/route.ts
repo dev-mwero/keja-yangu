@@ -12,6 +12,7 @@ const tenantUpdate = z.object({
   name: z.string().trim().min(1).optional(),
   email: z.string().trim().toLowerCase().email().optional(),
   phone: z.string().optional(),
+  type: z.enum(["residential", "commercial", "owning"]).optional(),
   notes: z.string().optional(),
   status: z.enum(["active", "pending", "rejected"]).optional(),
   propertyId: z
@@ -74,6 +75,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   if (parsed.data.name !== undefined) updateData.name = parsed.data.name;
   if (parsed.data.email !== undefined) updateData.email = parsed.data.email;
   if (parsed.data.phone !== undefined) updateData.phone = parsed.data.phone;
+  if (parsed.data.type !== undefined) updateData.type = parsed.data.type;
   if (parsed.data.notes !== undefined) updateData.notes = parsed.data.notes;
 
   if (parsed.data.status !== undefined) {

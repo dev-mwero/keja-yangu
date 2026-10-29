@@ -30,7 +30,9 @@ async function loadScopedTenant(request: NextRequest, id: string) {
   if (scope instanceof NextResponse) return scope;
 
   await connectToDatabase();
-  const tenant = (await Tenant.findById(id).lean()) as TenantRef | null;
+  const tenant =
+    ((await Tenant.findById(id).lean()) as TenantRef | null) ??
+    ((await Tenant.findOne({ userId: id }).lean()) as TenantRef | null);
   if (!tenant || !tenantMatchesScope(tenant, scope)) {
     return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
   }

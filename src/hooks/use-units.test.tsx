@@ -20,7 +20,7 @@ const unit = (id: string): Unit => ({
   beds: 0,
   baths: 0,
   area: 0,
-  tenantId: "",
+  tenantId: [],
 });
 
 describe("useUnits", () => {

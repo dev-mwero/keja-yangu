@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-
+import type { PropertyPurpose } from "@/lib/domain-enums";
 import type { PropertyStatus, PropertyType } from "@/lib/property-types";
 
-export type { PropertyStatus };
+export type { PropertyPurpose, PropertyStatus };
 
 export interface PropertyFloor {
   _id: string;
@@ -12,6 +12,7 @@ export interface PropertyFloor {
   label: string;
   unitsPerFloor: number;
   rentOverride: number | null;
+  purpose?: PropertyPurpose | null;
 }
 
 export interface PropertyBlock {
@@ -19,6 +20,7 @@ export interface PropertyBlock {
   name: string;
   order: number;
   rentOverride: number | null;
+  purpose?: PropertyPurpose | null;
   floors: PropertyFloor[];
 }
 
@@ -28,6 +30,7 @@ export interface FloorInputPayload {
   level: number;
   label?: string;
   rentOverride?: number | null;
+  purpose?: PropertyPurpose | null;
   unitsPerFloor: number;
   unitNames?: string[];
 }
@@ -37,6 +40,7 @@ export interface BlockInputPayload {
   id?: string;
   name: string;
   rentOverride?: number | null;
+  purpose?: PropertyPurpose | null;
   floors: FloorInputPayload[];
 }
 
@@ -50,11 +54,13 @@ export function toBlockPayloads(property: Pick<Property, "blocks">): BlockInputP
     id: block._id,
     name: block.name,
     rentOverride: block.rentOverride,
+    purpose: block.purpose,
     floors: block.floors.map((floor) => ({
       id: floor._id,
       level: floor.level,
       label: floor.label,
       rentOverride: floor.rentOverride,
+      purpose: floor.purpose,
       unitsPerFloor: floor.unitsPerFloor,
     })),
   }));
@@ -70,6 +76,8 @@ export interface Property {
   images: string[];
   amenities: string[];
   status: PropertyStatus;
+  dateCompleted?: string | null;
+  purpose?: PropertyPurpose;
   ownerId: string;
   caretakerIds: string[];
   beds: number;
@@ -88,6 +96,8 @@ export interface PropertyInput {
   images?: string[];
   amenities?: string[];
   status?: PropertyStatus;
+  dateCompleted?: string | null;
+  purpose?: PropertyPurpose;
   beds?: number;
   baths?: number;
   area?: number;
