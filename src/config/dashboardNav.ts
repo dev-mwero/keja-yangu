@@ -7,6 +7,7 @@ import {
   DoorOpen,
   FileBarChart,
   FileText,
+  Heart,
   Home,
   type LucideIcon,
   MessagesSquare,
@@ -115,6 +116,7 @@ interface TenantSection {
 const tenantSections: TenantSection[] = [
   { slug: "", label: "Overview", icon: Home },
   { slug: "/browse", label: "Browse", icon: Search, external: "/properties" },
+  { slug: "/favourites", label: "Favourites", icon: Heart },
   { slug: "/home", label: "My Home", icon: DoorOpen },
   { slug: "/requests", label: "Requests", icon: ArrowLeftRight },
   { slug: "/payments", label: "Payments", icon: CreditCard },

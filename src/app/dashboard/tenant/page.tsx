@@ -4,6 +4,7 @@ import { CheckCircle2, Clock, FileText, XCircle } from "lucide-react";
 import Link from "next/link";
 import { DashboardShell } from "@/components/DashboardShell";
 import { PropertyCard } from "@/components/PropertyCard";
+import { RecentlyViewedProperties } from "@/components/property/RecentlyViewedProperties";
 import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -190,6 +191,7 @@ const TenantDashboard = () => {
             ))
           )}
         </div>
+        <RecentlyViewedProperties />
       </div>
     </DashboardShell>
   );
