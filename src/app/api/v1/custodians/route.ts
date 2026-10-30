@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
   }
 
   const custodians = await User.find(filter)
-    .select("name email phone managedByOwnerId")
+    .select("name email phone managedByOwnerId privileges")
     .sort({ name: 1 })
     .lean();
 
@@ -58,6 +58,7 @@ export async function GET(request: NextRequest) {
     email: c.email,
     phone: c.phone ?? "",
     managedByOwnerId: c.managedByOwnerId ?? "",
+    privileges: c.privileges ?? [],
   }));
 
   return NextResponse.json({ data });
@@ -155,6 +156,7 @@ export async function POST(request: NextRequest) {
           email: existing.email ?? email,
           phone: update.phone ?? existing.phone ?? phone,
           managedByOwnerId: boundOwnerId,
+          privileges: existing.privileges ?? [],
         },
       });
     }
@@ -192,6 +194,7 @@ export async function POST(request: NextRequest) {
           email,
           phone,
           managedByOwnerId: boundOwnerId,
+          privileges: existing.privileges ?? [],
         },
       },
       { status: 201 },
@@ -219,6 +222,7 @@ export async function POST(request: NextRequest) {
           email: created.email,
           phone: created.phone,
           managedByOwnerId: created.managedByOwnerId,
+          privileges: created.privileges ?? [],
         },
       },
       { status: 201 },
@@ -254,6 +258,7 @@ export async function POST(request: NextRequest) {
         email: created.email,
         phone: created.phone ?? "",
         managedByOwnerId: created.managedByOwnerId,
+        privileges: created.privileges ?? [],
       },
     },
     { status: 201 },

@@ -8,6 +8,7 @@ export interface CustodianRow {
   email?: string;
   phone: string;
   managedByOwnerId: string;
+  privileges: string[];
 }
 
 export function useCustodians() {
@@ -55,11 +56,17 @@ export interface CustodianInviteInput {
   ownerId?: string;
 }
 
+export interface CustodianInviteResult {
+  member: CustodianRow;
+  /** One-time password for a phone-only account. */
+  temporaryPassword?: string;
+}
+
 export function useCustodianMutations() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const inviteCustodian = async (input: CustodianInviteInput): Promise<CustodianRow> => {
+  const inviteCustodian = async (input: CustodianInviteInput): Promise<CustodianInviteResult> => {
     setPending(true);
     setError(null);
     try {
@@ -71,6 +78,33 @@ export function useCustodianMutations() {
       const json = await res.json();
       if (!res.ok) {
         const message = json.error || "Failed to invite custodian";
+        setError(message);
+        throw new Error(message);
+      }
+      return {
+        member: json.data as CustodianRow,
+        temporaryPassword: typeof json.password === "string" ? json.password : undefined,
+      };
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const updateCustodianPrivileges = async (
+    id: string,
+    privileges: string[],
+  ): Promise<CustodianRow> => {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/v1/custodians/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ privileges }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        const message = json.error || "Failed to update custodian privileges";
         setError(message);
         throw new Error(message);
       }
@@ -96,5 +130,11 @@ export function useCustodianMutations() {
     }
   };
 
-  return { inviteCustodian, revokeCustodian, pending, error };
+  return {
+    inviteCustodian,
+    updateCustodianPrivileges,
+    revokeCustodian,
+    pending,
+    error,
+  };
 }

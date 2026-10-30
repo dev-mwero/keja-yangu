@@ -37,6 +37,7 @@ export interface ResolvedContactUser {
   isActive?: boolean;
   isVerified?: boolean;
   managedByOwnerId?: string;
+  privileges?: string[];
 }
 
 export interface ResolveContactInput {

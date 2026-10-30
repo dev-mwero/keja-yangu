@@ -1,6 +1,10 @@
 # Plan — Phone-or-email accounts + unified team invitations
 
-Status: **PROPOSED** · Date: 2026-10-30 · Author: inline
+Status: **IMPLEMENTED (code)** · Date: 2026-10-30 · Author: inline
+
+> Phases 1–5 are shipped. Phase 6 code/docs and the automated verification
+> suite are complete; the staging migration run (T6.2) and manual end-to-end
+> pass (T6.4) remain operational follow-ups.
 
 ## 1. Request
 
@@ -136,10 +140,10 @@ Implementation rules:
   - Follow the pattern of `scripts/backfill-phone-e164.ts`.
 
 **Tasks**
-- [ ] T1.1 Add identity helpers + unit tests (`user-identity.test.ts`).
-- [ ] T1.2 Update `User`/`Tenant` models and indexes.
-- [ ] T1.3 Add the normalization/dedupe report script and document the manual merge step.
-- [ ] T1.4 Update `Tenant`/`User` fixture factories so optional email is supported.
+- [x] T1.1 Add identity helpers + unit tests (`user-identity.test.ts`).
+- [x] T1.2 Update `User`/`Tenant` models and indexes.
+- [x] T1.3 Add the normalization/dedupe report script and document the manual merge step.
+- [x] T1.4 Update `Tenant`/`User` fixture factories so optional email is supported.
 
 **Review focus:** do not create a unique index before the migration has removed empty strings
 and duplicates, or index creation will fail on existing data.
@@ -165,11 +169,11 @@ and duplicates, or index creation will fail on existing data.
   search) and use a phone fallback where an email would otherwise render blank.
 
 **Tasks**
-- [ ] T2.1 Failing tests: sign in with E.164 phone; sign in with local `07…`/`254…` phone;
+- [x] T2.1 Failing tests: sign in with E.164 phone; sign in with local `07…`/`254…` phone;
       sign in with email still works; wrong password still 401.
-- [ ] T2.2 Implement identifier normalization in `signin`.
-- [ ] T2.3 Update client types and blank-email fallbacks.
-- [ ] T2.4 Run auth route + hook tests.
+- [x] T2.2 Implement identifier normalization in `signin`.
+- [x] T2.3 Update client types and blank-email fallbacks.
+- [x] T2.4 Run auth route + hook tests.
 
 ---
 
@@ -219,12 +223,12 @@ tenant gets an immediately usable account.
 - Table: show `—` (or the phone) when email is absent; make search tolerate undefined email.
 
 **Tasks**
-- [ ] T3.1 Route tests: phone-only tenant succeeds; email-only invite succeeds; both succeed;
+- [x] T3.1 Route tests: phone-only tenant succeeds; email-only invite succeeds; both succeed;
       neither → 400; existing-role conflict → 409; duplicate tenant contact → 409.
-- [ ] T3.2 Model/index changes from Phase 1 verified by a route-level create.
-- [ ] T3.3 Update `useTenantMutations`/types.
-- [ ] T3.4 Update `TenantsManager` validation, phone input, credentials dialog, tests.
-- [ ] T3.5 Update existing `TenantsManager.test.tsx` expectations that email is required.
+- [x] T3.2 Model/index changes from Phase 1 verified by a route-level create.
+- [x] T3.3 Update `useTenantMutations`/types.
+- [x] T3.4 Update `TenantsManager` validation, phone input, credentials dialog, tests.
+- [x] T3.5 Update existing `TenantsManager.test.tsx` expectations that email is required.
 
 ---
 
@@ -267,11 +271,11 @@ and custodians can invite/see caretakers under their owner.
 - Ensure the UI can rely on the same response shape (`password` for phone-only).
 
 **Tasks**
-- [ ] T4.1 Failing tests: custodian actor sees caretakers bound to their owner; custodian actor
+- [x] T4.1 Failing tests: custodian actor sees caretakers bound to their owner; custodian actor
       invites a caretaker; phone-only caretaker is active/verified; email invite receives the
       token; re-inviting an existing caretaker refreshes the token; role/owner conflicts → 409.
-- [ ] T4.2 Implement scoping and invite parity.
-- [ ] T4.3 Update divider/custodian route tests for shared helper behavior.
+- [x] T4.2 Implement scoping and invite parity.
+- [x] T4.3 Update divider/custodian route tests for shared helper behavior.
 
 **Review focus:** a caretaker must never be able to invite anyone. The custodian actor must
 never be able to invite a custodian (confirmed decision).
@@ -317,11 +321,11 @@ letting any custodian escalate to peer-custodian or owner management.
   - Always passes `canAssign`.
 
 **Tasks**
-- [ ] T4B.1 Add `assign_privileges` to the model + permission helpers with unit tests.
-- [ ] T4B.2 Enforce privileged-custodian scoping on the caretaker-privilege endpoint.
-- [ ] T4B.3 Add the owner-only custodian privilege toggle + API.
-- [ ] T4B.4 Wire `canAssign` through the team pages and update component tests.
-- [ ] T4B.5 Test that custodians cannot add/edit/revoke custodians and cannot remove the owner.
+- [x] T4B.1 Add `assign_privileges` to the model + permission helpers with unit tests.
+- [x] T4B.2 Enforce privileged-custodian scoping on the caretaker-privilege endpoint.
+- [x] T4B.3 Add the owner-only custodian privilege toggle + API.
+- [x] T4B.4 Wire `canAssign` through the team pages and update component tests.
+- [x] T4B.5 Test that custodians cannot add/edit/revoke custodians and cannot remove the owner.
 
 ---
 
@@ -378,12 +382,12 @@ The owner form offers **custodian + caretaker**; the custodian form offers **car
     out of scope unless a follow-up asks for it.
 
 **Tasks**
-- [ ] T5.1 Create `TeamInviteCard` + hook, with component tests for role switching, contact
+- [x] T5.1 Create `TeamInviteCard` + hook, with component tests for role switching, contact
       validation, and phone-only credentials.
-- [ ] T5.2 Refactor `CustodianManager` to remove the duplicated invite dialog and add phone
+- [x] T5.2 Refactor `CustodianManager` to remove the duplicated invite dialog and add phone
       display; update its tests.
-- [ ] T5.3 Wire the card into the owner and custodian team pages.
-- [ ] T5.4 Update caretaker table/hook for optional email + phone.
+- [x] T5.3 Wire the card into the owner and custodian team pages.
+- [x] T5.4 Update caretaker table/hook for optional email + phone.
 - [ ] T5.5 Manual check: owner invites custodian by email and by phone; owner invites caretaker
       by email and by phone; custodian invites a caretaker; custodian cannot select custodian;
       owner grants a custodian the privileged toggle; that custodian can toggle caretaker
@@ -394,10 +398,10 @@ The owner form offers **custodian + caretaker**; the custodian form offers **car
 
 ### Phase 6 — Cleanup, docs, verification
 
-- [ ] T6.1 Update plan/status docs and any README notes about invite flows.
+- [x] T6.1 Update plan/status docs and any README notes about invite flows.
 - [ ] T6.2 Run the identity migration/report script against a staging database and record
       duplicates before applying the unique phone index.
-- [ ] T6.3 Run the full verification suite:
+- [x] T6.3 Run the full verification suite:
 
 ```bash
 npm run check

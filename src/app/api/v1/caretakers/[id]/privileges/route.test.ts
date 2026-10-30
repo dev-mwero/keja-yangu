@@ -263,4 +263,67 @@ describe("PUT /api/v1/caretakers/[id]/privileges", () => {
     );
     expect(res.status).toBe(404);
   });
+
+  it("lets a privileged custodian update a caretaker under their owner", async () => {
+    const custodian = makeUser({
+      _id: CARE_ID,
+      role: "custodian",
+      managedByOwnerId: OWNER_ID,
+      privileges: ["assign_privileges"],
+    });
+    mockActorAndTarget(custodian, caretakerDoc(TARGET_ID, { managedByOwnerId: OWNER_ID }));
+    user.findOneAndUpdate.mockReturnValue(
+      buildQuery(
+        caretakerDoc(TARGET_ID, {
+          managedByOwnerId: OWNER_ID,
+          privileges: ["manage_tenants"],
+        }),
+      ),
+    );
+
+    const res = await PUT(
+      putRequest(signToken(CARE_ID), TARGET_ID, { privileges: ["manage_tenants"] }),
+      withParams(TARGET_ID),
+    );
+    expect(res.status).toBe(200);
+    expect(user.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: TARGET_ID },
+      { privileges: ["manage_tenants"] },
+      { new: true, runValidators: true },
+    );
+  });
+
+  it("403 for a non-privileged custodian", async () => {
+    const custodian = makeUser({
+      _id: CARE_ID,
+      role: "custodian",
+      managedByOwnerId: OWNER_ID,
+      privileges: [],
+    });
+    user.findById.mockReturnValue(buildQuery(custodian));
+
+    const res = await PUT(
+      putRequest(signToken(CARE_ID), TARGET_ID, { privileges: ["manage_tenants"] }),
+      withParams(TARGET_ID),
+    );
+    expect(res.status).toBe(403);
+    expect(user.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it("403 when a privileged custodian targets another owner's caretaker", async () => {
+    const custodian = makeUser({
+      _id: CARE_ID,
+      role: "custodian",
+      managedByOwnerId: OWNER_ID,
+      privileges: ["assign_privileges"],
+    });
+    mockActorAndTarget(custodian, caretakerDoc(TARGET_ID, { managedByOwnerId: OTHER_OWNER_ID }));
+
+    const res = await PUT(
+      putRequest(signToken(CARE_ID), TARGET_ID, { privileges: ["manage_tenants"] }),
+      withParams(TARGET_ID),
+    );
+    expect(res.status).toBe(403);
+    expect(user.findOneAndUpdate).not.toHaveBeenCalled();
+  });
 });

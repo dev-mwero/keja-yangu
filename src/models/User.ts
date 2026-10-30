@@ -63,6 +63,7 @@ const userSchema = new Schema<IUser>(
         "manage_announcements",
         "send_messages",
         "manage_documents",
+        "assign_privileges",
       ],
       default: [],
     },

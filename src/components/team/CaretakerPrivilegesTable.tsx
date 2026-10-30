@@ -29,7 +29,12 @@ const PRIVILEGES = [
   { key: "manage_tenants", label: "Manage tenants" },
 ] as const;
 
-export const CaretakerPrivilegesTable = () => {
+interface CaretakerPrivilegesTableProps {
+  /** Owner/system-admin and privileged custodians may change privileges. */
+  canAssign?: boolean;
+}
+
+export const CaretakerPrivilegesTable = ({ canAssign = true }: CaretakerPrivilegesTableProps) => {
   const { caretakers, loading, error, refetch } = useCaretakers();
   const { updatePrivileges, pendingId } = useUpdateCaretakerPrivileges();
   const [rows, setRows] = useState<CaretakerRow[]>(caretakers);
@@ -40,6 +45,7 @@ export const CaretakerPrivilegesTable = () => {
   }, [caretakers]);
 
   const toggle = async (row: CaretakerRow, key: string, checked: boolean) => {
+    if (!canAssign) return;
     const nextPrivileges = checked
       ? [...new Set([...row.privileges, key])]
       : row.privileges.filter((p) => p !== key);
@@ -76,7 +82,7 @@ export const CaretakerPrivilegesTable = () => {
     );
   }
 
-  const visible = rows.filter((c) => matchesQuery(query, c.name, c.email));
+  const visible = rows.filter((c) => matchesQuery(query, c.name, c.email, c.phone));
 
   const allPrivileges = PRIVILEGES.length;
   const fullAccess = rows.filter((c) => c.privileges.length === allPrivileges).length;
@@ -89,6 +95,11 @@ export const CaretakerPrivilegesTable = () => {
         <StatCard label="Full access" value={fullAccess} icon={ShieldCheck} hint="All privileges" />
         <StatCard label="No access" value={noAccess} icon={ShieldOff} hint="Needs setup" />
       </div>
+      {!canAssign && (
+        <p className="text-sm text-muted-foreground">
+          Your owner has not granted you permission to change caretaker privileges.
+        </p>
+      )}
       <SearchInput
         value={query}
         onChange={setQuery}
@@ -127,7 +138,9 @@ export const CaretakerPrivilegesTable = () => {
               visible.map((c) => (
                 <TableRow key={c.id}>
                   <TableCell className="font-medium">{c.name}</TableCell>
-                  <TableCell className="text-muted-foreground">{c.email}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {c.email ?? c.phone ?? "—"}
+                  </TableCell>
                   <TableCell>
                     <Badge variant="secondary">{c.propertyCount}</Badge>
                   </TableCell>
@@ -136,7 +149,7 @@ export const CaretakerPrivilegesTable = () => {
                       <Switch
                         aria-label={`${priv.label} for ${c.name}`}
                         checked={c.privileges.includes(priv.key)}
-                        disabled={pendingId === c.id}
+                        disabled={!canAssign || pendingId === c.id}
                         onCheckedChange={(checked) => toggle(c, priv.key, checked)}
                       />
                     </TableCell>
