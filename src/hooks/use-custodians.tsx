@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 export interface CustodianRow {
   id: string;
   name: string;
-  email: string;
+  email?: string;
   phone: string;
   managedByOwnerId: string;
 }
@@ -49,7 +49,7 @@ export function useCustodians() {
 }
 
 export interface CustodianInviteInput {
-  email: string;
+  email?: string;
   name?: string;
   phone?: string;
   ownerId?: string;

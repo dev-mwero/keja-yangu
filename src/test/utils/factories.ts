@@ -28,6 +28,7 @@ export interface TestUser {
   managedByOwnerId: string;
   passwordHash?: string;
   isVerified?: boolean;
+  phone?: string;
 }
 
 export interface TestProperty {

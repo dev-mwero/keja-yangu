@@ -5,7 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 export interface CaretakerRow {
   id: string;
   name: string;
-  email: string;
+  email?: string;
+  phone?: string;
   managedByOwnerId: string;
   privileges: string[];
   propertyCount: number;

@@ -87,7 +87,7 @@ describe("GET /api/v1/caretakers", () => {
     const res = await GET(buildRequest("/api/v1/caretakers", { token: signToken(OWNER_ID) }));
     expect(res.status).toBe(200);
     expect(user.find).toHaveBeenCalledWith({ role: "caretaker", managedByOwnerId: OWNER_ID });
-    expect(chain.select).toHaveBeenCalledWith("name email managedByOwnerId privileges");
+    expect(chain.select).toHaveBeenCalledWith("name email phone managedByOwnerId privileges");
     expect(property.aggregate).toHaveBeenCalled();
     const data = (await json(res)).data as Array<Record<string, unknown>>;
     expect(data).toHaveLength(2);
@@ -197,7 +197,6 @@ describe("POST /api/v1/caretakers", () => {
       name: "Care One",
       email: "care@care.co",
     }) as ReturnType<typeof makeUser> & { save: ReturnType<typeof vi.fn> };
-    existing.save = vi.fn().mockResolvedValue(undefined);
     user.findOne.mockReturnValue(buildQuery(existing));
 
     const res = await POST(
@@ -211,9 +210,16 @@ describe("POST /api/v1/caretakers", () => {
     expect(res.status).toBe(200);
     const body = await json(res);
     expect(body.linked).toBe(true);
-    expect(existing.managedByOwnerId).toBe(OWNER_ID);
-    expect(existing.privileges).toEqual(["manage_tenants"]);
-    expect(existing.save).toHaveBeenCalled();
+    expect(user.updateOne).toHaveBeenCalledWith(
+      { _id: CARE_1 },
+      {
+        $set: {
+          managedByOwnerId: OWNER_ID,
+          privileges: ["manage_tenants"],
+          name: "Care One",
+        },
+      },
+    );
     expect(sendInviteEmail).not.toHaveBeenCalled();
   });
 
@@ -248,10 +254,171 @@ describe("POST /api/v1/caretakers", () => {
         isActive: false,
         isVerified: false,
         privileges: ["manage_tenants"],
+        verificationToken: expect.any(String),
+        verificationTokenExpiry: expect.any(Date),
       }),
     );
-    const createArg = user.create.mock.calls[0][0] as { passwordHash: string };
+    const createArg = user.create.mock.calls[0][0] as {
+      passwordHash: string;
+      verificationToken: string;
+    };
     expect(createArg.passwordHash).toMatch(/^\$2[aby]\$/);
-    expect(sendInviteEmail).toHaveBeenCalledWith("new@care.co", "New Care", "caretaker");
+    expect(sendInviteEmail).toHaveBeenCalledWith(
+      "new@care.co",
+      "New Care",
+      "caretaker",
+      createArg.verificationToken,
+    );
+  });
+
+  it("lets a custodian list caretakers under their owner", async () => {
+    const custodian = makeUser({
+      _id: makeObjectId("custodian"),
+      role: "custodian",
+      managedByOwnerId: OWNER_ID,
+    });
+    user.findById.mockReturnValue(buildQuery(custodian));
+    user.find.mockReturnValue(buildQuery([]));
+
+    const res = await GET(buildRequest("/api/v1/caretakers", { token: signToken(custodian._id) }));
+    expect(res.status).toBe(200);
+    expect(user.find).toHaveBeenCalledWith({ role: "caretaker", managedByOwnerId: OWNER_ID });
+  });
+
+  it("lets a custodian invite a caretaker under their owner", async () => {
+    const custodian = makeUser({
+      _id: makeObjectId("custodian"),
+      role: "custodian",
+      managedByOwnerId: OWNER_ID,
+    });
+    user.findById.mockReturnValue(buildQuery(custodian));
+    user.findOne.mockReturnValue(buildQuery(null));
+    const created = makeUser({
+      _id: CARE_2,
+      role: "caretaker",
+      name: "New Care",
+      email: "new@care.co",
+      managedByOwnerId: OWNER_ID,
+      isActive: false,
+    });
+    user.create.mockResolvedValue(created);
+
+    const res = await POST(
+      buildRequest("/api/v1/caretakers", {
+        method: "POST",
+        token: signToken(custodian._id),
+        body: { email: "new@care.co", name: "New Care" },
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect(user.create).toHaveBeenCalledWith(
+      expect.objectContaining({ managedByOwnerId: OWNER_ID, role: "caretaker" }),
+    );
+  });
+
+  it("creates an active verified phone-only caretaker with a temporary password", async () => {
+    user.findOne.mockReturnValue(buildQuery(null));
+    const created = {
+      _id: CARE_2,
+      name: "Phone Care",
+      phone: "+254712345678",
+      role: "caretaker",
+      managedByOwnerId: OWNER_ID,
+      privileges: [],
+      isActive: true,
+      isVerified: true,
+    };
+    user.create.mockResolvedValue(created);
+
+    const res = await POST(
+      buildRequest("/api/v1/caretakers", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { phone: "0712 345 678", name: "Phone Care" },
+      }),
+    );
+    expect(res.status).toBe(201);
+    const body = await json(res);
+    expect(body.created).toBe(true);
+    expect(body.password).toEqual(expect.any(String));
+    expect(user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phone: "+254712345678",
+        role: "caretaker",
+        isActive: true,
+        isVerified: true,
+        managedByOwnerId: OWNER_ID,
+      }),
+    );
+    expect(sendInviteEmail).not.toHaveBeenCalled();
+  });
+
+  it("refreshes a pending invite and resends the token", async () => {
+    const pending = makeUser({
+      _id: CARE_1,
+      role: "caretaker",
+      email: "pending@care.co",
+      managedByOwnerId: OWNER_ID,
+      isActive: false,
+      isVerified: false,
+    });
+    user.findOne.mockReturnValue(buildQuery(pending));
+
+    const res = await POST(
+      buildRequest("/api/v1/caretakers", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { email: "pending@care.co", name: "Pending Care", privileges: ["manage_tenants"] },
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect(user.create).not.toHaveBeenCalled();
+    expect(user.updateOne).toHaveBeenCalledWith(
+      { _id: CARE_1 },
+      {
+        $set: expect.objectContaining({
+          email: "pending@care.co",
+          name: "Pending Care",
+          managedByOwnerId: OWNER_ID,
+          privileges: ["manage_tenants"],
+          verificationToken: expect.any(String),
+          verificationTokenExpiry: expect.any(Date),
+        }),
+      },
+    );
+    expect(sendInviteEmail).toHaveBeenCalledWith(
+      "pending@care.co",
+      "Pending Care",
+      "caretaker",
+      expect.any(String),
+    );
+  });
+
+  it("409 when the contact belongs to a different role", async () => {
+    user.findOne.mockReturnValue(
+      buildQuery(makeUser({ role: "tenant", isActive: true, email: "tenant@care.co" })),
+    );
+
+    const res = await POST(
+      buildRequest("/api/v1/caretakers", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { email: "tenant@care.co" },
+      }),
+    );
+    expect(res.status).toBe(409);
+  });
+
+  it("system-admin requires an active ownerId", async () => {
+    user.findById.mockReturnValue(buildQuery(adminDoc()));
+    const res = await POST(
+      buildRequest("/api/v1/caretakers", {
+        method: "POST",
+        token: signToken(adminDoc()._id),
+        body: { email: "new@care.co" },
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(user.create).not.toHaveBeenCalled();
   });
 });
