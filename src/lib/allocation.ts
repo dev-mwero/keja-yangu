@@ -30,7 +30,7 @@ export class AllocationError extends Error {
 
 export interface TenantRef {
   _id: unknown;
-  email: string;
+  email?: string;
   userId?: string;
   propertyId: string;
   ownerId: string;
@@ -55,14 +55,14 @@ export interface AllocatedUnit {
  */
 export async function resolveOccupantUserId(tenant: {
   _id: unknown;
-  email: string;
+  email?: string;
   userId?: string;
 }): Promise<string> {
   if (tenant.userId) return tenant.userId;
+  const email = tenant.email?.trim().toLowerCase() ?? "";
+  if (!email) return "";
 
-  const user = await User.findOne({ email: tenant.email.trim().toLowerCase(), role: "tenant" })
-    .select("_id isActive")
-    .lean();
+  const user = await User.findOne({ email, role: "tenant" }).select("_id isActive").lean();
   if (!user || user.isActive === false) return "";
 
   const userId = String(user._id);

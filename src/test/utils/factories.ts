@@ -21,7 +21,7 @@ export function makeObjectId(token: string): string {
 export interface TestUser {
   _id: string;
   name: string;
-  email: string;
+  email?: string;
   role: Role;
   isActive: boolean;
   privileges: CaretakerPrivilege[];
@@ -54,7 +54,7 @@ export interface TestProperty {
 export interface TestTenant {
   _id: string;
   name: string;
-  email: string;
+  email?: string;
   phone?: string;
   propertyId: string;
   ownerId: string;
