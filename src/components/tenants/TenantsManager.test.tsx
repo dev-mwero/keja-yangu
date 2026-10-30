@@ -175,7 +175,7 @@ function comboboxByText(scope: HTMLElement, text: string) {
 const addInputs = {
   name: "Amina Otieno",
   email: "AMINA@keja.co",
-  phone: "+254700000000",
+  phone: "700000000",
   notes: "First floor",
 };
 
@@ -257,7 +257,7 @@ describe("TenantsManager", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Add tenant" }));
 
     expect(await within(dialog).findByText("Name is required")).toBeInTheDocument();
-    expect(within(dialog).getByText("Email is required")).toBeInTheDocument();
+    expect(within(dialog).getByText("Provide an email or phone")).toBeInTheDocument();
     expect(within(dialog).getByText("Select a property")).toBeInTheDocument();
     expect(mocks.createTenant).not.toHaveBeenCalled();
   });
@@ -301,6 +301,33 @@ describe("TenantsManager", () => {
     const payload = mocks.createTenant.mock.calls[0][0] as Record<string, unknown>;
     expect(payload).not.toHaveProperty("status");
     expect(mocks.toast.success).toHaveBeenCalledWith("Tenant added", expect.any(Object));
+  });
+
+  it("shows a one-time temporary password after creating a phone-only tenant", async () => {
+    const user = userEvent.setup();
+    mocks.properties.push(...properties);
+    mocks.createTenant.mockResolvedValue({
+      tenant: tenants[0],
+      temporaryPassword: "temp-pass-123",
+    });
+    renderManager({ canSetStatus: false });
+
+    fireEvent.click(screen.getByRole("button", { name: "Add tenant" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: addInputs.name } });
+    fireEvent.change(within(dialog).getByLabelText("Phone"), {
+      target: { value: addInputs.phone },
+    });
+
+    await user.click(comboboxByText(dialog, "Select property"));
+    await user.click(await screen.findByRole("option", { name: "Sunset Villa" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add tenant" }));
+
+    const credentials = await screen.findByRole("dialog", { name: "Temporary password" });
+    expect(within(credentials).getByText("temp-pass-123")).toBeInTheDocument();
+    expect(mocks.createTenant).toHaveBeenCalledWith(
+      expect.objectContaining({ phone: "+254700000000", email: undefined }),
+    );
   });
 
   it("includes the default pending status when canSetStatus is true", async () => {

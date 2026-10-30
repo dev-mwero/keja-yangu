@@ -24,6 +24,27 @@ export const CARETAKER_PRIVILEGES = [
 
 export type CaretakerPrivilege = (typeof CARETAKER_PRIVILEGES)[number];
 
+export const CUSTODIAN_PRIVILEGES = ["assign_privileges"] as const;
+
+export type CustodianPrivilege = (typeof CUSTODIAN_PRIVILEGES)[number];
+
+export type Privilege = CaretakerPrivilege | CustodianPrivilege;
+
+/** A custodian trusted to manage caretaker privileges for their owner. */
+export function isPrivilegedCustodian(user: {
+  role: Role;
+  privileges?: string[] | null;
+  isActive?: boolean;
+  managedByOwnerId?: string | null;
+}): boolean {
+  return (
+    user.role === "custodian" &&
+    user.isActive === true &&
+    Boolean(user.managedByOwnerId) &&
+    (user.privileges ?? []).includes("assign_privileges")
+  );
+}
+
 export type Action =
   | "property:create"
   | "property:edit"
@@ -70,7 +91,7 @@ export interface AuthUser {
 export interface UserCtx {
   role: Role;
   isActive: boolean;
-  privileges: CaretakerPrivilege[];
+  privileges: Privilege[];
   managedByOwnerId: string;
 }
 
@@ -378,7 +399,7 @@ export async function getCaretakerContext(userId: string): Promise<UserCtx> {
   return {
     role: user.role,
     isActive: user.isActive,
-    privileges: (user.privileges ?? []) as CaretakerPrivilege[],
+    privileges: (user.privileges ?? []) as Privilege[],
     managedByOwnerId: user.managedByOwnerId ?? "",
   };
 }

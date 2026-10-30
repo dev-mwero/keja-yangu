@@ -1,21 +1,13 @@
 "use client";
 
-import { Loader2, Plus, UserCog, Users } from "lucide-react";
+import { ShieldCheck, UserCog, Users } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { SearchInput } from "@/components/SearchInput";
 import { StatCard } from "@/components/StatCard";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -24,57 +16,28 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useCustodianMutations, useCustodians } from "@/hooks/use-custodians";
+import { type CustodianRow, useCustodianMutations, useCustodians } from "@/hooks/use-custodians";
 import { matchesQuery } from "@/lib/search";
 
-interface Props {
-  systemAdmin?: boolean;
-}
-
-export const CustodianManager = ({ systemAdmin = false }: Props) => {
+export const CustodianManager = () => {
   const { custodians, loading, error, refetch } = useCustodians();
-  const { inviteCustodian, revokeCustodian, pending } = useCustodianMutations();
-  const [open, setOpen] = useState(false);
+  const { updateCustodianPrivileges, revokeCustodian, pending } = useCustodianMutations();
   const [query, setQuery] = useState("");
-  const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [ownerId, setOwnerId] = useState("");
-
-  const resetForm = () => {
-    setEmail("");
-    setName("");
-    setPhone("");
-    setOwnerId("");
-  };
 
   const visible = custodians.filter((c) => matchesQuery(query, c.name, c.email, c.phone));
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.trim()) {
-      toast.error("Email is required");
-      return;
-    }
-    if (systemAdmin && !ownerId.trim()) {
-      toast.error("Owner id is required");
-      return;
-    }
+  const togglePrivileged = async (c: CustodianRow, checked: boolean) => {
+    const next = checked ? ["assign_privileges"] : [];
     try {
-      await inviteCustodian({
-        email: email.trim(),
-        name: name.trim() || undefined,
-        phone: phone.trim() || undefined,
-        ownerId: systemAdmin ? ownerId.trim() : undefined,
-      });
-      toast.success("Custodian invited", {
-        description: "They will receive an email to activate their account.",
-      });
-      resetForm();
-      setOpen(false);
+      await updateCustodianPrivileges(c.id, next);
+      toast.success(
+        checked
+          ? `${c.name} can now assign caretaker privileges`
+          : `${c.name} is no longer privileged`,
+      );
       refetch();
     } catch (err) {
-      toast.error("Could not invite custodian", {
+      toast.error("Could not update custodian", {
         description: err instanceof Error ? err.message : undefined,
       });
     }
@@ -109,17 +72,12 @@ export const CustodianManager = ({ systemAdmin = false }: Props) => {
             Custodians manage your portfolio on your behalf, scoped to your account.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <SearchInput
-            value={query}
-            onChange={setQuery}
-            placeholder="Search custodians…"
-            className="w-full sm:w-56"
-          />
-          <Button className="rounded-full" onClick={() => setOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" /> Invite custodian
-          </Button>
-        </div>
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder="Search custodians…"
+          className="w-full sm:w-56"
+        />
       </div>
 
       {loading ? (
@@ -142,22 +100,41 @@ export const CustodianManager = ({ systemAdmin = false }: Props) => {
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Phone</TableHead>
+                <TableHead>Privileges</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {visible.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
                     No custodians match your search.
                   </TableCell>
                 </TableRow>
               ) : (
                 visible.map((c) => (
                   <TableRow key={c.id}>
-                    <TableCell className="font-medium">{c.name}</TableCell>
-                    <TableCell className="text-muted-foreground">{c.email}</TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {c.name}
+                        {c.privileges.includes("assign_privileges") && (
+                          <Badge variant="secondary" className="gap-1 text-[10px]">
+                            <ShieldCheck className="h-3 w-3" />
+                            Privileged
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{c.email ?? "—"}</TableCell>
                     <TableCell className="text-muted-foreground">{c.phone || "—"}</TableCell>
+                    <TableCell>
+                      <Switch
+                        aria-label={`Assign privileges for ${c.name}`}
+                        checked={c.privileges.includes("assign_privileges")}
+                        disabled={pending}
+                        onCheckedChange={(checked) => togglePrivileged(c, checked)}
+                      />
+                    </TableCell>
                     <TableCell className="text-right">
                       <Button
                         variant="outline"
@@ -176,79 +153,6 @@ export const CustodianManager = ({ systemAdmin = false }: Props) => {
           </Table>
         </div>
       )}
-
-      <Dialog
-        open={open}
-        onOpenChange={(next) => {
-          if (!pending) setOpen(next);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Invite custodian</DialogTitle>
-            <DialogDescription>
-              They will receive an email invite and can activate their account with the same email
-              address.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={submit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="custodian-email">Email</Label>
-              <Input
-                id="custodian-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="custodian@example.com"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="custodian-name">Name</Label>
-              <Input
-                id="custodian-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Optional"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="custodian-phone">Phone</Label>
-              <Input
-                id="custodian-phone"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="Optional"
-              />
-            </div>
-            {systemAdmin && (
-              <div className="space-y-2">
-                <Label htmlFor="custodian-owner">Owner id</Label>
-                <Input
-                  id="custodian-owner"
-                  value={ownerId}
-                  onChange={(e) => setOwnerId(e.target.value)}
-                  placeholder="24-hex owner user id"
-                />
-              </div>
-            )}
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                className="rounded-full"
-                disabled={pending}
-                onClick={() => setOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" className="rounded-full" disabled={pending}>
-                {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Send invite
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

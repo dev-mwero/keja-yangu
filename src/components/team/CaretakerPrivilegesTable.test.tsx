@@ -119,6 +119,23 @@ describe("CaretakerPrivilegesTable", () => {
     expect(screen.getByRole("switch", { name: "Create property for Amka" })).not.toBeChecked();
   });
 
+  it("disables toggles and explains why when canAssign is false", () => {
+    mocks.list.push(...caretakerRows);
+    render(<CaretakerPrivilegesTable canAssign={false} />);
+
+    expect(
+      screen.getByText("Your owner has not granted you permission to change caretaker privileges."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Manage tenants for Amka" })).toBeDisabled();
+  });
+
+  it("shows the phone when a caretaker has no email", () => {
+    mocks.list.push({ ...caretakerRows[0], email: undefined, phone: "+254712345678" });
+    render(<CaretakerPrivilegesTable />);
+
+    expect(screen.getByText("+254712345678")).toBeInTheDocument();
+  });
+
   it("filters caretakers by the search box", async () => {
     mocks.list.push(...caretakerRows, {
       id: "care-2",

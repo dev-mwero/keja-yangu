@@ -173,11 +173,35 @@ describe("POST /api/v1/custodians", () => {
     expect(res.status).toBe(409);
   });
 
-  it("links an existing unbound custodian record", async () => {
+  it("refreshes an existing pending custodian invite instead of duplicating it", async () => {
     user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
     user.findOne.mockReturnValue(
-      buildQuery(custodianDoc({ managedByOwnerId: "", isActive: false })),
+      buildQuery(custodianDoc({ managedByOwnerId: "", isActive: false, isVerified: false })),
     );
+
+    const res = await POST(
+      buildRequest("/api/v1/custodians", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { email: "custodian@keja.co" },
+      }),
+    );
+    expect(res.status).toBe(201);
+    const body = await json(res);
+    expect(body.invited).toBe(true);
+    expect(user.create).not.toHaveBeenCalled();
+    expect(user.updateOne).toHaveBeenCalled();
+    expect(sendInviteEmail).toHaveBeenCalledWith(
+      "custodian@keja.co",
+      "Custodian One",
+      "custodian",
+      expect.any(String),
+    );
+  });
+
+  it("links an existing active custodian under the same owner", async () => {
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findOne.mockReturnValue(buildQuery(custodianDoc({ managedByOwnerId: "" })));
 
     const res = await POST(
       buildRequest("/api/v1/custodians", {

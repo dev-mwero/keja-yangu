@@ -5,10 +5,25 @@ import { useCallback, useEffect, useState } from "react";
 export interface CaretakerRow {
   id: string;
   name: string;
-  email: string;
+  email?: string;
+  phone?: string;
   managedByOwnerId: string;
   privileges: string[];
   propertyCount: number;
+}
+
+export interface CaretakerInviteInput {
+  email?: string;
+  name?: string;
+  phone?: string;
+  ownerId?: string;
+  privileges?: string[];
+}
+
+export interface CaretakerInviteResult {
+  member: CaretakerRow;
+  /** One-time password for a phone-only account. */
+  temporaryPassword?: string;
 }
 
 export function useCaretakers() {
@@ -47,6 +62,37 @@ export function useCaretakers() {
   const refetch = useCallback(() => setReload((n) => n + 1), []);
 
   return { caretakers, loading, error, refetch };
+}
+
+export function useCaretakerMutations() {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const inviteCaretaker = async (input: CaretakerInviteInput): Promise<CaretakerInviteResult> => {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/v1/caretakers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        const message = json.error || "Failed to invite caretaker";
+        setError(message);
+        throw new Error(message);
+      }
+      return {
+        member: json.data as CaretakerRow,
+        temporaryPassword: typeof json.password === "string" ? json.password : undefined,
+      };
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return { inviteCaretaker, pending, error };
 }
 
 export function useUpdateCaretakerPrivileges() {

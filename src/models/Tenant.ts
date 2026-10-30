@@ -5,7 +5,7 @@ export type TenantType = "residential" | "commercial" | "owning";
 
 export interface ITenant {
   name: string;
-  email: string;
+  email?: string;
   phone?: string;
   propertyId: string;
   ownerId: string;
@@ -20,7 +20,7 @@ export interface ITenant {
 const tenantSchema = new Schema<ITenant>(
   {
     name: { type: String, required: true, trim: true },
-    email: { type: String, required: true, trim: true, lowercase: true },
+    email: { type: String, required: false, trim: true, lowercase: true },
     phone: { type: String },
     propertyId: { type: String, required: true },
     ownerId: { type: String, required: true },
@@ -45,11 +45,16 @@ const tenantSchema = new Schema<ITenant>(
   },
 );
 
-// One live tenant per email per property; soft-deleted rows are excluded so the
-// email can be reused after deletion.
+// One live tenant per contact per property. Empty/missing contacts are excluded
+// from the partial indexes so phone-only tenants are allowed; soft-deleted rows
+// are excluded so a contact can be reused after deletion.
 tenantSchema.index(
   { propertyId: 1, email: 1 },
-  { unique: true, partialFilterExpression: { deletedAt: null } },
+  { unique: true, partialFilterExpression: { deletedAt: null, email: { $gt: "" } } },
+);
+tenantSchema.index(
+  { propertyId: 1, phone: 1 },
+  { unique: true, partialFilterExpression: { deletedAt: null, phone: { $gt: "" } } },
 );
 tenantSchema.index({ userId: 1 });
 softDeletePlugin(tenantSchema);

@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { connectToDatabase } from "@/lib/mongoose";
-import { authenticate } from "@/lib/permissions";
+import { authenticate, CUSTODIAN_PRIVILEGES } from "@/lib/permissions";
 import { User } from "@/models/User";
 
 interface RouteContext {
@@ -12,6 +12,7 @@ interface RouteContext {
 const custodianUpdateSchema = z.object({
   name: z.string().trim().min(1).optional(),
   phone: z.string().trim().optional(),
+  privileges: z.array(z.enum(CUSTODIAN_PRIVILEGES)).optional(),
 });
 
 async function loadActorAndCustodian(request: NextRequest, id: string) {
@@ -56,6 +57,9 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
 
   if (parsed.data.name !== undefined) custodian.name = parsed.data.name;
   if (parsed.data.phone !== undefined) custodian.phone = parsed.data.phone;
+  if (parsed.data.privileges !== undefined) {
+    custodian.privileges = parsed.data.privileges;
+  }
   await custodian.save();
 
   return NextResponse.json({
@@ -65,6 +69,7 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
       email: custodian.email,
       phone: custodian.phone ?? "",
       managedByOwnerId: custodian.managedByOwnerId ?? "",
+      privileges: custodian.privileges ?? [],
     },
   });
 }

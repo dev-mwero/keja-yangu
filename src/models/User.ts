@@ -10,7 +10,7 @@ export interface IUserSettings {
 }
 
 export interface IUser {
-  email: string;
+  email?: string;
   name: string;
   passwordHash: string;
   role: "tenant" | "caretaker" | "custodian" | "owner" | "system-admin";
@@ -63,6 +63,7 @@ const userSchema = new Schema<IUser>(
         "manage_announcements",
         "send_messages",
         "manage_documents",
+        "assign_privileges",
       ],
       default: [],
     },
@@ -87,7 +88,7 @@ const userSchema = new Schema<IUser>(
 );
 
 userSchema.index({ role: 1, managedByOwnerId: 1 });
-userSchema.index({ phone: 1 });
+userSchema.index({ phone: 1 }, { unique: true, partialFilterExpression: { phone: { $gt: "" } } });
 userSchema.index({ email: 1 }, { unique: true, sparse: true });
 
 export type UserDocument = InferSchemaType<IUser>;

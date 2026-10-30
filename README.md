@@ -92,7 +92,7 @@ Open [http://localhost:3000](http://localhost:3000).
 - `DELETE /api/v1/units/[id]` — Delete a vacant unit (`unit:manage`; 409 while occupied)
 - `GET /api/v1/custodians` — List an owner's custodians (owner/system-admin only)
 - `POST /api/v1/custodians` — Invite or link a custodian bound to an owner (owner/system-admin; rate-limited 20/min)
-- `PATCH /api/v1/custodians/[id]` — Update a custodian's profile (managing owner/system-admin)
+- `PATCH /api/v1/custodians/[id]` — Update a custodian's profile or grant `assign_privileges` (managing owner/system-admin)
 - `DELETE /api/v1/custodians/[id]` — Revoke a custodian (unlinks from owner and deactivates; owner/system-admin)
 - `GET /api/v1/move-requests` — List move-requests scoped per role (`status` filter)
 - `POST /api/v1/move-requests` — File a move-in/move-out request (occupying tenant, owner, custodian, or privileged caretaker)
@@ -103,10 +103,10 @@ Open [http://localhost:3000](http://localhost:3000).
 - `GET /api/v1/tenants/[id]` — Get single tenant (same scope as tenant list)
 - `PATCH /api/v1/tenants/[id]` — Update tenant (same scope as tenant list)
 - `DELETE /api/v1/tenants/[id]` — Delete tenant (same scope as tenant list)
-- `GET /api/v1/caretakers` — List caretakers with privileges (owner/system-admin only)
+- `GET /api/v1/caretakers` — List caretakers with privileges (owner, custodian scoped to their owner, or system-admin)
 - `GET /api/v1/users/search` — Exact case-insensitive email or exact phone match (owner/system-admin; caretakers with `manage_tenants`; returns `id, name, email, role, isActive, hasVerifiedEmail`)
-- `POST /api/v1/caretakers` — Link an existing active user (`{ linked: true }`) or pre-create an inactive, unverified caretaker account (`{ invited: true }`, rate-limited 20/min)
-- `PUT /api/v1/caretakers/[id]/privileges` — Set caretaker privileges (owner/system-admin only; rate-limited 20/min)
+- `POST /api/v1/caretakers` — Invite or link a caretaker by email or phone; phone-only creates an active, verified account and returns a one-time password (owner, custodian, or system-admin; rate-limited 20/min)
+- `PUT /api/v1/caretakers/[id]/privileges` — Set caretaker privileges (owner/system-admin, or a privileged custodian scoped to their owner; rate-limited 20/min)
 - `GET /api/v1/leases` — List leases (`lease:manage`; owner-scoped)
 - `POST /api/v1/leases` — Create lease (`lease:manage`; validates tenant/property, rate-limited 20/min)
 - `GET /api/v1/leases/[id]` — Get single lease (`lease:manage`)
@@ -149,8 +149,8 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ### Invite-or-link onboarding
 
-Tenants and caretakers can join by either signing up first (and being linked by
-email) or being invited first:
+Tenants, custodians, and caretakers can join by either signing up first (and
+being linked by email) or being invited first:
 
 - `POST /api/v1/tenants` links the tenant to an existing active, verified user
   by email, otherwise creates the tenant with an empty `userId` and emails an
@@ -158,8 +158,10 @@ email) or being invited first:
 - `POST /api/v1/caretakers` links an existing user (binding `managedByOwnerId`,
   409 if already bound to a different owner) or pre-creates an inactive,
   unverified caretaker user with a random unguessable password hash plus an
-  invite email. When that person later signs up with the same email, the
-  signup flow adopts the pre-created account instead of duplicating it.
+  invite email carrying a verification token. When that person later signs up
+  with the same email, the signup flow adopts the pre-created account instead
+  of duplicating it. A phone-only invite creates an active, verified account
+  immediately and returns a one-time temporary password.
 - `GET /api/v1/users/search?email=|phone=` performs exact, case-insensitive
   email or phone lookups for owner/system-admin and caretakers with
   `manage_tenants`.
@@ -234,8 +236,11 @@ Caretakers are read-only by default. Owners grant granular privileges — create
 property, edit property, delete assigned property, manage tenants, manage
 invoices — from the team page; system-admin applies to all caretakers.
 Custodians are **owner-delegates**: bound to one owner via `managedByOwnerId`
-and scoped to that owner's portfolio. They cannot invite or revoke other
-custodians.
+and scoped to that owner's portfolio. They can invite caretakers but cannot
+invite, edit, or revoke other custodians. Owners can mark a custodian as
+privileged (`assign_privileges`), letting that custodian manage caretaker
+privileges within the owner's portfolio; only the owner/system-admin can grant
+or revoke that token.
 `custodian` and `system-admin` are invite/seed-only and cannot be selected at
 public signup.
 

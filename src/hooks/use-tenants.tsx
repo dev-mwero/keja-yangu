@@ -15,7 +15,7 @@ export interface TenantUnitSummary {
 export interface Tenant {
   _id: string;
   name: string;
-  email: string;
+  email?: string;
   phone?: string;
   propertyId: string;
   ownerId: string;
@@ -35,12 +35,18 @@ export interface Tenant {
 
 export interface TenantInput {
   name: string;
-  email: string;
+  email?: string;
   phone?: string;
   propertyId: string;
   type?: TenantType;
   status?: TenantStatus;
   notes?: string;
+}
+
+export interface CreateTenantResult {
+  tenant: Tenant;
+  /** One-time password for a phone-only account. */
+  temporaryPassword?: string;
 }
 
 export interface TenantFilters {
@@ -119,7 +125,7 @@ export function usePropertyTenants(propertyId?: string, options?: UseTenantsOpti
 export function useTenantMutations() {
   const [pending, setPending] = useState(false);
 
-  const createTenant = async (input: TenantInput): Promise<Tenant> => {
+  const createTenant = async (input: TenantInput): Promise<CreateTenantResult> => {
     setPending(true);
     try {
       const res = await fetch("/api/v1/tenants", {
@@ -131,7 +137,10 @@ export function useTenantMutations() {
       if (!res.ok) {
         throw new Error(json.error || "Failed to create tenant");
       }
-      return json.data as Tenant;
+      return {
+        tenant: json.data as Tenant,
+        ...(json.password ? { temporaryPassword: String(json.password) } : {}),
+      };
     } finally {
       setPending(false);
     }

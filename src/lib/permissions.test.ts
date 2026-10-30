@@ -5,6 +5,7 @@ import {
   getTenantScope,
   isFullControlRole,
   isOwnerScopedRole,
+  isPrivilegedCustodian,
   requirePermission,
   tenantMatchesScope,
 } from "@/lib/permissions";
@@ -89,6 +90,24 @@ describe("isFullControlRole", () => {
   it("returns false for caretaker and tenant", () => {
     expect(isFullControlRole("caretaker")).toBe(false);
     expect(isFullControlRole("tenant")).toBe(false);
+  });
+});
+
+describe("isPrivilegedCustodian", () => {
+  const privileged = {
+    role: "custodian" as const,
+    privileges: ["assign_privileges"],
+    isActive: true,
+    managedByOwnerId: "owner-1",
+  };
+
+  it("is true only for active, owner-bound custodians with assign_privileges", () => {
+    expect(isPrivilegedCustodian(privileged)).toBe(true);
+    expect(isPrivilegedCustodian({ ...privileged, privileges: [] })).toBe(false);
+    expect(isPrivilegedCustodian({ ...privileged, isActive: false })).toBe(false);
+    expect(isPrivilegedCustodian({ ...privileged, managedByOwnerId: "" })).toBe(false);
+    expect(isPrivilegedCustodian({ ...privileged, role: "owner" })).toBe(false);
+    expect(isPrivilegedCustodian({ ...privileged, role: "caretaker" })).toBe(false);
   });
 });
 

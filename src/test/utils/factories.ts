@@ -1,5 +1,5 @@
 import type { PropertyPurpose } from "@/lib/domain-enums";
-import type { CaretakerPrivilege, Role } from "@/lib/permissions";
+import type { Privilege, Role } from "@/lib/permissions";
 
 const HEX_CHARS = "abcdef0123456789";
 
@@ -21,13 +21,14 @@ export function makeObjectId(token: string): string {
 export interface TestUser {
   _id: string;
   name: string;
-  email: string;
+  email?: string;
   role: Role;
   isActive: boolean;
-  privileges: CaretakerPrivilege[];
+  privileges: Privilege[];
   managedByOwnerId: string;
   passwordHash?: string;
   isVerified?: boolean;
+  phone?: string;
 }
 
 export interface TestProperty {
@@ -54,7 +55,7 @@ export interface TestProperty {
 export interface TestTenant {
   _id: string;
   name: string;
-  email: string;
+  email?: string;
   phone?: string;
   propertyId: string;
   ownerId: string;

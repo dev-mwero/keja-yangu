@@ -5,12 +5,13 @@ import { z } from "zod";
 import { connectToDatabase } from "@/lib/mongoose";
 import { asSoftDeleteModel } from "@/lib/mongoose-soft-delete";
 import { getTenantScope, requirePermission, tenantMatchesScope } from "@/lib/permissions";
+import { normalizeContactEmail, normalizeContactPhone } from "@/lib/user-identity";
 import { Property } from "@/models/Property";
 import { TENANT_SAFE_FIELDS, Tenant } from "@/models/Tenant";
 
 const tenantUpdate = z.object({
   name: z.string().trim().min(1).optional(),
-  email: z.string().trim().toLowerCase().email().optional(),
+  email: z.string().trim().toLowerCase().email().or(z.literal("")).optional(),
   phone: z.string().optional(),
   type: z.enum(["residential", "commercial", "owning"]).optional(),
   notes: z.string().optional(),
@@ -72,9 +73,27 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
   const updateData: Record<string, unknown> = {};
 
+  const nextEmail =
+    parsed.data.email !== undefined
+      ? normalizeContactEmail(parsed.data.email)
+      : normalizeContactEmail(tenant.email);
+  const nextPhone =
+    parsed.data.phone !== undefined
+      ? normalizeContactPhone(parsed.data.phone)
+      : normalizeContactPhone(tenant.phone);
+  if (!nextEmail && !nextPhone) {
+    return NextResponse.json({ error: "Email or phone is required" }, { status: 400 });
+  }
+  if (parsed.data.phone?.trim() && !nextPhone) {
+    return NextResponse.json(
+      { error: "Enter a valid mobile number with its country code" },
+      { status: 400 },
+    );
+  }
+
   if (parsed.data.name !== undefined) updateData.name = parsed.data.name;
-  if (parsed.data.email !== undefined) updateData.email = parsed.data.email;
-  if (parsed.data.phone !== undefined) updateData.phone = parsed.data.phone;
+  if (parsed.data.email !== undefined) updateData.email = nextEmail;
+  if (parsed.data.phone !== undefined) updateData.phone = nextPhone;
   if (parsed.data.type !== undefined) updateData.type = parsed.data.type;
   if (parsed.data.notes !== undefined) updateData.notes = parsed.data.notes;
 
@@ -108,14 +127,23 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   }
 
   const nextPropertyId = parsed.data.propertyId ?? tenant.propertyId;
-  const nextEmail = parsed.data.email ?? tenant.email;
-  if (nextEmail !== tenant.email || nextPropertyId !== tenant.propertyId) {
-    const duplicate = await Tenant.findOne({ propertyId: nextPropertyId, email: nextEmail })
-      .select("_id")
-      .lean();
+  if (
+    nextEmail !== normalizeContactEmail(tenant.email) ||
+    nextPhone !== normalizeContactPhone(tenant.phone) ||
+    nextPropertyId !== tenant.propertyId
+  ) {
+    const duplicateQuery: Record<string, unknown> = { propertyId: nextPropertyId };
+    if (nextEmail && nextPhone) {
+      duplicateQuery.$or = [{ email: nextEmail }, { phone: nextPhone }];
+    } else if (nextEmail) {
+      duplicateQuery.email = nextEmail;
+    } else {
+      duplicateQuery.phone = nextPhone;
+    }
+    const duplicate = await Tenant.findOne(duplicateQuery).select("_id").lean();
     if (duplicate && String(duplicate._id) !== id) {
       return NextResponse.json(
-        { error: "A tenant with this email already exists on this property" },
+        { error: "A tenant with this email or phone already exists on this property" },
         { status: 409 },
       );
     }
