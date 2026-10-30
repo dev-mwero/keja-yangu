@@ -8,7 +8,7 @@ export type Role = "tenant" | "caretaker" | "custodian" | "owner" | "system-admi
 
 export interface KejaUser {
   id: string;
-  email: string;
+  email?: string;
   name?: string;
   role: Role;
   privileges?: string[];

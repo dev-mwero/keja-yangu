@@ -340,7 +340,7 @@ describe("POST /api/auth — signin by phone", () => {
     resetAuthRateLimits();
   });
 
-  it("signs in a user by phone number when email lookup misses", async () => {
+  it("signs in a phone-only user by E.164 phone", async () => {
     const phoneUser = {
       _id: USER_ID,
       email: undefined,
@@ -351,8 +351,7 @@ describe("POST /api/auth — signin by phone", () => {
       isVerified: true,
       passwordHash: await bcrypt.hash("secret123", 12),
     };
-    user.findOne.mockReturnValueOnce(buildQuery(null));
-    user.findOne.mockReturnValueOnce(buildQuery(phoneUser));
+    user.findOne.mockReturnValue(buildQuery(phoneUser));
 
     const res = await POST(
       buildRequest("/api/auth", {
@@ -365,6 +364,30 @@ describe("POST /api/auth — signin by phone", () => {
     const signedInUser = body.user as { role: string; phone: string };
     expect(signedInUser.role).toBe("caretaker");
     expect(signedInUser.phone).toBe("+254712345678");
+    expect(user.findOne).toHaveBeenCalledWith({ phone: "+254712345678" });
+  });
+
+  it("normalises a local Kenyan phone before sign-in", async () => {
+    const phoneUser = {
+      _id: USER_ID,
+      email: undefined,
+      phone: "+254712345678",
+      name: "Jane",
+      role: "tenant",
+      isActive: true,
+      isVerified: true,
+      passwordHash: await bcrypt.hash("secret123", 12),
+    };
+    user.findOne.mockReturnValue(buildQuery(phoneUser));
+
+    const res = await POST(
+      buildRequest("/api/auth", {
+        method: "POST",
+        body: { action: "signin", identifier: "0712 345 678", password: "secret123" },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(user.findOne).toHaveBeenCalledWith({ phone: "+254712345678" });
   });
 
   it("still signs in with email for backward compatibility", async () => {
@@ -389,8 +412,7 @@ describe("POST /api/auth — signin by phone", () => {
   });
 
   it("401 when phone lookup finds no active verified user", async () => {
-    user.findOne.mockReturnValueOnce(buildQuery(null));
-    user.findOne.mockReturnValueOnce(buildQuery(null));
+    user.findOne.mockReturnValue(buildQuery(null));
 
     const res = await POST(
       buildRequest("/api/auth", {

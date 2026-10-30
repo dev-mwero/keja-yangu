@@ -10,6 +10,7 @@ import { isValidE164, isValidNationalId, normalizeNationalId } from "@/lib/phone
 import { isProfileComplete } from "@/lib/profile-completion";
 import { rateLimitAuth } from "@/lib/rate-limit-auth";
 import { type Role, roleRoute } from "@/lib/role-routes";
+import { normalizeContactEmail, normalizeContactPhone } from "@/lib/user-identity";
 import { Tenant } from "@/models/Tenant";
 import { User } from "@/models/User";
 
@@ -106,12 +107,21 @@ export async function POST(request: Request) {
 
       await connectToDatabase();
       const rawId = (parsed.data.identifier ?? parsed.data.email ?? "").trim();
-      const emailLookup = rawId.toLowerCase();
-      // Emails are stored lowercased, so normalise before lookup.
-      let user = await User.findOne({ email: emailLookup }).lean();
-      // Fall back to phone lookup when no email match (plain E.164, indexed).
-      if (!user && /^\+?[\d\s-]+$/.test(rawId)) {
-        user = await User.findOne({ phone: rawId }).lean();
+      let user = null;
+      if (rawId.includes("@")) {
+        // Emails are stored lowercased, so normalise before lookup.
+        user = await User.findOne({ email: normalizeContactEmail(rawId) }).lean();
+      } else {
+        // Phones are stored in E.164, so accept local/international input.
+        const phoneLookup = normalizeContactPhone(rawId);
+        if (phoneLookup) {
+          user = await User.findOne({ phone: phoneLookup }).lean();
+        }
+        // Back-compat: look up the raw value when it differs from the
+        // normalised form (covers legacy rows that were not yet backfilled).
+        if (!user && phoneLookup !== rawId) {
+          user = await User.findOne({ phone: rawId }).lean();
+        }
       }
       // biome-ignore lint/complexity: useOptionalChain
       if (!user || !user.isActive) {
