@@ -33,6 +33,8 @@ export interface ResolvedContactUser {
   email?: string;
   phone?: string;
   role?: Role;
+  isActive?: boolean;
+  isVerified?: boolean;
   managedByOwnerId?: string;
 }
 

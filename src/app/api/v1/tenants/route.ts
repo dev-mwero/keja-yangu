@@ -8,6 +8,7 @@ import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
 import { getTenantScope, requirePermission } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
+import { createPhoneOnlyAccount, resolveUserByContact } from "@/lib/user-identity";
 import { MoveRequest } from "@/models/MoveRequest";
 import { Property } from "@/models/Property";
 import { TENANT_SAFE_FIELDS, Tenant } from "@/models/Tenant";
@@ -202,9 +203,33 @@ export async function POST(request: NextRequest) {
 
   const status = scope.role === "caretaker" ? "pending" : (parsed.data.status ?? "pending");
 
+  const identity = await resolveUserByContact({
+    email: parsed.data.email,
+    phone: parsed.data.phone,
+  });
+  if (!identity.ok) {
+    return NextResponse.json(
+      { error: identity.message },
+      { status: identity.kind === "identity-conflict" ? 409 : 400 },
+    );
+  }
+
+  const { email, phone, user: existingUser } = identity;
+  if (existingUser?.role && existingUser.role !== "tenant") {
+    return NextResponse.json(
+      { error: `This contact already belongs to a ${existingUser.role} account` },
+      { status: 409 },
+    );
+  }
+
   const duplicateQuery: Record<string, unknown> = { propertyId: parsed.data.propertyId };
-  if (parsed.data.email) duplicateQuery.email = parsed.data.email;
-  if (parsed.data.phone) duplicateQuery.phone = parsed.data.phone;
+  if (email && phone) {
+    duplicateQuery.$or = [{ email }, { phone }];
+  } else if (email) {
+    duplicateQuery.email = email;
+  } else {
+    duplicateQuery.phone = phone;
+  }
 
   const duplicate = await Tenant.findOne(duplicateQuery).select("_id").lean();
   if (duplicate) {
@@ -214,65 +239,91 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const existingUserQuery: Record<string, unknown> = {
-    isActive: true,
-    isVerified: true,
-  };
-  if (parsed.data.email) existingUserQuery.email = parsed.data.email;
-  if (parsed.data.phone) existingUserQuery.phone = parsed.data.phone;
+  // Phone-only path: no email. An existing active tenant is linked directly;
+  // otherwise create an active, verified tenant account with a one-time
+  // temporary password (no email verification step is needed).
+  if (!email) {
+    const existingIsUsable =
+      !!existingUser && existingUser.isActive !== false && existingUser.isVerified !== false;
+    if (existingUser && !existingIsUsable) {
+      return NextResponse.json(
+        { error: "An inactive account with this phone already exists" },
+        { status: 409 },
+      );
+    }
 
-  const existingUser = await User.findOne(existingUserQuery).select("_id").lean();
-
-  // Phone-only path: no email — create an active, verified tenant user and bind
-  // the Tenant row to it immediately (no verify-email activation step needed).
-  if (!parsed.data.email) {
-    const plainPassword = crypto.randomBytes(12).toString("base64url");
-    const passwordHash = await bcrypt.hash(plainPassword, 12);
-    const createdUser = await User.create({
-      email: undefined,
-      name: parsed.data.name,
-      phone: parsed.data.phone,
-      passwordHash,
-      role: "tenant",
-      isActive: true,
-      isVerified: true,
-    });
+    let userId = existingUser ? String(existingUser._id ?? existingUser.id ?? "") : "";
+    let plainPassword: string | undefined;
+    if (!existingUser) {
+      const createdAccount = await createPhoneOnlyAccount({
+        role: "tenant",
+        name: parsed.data.name,
+        phone,
+      });
+      userId = String(createdAccount.user._id);
+      plainPassword = createdAccount.password;
+    }
 
     const tenant = await Tenant.create({
       name: parsed.data.name,
       email: undefined,
-      phone: parsed.data.phone,
+      phone,
       propertyId: parsed.data.propertyId,
       ownerId: property.ownerId,
       type: parsed.data.type,
       status: "active",
       joinedAt: new Date(),
       notes: parsed.data.notes,
-      userId: String(createdUser._id),
+      userId,
     });
 
     const created = await Tenant.findById(tenant._id).select(TENANT_SAFE_FIELDS).lean();
     return NextResponse.json(
       {
-        created: true,
-        password: plainPassword,
-        data: { ...created, userId: String(createdUser._id) },
+        created: !!plainPassword,
+        ...(plainPassword ? { password: plainPassword } : {}),
+        data: { ...created, userId },
       },
       { status: 201 },
     );
   }
 
+  let userId = "";
+  if (existingUser) {
+    const existingIsUsable = existingUser.isActive !== false && existingUser.isVerified !== false;
+    if (existingIsUsable) {
+      userId = String(existingUser._id ?? existingUser.id ?? "");
+    } else {
+      // Pending invite: refresh the magic-link token instead of duplicating.
+      const verificationToken = crypto.randomUUID();
+      const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      await User.updateOne(
+        { _id: existingUser._id },
+        {
+          $set: {
+            email,
+            name: parsed.data.name,
+            phone,
+            verificationToken,
+            verificationTokenExpiry,
+          },
+        },
+      );
+      await sendInviteEmail(email, parsed.data.name, "tenant", verificationToken);
+    }
+  }
+
   const tenant = await Tenant.create({
     name: parsed.data.name,
-    email: parsed.data.email,
-    phone: parsed.data.phone,
+    email,
+    phone: phone || undefined,
     propertyId: parsed.data.propertyId,
     ownerId: property.ownerId,
     type: parsed.data.type,
     status,
     joinedAt: status === "active" ? new Date() : undefined,
     notes: parsed.data.notes,
-    userId: existingUser ? String(existingUser._id) : "",
+    userId,
   });
 
   if (!existingUser) {
@@ -285,9 +336,9 @@ export async function POST(request: NextRequest) {
     const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     await User.create({
-      email: parsed.data.email,
+      email,
       name: parsed.data.name,
-      phone: parsed.data.phone ?? "",
+      phone,
       passwordHash,
       role: "tenant",
       isActive: false,
@@ -296,7 +347,7 @@ export async function POST(request: NextRequest) {
       verificationTokenExpiry,
     });
 
-    await sendInviteEmail(parsed.data.email, parsed.data.name, "tenant", verificationToken);
+    await sendInviteEmail(email, parsed.data.name, "tenant", verificationToken);
   }
 
   const created = await Tenant.findById(tenant._id).select(TENANT_SAFE_FIELDS).lean();

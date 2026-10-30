@@ -95,7 +95,7 @@ describe("useTenantMutations", () => {
         email: "amina@keja.co",
         propertyId: "prop-1",
       });
-      expect(created).toEqual(tenant);
+      expect(created).toEqual({ tenant });
     });
     expect(fetch).toHaveBeenCalledWith(
       "/api/v1/tenants",
