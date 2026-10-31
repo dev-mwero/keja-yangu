@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
           _id: { $in: propertyIds },
           deletedAt: null,
         })
-          .select("-ownerId -caretakerIds -createdById -__v")
+          .select("-ownerId -caretakerIds -custodianIds -createdById -__v")
           .lean()
       : [];
   const propertyById = new Map(properties.map((p) => [String(p._id), p]));

@@ -44,6 +44,7 @@ const propertySchema = new Schema(
     status: { type: String, enum: ["available", "occupied", "maintenance"], default: "available" },
     ownerId: { type: String, default: "" },
     caretakerIds: { type: [String], default: [] },
+    custodianIds: { type: [String], default: [] },
     createdById: { type: String, default: "" },
     beds: { type: Number, required: true, min: 0 },
     baths: { type: Number, required: true, min: 0 },

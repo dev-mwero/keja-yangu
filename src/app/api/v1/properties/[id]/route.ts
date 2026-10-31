@@ -7,6 +7,7 @@ import { PROPERTY_PURPOSES } from "@/lib/domain-enums";
 import { connectToDatabase } from "@/lib/mongoose";
 import { asSoftDeleteModel } from "@/lib/mongoose-soft-delete";
 import { authenticate, isFullControlRole, requirePermission } from "@/lib/permissions";
+import { validatePropertyStaffAssignments } from "@/lib/property-staff";
 import { isActivePropertyTypeKey } from "@/lib/property-type-store";
 import { Property } from "@/models/Property";
 import { Tenant } from "@/models/Tenant";
@@ -28,6 +29,7 @@ const propertyUpdate = z.object({
   purpose: z.enum(PROPERTY_PURPOSES).optional(),
   published: z.boolean().optional(),
   caretakerIds: z.array(z.string()).optional(),
+  custodianIds: z.array(z.string()).optional(),
   description: z.string().optional(),
 });
 
@@ -49,7 +51,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       : null;
   }
 
-  const PUBLIC_PROJECTION = "-ownerId -caretakerIds -createdById -__v";
+  const PUBLIC_PROJECTION = "-ownerId -caretakerIds -custodianIds -createdById -__v";
 
   let property: { status?: string; _id?: unknown } | null = null;
   if (!actor) {
@@ -130,11 +132,29 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const actorDoc = await User.findById(actor.userId).select("role").lean();
-  const canManageCaretakerIds = actorDoc ? isFullControlRole(actorDoc.role) : false;
+  const canManageStaffAssignments =
+    actorDoc !== null &&
+    actorDoc !== undefined &&
+    (isFullControlRole(actorDoc.role) || actorDoc.role === "custodian");
 
   const updateData = { ...parsed.data };
-  if (!canManageCaretakerIds) {
-    delete updateData.caretakerIds;
+  if (
+    !canManageStaffAssignments &&
+    (updateData.caretakerIds !== undefined || updateData.custodianIds !== undefined)
+  ) {
+    return NextResponse.json(
+      { error: "You cannot assign caretakers or custodians to a property" },
+      { status: 403 },
+    );
+  }
+  if (updateData.caretakerIds !== undefined || updateData.custodianIds !== undefined) {
+    const assignmentError = await validatePropertyStaffAssignments(property.ownerId, {
+      caretakerIds: updateData.caretakerIds,
+      custodianIds: updateData.custodianIds,
+    });
+    if (assignmentError) {
+      return NextResponse.json({ error: assignmentError }, { status: 400 });
+    }
   }
   if (updateData.amenities) {
     updateData.amenities = normalizeAmenities(updateData.amenities);
