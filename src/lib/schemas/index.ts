@@ -9,6 +9,7 @@ export * from "./move-request";
 export * from "./notifications";
 export * from "./payments";
 export * from "./profile";
+export * from "./service-fee";
 export * from "./settings";
 export * from "./structure";
 export * from "./unit";

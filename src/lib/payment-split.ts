@@ -32,3 +32,45 @@ export function computePaymentSplit(
   const serviceChargeMinor = amountMinor - rentMinor;
   return { rentMinor, serviceChargeMinor };
 }
+
+export interface PaymentSplitInvoice {
+  amountDue: number;
+  rentAmount?: number | null;
+  serviceChargeAmount?: number | null;
+  rentIncludesServiceCharge?: boolean | null;
+}
+
+/**
+ * Splits a collected amount using the invoice's immutable billing snapshot.
+ * Full settlement follows the snapshot exactly; partial payments allocate the
+ * service fee pro-rata and put any rounding remainder on rent so the parts
+ * always sum to the collected total.
+ */
+export function computeInvoicePaymentSplit(
+  invoice: PaymentSplitInvoice,
+  amountMinor: number,
+): PaymentSplitResult {
+  const serviceFee = Math.max(0, invoice.serviceChargeAmount ?? 0);
+  if (serviceFee <= 0) {
+    return { rentMinor: amountMinor, serviceChargeMinor: 0 };
+  }
+
+  const total = Math.max(invoice.amountDue, invoice.rentAmount ?? 0, serviceFee);
+  if (total <= 0) {
+    return { rentMinor: amountMinor, serviceChargeMinor: 0 };
+  }
+
+  if (amountMinor >= Math.round(total * 100)) {
+    const serviceChargeMinor = Math.round(serviceFee * 100);
+    return {
+      rentMinor: amountMinor - serviceChargeMinor,
+      serviceChargeMinor,
+    };
+  }
+
+  const serviceChargeMinor = Math.round((amountMinor * serviceFee) / total);
+  return {
+    rentMinor: amountMinor - serviceChargeMinor,
+    serviceChargeMinor,
+  };
+}

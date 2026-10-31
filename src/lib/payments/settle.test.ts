@@ -227,6 +227,9 @@ describe("applyProviderPayment", () => {
       amountPaid: 0,
       leaseId,
       period: "2026-09",
+      rentAmount: 20000,
+      serviceChargeAmount: 5000,
+      rentIncludesServiceCharge: true,
     });
     const paid = makeInvoice({ ...pending, status: "paid", amountPaid: 25000 });
     paymentStub.findOne.mockReturnValue(buildQuery(paymentDoc()));
@@ -234,14 +237,6 @@ describe("applyProviderPayment", () => {
     invoiceStub.findOneAndUpdate.mockReturnValue(buildQuery(paid));
     paymentStub.updateOne.mockResolvedValue(undefined);
     leaseStub.findById.mockReturnValue(buildQuery({ _id: leaseId, unitId }));
-    unitStub.findById.mockReturnValue(
-      buildQuery({
-        _id: unitId,
-        rentIncludesServiceCharge: true,
-        rentSharePercent: 80,
-        serviceChargeSharePercent: 20,
-      }),
-    );
     paymentSplitStub.create.mockResolvedValue({});
 
     const result = await applyProviderPayment(input);
@@ -269,7 +264,7 @@ describe("applyProviderPayment", () => {
     expect(split.rentMinor + split.serviceChargeMinor).toBe(input.amountMinor);
   });
 
-  it("records all rent as the split when the unit is not inclusive", async () => {
+  it("records all rent as the split when the invoice has no service fee", async () => {
     const leaseId = makeObjectId("lease");
     const unitId = makeObjectId("unit");
     const pending = makeInvoice({

@@ -1,5 +1,5 @@
 import { notifyInvoicePaid } from "@/lib/notifications";
-import { computePaymentSplit } from "@/lib/payment-split";
+import { computeInvoicePaymentSplit, computePaymentSplit } from "@/lib/payment-split";
 import type { PaymentProviderName } from "@/lib/payments/provider";
 import { mapChannelToMethod, PROVIDER_LABELS, toMinorUnits } from "@/lib/payments/provider";
 import { Invoice } from "@/models/Invoice";
@@ -44,6 +44,9 @@ interface InvoiceLike {
   propertyId: string;
   ownerId: string;
   period: string;
+  rentAmount?: number;
+  serviceChargeAmount?: number;
+  rentIncludesServiceCharge?: boolean;
   notes?: string;
 }
 
@@ -119,17 +122,27 @@ async function recordPaymentSplit(
     if (!invoice.leaseId) return; // manual invoices have no unit → no split
     const lease = await Lease.findById(invoice.leaseId).select("unitId").lean();
     if (!lease?.unitId) return;
-    const unit = await Unit.findById(lease.unitId).lean();
-    if (!unit) return;
 
-    const { rentMinor, serviceChargeMinor } = computePaymentSplit(
-      {
-        rentIncludesServiceCharge: !!unit.rentIncludesServiceCharge,
-        rentSharePercent: unit.rentSharePercent ?? 0,
-        serviceChargeSharePercent: unit.serviceChargeSharePercent ?? 0,
-      },
-      amountMinor,
-    );
+    // Modern invoices carry an immutable rent/service-fee snapshot. Fall back
+    // to the unit's legacy inclusive percentages only for older documents.
+    let split;
+    if (
+      typeof invoice.rentAmount === "number" &&
+      typeof invoice.serviceChargeAmount === "number"
+    ) {
+      split = computeInvoicePaymentSplit(invoice, amountMinor);
+    } else {
+      const unit = await Unit.findById(lease.unitId).lean();
+      if (!unit) return;
+      split = computePaymentSplit(
+        {
+          rentIncludesServiceCharge: !!unit.rentIncludesServiceCharge,
+          rentSharePercent: unit.rentSharePercent ?? 0,
+          serviceChargeSharePercent: unit.serviceChargeSharePercent ?? 0,
+        },
+        amountMinor,
+      );
+    }
 
     await PaymentSplit.create({
       paymentId: String(payment._id),
@@ -138,8 +151,8 @@ async function recordPaymentSplit(
       propertyId: invoice.propertyId,
       ownerId: invoice.ownerId,
       period: invoice.period,
-      rentMinor,
-      serviceChargeMinor,
+      rentMinor: split.rentMinor,
+      serviceChargeMinor: split.serviceChargeMinor,
     });
   } catch (error) {
     console.warn(

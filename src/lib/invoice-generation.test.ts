@@ -64,7 +64,8 @@ describe("buildInvoiceForLease", () => {
 
   it("inclusive unit: amountDue is the collected rent, split into rent + service charge", () => {
     const draft = buildInvoiceForLease(lease(), "2026-09", new Date(), {
-      serviceChargeAmount: 5000,
+      total: 5000,
+      breakdown: [{ itemId: "water", label: "Water", amount: 5000 }],
       rentIncludesServiceCharge: true,
       rentSharePercent: 80,
       serviceChargeSharePercent: 20,
@@ -74,11 +75,16 @@ describe("buildInvoiceForLease", () => {
     expect(draft.serviceChargeAmount).toBe(5000);
     expect(draft.rentAmount + draft.serviceChargeAmount).toBe(draft.amountDue);
     expect(draft.rentIncludesServiceCharge).toBe(true);
+    expect(draft.serviceFeeItems).toEqual([]);
   });
 
   it("separate unit: amountDue is rent + service charge", () => {
     const draft = buildInvoiceForLease(lease(), "2026-09", new Date(), {
-      serviceChargeAmount: 5000,
+      total: 5000,
+      breakdown: [
+        { itemId: "water", label: "Water", amount: 5000 },
+        { itemId: "garbage", label: "Garbage", amount: 500 },
+      ],
       rentIncludesServiceCharge: false,
       rentSharePercent: 100,
       serviceChargeSharePercent: 0,
@@ -88,6 +94,10 @@ describe("buildInvoiceForLease", () => {
     expect(draft.serviceChargeAmount).toBe(5000);
     expect(draft.rentAmount + draft.serviceChargeAmount).toBe(draft.amountDue);
     expect(draft.rentIncludesServiceCharge).toBe(false);
+    expect(draft.serviceFeeItems).toEqual([
+      { itemId: "water", label: "Water", amount: 5000 },
+      { itemId: "garbage", label: "Garbage", amount: 500 },
+    ]);
   });
 
   it("no unit charge: service charge is zero and not inclusive", () => {
@@ -96,6 +106,7 @@ describe("buildInvoiceForLease", () => {
     expect(draft.rentAmount).toBe(45000);
     expect(draft.serviceChargeAmount).toBe(0);
     expect(draft.rentIncludesServiceCharge).toBe(false);
+    expect(draft.serviceFeeItems).toEqual([]);
   });
 });
 

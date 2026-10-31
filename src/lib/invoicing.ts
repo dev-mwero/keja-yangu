@@ -77,16 +77,30 @@ export function deriveStatus(
   return invoice.status as InvoiceStatus;
 }
 
+export interface SerializeInvoiceOptions {
+  /**
+   * Include the staff-only itemized service-fee snapshot. Defaults to false so
+   * tenant-facing routes never leak item labels or individual amounts.
+   */
+  includeServiceFeeItems?: boolean;
+}
+
 /**
  * Shallow copies an invoice doc, normalizing `status` through `deriveStatus`
- * and appending a derived `overdue` boolean. All original fields are kept.
+ * and appending a derived `overdue` boolean. All original fields are kept
+ * except `serviceFeeItems`, which is stripped unless explicitly requested.
  */
 export function serializeInvoice<T extends { status: string; dueDate: Date }>(
   doc: T,
   now: Date,
+  options: SerializeInvoiceOptions = {},
 ): T & { status: DerivedInvoiceStatus; overdue: boolean } {
   const status = deriveStatus(doc, now);
-  return { ...doc, status, overdue: status === "overdue" };
+  const serialized = { ...doc, status, overdue: status === "overdue" };
+  if (!options.includeServiceFeeItems) {
+    delete (serialized as { serviceFeeItems?: unknown }).serviceFeeItems;
+  }
+  return serialized;
 }
 
 /** `"YYYY-MM"` of `now` in UTC (e.g. September 2026 -> `"2026-09"`). */

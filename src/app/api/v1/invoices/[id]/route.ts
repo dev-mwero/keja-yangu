@@ -44,7 +44,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ data: serializeInvoice(invoice, new Date()) });
+  return NextResponse.json({
+    data: serializeInvoice(invoice, new Date(), { includeServiceFeeItems: true }),
+  });
 }
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -95,7 +97,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ data: serializeInvoice(updated, new Date()) });
+  return NextResponse.json({
+    data: serializeInvoice(updated, new Date(), { includeServiceFeeItems: true }),
+  });
 }
 
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {

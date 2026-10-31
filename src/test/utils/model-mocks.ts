@@ -22,7 +22,9 @@ const stubs: Record<
   | "paymentSplit"
   | "propertyFavorite"
   | "propertyView"
-  | "unitFavorite",
+  | "unitFavorite"
+  | "serviceFeeItem"
+  | "unitServiceFeeOverride",
   ModelStub
 > = {
   user: createModelStub(),
@@ -47,6 +49,8 @@ const stubs: Record<
   propertyFavorite: createModelStub(),
   propertyView: createModelStub(),
   unitFavorite: createModelStub(),
+  serviceFeeItem: createModelStub(),
+  unitServiceFeeOverride: createModelStub(),
 };
 
 /**

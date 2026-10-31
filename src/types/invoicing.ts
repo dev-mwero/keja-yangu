@@ -15,6 +15,13 @@ export interface Invoice {
   period: string;
   amountDue: number;
   amountPaid: number;
+  /** Rent portion of amountDue (the service fee is the rest). */
+  rentAmount?: number;
+  /** Aggregate service fee shown to tenants (item labels stay staff-only). */
+  serviceChargeAmount?: number;
+  rentIncludesServiceCharge?: boolean;
+  /** Staff-only itemized snapshot; omitted on tenant responses. */
+  serviceFeeItems?: Array<{ itemId: string; label: string; amount: number }>;
   status: DerivedInvoiceStatus;
   dueDate: string;
   issuedAt: string;

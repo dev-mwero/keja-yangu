@@ -1,18 +1,18 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { isDuplicateKeyError, readJsonBody, resolveInvoiceActor } from "@/app/api/v1/_helpers";
-import { generateForPeriod, type UnitCharge } from "@/lib/invoice-generation";
+import { generateForPeriod } from "@/lib/invoice-generation";
 import { nextInvoiceNumber } from "@/lib/invoice-numbering";
 import { currentPeriod } from "@/lib/invoicing";
 import { connectToDatabase } from "@/lib/mongoose";
 import { DAY_IN_MS, notifyLeaseExpiry } from "@/lib/notifications";
 import { requirePermission } from "@/lib/permissions";
+import { loadServiceFeesForUnits, type UnitServiceFee } from "@/lib/service-fees";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { invoiceGenerateInput } from "@/lib/schemas";
 import { Invoice } from "@/models/Invoice";
 import { Lease } from "@/models/Lease";
 import { Tenant } from "@/models/Tenant";
-import { Unit } from "@/models/Unit";
 
 export async function POST(request: NextRequest) {
   const limit = await rateLimit(request, { windowMs: 60_000, limit: 20 });
@@ -66,37 +66,14 @@ export async function POST(request: NextRequest) {
     .select("leaseId")
     .lean();
 
-  // Resolve each lease's unit service-charge configuration so generated
-  // invoices carry the rent / service-charge breakdown.
+  // Batch-resolve each lease's itemized service fee so generated invoices
+  // carry the rent / service-fee snapshot without an N+1 query per lease.
   const unitIds = [...new Set(leases.map((l) => l.unitId).filter(Boolean))] as string[];
-  const units = unitIds.length > 0 ? await Unit.find({ _id: { $in: unitIds } }).lean() : [];
-  const unitById = new Map<
-    string,
-    {
-      serviceCharge: number;
-      rentIncludesServiceCharge: boolean;
-      rentSharePercent: number;
-      serviceChargeSharePercent: number;
-    }
-  >();
-  for (const unit of units) {
-    unitById.set(String(unit._id), {
-      serviceCharge: unit.serviceCharge ?? 0,
-      rentIncludesServiceCharge: unit.rentIncludesServiceCharge ?? false,
-      rentSharePercent: unit.rentSharePercent ?? 100,
-      serviceChargeSharePercent: unit.serviceChargeSharePercent ?? 0,
-    });
-  }
-  const unitChargeByLeaseId = new Map<string, UnitCharge>();
+  const serviceFeeByUnitId = await loadServiceFeesForUnits(unitIds);
+  const unitChargeByLeaseId = new Map<string, UnitServiceFee>();
   for (const lease of leases) {
-    const unit = lease.unitId ? unitById.get(String(lease.unitId)) : undefined;
-    if (!unit) continue;
-    unitChargeByLeaseId.set(String(lease._id), {
-      serviceChargeAmount: unit.serviceCharge,
-      rentIncludesServiceCharge: unit.rentIncludesServiceCharge,
-      rentSharePercent: unit.rentSharePercent,
-      serviceChargeSharePercent: unit.serviceChargeSharePercent,
-    });
+    const fee = lease.unitId ? serviceFeeByUnitId.get(String(lease.unitId)) : undefined;
+    if (fee) unitChargeByLeaseId.set(String(lease._id), fee);
   }
 
   // Lazy lease-expiry seam: notify owners, their caretakers and the tenant

@@ -49,6 +49,9 @@ export const InvoiceTable = ({ invoices, tenantNames, renderActions }: InvoiceTa
           {invoices.map((invoice) => {
             const amountPaid = invoice.amountPaid ?? 0;
             const partial = amountPaid > 0 && amountPaid < invoice.amountDue;
+            const serviceFeeAmount = invoice.serviceChargeAmount ?? 0;
+            const rentAmount =
+              invoice.rentAmount ?? Math.max(0, invoice.amountDue - serviceFeeAmount);
             return (
               <TableRow key={invoice._id}>
                 <TableCell className="font-medium">
@@ -66,7 +69,13 @@ export const InvoiceTable = ({ invoices, tenantNames, renderActions }: InvoiceTa
                   <p className="text-xs text-muted-foreground">{formatPeriod(invoice.period)}</p>
                 </TableCell>
                 <TableCell className="font-medium">
-                  {formatKES(invoice.amountDue)}
+                  <div>{formatKES(invoice.amountDue)}</div>
+                  {serviceFeeAmount > 0 && (
+                    <div className="mt-1 space-y-0.5 text-[11px] font-normal text-muted-foreground">
+                      <div>Rent {formatKES(rentAmount)}</div>
+                      <div>Service fee {formatKES(serviceFeeAmount)}</div>
+                    </div>
+                  )}
                   {partial && (
                     <p className="text-xs font-normal text-muted-foreground">
                       {formatKES(amountPaid)} received

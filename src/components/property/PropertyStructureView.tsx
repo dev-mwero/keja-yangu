@@ -22,6 +22,7 @@ import {
   validateBlocks,
 } from "@/components/property/PropertyStructureEditor";
 import { PropertyUnitsTable } from "@/components/property/PropertyUnitsTable";
+import { ServiceFeesManager } from "@/components/service-fees/ServiceFeesManager";
 import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
 import type { DashNavItem } from "@/config/dashboardNav";
@@ -250,6 +251,10 @@ export function PropertyStructureView({ propertyId, nav, roleName, backHref }: P
             ) : (
               <PropertyStructurePreview blocks={blocks} />
             )}
+          </section>
+
+          <section className="space-y-3">
+            <ServiceFeesManager propertyId={propertyId} />
           </section>
 
           <section className="space-y-3">

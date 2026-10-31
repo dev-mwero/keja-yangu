@@ -40,6 +40,25 @@ describe("ReceiptDialog", () => {
     expect(screen.getByText("October rent")).toBeInTheDocument();
   });
 
+  it("shows a rent and service fee breakdown when the invoice has a separate service fee", () => {
+    render(
+      <ReceiptDialog
+        open
+        onOpenChange={vi.fn()}
+        invoice={makeInvoice({
+          rentAmount: 12000,
+          serviceChargeAmount: 3000,
+          amountDue: 15000,
+        })}
+      />,
+    );
+
+    expect(screen.getByText("Rent")).toBeInTheDocument();
+    expect(screen.getByText("Service fee")).toBeInTheDocument();
+    expect(screen.getByText(/Ksh 12,000/)).toBeInTheDocument();
+    expect(screen.getByText(/Ksh 3,000/)).toBeInTheDocument();
+  });
+
   it("omits the reference and description rows when there are none", () => {
     render(<ReceiptDialog open onOpenChange={vi.fn()} invoice={makeInvoice()} />);
     expect(screen.queryByText(/Reference/i)).not.toBeInTheDocument();
