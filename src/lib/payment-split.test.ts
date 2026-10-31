@@ -1,6 +1,6 @@
 /** @vitest-environment node */
 import { describe, expect, it } from "vitest";
-import { computePaymentSplit } from "@/lib/payment-split";
+import { computeInvoicePaymentSplit, computePaymentSplit } from "@/lib/payment-split";
 
 const unit = (overrides: Record<string, unknown> = {}) => ({
   rentIncludesServiceCharge: false,
@@ -86,5 +86,35 @@ describe("computePaymentSplit", () => {
       1_001,
     );
     expect(result.rentMinor + result.serviceChargeMinor).toBe(1_001);
+  });
+});
+
+describe("computeInvoicePaymentSplit", () => {
+  it("splits a full settlement using the invoice snapshot", () => {
+    expect(
+      computeInvoicePaymentSplit(
+        { amountDue: 30000, rentAmount: 25000, serviceChargeAmount: 5000 },
+        3_000_000,
+      ),
+    ).toEqual({ rentMinor: 2_500_000, serviceChargeMinor: 500_000 });
+  });
+
+  it("allocates a partial payment pro-rata and keeps the parts exact", () => {
+    const result = computeInvoicePaymentSplit(
+      { amountDue: 30000, rentAmount: 25000, serviceChargeAmount: 5000 },
+      1_000_000,
+    );
+    expect(result.rentMinor).toBe(833_333);
+    expect(result.serviceChargeMinor).toBe(166_667);
+    expect(result.rentMinor + result.serviceChargeMinor).toBe(1_000_000);
+  });
+
+  it("treats a rent-only invoice as all rent", () => {
+    expect(
+      computeInvoicePaymentSplit(
+        { amountDue: 25000, rentAmount: 25000, serviceChargeAmount: 0 },
+        2_500_000,
+      ),
+    ).toEqual({ rentMinor: 2_500_000, serviceChargeMinor: 0 });
   });
 });

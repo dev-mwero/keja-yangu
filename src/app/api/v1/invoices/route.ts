@@ -1,12 +1,14 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { isDuplicateKeyError, readJsonBody, resolveInvoiceActor } from "@/app/api/v1/_helpers";
+import { buildInvoiceForLease } from "@/lib/invoice-generation";
 import { nextInvoiceNumber } from "@/lib/invoice-numbering";
 import { computeDueDate, currentPeriod, serializeInvoice } from "@/lib/invoicing";
 import { connectToDatabase } from "@/lib/mongoose";
 import { notifyOverdueInvoices } from "@/lib/notifications";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
 import { requirePermission } from "@/lib/permissions";
+import { loadServiceFeeForUnit, type UnitServiceFee } from "@/lib/service-fees";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { invoiceInput } from "@/lib/schemas";
 import { Invoice } from "@/models/Invoice";
@@ -86,7 +88,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json(
     buildPaginationResult(
-      invoices.map((doc) => serializeInvoice(doc, now)),
+      invoices.map((doc) => serializeInvoice(doc, now, { includeServiceFeeItems: true })),
       total,
       page,
       limit,
@@ -128,6 +130,10 @@ export async function POST(request: NextRequest) {
     leaseId: string;
     ownerId: string;
     amountDue: number;
+    rentAmount: number;
+    serviceChargeAmount: number;
+    rentIncludesServiceCharge: boolean;
+    serviceFeeItems: Array<{ itemId: string; label: string; amount: number }>;
   };
 
   if (parsed.data.leaseId) {
@@ -148,12 +154,20 @@ export async function POST(request: NextRequest) {
     ) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+    const fee: UnitServiceFee | null = lease.unitId
+      ? await loadServiceFeeForUnit(String(lease.unitId))
+      : null;
+    const draft = buildInvoiceForLease(lease, period, now, fee);
     derived = {
       tenantId: lease.tenantId,
       propertyId: lease.propertyId,
       leaseId: parsed.data.leaseId,
       ownerId: lease.ownerId,
-      amountDue: lease.rentAmount,
+      amountDue: draft.amountDue,
+      rentAmount: draft.rentAmount,
+      serviceChargeAmount: draft.serviceChargeAmount,
+      rentIncludesServiceCharge: draft.rentIncludesServiceCharge,
+      serviceFeeItems: draft.serviceFeeItems,
     };
   } else {
     const tenantId = parsed.data.tenantId;
@@ -193,6 +207,10 @@ export async function POST(request: NextRequest) {
       leaseId: "",
       ownerId: tenant.ownerId,
       amountDue,
+      rentAmount: amountDue,
+      serviceChargeAmount: 0,
+      rentIncludesServiceCharge: false,
+      serviceFeeItems: [],
     };
   }
 
@@ -212,12 +230,19 @@ export async function POST(request: NextRequest) {
       dueDate: computeDueDate(period),
       method: parsed.data.method,
       notes: parsed.data.notes,
+      rentAmount: derived.rentAmount,
+      serviceChargeAmount: derived.serviceChargeAmount,
+      rentIncludesServiceCharge: derived.rentIncludesServiceCharge,
+      serviceFeeItems: derived.serviceFeeItems,
     });
     const created = await Invoice.findById(invoice._id).lean();
     if (!created) {
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
     }
-    return NextResponse.json({ data: serializeInvoice(created, now) }, { status: 201 });
+    return NextResponse.json(
+      { data: serializeInvoice(created, now, { includeServiceFeeItems: true }) },
+      { status: 201 },
+    );
   } catch (error) {
     if (isDuplicateKeyError(error)) {
       return NextResponse.json(

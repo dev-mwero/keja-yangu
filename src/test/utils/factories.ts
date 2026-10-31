@@ -241,6 +241,10 @@ export interface TestInvoice {
   status: "draft" | "pending" | "paid" | "void";
   dueDate: Date;
   issuedAt: Date;
+  rentAmount?: number;
+  serviceChargeAmount?: number;
+  rentIncludesServiceCharge?: boolean;
+  serviceFeeItems?: Array<{ itemId: string; label: string; amount: number }>;
   method?: string;
   notes?: string;
   paidAt?: Date;
@@ -262,6 +266,10 @@ export function makeInvoice(overrides: Partial<TestInvoice> = {}): TestInvoice {
     status: "pending",
     dueDate: new Date("2026-10-05T00:00:00.000Z"),
     issuedAt: new Date("2026-09-01T00:00:00.000Z"),
+    rentAmount: 25000,
+    serviceChargeAmount: 0,
+    rentIncludesServiceCharge: false,
+    serviceFeeItems: [],
     ...overrides,
   };
 }

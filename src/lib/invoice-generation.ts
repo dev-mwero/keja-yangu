@@ -1,4 +1,5 @@
 import { computeDueDate, periodRange } from "@/lib/invoicing";
+import type { ServiceFeeBreakdownItem, UnitServiceFee } from "@/lib/service-fees";
 
 export interface InvoiceLease {
   _id?: string | { toString(): string };
@@ -13,14 +14,6 @@ export interface InvoiceLease {
   startDate: Date;
   endDate?: Date | null;
   status?: string;
-}
-
-/** Per-unit rent/service-charge configuration used when generating an invoice. */
-export interface UnitCharge {
-  serviceChargeAmount: number;
-  rentIncludesServiceCharge: boolean;
-  rentSharePercent: number;
-  serviceChargeSharePercent: number;
 }
 
 /** Emitted invoice fields, ready for numbered insert by the route. */
@@ -39,6 +32,7 @@ export interface InvoiceDraft {
   rentAmount: number;
   serviceChargeAmount: number;
   rentIncludesServiceCharge: boolean;
+  serviceFeeItems: ServiceFeeBreakdownItem[];
 }
 
 export type SkipReason = "already-generated" | "non-monthly" | "ended" | "future" | "owning-tenant";
@@ -58,37 +52,40 @@ export interface GenerateResult {
  * numbering needs the atomic counter, so the route assigns it afterwards via
  * `nextInvoiceNumber`.
  *
- * When `unitCharge` is supplied, `amountDue` and the rent/service-charge
+ * When `serviceFee` is supplied, `amountDue` and the rent/service-fee
  * breakdown reflect the unit's configuration:
- *  - rent includes service charge: `amountDue = rentAmount` (the collected
- *    total) and the breakdown comes from `unitCharge`.
- *  - separate billing: `amountDue = rentAmount + serviceChargeAmount`.
- * Without `unitCharge`, `amountDue = rentAmount` and the service charge is 0.
+ *  - legacy inclusive rent: `amountDue = rentAmount` (the collected total) and
+ *    the service fee is the agreed share of that total.
+ *  - separate billing: `amountDue = rentAmount + serviceFee.total`.
+ * Without `serviceFee`, `amountDue = rentAmount` and the service fee is 0.
  */
 export function buildInvoiceForLease(
   lease: InvoiceLease,
   period: string,
   now: Date,
-  unitCharge: UnitCharge | null = null,
+  serviceFee: UnitServiceFee | null = null,
 ): InvoiceDraft {
   const rentAmount = lease.rentAmount;
   let amountDue: number;
   let rentAmountField: number;
   let serviceChargeAmountField: number;
   let rentIncludesServiceCharge = false;
+  let serviceFeeItems: ServiceFeeBreakdownItem[] = [];
 
-  if (unitCharge) {
-    rentIncludesServiceCharge = unitCharge.rentIncludesServiceCharge;
+  if (serviceFee) {
+    rentIncludesServiceCharge = serviceFee.rentIncludesServiceCharge;
     if (rentIncludesServiceCharge) {
-      // Collected rent already includes the service charge; split by shares.
+      // Legacy inclusive rent: preserve the collected total and split it by
+      // the agreed percentages until the lease is renewed.
       amountDue = rentAmount;
-      rentAmountField = rentAmount * (unitCharge.rentSharePercent / 100);
+      rentAmountField = Math.round(rentAmount * (serviceFee.rentSharePercent / 100));
       serviceChargeAmountField = rentAmount - rentAmountField;
     } else {
-      // Rent and service charge billed separately as a single invoice total.
-      amountDue = rentAmount + unitCharge.serviceChargeAmount;
+      // Modern billing: rent and itemized service fee are separate lines.
+      serviceChargeAmountField = serviceFee.total;
+      amountDue = rentAmount + serviceChargeAmountField;
       rentAmountField = rentAmount;
-      serviceChargeAmountField = unitCharge.serviceChargeAmount;
+      serviceFeeItems = serviceFee.breakdown;
     }
   } else {
     amountDue = rentAmount;
@@ -111,6 +108,7 @@ export function buildInvoiceForLease(
     rentAmount: rentAmountField,
     serviceChargeAmount: serviceChargeAmountField,
     rentIncludesServiceCharge,
+    serviceFeeItems,
   };
 }
 
@@ -129,8 +127,8 @@ export function generateForPeriod(input: {
   existing: Array<{ leaseId: string }>;
   period: string;
   now: Date;
-  // Optional per-lease rent/service-charge breakdown, keyed by lease id.
-  unitChargeByLeaseId?: Map<string, UnitCharge>;
+  // Optional per-lease service-fee breakdown, keyed by lease id.
+  unitChargeByLeaseId?: Map<string, UnitServiceFee>;
 }): GenerateResult {
   const { start: periodStart, end: periodEnd } = periodRange(input.period);
   const existingIds = new Set(input.existing.map((invoice) => invoice.leaseId));

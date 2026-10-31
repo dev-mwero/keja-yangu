@@ -169,6 +169,28 @@ describe("serializeInvoice", () => {
     });
   });
 
+  it("strips the staff-only service-fee breakdown by default", () => {
+    const doc = {
+      status: "pending" as const,
+      dueDate: new Date("2026-01-05T00:00:00.000Z"),
+      serviceFeeItems: [{ itemId: "water", label: "Water", amount: 500 }],
+    };
+    const out = serializeInvoice(doc, new Date("2026-01-06T00:00:00.000Z"));
+    expect(out).not.toHaveProperty("serviceFeeItems");
+  });
+
+  it("includes the itemized breakdown only for staff serialization", () => {
+    const doc = {
+      status: "pending" as const,
+      dueDate: new Date("2026-01-05T00:00:00.000Z"),
+      serviceFeeItems: [{ itemId: "water", label: "Water", amount: 500 }],
+    };
+    const out = serializeInvoice(doc, new Date("2026-01-06T00:00:00.000Z"), {
+      includeServiceFeeItems: true,
+    });
+    expect(out.serviceFeeItems).toEqual([{ itemId: "water", label: "Water", amount: 500 }]);
+  });
+
   it("serializes a paid invoice unchanged with overdue false", () => {
     const doc = { status: "paid" as const, dueDate: new Date("2026-01-05T00:00:00.000Z") };
     const out = serializeInvoice(doc, new Date("2026-02-01T00:00:00.000Z"));

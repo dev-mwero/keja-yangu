@@ -11,6 +11,12 @@ import { softDeletePlugin } from "@/lib/mongoose-soft-delete";
 export type { InvoiceMethod, InvoiceStatus };
 export { INVOICE_METHODS, INVOICE_STATUSES };
 
+export interface InvoiceServiceFeeItem {
+  itemId: string;
+  label: string;
+  amount: number;
+}
+
 export interface IInvoice {
   invoiceNumber: string;
   tenantId: string;
@@ -35,6 +41,8 @@ export interface IInvoice {
   rentAmount: number;
   serviceChargeAmount: number;
   rentIncludesServiceCharge: boolean;
+  // Staff-only itemized snapshot. Tenant serialization omits this field.
+  serviceFeeItems: InvoiceServiceFeeItem[];
   deletedAt?: Date | null;
 }
 
@@ -61,6 +69,19 @@ const invoiceSchema = new Schema<IInvoice>(
     rentAmount: { type: Number, required: true, min: 0, default: 0 },
     serviceChargeAmount: { type: Number, required: true, min: 0, default: 0 },
     rentIncludesServiceCharge: { type: Boolean, default: false },
+    serviceFeeItems: {
+      type: [
+        new Schema<InvoiceServiceFeeItem>(
+          {
+            itemId: { type: String, required: true },
+            label: { type: String, required: true },
+            amount: { type: Number, required: true, min: 0 },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
+    },
     deletedAt: { type: Date, default: null },
   },
   {
