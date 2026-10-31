@@ -1,6 +1,6 @@
 # Plan — Property staff assignment and existing-user linking
 
-**Status:** Proposed — planning only  
+**Status:** Implemented
 **Date:** 2026-10-31
 
 ## Goal
@@ -70,44 +70,56 @@ Relevant existing code: `src/models/Property.ts`, `src/app/api/v1/properties/rou
    searches scoped to their bound owner's portfolio wherever the result can be
    portfolio-scoped.
 
-## Proposed implementation phases
+## Implementation delivered
 
 ### Phase 1 — Identity lookup and invite UX
 
-- Extend the existing user-search flow, or add a narrowly scoped team identity
-  lookup, to accept both email and phone and detect conflicting matches.
-- Add custodian authorization with owner binding checks; return an explicit,
-  minimal response shape.
-- Add the pre-search/link state to the shared team invite UI and keep server-side
-  `resolveUserByContact` validation as the final guard.
-- Test no match, compatible existing match, wrong-role match, other-owner match,
-  conflicting email/phone matches, inactive account paths, and lookup failures.
+- [x] Extend `GET /api/v1/users/search` to normalize and check email and phone
+  together, returning `409` if the contacts resolve to different users.
+- [x] Authorize owner/custodian team lookup and scope link eligibility to the
+  actor's portfolio; return only minimal identity and eligibility fields.
+- [x] Search before submitting the shared team invite form. A compatible match
+  requires confirmation before the existing invite API links it; incompatible
+  matches are blocked. Existing server-side resolution remains authoritative.
+- [x] Cover no match, link confirmation, wrong-role match, other-owner scope,
+  conflicting contacts, and custodian authorization in API/UI tests.
 
 ### Phase 2 — Property custodian assignments
 
-- Add `custodianIds` to the property model and client property types.
-- Update property create/update schemas, assignment validation, permission checks,
-  and public projections.
-- Add caretaker/custodian selection controls to the property dialog; ensure the
-  selection payload is preserved on create and edit.
-- Test owner, custodian, and system-admin assignment success; caretaker rejection;
-  role mismatch, inactive user, duplicate ID, cross-owner ID, and public response
-  redaction.
+- [x] Add `custodianIds` to the property model and client property types.
+- [x] Validate active, role-matching, same-owner staff IDs on create and update;
+  reject invalid/cross-owner/duplicate assignments. Existing inactive assignments
+  can remain selected while editing, but cannot be newly assigned.
+- [x] Allow owners and custodians to manage the two assignment arrays; caretakers
+  cannot mutate them. Custodians continue to access the owner's full portfolio.
+- [x] Add owner-scoped caretaker/custodian selection controls, including scoped
+  system-admin lists. Public property, favourite, and recently-viewed projections
+  omit both assignment arrays.
+- [x] Cover create/update, inactive and cross-owner validation, role permissions,
+  custodian property access, and UI selection.
 
 ### Phase 3 — Portfolio surfaces and regression checks
 
-- Check property lists, property detail, caretaker/custodian team counts, filters,
-  and dashboards for assumptions that only `caretakerIds` exist.
-- Add or update tests for caretaker access remaining assignment-based and for
-  custodian access retaining current owner-portfolio scope.
-- Run the focused API and component tests, then the project's type-check/lint
-  commands covering touched files.
+- [x] Keep caretaker property visibility based on `caretakerIds` and preserve the
+  custodian owner-wide portfolio scope.
+- [x] Run focused API, hook, and component regression tests: **137 passed**.
+- [x] Run `tsc --noEmit` and Biome checks for all touched implementation files.
 
 ## Confirmed access decision
 
 Custodians continue to access the **entire owner's portfolio**. `custodianIds` is an
 explicit property-team relationship only and does not change visibility or
 permissions. Property-level custodian access restrictions are out of scope.
+
+## Migration and commits
+
+The property schema change is additive with an empty-array default; no data migration
+is required. Implementation was committed in these steps:
+
+- `44b5c4b` — feature plan
+- `83cf584` — existing-user lookup and invite flow
+- `c064240` — property assignment model and API
+- `3e2f326` — property assignment controls and portfolio scoping
 
 ## Out of scope
 
