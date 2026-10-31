@@ -10,7 +10,7 @@ property. When adding a caretaker or custodian, search for the person by email
 and/or phone first; reuse and link an eligible existing account instead of
 creating a duplicate.
 
-## Current state
+## Initial state (before implementation)
 
 | Area | Existing behavior | Gap |
 |---|---|---|
