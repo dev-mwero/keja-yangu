@@ -101,6 +101,31 @@ describe("GET /api/v1/caretakers", () => {
     expect(data[1]).toMatchObject({ id: CARE_2, propertyCount: 0 });
   });
 
+  it("returns active caretaker choices without contact details for property assignment", async () => {
+    const chain = buildQuery([caretakerRow()]);
+    user.find.mockReturnValue(chain);
+    property.aggregate.mockResolvedValue([]);
+
+    const res = await GET(
+      buildRequest("/api/v1/caretakers", {
+        token: signToken(OWNER_ID),
+        query: { forPropertyAssignment: "true" },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(user.find).toHaveBeenCalledWith({
+      role: "caretaker",
+      isActive: { $ne: false },
+      isVerified: { $ne: false },
+      managedByOwnerId: OWNER_ID,
+    });
+    expect(chain.select).toHaveBeenCalledWith("name managedByOwnerId");
+    const data = (await json(res)).data as Array<Record<string, unknown>>;
+    expect(data[0].email).toBeUndefined();
+    expect(data[0].phone).toBe("");
+  });
+
   it("owner may pass their own ownerId filter", async () => {
     user.find.mockReturnValue(buildQuery([]));
     property.aggregate.mockResolvedValue([]);

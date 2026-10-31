@@ -31,15 +31,30 @@ export async function GET(request: NextRequest) {
   if (!user?.isActive) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (user.role !== "owner" && user.role !== "system-admin") {
+  const forPropertyAssignment =
+    request.nextUrl.searchParams.get("forPropertyAssignment") === "true";
+  if (
+    user.role !== "owner" &&
+    user.role !== "system-admin" &&
+    !(user.role === "custodian" && forPropertyAssignment)
+  ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const ownerId = request.nextUrl.searchParams.get("ownerId");
-  const filter: Record<string, unknown> = { role: "custodian" };
+  const filter: Record<string, unknown> = {
+    role: "custodian",
+    ...(forPropertyAssignment ? { isActive: { $ne: false }, isVerified: { $ne: false } } : {}),
+  };
 
   if (user.role === "system-admin") {
     if (ownerId) filter.managedByOwnerId = ownerId;
+  } else if (user.role === "custodian") {
+    const managedByOwnerId = user.managedByOwnerId ?? "";
+    if (!managedByOwnerId || (ownerId && ownerId !== managedByOwnerId)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    filter.managedByOwnerId = managedByOwnerId;
   } else {
     if (ownerId && ownerId !== String(user._id)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -48,17 +63,21 @@ export async function GET(request: NextRequest) {
   }
 
   const custodians = await User.find(filter)
-    .select("name email phone managedByOwnerId privileges")
+    .select(
+      forPropertyAssignment
+        ? "name managedByOwnerId"
+        : "name email phone managedByOwnerId privileges",
+    )
     .sort({ name: 1 })
     .lean();
 
   const data = custodians.map((c) => ({
     id: String(c._id),
     name: c.name,
-    email: c.email,
-    phone: c.phone ?? "",
-    managedByOwnerId: c.managedByOwnerId ?? "",
-    privileges: c.privileges ?? [],
+    email: forPropertyAssignment ? undefined : c.email,
+    phone: forPropertyAssignment ? "" : (c.phone ?? ""),
+    managedByOwnerId: forPropertyAssignment ? "" : (c.managedByOwnerId ?? ""),
+    privileges: forPropertyAssignment ? [] : (c.privileges ?? []),
   }));
 
   return NextResponse.json({ data });

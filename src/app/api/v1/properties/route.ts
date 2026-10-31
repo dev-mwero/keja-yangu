@@ -6,6 +6,7 @@ import { DEFAULT_PROPERTY_PURPOSE, PROPERTY_PURPOSES } from "@/lib/domain-enums"
 import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
 import { authenticate, requirePermission } from "@/lib/permissions";
+import { validatePropertyStaffAssignments } from "@/lib/property-staff";
 import { isActivePropertyTypeKey } from "@/lib/property-type-store";
 import { blockInput, MAX_UNITS_PER_PROPERTY } from "@/lib/schemas/structure";
 import { buildUnitInserts, countRequestedUnits } from "@/lib/units";
@@ -27,6 +28,7 @@ const propertyInput = z.object({
   dateCompleted: z.coerce.date().nullable().optional(),
   purpose: z.enum(PROPERTY_PURPOSES).optional().default(DEFAULT_PROPERTY_PURPOSE),
   caretakerIds: z.array(z.string()).optional(),
+  custodianIds: z.array(z.string()).optional(),
   targetOwnerId: z.string().optional(),
   description: z.string().optional(),
   blocks: z.array(blockInput).max(50).optional(),
@@ -50,7 +52,7 @@ export async function GET(request: NextRequest) {
   const publicListing = async () => {
     const available = await Promise.all([
       Property.find({ status: "available", published: true })
-        .select("-ownerId -caretakerIds -createdById -__v")
+        .select("-ownerId -caretakerIds -custodianIds -createdById -__v")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -136,8 +138,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  for (const [field, ids] of [
+    ["caretakerIds", parsed.data.caretakerIds],
+    ["custodianIds", parsed.data.custodianIds],
+  ] as const) {
+    if (ids && new Set(ids).size !== ids.length) {
+      return NextResponse.json(
+        { error: `${field} cannot contain duplicate user IDs` },
+        { status: 400 },
+      );
+    }
+  }
+
   const actorId = String(user._id);
   const caretakerIds = parsed.data.caretakerIds ? [...parsed.data.caretakerIds] : [];
+  const custodianIds = parsed.data.custodianIds ? [...parsed.data.custodianIds] : [];
   let ownerId = "";
 
   if (user.role === "owner") {
@@ -165,6 +180,12 @@ export async function POST(request: NextRequest) {
     }
     ownerId = targetOwnerId;
   } else if (user.role === "caretaker") {
+    if (caretakerIds.length > 0 || custodianIds.length > 0) {
+      return NextResponse.json(
+        { error: "Caretakers cannot assign caretakers or custodians to a property" },
+        { status: 403 },
+      );
+    }
     const managingOwnerId = user.managedByOwnerId ?? "";
     if (!managingOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -202,16 +223,13 @@ export async function POST(request: NextRequest) {
   }
 
   const uniqueCaretakerIds = [...new Set(caretakerIds)];
-  if (uniqueCaretakerIds.length > 0) {
-    const caretakers = await User.find({ _id: { $in: uniqueCaretakerIds }, role: "caretaker" })
-      .select("_id")
-      .lean();
-    if (caretakers.length !== uniqueCaretakerIds.length) {
-      return NextResponse.json(
-        { error: "caretakerIds must reference caretaker users" },
-        { status: 400 },
-      );
-    }
+  const uniqueCustodianIds = [...new Set(custodianIds)];
+  const assignmentError = await validatePropertyStaffAssignments(ownerId, {
+    caretakerIds: uniqueCaretakerIds,
+    custodianIds: uniqueCustodianIds,
+  });
+  if (assignmentError) {
+    return NextResponse.json({ error: assignmentError }, { status: 400 });
   }
 
   const inputBlocks = parsed.data.blocks ?? [];
@@ -225,6 +243,7 @@ export async function POST(request: NextRequest) {
   const createData = { ...parsed.data };
   delete createData.targetOwnerId;
   delete createData.caretakerIds;
+  delete createData.custodianIds;
   delete createData.blocks;
   createData.amenities = normalizeAmenities(parsed.data.amenities ?? []);
 
@@ -233,6 +252,7 @@ export async function POST(request: NextRequest) {
     ownerId,
     createdById: actorId,
     caretakerIds: uniqueCaretakerIds,
+    custodianIds: uniqueCustodianIds,
     published: false,
     blocks: inputBlocks.map((block, order) => ({
       name: block.name,

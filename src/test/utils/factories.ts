@@ -46,6 +46,7 @@ export interface TestProperty {
   purpose?: PropertyPurpose;
   ownerId: string;
   caretakerIds: string[];
+  custodianIds: string[];
   createdById: string;
   beds: number;
   baths: number;
@@ -92,6 +93,7 @@ export function makeProperty(overrides: Partial<TestProperty> = {}): TestPropert
     published: true,
     ownerId: makeObjectId("user"),
     caretakerIds: [],
+    custodianIds: [],
     createdById: makeObjectId("user"),
     beds: 2,
     baths: 1,

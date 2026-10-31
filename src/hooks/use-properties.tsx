@@ -80,6 +80,7 @@ export interface Property {
   purpose?: PropertyPurpose;
   ownerId: string;
   caretakerIds: string[];
+  custodianIds?: string[];
   beds: number;
   baths: number;
   area: number;
@@ -102,6 +103,7 @@ export interface PropertyInput {
   baths?: number;
   area?: number;
   caretakerIds?: string[];
+  custodianIds?: string[];
   targetOwnerId?: string;
   published?: boolean;
   blocks?: BlockInputPayload[];

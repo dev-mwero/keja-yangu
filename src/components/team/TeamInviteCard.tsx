@@ -42,6 +42,17 @@ interface InviteErrors {
   ownerId?: string;
 }
 
+interface ExistingAccountMatch {
+  id: string;
+  name: string;
+  email?: string;
+  role: string;
+  isActive: boolean;
+  hasVerifiedEmail: boolean;
+  canLink?: boolean;
+  linkReason?: string;
+}
+
 export const TeamInviteCard = ({ allowedRoles, systemAdmin = false }: TeamInviteCardProps) => {
   const { inviteMember, pending } = useTeamInvites();
   const [role, setRole] = useState<TeamInviteRole>(allowedRoles[0]);
@@ -52,6 +63,17 @@ export const TeamInviteCard = ({ allowedRoles, systemAdmin = false }: TeamInvite
   const [ownerId, setOwnerId] = useState("");
   const [errors, setErrors] = useState<InviteErrors>({});
   const [credentials, setCredentials] = useState<{ phone: string; password: string } | null>(null);
+  const [identityCheck, setIdentityCheck] = useState<{
+    key: string;
+    match: ExistingAccountMatch | null;
+  } | null>(null);
+  const [identityError, setIdentityError] = useState<string | null>(null);
+  const [checkingIdentity, setCheckingIdentity] = useState(false);
+
+  const phone = nationalPhone.trim() ? toE164(dial, nationalPhone) : "";
+  const trimmedEmail = email.trim().toLowerCase();
+  const identityKey = [role, trimmedEmail, phone, systemAdmin ? ownerId.trim() : ""].join("|");
+  const currentMatch = identityCheck?.key === identityKey ? identityCheck.match : null;
 
   const resetForm = () => {
     setName("");
@@ -60,6 +82,13 @@ export const TeamInviteCard = ({ allowedRoles, systemAdmin = false }: TeamInvite
     setDial(DEFAULT_COUNTRY.dial);
     setOwnerId("");
     setErrors({});
+    setIdentityCheck(null);
+    setIdentityError(null);
+  };
+
+  const clearIdentityCheck = () => {
+    setIdentityCheck(null);
+    setIdentityError(null);
   };
 
   const validate = (phone: string): boolean => {
@@ -82,25 +111,61 @@ export const TeamInviteCard = ({ allowedRoles, systemAdmin = false }: TeamInvite
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    const phone = nationalPhone.trim() ? toE164(dial, nationalPhone) : undefined;
-    if (!validate(phone ?? "")) return;
+    if (!validate(phone)) return;
 
-    const trimmedEmail = email.trim().toLowerCase() || undefined;
+    const contactEmail = trimmedEmail || undefined;
+    const contactPhone = phone || undefined;
+    let existingMatch = currentMatch;
     try {
+      if (identityCheck?.key !== identityKey) {
+        setCheckingIdentity(true);
+        setIdentityError(null);
+        const params = new URLSearchParams({
+          role,
+          ...(contactEmail ? { email: contactEmail } : {}),
+          ...(contactPhone ? { phone: contactPhone } : {}),
+          ...(systemAdmin && ownerId.trim() ? { ownerId: ownerId.trim() } : {}),
+        });
+        const response = await fetch(`/api/v1/users/search?${params.toString()}`);
+        const body = (await response.json()) as {
+          error?: string;
+          data?: ExistingAccountMatch[];
+        };
+        if (!response.ok) {
+          throw new Error(body.error || "Could not check for an existing account");
+        }
+        if (!Array.isArray(body.data)) {
+          throw new Error("Could not verify whether this person already has an account");
+        }
+        existingMatch = body.data[0] ?? null;
+        setIdentityCheck({ key: identityKey, match: existingMatch });
+        if (existingMatch) {
+          if (!existingMatch.canLink) {
+            setIdentityError(existingMatch.linkReason || "This existing account cannot be linked.");
+          }
+          return;
+        }
+      } else if (existingMatch && !existingMatch.canLink) {
+        setIdentityError(existingMatch.linkReason || "This existing account cannot be linked.");
+        return;
+      }
+
       const result = await inviteMember({
         role,
         name: name.trim() || undefined,
-        email: trimmedEmail,
-        phone,
+        email: contactEmail,
+        phone: contactPhone,
         ownerId: systemAdmin && role === "custodian" ? ownerId.trim() : undefined,
       });
 
-      if (trimmedEmail) {
+      if (result.linked) {
+        toast.success("Team member linked");
+      } else if (contactEmail) {
         toast.success("Invitation sent", {
           description: "They will receive an email to activate their account.",
         });
-      } else if (phone && result.temporaryPassword) {
-        setCredentials({ phone, password: result.temporaryPassword });
+      } else if (contactPhone && result.temporaryPassword) {
+        setCredentials({ phone: contactPhone, password: result.temporaryPassword });
         toast.success("Team member added", {
           description: "Share the temporary password with them once.",
         });
@@ -109,9 +174,11 @@ export const TeamInviteCard = ({ allowedRoles, systemAdmin = false }: TeamInvite
       }
       resetForm();
     } catch (err) {
-      toast.error("Could not send invitation", {
+      toast.error("Could not check or invite team member", {
         description: err instanceof Error ? err.message : undefined,
       });
+    } finally {
+      setCheckingIdentity(false);
     }
   };
 
@@ -134,7 +201,13 @@ export const TeamInviteCard = ({ allowedRoles, systemAdmin = false }: TeamInvite
           {allowedRoles.length > 1 && (
             <div className="space-y-2">
               <Label>Role</Label>
-              <Select value={role} onValueChange={(value) => setRole(value as TeamInviteRole)}>
+              <Select
+                value={role}
+                onValueChange={(value) => {
+                  setRole(value as TeamInviteRole);
+                  clearIdentityCheck();
+                }}
+              >
                 <SelectTrigger aria-label="Role">
                   <SelectValue />
                 </SelectTrigger>
@@ -168,7 +241,10 @@ export const TeamInviteCard = ({ allowedRoles, systemAdmin = false }: TeamInvite
                 type="email"
                 placeholder="teammate@example.com"
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  clearIdentityCheck();
+                }}
               />
               {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
             </div>
@@ -181,7 +257,10 @@ export const TeamInviteCard = ({ allowedRoles, systemAdmin = false }: TeamInvite
                   inputMode="tel"
                   placeholder="712 345 678"
                   value={nationalPhone}
-                  onChange={(event) => setNationalPhone(event.target.value)}
+                  onChange={(event) => {
+                    setNationalPhone(event.target.value);
+                    clearIdentityCheck();
+                  }}
                 />
               </div>
               {errors.phone && <p className="text-xs text-destructive">{errors.phone}</p>}
@@ -195,21 +274,55 @@ export const TeamInviteCard = ({ allowedRoles, systemAdmin = false }: TeamInvite
             <Input
               id="team-invite-owner"
               value={ownerId}
-              onChange={(event) => setOwnerId(event.target.value)}
+              onChange={(event) => {
+                setOwnerId(event.target.value);
+                clearIdentityCheck();
+              }}
               placeholder="24-hex owner user id"
             />
             {errors.ownerId && <p className="text-xs text-destructive">{errors.ownerId}</p>}
           </div>
         )}
 
+        {currentMatch && (
+          <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm" role="status">
+            <p className="font-medium">
+              An existing {ROLE_LABELS[role].toLowerCase()} account was found
+            </p>
+            <p className="text-muted-foreground">
+              {currentMatch.name}
+              {currentMatch.email ? ` · ${currentMatch.email}` : ""}
+              {currentMatch.isActive && currentMatch.hasVerifiedEmail ? " · Active" : " · Pending"}
+            </p>
+            {currentMatch.canLink && (
+              <p className="mt-1 text-muted-foreground">
+                Link this account to your portfolio; no duplicate account will be created.
+              </p>
+            )}
+          </div>
+        )}
+        {identityError && (
+          <p className="text-sm text-destructive" role="alert">
+            {identityError}
+          </p>
+        )}
+
         <div className="flex justify-end">
-          <Button type="submit" className="rounded-full" disabled={pending}>
-            {pending ? (
+          <Button
+            type="submit"
+            className="rounded-full"
+            disabled={
+              pending ||
+              checkingIdentity ||
+              (currentMatch !== null && currentMatch.canLink === false)
+            }
+          >
+            {pending || checkingIdentity ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
               <UserPlus className="mr-2 h-4 w-4" />
             )}
-            Send invitation
+            {currentMatch?.canLink ? "Link existing account" : "Check account and continue"}
           </Button>
         </div>
       </form>

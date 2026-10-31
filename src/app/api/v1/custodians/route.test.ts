@@ -59,6 +59,35 @@ describe("GET /api/v1/custodians", () => {
     expect(res.status).toBe(403);
   });
 
+  it("lists same-owner custodians with limited fields for property assignment", async () => {
+    user.findById.mockReturnValue(
+      buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian", managedByOwnerId: OWNER_ID })),
+    );
+    const chain = buildQuery([custodianDoc()]);
+    user.find.mockReturnValue(chain);
+
+    const res = await GET(
+      buildRequest("/api/v1/custodians", {
+        token: signToken(CUSTODIAN_ID),
+        query: { forPropertyAssignment: "true" },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(user.find).toHaveBeenCalledWith({
+      role: "custodian",
+      isActive: { $ne: false },
+      isVerified: { $ne: false },
+      managedByOwnerId: OWNER_ID,
+    });
+    expect(chain.select).toHaveBeenCalledWith("name managedByOwnerId");
+    const data = (await json(res)).data as Array<Record<string, unknown>>;
+    expect(data[0]).toMatchObject({ id: CUSTODIAN_ID, name: "Custodian One" });
+    expect(data[0].email).toBeUndefined();
+    expect(data[0].phone).toBe("");
+    expect(data[0].privileges).toEqual([]);
+  });
+
   it("lists an owner's custodians", async () => {
     user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
     user.find.mockReturnValue(buildQuery([custodianDoc()]));
