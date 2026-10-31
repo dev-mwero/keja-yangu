@@ -30,6 +30,7 @@ vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Invoice", () => ({ Invoice: getModelStubs().invoice }));
 vi.mock("@/models/Notification", () => ({ Notification: getModelStubs().notification }));
+vi.mock("@/models/UnitFavorite", () => ({ UnitFavorite: getModelStubs().unitFavorite }));
 
 import {
   notifyAnnouncement,
@@ -42,13 +43,14 @@ import {
   notifyMoveRequestCreated,
   notifyMoveRequestDecided,
   notifyOverdueInvoices,
+  notifyUnitAvailable,
   notifyUser,
   resolveAnnouncementRecipients,
   resolveStaffRecipients,
   wantsEmailNotifications,
 } from "@/lib/notifications";
 
-const { user, tenant, property, invoice, notification } = getModelStubs();
+const { user, tenant, property, invoice, notification, unitFavorite } = getModelStubs();
 const isEmailConfiguredMock = vi.mocked(isEmailConfigured);
 const sendNotificationEmailMock = vi.mocked(sendNotificationEmail);
 const createInvoicePaidContentMock = vi.mocked(createInvoicePaidContent);
@@ -66,6 +68,7 @@ const LEASE_ID = makeObjectId("lease");
 const COMPLAINT_ID = makeObjectId("complaint");
 const CUSTODIAN_ID = makeObjectId("custodian");
 const MOVE_REQUEST_ID = makeObjectId("moverequest");
+const UNIT_ID = makeObjectId("unit");
 
 describe("notifyUser", () => {
   beforeEach(() => {
@@ -975,5 +978,67 @@ describe("notifyMoveRequestDecided", () => {
     });
     const row = notification.create.mock.calls[0][0] as Record<string, unknown>;
     expect(row.link).toBe("/dashboard/system-admin");
+  });
+});
+
+describe("notifyUnitAvailable", () => {
+  const unit = {
+    _id: UNIT_ID,
+    propertyId: PROPERTY_ID,
+    name: "3A",
+    blockName: "B",
+    status: "available",
+    statusChangedAt: new Date("2026-10-01T10:00:00.000Z"),
+  };
+
+  beforeEach(() => {
+    resetModelStubs();
+    notification.create.mockResolvedValue({ _id: "n1" });
+  });
+
+  it("notifies every user who favourited the unit", async () => {
+    unitFavorite.find.mockReturnValue(buildQuery([{ userId: USER_ID }, { userId: OWNER_ID }]));
+
+    const ok = await notifyUnitAvailable(unit, "Riverside Apartments");
+
+    expect(ok).toBe(true);
+    expect(notification.create).toHaveBeenCalledTimes(2);
+    const row = notification.create.mock.calls[0][0] as Record<string, unknown>;
+    expect(row).toMatchObject({
+      recipientUserId: USER_ID,
+      type: "unit:available",
+      title: "Unit is now available",
+      body: "Unit 3A (Block B) at Riverside Apartments is now available.",
+      link: `/properties/${PROPERTY_ID}`,
+      channels: ["in-app"],
+    });
+    expect(row.dedupeKey).toBe(`unit:available:${UNIT_ID}:available:2026-10-01T10:00:00.000Z`);
+  });
+
+  it("does nothing when no user has favourited the unit", async () => {
+    unitFavorite.find.mockReturnValue(buildQuery([]));
+
+    const ok = await notifyUnitAvailable(unit, "Riverside Apartments");
+
+    expect(ok).toBe(true);
+    expect(notification.create).not.toHaveBeenCalled();
+  });
+
+  it("ignores units that are not available", async () => {
+    await notifyUnitAvailable({ ...unit, status: "maintenance" }, "Riverside Apartments");
+    expect(unitFavorite.find).not.toHaveBeenCalled();
+    expect(notification.create).not.toHaveBeenCalled();
+  });
+
+  it("does not notify for an unpublished property", async () => {
+    unitFavorite.find.mockReturnValue(buildQuery([{ userId: USER_ID }]));
+    property.findById.mockReturnValue(
+      buildQuery({ _id: PROPERTY_ID, title: "Riverside", published: false }),
+    );
+
+    const ok = await notifyUnitAvailable(unit);
+
+    expect(ok).toBe(true);
+    expect(notification.create).not.toHaveBeenCalled();
   });
 });

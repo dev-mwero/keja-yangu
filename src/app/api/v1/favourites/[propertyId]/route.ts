@@ -1,8 +1,8 @@
 import { isValidObjectId } from "mongoose";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { authenticate, requireAuth } from "@/lib/permissions";
 import { connectToDatabase } from "@/lib/mongoose";
+import { authenticate, requireAuth } from "@/lib/permissions";
 import { PropertyFavorite } from "@/models/PropertyFavorite";
 
 interface RouteContext {

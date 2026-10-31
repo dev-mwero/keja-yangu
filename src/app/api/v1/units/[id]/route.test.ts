@@ -9,10 +9,15 @@ vi.mock("@/lib/mongoose", () => ({
 }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
+vi.mock("@/lib/notifications", () => ({
+  notifyUnitAvailable: vi.fn().mockResolvedValue(true),
+}));
 
 import { DELETE, GET, PATCH } from "@/app/api/v1/units/[id]/route";
+import { notifyUnitAvailable } from "@/lib/notifications";
 
 const { user, unit } = getModelStubs();
+const notifyUnitAvailableMock = vi.mocked(notifyUnitAvailable);
 
 const OWNER_ID = makeObjectId("owner");
 const CUSTODIAN_ID = makeObjectId("custodian");
@@ -96,6 +101,7 @@ describe("GET /api/v1/units/[id]", () => {
 describe("PATCH /api/v1/units/[id]", () => {
   beforeEach(() => {
     resetModelStubs();
+    notifyUnitAvailableMock.mockClear();
   });
 
   it("owner updates unit status and rent", async () => {
@@ -221,6 +227,43 @@ describe("PATCH /api/v1/units/[id]", () => {
     );
     expect(res.status).toBe(409);
     expect(doc.save).not.toHaveBeenCalled();
+  });
+
+  it("notifies favourites when a unit transitions to available", async () => {
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    const doc = persistedUnit({ status: "maintenance" });
+    unit.findById.mockResolvedValue(doc);
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/units/${UNIT_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { status: "available" },
+      }),
+      withParams(UNIT_ID),
+    );
+
+    expect(res.status).toBe(200);
+    expect(doc.statusChangedAt).toBeInstanceOf(Date);
+    expect(notifyUnitAvailableMock).toHaveBeenCalledWith(doc);
+  });
+
+  it("does not notify when the status is already available", async () => {
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    const doc = persistedUnit({ status: "available" });
+    unit.findById.mockResolvedValue(doc);
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/units/${UNIT_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { status: "available" },
+      }),
+      withParams(UNIT_ID),
+    );
+
+    expect(res.status).toBe(200);
+    expect(notifyUnitAvailableMock).not.toHaveBeenCalled();
   });
 
   it("owner updates unit service-charge configuration", async () => {

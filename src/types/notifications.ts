@@ -7,7 +7,8 @@ export type NotificationType =
   | "chat:reply"
   | "announcement"
   | "move-request:created"
-  | "move-request:decided";
+  | "move-request:decided"
+  | "unit:available";
 
 export type NotificationChannel = "in-app" | "email";
 

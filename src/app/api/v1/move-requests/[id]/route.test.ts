@@ -15,6 +15,7 @@ vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/lib/notifications", () => ({
   notifyMoveRequestDecided: vi.fn().mockResolvedValue(true),
+  notifyUnitAvailable: vi.fn().mockResolvedValue(true),
 }));
 
 import { PATCH } from "@/app/api/v1/move-requests/[id]/route";

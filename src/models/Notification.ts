@@ -10,6 +10,7 @@ export const NOTIFICATION_TYPES = [
   "announcement",
   "move-request:created",
   "move-request:decided",
+  "unit:available",
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];

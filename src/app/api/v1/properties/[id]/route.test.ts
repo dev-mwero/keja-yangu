@@ -221,6 +221,7 @@ describe("GET /api/v1/properties/[id]", () => {
     expect(unit.find).toHaveBeenCalledWith({
       propertyId: PROPERTY_ID,
       status: "available",
+      deletedAt: null,
     });
     const unitChain = unit.find.mock.results[0].value as { select: ReturnType<typeof vi.fn> };
     const projection = unitChain.select.mock.calls[0][0] as string;
@@ -246,6 +247,26 @@ describe("GET /api/v1/properties/[id]", () => {
     expect(unit.find).toHaveBeenCalledWith({
       propertyId: PROPERTY_ID,
       status: "available",
+      deletedAt: null,
+    });
+  });
+
+  it("can include every unit status for public favouriting", async () => {
+    property.findOne.mockReturnValue(
+      buildQuery(makeProperty({ _id: PROPERTY_ID, status: "available" })),
+    );
+    unit.find.mockReturnValue(buildQuery([]));
+
+    const res = await GET(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {
+        query: { includeUnits: "all" },
+      }),
+      withParams(PROPERTY_ID),
+    );
+    expect(res.status).toBe(200);
+    expect(unit.find).toHaveBeenCalledWith({
+      propertyId: PROPERTY_ID,
+      deletedAt: null,
     });
   });
 });

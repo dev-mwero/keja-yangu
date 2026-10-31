@@ -76,10 +76,16 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     return NextResponse.json({ error: "Property not found" }, { status: 404 });
   }
 
+  const includeUnits = request.nextUrl.searchParams.get("includeUnits");
+  const includeAllUnits = includeUnits === "all";
   const units =
-    request.nextUrl.searchParams.get("includeUnits") === "0"
+    includeUnits === "0"
       ? []
-      : await Unit.find({ propertyId: id, status: "available" })
+      : await Unit.find({
+          propertyId: id,
+          ...(includeAllUnits ? {} : { status: "available" }),
+          deletedAt: null,
+        })
           .select("name letter floorLevel floorLabel blockName rent beds baths area status")
           .sort({ floorLevel: 1, name: 1 })
           .lean();

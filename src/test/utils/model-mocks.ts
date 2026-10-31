@@ -21,7 +21,8 @@ const stubs: Record<
   | "ownerpaymentconfig"
   | "paymentSplit"
   | "propertyFavorite"
-  | "propertyView",
+  | "propertyView"
+  | "unitFavorite",
   ModelStub
 > = {
   user: createModelStub(),
@@ -45,6 +46,7 @@ const stubs: Record<
   paymentSplit: createModelStub(),
   propertyFavorite: createModelStub(),
   propertyView: createModelStub(),
+  unitFavorite: createModelStub(),
 };
 
 /**

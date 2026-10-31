@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { UnitFavoriteButton } from "@/components/units/UnitFavoriteButton";
 import { useApplicationMutations, useApplications } from "@/hooks/use-applications";
 import { useAuth } from "@/hooks/use-auth";
 import { type PropertyUnit, useProperty } from "@/hooks/use-properties";
@@ -127,9 +128,9 @@ const PropertyDetails = () => {
       return next;
     });
     try {
-      const response = await fetch(`/api/v1/properties/${loadingPropertyId}?includeUnits=1`);
+      const response = await fetch(`/api/v1/properties/${loadingPropertyId}?includeUnits=all`);
       const body = await response.json();
-      if (!response.ok) throw new Error(body.error || "Could not load available units");
+      if (!response.ok) throw new Error(body.error || "Could not load units");
       setUnitDetailsByProperty((current) => ({
         ...current,
         [loadingPropertyId]: body.data.units ?? [],
@@ -137,8 +138,7 @@ const PropertyDetails = () => {
     } catch (error) {
       setUnitErrorsByProperty((current) => ({
         ...current,
-        [loadingPropertyId]:
-          error instanceof Error ? error.message : "Could not load available units",
+        [loadingPropertyId]: error instanceof Error ? error.message : "Could not load units",
       }));
     } finally {
       setUnitLoadingByProperty((current) => ({ ...current, [loadingPropertyId]: false }));
@@ -384,7 +384,7 @@ const PropertyDetails = () => {
                 id="available-units-heading"
                 className="font-display text-2xl font-semibold tracking-tight"
               >
-                Available units
+                Units
               </h2>
               {unitSummaryError && (
                 <p role="alert" className="mt-3 text-sm text-destructive">
@@ -455,7 +455,7 @@ const PropertyDetails = () => {
                     </p>
                   )}
                   {unitsLoaded && unitDetails.length > 0 && (
-                    <ul aria-label="Available units" className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <ul aria-label="Units" className="mt-4 grid gap-3 sm:grid-cols-2">
                       {unitDetails.map((unit) => (
                         <li
                           key={unit._id}
@@ -471,12 +471,19 @@ const PropertyDetails = () => {
                                 Floor {unit.floorLabel || unit.floorLevel}
                               </div>
                             </div>
-                            <div className="text-right text-sm font-medium">
-                              {formatKES(unit.rent ?? property.price)}
-                              <div className="text-xs font-normal text-muted-foreground">
-                                / month
-                              </div>
+                            <div className="flex items-start gap-2">
+                              <Badge variant="outline" className="rounded-full capitalize">
+                                {unit.status}
+                              </Badge>
+                              <UnitFavoriteButton unitId={unit._id} />
                             </div>
+                          </div>
+                          <div className="text-sm font-medium">
+                            {formatKES(unit.rent ?? property.price)}
+                            <span className="text-xs font-normal text-muted-foreground">
+                              {" "}
+                              / month
+                            </span>
                           </div>
                           <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                             <span className="inline-flex items-center gap-1">
@@ -492,7 +499,7 @@ const PropertyDetails = () => {
                           <Button
                             size="sm"
                             className="rounded-full"
-                            disabled={alreadyPending}
+                            disabled={alreadyPending || unit.status !== "available"}
                             aria-label={`Request ${unit.name}`}
                             onClick={() => {
                               setSelectedUnit(unit);
@@ -500,7 +507,7 @@ const PropertyDetails = () => {
                             }}
                           >
                             <Send className="mr-2 h-3.5 w-3.5" />
-                            Request this unit
+                            {unit.status === "available" ? "Request this unit" : "Not available"}
                           </Button>
                         </li>
                       ))}

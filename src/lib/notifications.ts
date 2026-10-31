@@ -16,6 +16,7 @@ import {
 } from "@/models/Notification";
 import { Property } from "@/models/Property";
 import { Tenant } from "@/models/Tenant";
+import { UnitFavorite } from "@/models/UnitFavorite";
 import { User } from "@/models/User";
 
 function isDuplicateKeyError(error: unknown): boolean {
@@ -840,6 +841,77 @@ export async function notifyMoveRequestDecided(request: MoveRequestLike): Promis
     });
   } catch (_error) {
     console.warn("[notifications] notifyMoveRequestDecided failed");
+    return false;
+  }
+}
+
+export interface UnitAvailabilityLike {
+  _id: unknown;
+  propertyId: string;
+  name: string;
+  blockName?: string;
+  status?: string;
+  statusChangedAt?: Date | null;
+}
+
+/**
+ * Notifies everyone who favourited a unit that it is now available. Best-effort
+ * like the other notifiers; keyed by the unit's status transition so a retried
+ * or duplicate write cannot fire the same availability event twice.
+ */
+export async function notifyUnitAvailable(
+  unit: UnitAvailabilityLike,
+  propertyTitle?: string,
+): Promise<boolean> {
+  try {
+    if (unit.status !== "available") return true;
+
+    const favourites = await UnitFavorite.find({ unitId: String(unit._id) })
+      .select("userId")
+      .lean();
+    if (favourites.length === 0) return true;
+
+    let title = propertyTitle ?? "";
+    if (!title) {
+      try {
+        const property = await Property.findById(unit.propertyId).select("title published").lean();
+        if (!property?.published) return true;
+        title = property.title ?? "";
+      } catch (_error) {
+        console.warn(`[notifications] property lookup failed propertyId=${unit.propertyId}`);
+        return true;
+      }
+    }
+    if (!title) return true;
+
+    const unitId = String(unit._id);
+    const eventId = `${unitId}:available:${(unit.statusChangedAt ?? new Date()).toISOString()}`;
+    const unitLabel = unit.blockName
+      ? `Unit ${unit.name} (Block ${unit.blockName})`
+      : `Unit ${unit.name}`;
+    const data = {
+      unitId,
+      propertyId: unit.propertyId,
+      status: "available",
+      eventId,
+    };
+
+    let ok = true;
+    for (const favourite of favourites) {
+      if (!favourite.userId) continue;
+      ok =
+        (await notifyUser(favourite.userId, {
+          type: "unit:available",
+          title: "Unit is now available",
+          body: `${unitLabel} at ${title} is now available.`,
+          data,
+          link: `/properties/${unit.propertyId}`,
+          channels: ["in-app"],
+        })) && ok;
+    }
+    return ok;
+  } catch (_error) {
+    console.warn("[notifications] notifyUnitAvailable failed");
     return false;
   }
 }
