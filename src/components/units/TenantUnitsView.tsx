@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { DashboardShell } from "@/components/DashboardShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { UnitFavoriteButton } from "@/components/units/UnitFavoriteButton";
 import { tenantNav } from "@/config/dashboardNav";
 import { useMoveRequestMutations, useMoveRequests } from "@/hooks/use-move-requests";
 import { useMyTenancy } from "@/hooks/use-my-tenancy";
@@ -190,6 +191,7 @@ export function TenantUnitsView() {
                       {rent != null ? `${formatKES(rent)}/mo` : "Rent on request"}
                     </span>
                     <div className="flex items-center gap-2">
+                      <UnitFavoriteButton unitId={unit._id} />
                       <Button
                         size="sm"
                         disabled={requestPending || requested}

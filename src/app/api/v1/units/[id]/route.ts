@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongoose";
 import { asSoftDeleteModel } from "@/lib/mongoose-soft-delete";
+import { notifyUnitAvailable } from "@/lib/notifications";
 import { authenticate, requirePermission } from "@/lib/permissions";
 import { unitUpdateInput } from "@/lib/schemas/unit";
 import { Unit } from "@/models/Unit";
@@ -65,6 +66,7 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
     );
   }
 
+  const previousStatus = unit.status;
   const updates = parsed.data;
   if (updates.name && updates.name !== unit.name) {
     const clash = await Unit.findOne({
@@ -97,6 +99,7 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
       );
     }
     unit.status = requestedStatus;
+    if (previousStatus !== requestedStatus) unit.statusChangedAt = new Date();
   }
   if (updates.purpose !== undefined) unit.purpose = updates.purpose;
   if (updates.rent !== undefined) unit.rent = updates.rent;
@@ -111,6 +114,11 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
   if (updates.area !== undefined) unit.area = updates.area;
 
   await unit.save();
+
+  if (previousStatus !== "available" && unit.status === "available") {
+    await notifyUnitAvailable(unit);
+  }
+
   return NextResponse.json({ data: unit.toObject() });
 }
 

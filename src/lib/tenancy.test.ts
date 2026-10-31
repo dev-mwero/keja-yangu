@@ -157,7 +157,10 @@ describe("vacateTenantFromUnit", () => {
     // Last occupant removed → status set to available
     expect(unitStub.updateOne).toHaveBeenCalledWith(
       { _id: occupied._id },
-      { $pull: { tenantId: OCCUPANT }, $set: { status: "available" } },
+      {
+        $pull: { tenantId: OCCUPANT },
+        $set: { status: "available", statusChangedAt: expect.any(Date) },
+      },
     );
     expect(lease.updateMany).toHaveBeenCalledWith(
       { tenantId: TENANT_ID, status: "active" },

@@ -33,6 +33,7 @@ const TYPE_LABELS: Record<AppNotification["type"], string> = {
   announcement: "Announcement",
   "move-request:created": "Move request",
   "move-request:decided": "Move request decided",
+  "unit:available": "Unit available",
 };
 
 type BadgePropsVariant = "default" | "destructive" | "secondary" | "outline";

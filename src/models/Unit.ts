@@ -18,6 +18,9 @@ const unitSchema = new Schema(
     name: { type: String, required: true, trim: true },
     letter: { type: String, trim: true, default: "" },
     status: { type: String, enum: [...UNIT_STATUSES], default: "available" },
+    // Timestamp of the last status transition; used to key availability
+    // notifications so each transition notifies favourites exactly once.
+    statusChangedAt: { type: Date, default: null },
     // Optional purpose override; falls back to floor/block/property purpose.
     purpose: { type: String, enum: [...PROPERTY_PURPOSES, null], default: null },
     // Optional rent override; falls back to floor/block/property rent.

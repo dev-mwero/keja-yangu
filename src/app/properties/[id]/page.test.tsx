@@ -99,7 +99,7 @@ describe("Property details page", () => {
             }),
           };
         }
-        if (url.includes("includeUnits=1")) {
+        if (url.includes("includeUnits=all")) {
           return { ok: true, json: async () => ({ data: { units: mocks.unitDetails } }) };
         }
         return { ok: true, json: async () => ({ data: { viewed: true } }) };
@@ -116,7 +116,7 @@ describe("Property details page", () => {
 
   it("loads available unit details only when expanded", async () => {
     render(<PropertyDetails />);
-    expect(screen.getByText("Available units")).toBeInTheDocument();
+    expect(screen.getByText("Units")).toBeInTheDocument();
     expect(screen.queryByText("Unit 3A")).not.toBeInTheDocument();
     await userEvent.click(screen.getByText(/View and request a specific unit/i));
     expect(await screen.findByText("Unit 3A")).toBeInTheDocument();

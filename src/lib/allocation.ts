@@ -1,3 +1,4 @@
+import { notifyUnitAvailable } from "@/lib/notifications";
 import { Lease } from "@/models/Lease";
 import { Property } from "@/models/Property";
 import { Tenant } from "@/models/Tenant";
@@ -201,12 +202,27 @@ export async function vacateUnit(input: { tenantId: string }): Promise<{ tenant:
   const vacatingId =
     occupantUserId && occupantIds.includes(occupantUserId) ? occupantUserId : String(tenant._id);
   const remaining = occupantIds.filter((id) => id !== vacatingId);
+  const statusChangedAt = new Date();
   await Unit.updateOne(
     { _id: unit._id },
     remaining.length === 0
-      ? { $pull: { tenantId: vacatingId }, $set: { status: "available" } }
+      ? {
+          $pull: { tenantId: vacatingId },
+          $set: { status: "available", statusChangedAt },
+        }
       : { $pull: { tenantId: vacatingId } },
   );
+
+  if (remaining.length === 0) {
+    await notifyUnitAvailable({
+      _id: unit._id,
+      propertyId: String(unit.propertyId),
+      name: unit.name,
+      blockName: unit.blockName,
+      status: "available",
+      statusChangedAt,
+    });
+  }
 
   await Lease.updateMany(
     { tenantId: String(tenant._id), status: "active" },

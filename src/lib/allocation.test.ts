@@ -10,10 +10,15 @@ vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
+vi.mock("@/lib/notifications", () => ({
+  notifyUnitAvailable: vi.fn().mockResolvedValue(true),
+}));
 
 import { AllocationError, allocateUnit, vacateUnit } from "@/lib/allocation";
+import { notifyUnitAvailable } from "@/lib/notifications";
 
 const { user, property, tenant: tenantStub, unit: unitStub, lease } = getModelStubs();
+const notifyUnitAvailableMock = vi.mocked(notifyUnitAvailable);
 
 const OWNER_ID = makeObjectId("owner");
 const TENANT_ID = makeObjectId("tenant");
@@ -203,6 +208,8 @@ describe("vacateUnit", () => {
     unitStub.findOne.mockResolvedValue({
       _id: UNIT_ID,
       propertyId: PROPERTY_ID,
+      name: "3A",
+      blockName: "D",
       status: "occupied",
       tenantId: [OCCUPANT],
     });
@@ -214,7 +221,13 @@ describe("vacateUnit", () => {
     // Last occupant removed → mark available
     expect(unitStub.updateOne).toHaveBeenCalledWith(
       { _id: UNIT_ID },
-      { $pull: { tenantId: OCCUPANT }, $set: { status: "available" } },
+      {
+        $pull: { tenantId: OCCUPANT },
+        $set: { status: "available", statusChangedAt: expect.any(Date) },
+      },
+    );
+    expect(notifyUnitAvailableMock).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "available", name: "3A" }),
     );
   });
 
@@ -232,6 +245,8 @@ describe("vacateUnit", () => {
     unitStub.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce({
       _id: UNIT_ID,
       propertyId: PROPERTY_ID,
+      name: "3A",
+      blockName: "D",
       status: "occupied",
       tenantId: [String(TENANT_ID)],
     });
@@ -242,7 +257,10 @@ describe("vacateUnit", () => {
     await vacateUnit({ tenantId: String(TENANT_ID) });
     expect(unitStub.updateOne).toHaveBeenCalledWith(
       { _id: UNIT_ID },
-      { $pull: { tenantId: String(TENANT_ID) }, $set: { status: "available" } },
+      {
+        $pull: { tenantId: String(TENANT_ID) },
+        $set: { status: "available", statusChangedAt: expect.any(Date) },
+      },
     );
   });
 });
