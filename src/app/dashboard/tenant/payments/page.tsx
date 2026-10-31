@@ -285,9 +285,17 @@ const TenantPaymentsPage = () => {
                       <p className="text-xs text-muted-foreground">{invoice.invoiceNumber}</p>
                     </TableCell>
                     <TableCell className="font-medium">
-                      {tab === "history"
-                        ? formatKES(Math.min(invoice.amountDue, invoice.amountPaid ?? 0))
-                        : formatKES(Math.max(0, invoice.amountDue - (invoice.amountPaid ?? 0)))}
+                      <div>
+                        {tab === "history"
+                          ? formatKES(Math.min(invoice.amountDue, invoice.amountPaid ?? 0))
+                          : formatKES(Math.max(0, invoice.amountDue - (invoice.amountPaid ?? 0)))}
+                      </div>
+                      {(invoice.serviceChargeAmount ?? 0) > 0 && (
+                        <div className="mt-1 space-y-0.5 text-[11px] font-normal text-muted-foreground">
+                          <div>Rent {formatKES(invoice.rentAmount ?? Math.max(0, invoice.amountDue - (invoice.serviceChargeAmount ?? 0)))}</div>
+                          <div>Service fee {formatKES(invoice.serviceChargeAmount ?? 0)}</div>
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {new Date(invoice.dueDate).toLocaleDateString(undefined, {

@@ -37,6 +37,19 @@ describe("InvoiceTable", () => {
     expect(screen.getByText(/received/i)).toBeInTheDocument();
   });
 
+  it("shows the rent and service fee split when a separate service fee is billed", () => {
+    render(
+      <InvoiceTable
+        invoices={[makeInvoice({ amountDue: 15000, rentAmount: 12000, serviceChargeAmount: 3000 })]}
+      />,
+    );
+
+    expect(screen.getByText(/Rent/i)).toBeInTheDocument();
+    expect(screen.getByText(/Service fee/i)).toBeInTheDocument();
+    expect(screen.getByText(/Ksh 12,000/)).toBeInTheDocument();
+    expect(screen.getByText(/Ksh 3,000/)).toBeInTheDocument();
+  });
+
   it("does not show a received hint for an unpaid invoice", () => {
     render(<InvoiceTable invoices={[makeInvoice({ amountPaid: 0 })]} />);
     expect(screen.queryByText(/received/i)).not.toBeInTheDocument();
