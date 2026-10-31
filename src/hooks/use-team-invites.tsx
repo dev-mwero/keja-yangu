@@ -15,6 +15,7 @@ export interface TeamInviteInput {
 }
 
 export interface TeamInviteResult {
+  linked?: boolean;
   /** One-time password for a phone-only account. */
   temporaryPassword?: string;
 }
@@ -30,7 +31,7 @@ export function useTeamInvites() {
     try {
       const result =
         role === "custodian" ? await inviteCustodian(contact) : await inviteCaretaker(contact);
-      return { temporaryPassword: result.temporaryPassword };
+      return { linked: result.linked, temporaryPassword: result.temporaryPassword };
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send invitation");
       throw err;

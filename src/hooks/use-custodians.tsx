@@ -58,6 +58,7 @@ export interface CustodianInviteInput {
 
 export interface CustodianInviteResult {
   member: CustodianRow;
+  linked?: boolean;
   /** One-time password for a phone-only account. */
   temporaryPassword?: string;
 }
@@ -83,6 +84,7 @@ export function useCustodianMutations() {
       }
       return {
         member: json.data as CustodianRow,
+        linked: json.linked === true,
         temporaryPassword: typeof json.password === "string" ? json.password : undefined,
       };
     } finally {

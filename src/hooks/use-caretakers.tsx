@@ -22,6 +22,7 @@ export interface CaretakerInviteInput {
 
 export interface CaretakerInviteResult {
   member: CaretakerRow;
+  linked?: boolean;
   /** One-time password for a phone-only account. */
   temporaryPassword?: string;
 }
@@ -85,6 +86,7 @@ export function useCaretakerMutations() {
       }
       return {
         member: json.data as CaretakerRow,
+        linked: json.linked === true,
         temporaryPassword: typeof json.password === "string" ? json.password : undefined,
       };
     } finally {
