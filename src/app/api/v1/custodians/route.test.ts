@@ -74,7 +74,12 @@ describe("GET /api/v1/custodians", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(user.find).toHaveBeenCalledWith({ role: "custodian", managedByOwnerId: OWNER_ID });
+    expect(user.find).toHaveBeenCalledWith({
+      role: "custodian",
+      isActive: { $ne: false },
+      isVerified: { $ne: false },
+      managedByOwnerId: OWNER_ID,
+    });
     expect(chain.select).toHaveBeenCalledWith("name managedByOwnerId");
     const data = (await json(res)).data as Array<Record<string, unknown>>;
     expect(data[0]).toMatchObject({ id: CUSTODIAN_ID, name: "Custodian One" });

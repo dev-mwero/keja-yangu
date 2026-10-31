@@ -27,19 +27,31 @@ export interface CaretakerInviteResult {
   temporaryPassword?: string;
 }
 
-export function useCaretakers() {
+export function useCaretakers(ownerId?: string, enabled = true, forPropertyAssignment = false) {
   const [caretakers, setCaretakers] = useState<CaretakerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
+    if (!enabled) {
+      setCaretakers([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
     let cancelled = false;
     void reload;
     const fetchCaretakers = async () => {
       setLoading(true);
       try {
-        const res = await fetch("/api/v1/caretakers");
+        const params = new URLSearchParams();
+        if (ownerId) params.set("ownerId", ownerId);
+        if (forPropertyAssignment) params.set("forPropertyAssignment", "true");
+        const queryString = params.toString();
+        const query = queryString ? `?${queryString}` : "";
+        const res = await fetch(`/api/v1/caretakers${query}`);
         const json = await res.json();
         if (cancelled) return;
         if (res.ok) {
@@ -58,7 +70,7 @@ export function useCaretakers() {
     return () => {
       cancelled = true;
     };
-  }, [reload]);
+  }, [enabled, forPropertyAssignment, ownerId, reload]);
 
   const refetch = useCallback(() => setReload((n) => n + 1), []);
 

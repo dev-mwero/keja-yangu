@@ -62,6 +62,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     property = await Property.findById(id).lean();
   } else if (actor.role === "owner") {
     property = await Property.findOne({ _id: id, ownerId: actor._id }).lean();
+  } else if (actor.role === "custodian") {
+    if (actor.managedByOwnerId) {
+      property = await Property.findOne({ _id: id, ownerId: actor.managedByOwnerId }).lean();
+    }
   } else if (actor.role === "caretaker") {
     const scope =
       typeof actor.managedByOwnerId === "string" && actor.managedByOwnerId.length > 0
@@ -148,10 +152,17 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     );
   }
   if (updateData.caretakerIds !== undefined || updateData.custodianIds !== undefined) {
-    const assignmentError = await validatePropertyStaffAssignments(property.ownerId, {
-      caretakerIds: updateData.caretakerIds,
-      custodianIds: updateData.custodianIds,
-    });
+    const assignmentError = await validatePropertyStaffAssignments(
+      property.ownerId,
+      {
+        caretakerIds: updateData.caretakerIds,
+        custodianIds: updateData.custodianIds,
+      },
+      {
+        caretakerIds: property.caretakerIds ?? [],
+        custodianIds: property.custodianIds ?? [],
+      },
+    );
     if (assignmentError) {
       return NextResponse.json({ error: assignmentError }, { status: 400 });
     }

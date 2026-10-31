@@ -42,7 +42,10 @@ export async function GET(request: NextRequest) {
   }
 
   const ownerId = request.nextUrl.searchParams.get("ownerId");
-  const filter: Record<string, unknown> = { role: "custodian" };
+  const filter: Record<string, unknown> = {
+    role: "custodian",
+    ...(forPropertyAssignment ? { isActive: { $ne: false }, isVerified: { $ne: false } } : {}),
+  };
 
   if (user.role === "system-admin") {
     if (ownerId) filter.managedByOwnerId = ownerId;

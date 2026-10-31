@@ -11,19 +11,31 @@ export interface CustodianRow {
   privileges: string[];
 }
 
-export function useCustodians() {
+export function useCustodians(ownerId?: string, forPropertyAssignment = false, enabled = true) {
   const [custodians, setCustodians] = useState<CustodianRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
+    if (!enabled) {
+      setCustodians([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
     let cancelled = false;
     void reload;
     const fetchCustodians = async () => {
       setLoading(true);
       try {
-        const res = await fetch("/api/v1/custodians");
+        const params = new URLSearchParams();
+        if (ownerId) params.set("ownerId", ownerId);
+        if (forPropertyAssignment) params.set("forPropertyAssignment", "true");
+        const queryString = params.toString();
+        const query = queryString ? `?${queryString}` : "";
+        const res = await fetch(`/api/v1/custodians${query}`);
         const json = await res.json();
         if (cancelled) return;
         if (res.ok) {
@@ -42,7 +54,7 @@ export function useCustodians() {
     return () => {
       cancelled = true;
     };
-  }, [reload]);
+  }, [enabled, forPropertyAssignment, ownerId, reload]);
 
   const refetch = useCallback(() => setReload((n) => n + 1), []);
 

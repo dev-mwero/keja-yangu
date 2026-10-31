@@ -150,6 +150,26 @@ describe("GET /api/v1/properties/[id]", () => {
     expect((body.data as { ownerId?: string }).ownerId).toBe(OWNER_ID);
   });
 
+  it("lets a custodian read any property in their owner's portfolio", async () => {
+    const custodian = makeUser({
+      _id: CUSTODIAN_ID,
+      role: "custodian",
+      managedByOwnerId: OWNER_ID,
+    });
+    user.findById.mockReturnValue(buildQuery(custodian));
+    property.findOne.mockReturnValue(buildQuery(ownProperty()));
+
+    const res = await GET(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {
+        token: signToken(CUSTODIAN_ID),
+      }),
+      withParams(PROPERTY_ID),
+    );
+
+    expect(res.status).toBe(200);
+    expect(property.findOne).toHaveBeenCalledWith({ _id: PROPERTY_ID, ownerId: OWNER_ID });
+  });
+
   it("404 for an authenticated user with no scope on a non-available foreign property", async () => {
     const tenantActor = makeUser({ _id: makeObjectId("tenant"), role: "tenant" });
     user.findById.mockReturnValue(buildQuery(tenantActor));
@@ -371,7 +391,6 @@ describe("PATCH /api/v1/properties/[id]", () => {
       _id: { $in: [CUSTODIAN_ID] },
       role: "custodian",
       managedByOwnerId: OWNER_ID,
-      isActive: true,
     });
     expect(property.findOneAndUpdate).toHaveBeenCalledWith(
       { _id: PROPERTY_ID },
@@ -383,6 +402,58 @@ describe("PATCH /api/v1/properties/[id]", () => {
   it("rejects assigning a custodian bound to another owner", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     user.find.mockReturnValue(buildQuery([]));
+    property.findById.mockReturnValue(buildQuery(ownProperty()));
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { custodianIds: [CUSTODIAN_ID] },
+      }),
+      withParams(PROPERTY_ID),
+    );
+
+    expect(res.status).toBe(400);
+    expect(property.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it("preserves a previously assigned staff member who is now inactive", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    user.find.mockReturnValue(
+      buildQuery([
+        {
+          _id: CARETAKER_ID,
+          isActive: false,
+          isVerified: false,
+        },
+      ]),
+    );
+    property.findById.mockReturnValue(buildQuery(ownProperty()));
+    property.findOneAndUpdate.mockReturnValue(buildQuery(ownProperty()));
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { caretakerIds: [CARETAKER_ID] },
+      }),
+      withParams(PROPERTY_ID),
+    );
+
+    expect(res.status).toBe(200);
+  });
+
+  it("does not allow assigning an inactive staff account", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    user.find.mockReturnValue(
+      buildQuery([
+        {
+          _id: CUSTODIAN_ID,
+          isActive: false,
+          isVerified: false,
+        },
+      ]),
+    );
     property.findById.mockReturnValue(buildQuery(ownProperty()));
 
     const res = await PATCH(
@@ -425,7 +496,6 @@ describe("PATCH /api/v1/properties/[id]", () => {
       _id: { $in: [CARETAKER_ID] },
       role: "caretaker",
       managedByOwnerId: OWNER_ID,
-      isActive: true,
     });
   });
 

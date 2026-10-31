@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/hooks/use-property-types", () => ({
   usePropertyTypes: () => ({
@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => {
     deleteProperty: vi.fn(),
     pending: false,
     caretakers: [] as Array<{ id: string; name: string; email: string }>,
+    custodians: [] as Array<{ id: string; name: string; email?: string }>,
     toast: { success: vi.fn(), error: vi.fn() },
   };
   return {
@@ -39,12 +40,19 @@ const mocks = vi.hoisted(() => {
       error: null,
       refetch: vi.fn(),
     }),
+    useCustodians: () => ({
+      custodians: state.custodians,
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    }),
   };
 });
 
 vi.mock("sonner", () => ({ toast: mocks.toast }));
 vi.mock("@/hooks/use-properties", () => ({ usePropertyMutations: mocks.usePropertyMutations }));
 vi.mock("@/hooks/use-caretakers", () => ({ useCaretakers: mocks.useCaretakers }));
+vi.mock("@/hooks/use-custodians", () => ({ useCustodians: mocks.useCustodians }));
 
 import { PropertyDialog } from "@/components/dialogs/PropertyDialog";
 
@@ -65,6 +73,7 @@ const editProperty: Property = {
   published: true,
   ownerId: "dce2b032481698ae7cfe04d1",
   caretakerIds: [],
+  custodianIds: [],
   beds: 2,
   baths: 1,
   area: 60,
@@ -72,6 +81,15 @@ const editProperty: Property = {
 };
 
 describe("PropertyDialog", () => {
+  beforeEach(() => {
+    mocks.createProperty.mockReset();
+    mocks.updateProperty.mockReset();
+    mocks.caretakers.length = 0;
+    mocks.custodians.length = 0;
+    mocks.toast.success.mockClear();
+    mocks.toast.error.mockClear();
+  });
+
   it("renders a Published switch defaulting to off and submits published:true when toggled", async () => {
     mocks.createProperty.mockResolvedValue(editProperty);
     openDialog();
@@ -124,6 +142,7 @@ describe("PropertyDialog", () => {
       beds: 0,
       baths: 0,
       caretakerIds: [],
+      custodianIds: [],
       published: false,
       dateCompleted: null,
       purpose: "residential",
@@ -145,7 +164,30 @@ describe("PropertyDialog", () => {
     await waitFor(() => expect(mocks.createProperty).toHaveBeenCalled());
     const payload = mocks.createProperty.mock.calls[0][0] as Record<string, unknown>;
     expect(payload).not.toHaveProperty("caretakerIds");
+    expect(payload).not.toHaveProperty("custodianIds");
     expect(screen.queryByText("Assigned caretakers")).not.toBeInTheDocument();
+    expect(screen.queryByText("Assigned custodians")).not.toBeInTheDocument();
+  });
+
+  it("submits selected custodians with a property", async () => {
+    mocks.custodians.push({ id: "custodian-1", name: "Custodian One" });
+    mocks.createProperty.mockResolvedValue(editProperty);
+    openDialog();
+
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Sunset Villa" } });
+    fireEvent.change(screen.getByLabelText("Location"), {
+      target: { value: "Kilimani, Nairobi" },
+    });
+    fireEvent.change(screen.getByLabelText("Price (KES/month)"), {
+      target: { value: "45000" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Custodian One" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create property" }));
+
+    await waitFor(() => expect(mocks.createProperty).toHaveBeenCalled());
+    const payload = mocks.createProperty.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload.custodianIds).toEqual(["custodian-1"]);
+    mocks.custodians.length = 0;
   });
 
   it("requires a target owner id in system-admin create mode", async () => {

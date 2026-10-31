@@ -58,7 +58,6 @@ it("owner create assigns an active owner-scoped custodian", async () => {
     _id: { $in: [custodianId] },
     role: "custodian",
     managedByOwnerId: OWNER_ID,
-    isActive: true,
   });
   expect(property.create).toHaveBeenCalledWith(
     expect.objectContaining({ custodianIds: [custodianId] }),

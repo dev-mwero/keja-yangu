@@ -38,7 +38,12 @@ export async function GET(request: NextRequest) {
   }
 
   const ownerId = request.nextUrl.searchParams.get("ownerId");
-  const filter: Record<string, unknown> = { role: "caretaker" };
+  const forPropertyAssignment =
+    request.nextUrl.searchParams.get("forPropertyAssignment") === "true";
+  const filter: Record<string, unknown> = {
+    role: "caretaker",
+    ...(forPropertyAssignment ? { isActive: { $ne: false }, isVerified: { $ne: false } } : {}),
+  };
 
   if (user.role === "system-admin") {
     if (ownerId) filter.managedByOwnerId = ownerId;
@@ -56,7 +61,11 @@ export async function GET(request: NextRequest) {
   }
 
   const caretakers = await User.find(filter)
-    .select("name email phone managedByOwnerId privileges")
+    .select(
+      forPropertyAssignment
+        ? "name managedByOwnerId"
+        : "name email phone managedByOwnerId privileges",
+    )
     .sort({ name: 1 })
     .lean();
 
@@ -74,10 +83,10 @@ export async function GET(request: NextRequest) {
   const data = caretakers.map((c) => ({
     id: String(c._id),
     name: c.name,
-    email: c.email,
-    phone: c.phone ?? "",
-    managedByOwnerId: c.managedByOwnerId ?? "",
-    privileges: c.privileges ?? [],
+    email: forPropertyAssignment ? undefined : c.email,
+    phone: forPropertyAssignment ? "" : (c.phone ?? ""),
+    managedByOwnerId: forPropertyAssignment ? "" : (c.managedByOwnerId ?? ""),
+    privileges: forPropertyAssignment ? [] : (c.privileges ?? []),
     propertyCount: countByCaretaker.get(String(c._id)) ?? 0,
   }));
 

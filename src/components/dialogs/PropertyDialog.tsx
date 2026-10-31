@@ -33,6 +33,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useCaretakers } from "@/hooks/use-caretakers";
+import { useCustodians } from "@/hooks/use-custodians";
 import {
   type BlockInputPayload,
   type Property,
@@ -65,6 +66,7 @@ const formSchema = z.object({
   purpose: z.enum(PROPERTY_PURPOSES),
   dateCompleted: z.string().optional(),
   caretakerIds: z.array(z.string()),
+  custodianIds: z.array(z.string()),
   targetOwnerId: z.string(),
   published: z.boolean(),
 });
@@ -97,7 +99,6 @@ export const PropertyDialog = ({
   onSuccess,
 }: PropertyDialogProps) => {
   const { createProperty, updateProperty, pending } = usePropertyMutations();
-  const { caretakers } = useCaretakers();
   const { types } = usePropertyTypes();
   const [blocks, setBlocks] = useState<BlockInputPayload[]>([]);
   const [structureError, setStructureError] = useState<string | null>(null);
@@ -135,6 +136,7 @@ export const PropertyDialog = ({
       purpose: property?.purpose ?? DEFAULT_PROPERTY_PURPOSE,
       dateCompleted: property?.dateCompleted ? property.dateCompleted.slice(0, 10) : "",
       caretakerIds: property?.caretakerIds ?? [],
+      custodianIds: property?.custodianIds ?? [],
       targetOwnerId: "",
       published: property?.published ?? false,
     }),
@@ -155,6 +157,13 @@ export const PropertyDialog = ({
     defaultValues: buildDefaults(),
   });
 
+  const targetOwnerId = watch("targetOwnerId");
+  const assignmentOwnerId =
+    systemAdmin && mode === "edit" ? property?.ownerId : systemAdmin ? targetOwnerId : undefined;
+  const canLoadAssignmentLists = allowCaretakerIds && (!systemAdmin || Boolean(assignmentOwnerId));
+  const { caretakers } = useCaretakers(assignmentOwnerId, canLoadAssignmentLists, true);
+  const { custodians } = useCustodians(assignmentOwnerId, true, canLoadAssignmentLists);
+
   const statuses: Property["status"][] = ["available", "occupied", "maintenance"];
 
   // Keep the current property's type selectable even if it has been
@@ -169,6 +178,7 @@ export const PropertyDialog = ({
   }, [types, property?.type]);
 
   const selectedCaretakerIds = watch("caretakerIds");
+  const selectedCustodianIds = watch("custodianIds");
   const selectedStatus = watch("status");
   const selectedType = watch("type");
   const selectedPublished = watch("published");
@@ -188,10 +198,23 @@ export const PropertyDialog = ({
     setValue("caretakerIds", next);
   };
 
+  const toggleCustodian = (id: string) => {
+    const next = selectedCustodianIds.includes(id)
+      ? selectedCustodianIds.filter((x) => x !== id)
+      : [...selectedCustodianIds, id];
+    setValue("custodianIds", next);
+  };
+
   const caretakerOptions = [
     ...caretakers.map((c) => ({ id: c.id, label: c.name || c.email || c.id })),
     ...(property?.caretakerIds ?? [])
       .filter((id) => !caretakers.some((c) => c.id === id))
+      .map((id) => ({ id, label: id })),
+  ];
+  const custodianOptions = [
+    ...custodians.map((c) => ({ id: c.id, label: c.name || c.email || c.id })),
+    ...(property?.custodianIds ?? [])
+      .filter((id) => !custodians.some((c) => c.id === id))
       .map((id) => ({ id, label: id })),
   ];
 
@@ -223,7 +246,10 @@ export const PropertyDialog = ({
     };
     if (values.area > 0) payload.area = values.area;
     payload.published = values.published;
-    if (allowCaretakerIds) payload.caretakerIds = values.caretakerIds;
+    if (allowCaretakerIds) {
+      payload.caretakerIds = values.caretakerIds;
+      payload.custodianIds = values.custodianIds;
+    }
     if (mode === "edit") payload.status = values.status;
     if (systemAdmin && mode === "create") payload.targetOwnerId = values.targetOwnerId.trim();
     if (mode === "create" && blocks.length > 0) payload.blocks = blocks;
@@ -530,7 +556,35 @@ export const PropertyDialog = ({
                     <button
                       key={c.id}
                       type="button"
+                      aria-pressed={selected}
                       onClick={() => toggleCaretaker(c.id)}
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                        selected
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-background text-muted-foreground hover:border-primary/50",
+                      )}
+                    >
+                      {c.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {allowCaretakerIds && custodianOptions.length > 0 && (
+            <div className="space-y-2">
+              <Label>Assigned custodians</Label>
+              <div className="flex flex-wrap gap-2">
+                {custodianOptions.map((c) => {
+                  const selected = selectedCustodianIds.includes(c.id);
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => toggleCustodian(c.id)}
                       className={cn(
                         "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
                         selected

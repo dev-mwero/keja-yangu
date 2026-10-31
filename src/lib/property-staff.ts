@@ -4,10 +4,21 @@ import { User } from "@/models/User";
 export async function validatePropertyStaffAssignments(
   ownerId: string,
   assignments: { caretakerIds?: string[]; custodianIds?: string[] },
+  retainedAssignments: { caretakerIds?: string[]; custodianIds?: string[] } = {},
 ): Promise<string | null> {
   const teams = [
-    { field: "caretakerIds", role: "caretaker", ids: assignments.caretakerIds },
-    { field: "custodianIds", role: "custodian", ids: assignments.custodianIds },
+    {
+      field: "caretakerIds",
+      role: "caretaker",
+      ids: assignments.caretakerIds,
+      retainedIds: retainedAssignments.caretakerIds ?? [],
+    },
+    {
+      field: "custodianIds",
+      role: "custodian",
+      ids: assignments.custodianIds,
+      retainedIds: retainedAssignments.custodianIds ?? [],
+    },
   ] as const;
 
   for (const team of teams) {
@@ -26,11 +37,20 @@ export async function validatePropertyStaffAssignments(
       _id: { $in: ids },
       role: team.role,
       managedByOwnerId: ownerId,
-      isActive: true,
     })
-      .select("_id")
+      .select("_id isActive isVerified")
       .lean();
-    if (users.length !== ids.length) {
+    const retainedIds = new Set(team.retainedIds);
+    const eligibleIds = new Set(
+      users
+        .filter(
+          (user) =>
+            (user.isActive !== false && user.isVerified !== false) ||
+            retainedIds.has(String(user._id)),
+        )
+        .map((user) => String(user._id)),
+    );
+    if (ids.some((id) => !eligibleIds.has(id))) {
       return `${team.field} must reference active ${team.role}s assigned to this property owner`;
     }
   }
