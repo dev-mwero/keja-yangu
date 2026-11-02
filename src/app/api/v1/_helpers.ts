@@ -12,10 +12,15 @@ export interface InvoiceActor {
   userId: string;
   managedByOwnerId: string;
   assignedPropertyIds: string[];
+  propertyScopeIds: string[];
+  assignedBlockIds: string[];
+  assignedUnitIds: string[];
+  assignedTenantIds: string[];
 }
 
 export async function resolveInvoiceActor(
   request: NextRequest,
+  action?: Action,
 ): Promise<InvoiceActor | NextResponse> {
   const auth = authenticate(request);
   if (!auth) {
@@ -31,6 +36,11 @@ export async function resolveInvoiceActor(
   const userId = String(user._id);
   const managedByOwnerId = user.managedByOwnerId ?? "";
   let assignedPropertyIds: string[] = [];
+  let propertyScopeIds: string[] = [];
+  let assignedBlockIds: string[] = [];
+  let assignedUnitIds: string[] = [];
+  let assignedTenantIds: string[] = [];
+
   if (user.role === "caretaker" && managedByOwnerId) {
     const properties = await Property.find({ caretakerIds: userId, ownerId: managedByOwnerId })
       .select("_id")
@@ -38,7 +48,25 @@ export async function resolveInvoiceActor(
     assignedPropertyIds = properties.map((p) => String(p._id));
   }
 
-  return { role: user.role, userId, managedByOwnerId, assignedPropertyIds };
+  if (user.role === "admin" && action) {
+    const scope = await getAdminAssignmentScope(userId, action);
+    assignedPropertyIds = scope.assignedPropertyIds;
+    propertyScopeIds = scope.propertyScopeIds;
+    assignedBlockIds = scope.assignedBlockIds;
+    assignedUnitIds = scope.assignedUnitIds;
+    assignedTenantIds = scope.assignedTenantIds;
+  }
+
+  return {
+    role: user.role,
+    userId,
+    managedByOwnerId,
+    assignedPropertyIds,
+    propertyScopeIds,
+    assignedBlockIds,
+    assignedUnitIds,
+    assignedTenantIds,
+  };
 }
 
 export async function resolveTenantActor(request: NextRequest): Promise<string | NextResponse> {

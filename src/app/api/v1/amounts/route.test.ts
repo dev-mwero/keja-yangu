@@ -20,10 +20,13 @@ vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 vi.mock("@/models/Invoice", () => ({ Invoice: getModelStubs().invoice }));
 vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 
 import { GET } from "@/app/api/v1/amounts/route";
 
-const { user, property, unit, invoice, lease } = getModelStubs();
+const { user, property, unit, invoice, lease, managementAssignment } = getModelStubs();
 
 const SELF_ID = makeObjectId("self");
 const OWNER_ID = makeObjectId("owner");
@@ -255,6 +258,37 @@ describe("GET /api/v1/amounts", () => {
 
     const body = await json(res);
     expect(body.potentialMonthlyRent).toBe(18000);
+  });
+
+  it("scopes an admin to assigned properties without requiring ownerScope", async () => {
+    const token = signIn("admin");
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          permissions: ["invoice:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    stubReads({
+      docs: [propertyWithHierarchy()],
+      units: [makeUnit({ propertyId: PROP_ID, rent: 20000 })],
+    });
+
+    const res = await GET(buildRequest("/api/v1/amounts", { token }));
+
+    expect(res.status).toBe(200);
+    expect(unit.find).toHaveBeenCalledWith({ propertyId: { $in: [PROP_ID] } });
+    expect(invoice.find).toHaveBeenCalledWith(
+      expect.objectContaining({ propertyId: { $in: [PROP_ID] } }),
+    );
+    const body = await json(res);
+    expect(body.potentialMonthlyRent).toBe(20000);
   });
 
   it("returns 403 for a caretaker asking about a property outside their assignment", async () => {

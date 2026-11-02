@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
 
   await connectToDatabase();
 
-  const actor = await resolveInvoiceActor(request);
+  const actor = await resolveInvoiceActor(request, "invoice:read");
   if (actor instanceof NextResponse) return actor;
 
   if (actor.role === "caretaker" && propertyId && !actor.assignedPropertyIds.includes(propertyId)) {
@@ -52,6 +52,22 @@ export async function GET(request: NextRequest) {
   if (actor.role === "caretaker") {
     filter.propertyId = { $in: actor.assignedPropertyIds };
     filter.ownerId = actor.managedByOwnerId;
+  }
+  if (actor.role === "admin") {
+    const scopes: Record<string, unknown>[] = [];
+    if (actor.propertyScopeIds.length > 0) {
+      scopes.push({ propertyId: { $in: actor.propertyScopeIds } });
+    }
+    if (actor.assignedUnitIds.length > 0) {
+      scopes.push({ unitId: { $in: actor.assignedUnitIds } });
+    }
+    if (actor.assignedTenantIds.length > 0) {
+      scopes.push({ tenantId: { $in: actor.assignedTenantIds } });
+    }
+    if (scopes.length === 0) {
+      return NextResponse.json(buildPaginationResult([], 0, page, limit));
+    }
+    filter.$or = scopes;
   }
   if (period) filter.period = period;
   if (tenantId) filter.tenantId = tenantId;
@@ -117,7 +133,7 @@ export async function POST(request: NextRequest) {
 
   await connectToDatabase();
 
-  const actor = await resolveInvoiceActor(request);
+  const actor = await resolveInvoiceActor(request, "invoice:manage");
   if (actor instanceof NextResponse) return actor;
 
   const period = currentPeriod();
@@ -153,6 +169,13 @@ export async function POST(request: NextRequest) {
         !actor.assignedPropertyIds.includes(lease.propertyId))
     ) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (actor.role === "admin") {
+      const coversProperty = actor.propertyScopeIds.includes(lease.propertyId);
+      const coversUnit = lease.unitId && actor.assignedUnitIds.includes(String(lease.unitId));
+      if (!coversProperty && !coversUnit) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
     const fee: UnitServiceFee | null = lease.unitId
       ? await loadServiceFeeForUnit(String(lease.unitId))
@@ -193,6 +216,13 @@ export async function POST(request: NextRequest) {
       (tenant.ownerId !== actor.managedByOwnerId || !actor.assignedPropertyIds.includes(propertyId))
     ) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (actor.role === "admin") {
+      const coversProperty = actor.propertyScopeIds.includes(propertyId);
+      const coversTenant = actor.assignedTenantIds.includes(tenantId);
+      if (!coversProperty && !coversTenant) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
     const amountDue = parsed.data.amountDue;
     if (amountDue == null) {

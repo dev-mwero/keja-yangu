@@ -32,6 +32,14 @@ vi.mock("@/models/Invoice", async () => {
   const { getModelStubs: get } = await import("@/test/utils/model-mocks");
   return { Invoice: get().invoice };
 });
+vi.mock("@/models/ManagementAssignment", async () => {
+  const { getModelStubs: get } = await import("@/test/utils/model-mocks");
+  return { ManagementAssignment: get().managementAssignment };
+});
+vi.mock("@/models/Unit", async () => {
+  const { getModelStubs: get } = await import("@/test/utils/model-mocks");
+  return { Unit: get().unit };
+});
 
 import { GET, POST } from "@/app/api/v1/invoices/route";
 import { notifyOverdueInvoices } from "@/lib/notifications";
@@ -42,6 +50,7 @@ const {
   tenant: tenantStub,
   lease: leaseStub,
   invoice: invoiceStub,
+  managementAssignment,
 } = getModelStubs();
 const notifyOverdueInvoicesMock = vi.mocked(notifyOverdueInvoices);
 
@@ -150,6 +159,32 @@ describe("GET /api/v1/invoices", () => {
     expect(invoiceStub.find).toHaveBeenCalledWith({
       propertyId: { $in: [PROPERTY_ID] },
       ownerId: MANAGED_OWNER_ID,
+    });
+  });
+
+  it("scopes an admin to invoices on assigned properties or units", async () => {
+    const SCOPED_ADMIN_ID = makeObjectId("scoped-admin");
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: SCOPED_ADMIN_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["invoice:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    invoiceStub.find.mockReturnValue(buildQuery([]).sort({ issuedAt: -1 }).skip(0).limit(10));
+    invoiceStub.countDocuments.mockResolvedValue(0);
+
+    const res = await GET(buildRequest("/api/v1/invoices", { token: signToken(SCOPED_ADMIN_ID) }));
+    expect(res.status).toBe(200);
+    expect(invoiceStub.find).toHaveBeenCalledWith({
+      $or: [{ propertyId: { $in: [PROPERTY_ID] } }],
     });
   });
 

@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
 
   await connectToDatabase();
 
-  const actor = await resolveInvoiceActor(request);
+  const actor = await resolveInvoiceActor(request, "invoice:generate");
   if (actor instanceof NextResponse) return actor;
 
   const now = new Date();
@@ -58,6 +58,19 @@ export async function POST(request: NextRequest) {
   if (actor.role === "caretaker") {
     filter.propertyId = { $in: actor.assignedPropertyIds };
     filter.ownerId = actor.managedByOwnerId;
+  }
+  if (actor.role === "admin") {
+    const scopes: Record<string, unknown>[] = [];
+    if (actor.propertyScopeIds.length > 0) {
+      scopes.push({ propertyId: { $in: actor.propertyScopeIds } });
+    }
+    if (actor.assignedUnitIds.length > 0) {
+      scopes.push({ unitId: { $in: actor.assignedUnitIds } });
+    }
+    if (scopes.length === 0) {
+      return NextResponse.json({ data: { generatedCount: 0, invoices: [] } }, { status: 201 });
+    }
+    filter.$or = scopes;
   }
 
   const leases = await Lease.find(filter).lean();
