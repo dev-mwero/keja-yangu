@@ -29,10 +29,18 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   const authError = await requirePermission(request, "invoice:manage", { resource: invoice });
   if (authError) return authError;
 
-  const actor = await resolveInvoiceActor(request);
+  const actor = await resolveInvoiceActor(request, "invoice:manage");
   if (actor instanceof NextResponse) return actor;
 
   if (actor.role === "caretaker" && !actor.assignedPropertyIds.includes(invoice.propertyId)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  if (
+    actor.role === "admin" &&
+    !actor.propertyScopeIds.includes(invoice.propertyId) &&
+    !(invoice.unitId && actor.assignedUnitIds.includes(invoice.unitId))
+  ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

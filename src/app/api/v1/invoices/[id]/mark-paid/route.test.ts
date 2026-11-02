@@ -7,21 +7,28 @@ import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-m
 vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("@/lib/audit", () => ({
+  writeAuditEvent: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/lib/notifications", () => ({
   notifyInvoicePaid: vi.fn().mockResolvedValue(true),
 }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Invoice", () => ({ Invoice: getModelStubs().invoice }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 
 import { POST } from "@/app/api/v1/invoices/[id]/mark-paid/route";
 import { notifyInvoicePaid } from "@/lib/notifications";
 
-const { user, property, invoice: invoiceStub } = getModelStubs();
+const { user, property, invoice: invoiceStub, managementAssignment } = getModelStubs();
 const notifyInvoicePaidMock = vi.mocked(notifyInvoicePaid);
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
+const ADMIN_ID = makeObjectId("admin");
 const PROPERTY_ID = makeObjectId("p1");
 const OTHER_PROPERTY_ID = makeObjectId("p2");
 const INVOICE_ID = makeObjectId("invoice");
@@ -409,6 +416,68 @@ describe("POST /api/v1/invoices/[id]/mark-paid", () => {
       buildRequest(`/api/v1/invoices/${INVOICE_ID}/mark-paid`, {
         method: "POST",
         token: signToken(CARETAKER_ID),
+        body: {},
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(403);
+    const body = await json(res);
+    expect(body.error).toBe("Forbidden");
+    expect(invoiceStub.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it("an in-scope admin marks an invoice paid on their assigned property", async () => {
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: ADMIN_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: ADMIN_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["invoice:mark-paid"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    invoiceStub.findById.mockReturnValue(buildQuery(pendingInvoice()));
+    invoiceStub.findOneAndUpdate.mockReturnValue(
+      buildQuery({ ...pendingInvoice(), status: "paid" }),
+    );
+    const res = await POST(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}/mark-paid`, {
+        method: "POST",
+        token: signToken(ADMIN_ID, { role: "admin" }),
+        body: {},
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("403 when an admin marks an invoice outside their assignment scope", async () => {
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: ADMIN_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: ADMIN_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: OTHER_PROPERTY_ID,
+          permissions: ["invoice:mark-paid"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    invoiceStub.findById.mockReturnValue(buildQuery(pendingInvoice())); // invoice on PROPERTY_ID
+    const res = await POST(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}/mark-paid`, {
+        method: "POST",
+        token: signToken(ADMIN_ID, { role: "admin" }),
         body: {},
       }),
       withParams(INVOICE_ID),
