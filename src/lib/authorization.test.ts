@@ -16,7 +16,10 @@ import {
   authorize,
   evaluatePolicy,
   getCapabilities,
+  POLICY_ACTIONS,
+  type PolicyAction,
   type PolicyActor,
+  roleMaximumActions,
 } from "@/lib/authorization";
 
 const NOW = new Date("2026-11-02T00:00:00.000Z");
@@ -414,5 +417,82 @@ describe("getCapabilities", () => {
 
     const capabilities = await getCapabilities("user-1");
     expect(capabilities?.actions).toEqual(["unit:read"]);
+  });
+});
+
+describe("policy action matrix", () => {
+  const PLATFORM_ACTIONS = new Set<PolicyAction>([
+    "property-type:manage",
+    "recycle-bin:manage",
+    "ownership:manage",
+  ]);
+
+  const resource = {
+    propertyId: "property-1",
+    blockId: "block-1",
+    unitId: "unit-1",
+  };
+
+  for (const role of ["admin", "custodian", "caretaker"] as const) {
+    it(`matches the ${role} role maximum for every action`, () => {
+      const maximum = new Set(roleMaximumActions(role));
+      for (const action of POLICY_ACTIONS) {
+        const result = evaluatePolicy({
+          actor: actor({ role }),
+          action,
+          resource,
+          assignments: [
+            assignment({
+              accessRole: role,
+              permissions: [action],
+              status: "active",
+            }),
+          ],
+          now: NOW,
+        });
+        const expected = maximum.has(action) && !PLATFORM_ACTIONS.has(action);
+        expect(result.allowed, `${role} ${action}`).toBe(expected);
+      }
+    });
+  }
+
+  it("allows only tenant self-service actions for tenants", () => {
+    const tenantActions = new Set<PolicyAction>([
+      "invoice:read-own",
+      "notification:read-own",
+      "notification:manage",
+      "settings:read",
+      "settings:write",
+      "complaint:read-own",
+      "complaint:create",
+      "chat:read-own",
+      "chat:send",
+      "announcement:read",
+      "document:read-own",
+      "move-request:create",
+    ]);
+    for (const action of POLICY_ACTIONS) {
+      const result = evaluatePolicy({
+        actor: actor({ role: "tenant" }),
+        action,
+        resource,
+        assignments: [],
+        now: NOW,
+      });
+      expect(result.allowed, action).toBe(tenantActions.has(action));
+    }
+  });
+
+  it("allows every action for system-admin", () => {
+    for (const action of POLICY_ACTIONS) {
+      const result = evaluatePolicy({
+        actor: actor({ role: "system-admin" }),
+        action,
+        resource,
+        assignments: [],
+        now: NOW,
+      });
+      expect(result.allowed, action).toBe(true);
+    }
   });
 });

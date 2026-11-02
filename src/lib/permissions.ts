@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { compareAuthorizationShadow, shadowSampleRate } from "@/lib/authorization-shadow";
 import { getJwtSecret } from "@/lib/jwt";
 import { connectToDatabase } from "@/lib/mongoose";
 import { Property } from "@/models/Property";
@@ -163,7 +164,7 @@ async function caretakerAssignedToProperty(
   return property !== null;
 }
 
-export async function requirePermission(
+async function requirePermissionLegacy(
   request: NextRequest,
   action: Action,
   opts?: { resource?: PermissionResource },
@@ -426,6 +427,40 @@ export async function requirePermission(
   }
 
   return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+}
+
+/**
+ * Legacy permission entry point. Runs the scoped policy in shadow mode on a
+ * sampled subset of decisions without changing the legacy response.
+ */
+export async function requirePermission(
+  request: NextRequest,
+  action: Action,
+  opts?: { resource?: PermissionResource },
+): Promise<NextResponse | null> {
+  const result = await requirePermissionLegacy(request, action, opts);
+  if (shadowSampleRate() <= 0) return result;
+  if (opts?.resource && !opts.resource.propertyId) return result;
+
+  const auth = authenticate(request);
+  if (!auth) return result;
+
+  try {
+    await compareAuthorizationShadow({
+      actorUserId: auth.userId,
+      action,
+      resource: opts?.resource?.propertyId ? { propertyId: opts.resource.propertyId } : undefined,
+      legacyAllowed: result === null,
+      request: {
+        ip: request.headers.get("x-forwarded-for"),
+        userAgent: request.headers.get("user-agent"),
+      },
+    });
+  } catch (error) {
+    console.error("Authorization shadow comparison failed", error);
+  }
+
+  return result;
 }
 
 export async function getCaretakerContext(userId: string): Promise<UserCtx> {
