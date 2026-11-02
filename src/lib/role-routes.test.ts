@@ -3,11 +3,16 @@ import { getDashboardAllowedRoles } from "@/lib/role-routes";
 
 describe("getDashboardAllowedRoles", () => {
   it("matches dashboard roots", () => {
-    expect(getDashboardAllowedRoles("/dashboard/owner")).toEqual(["owner", "system-admin"]);
+    expect(getDashboardAllowedRoles("/dashboard/owner")).toEqual([
+      "owner",
+      "admin",
+      "system-admin",
+    ]);
     expect(getDashboardAllowedRoles("/dashboard/tenant")).toEqual(["tenant"]);
     expect(getDashboardAllowedRoles("/dashboard/custodian")).toEqual([
       "custodian",
       "owner",
+      "admin",
       "system-admin",
     ]);
   });
@@ -15,6 +20,7 @@ describe("getDashboardAllowedRoles", () => {
   it("matches nested dashboard paths", () => {
     expect(getDashboardAllowedRoles("/dashboard/owner/portfolio/123")).toEqual([
       "owner",
+      "admin",
       "system-admin",
     ]);
     expect(getDashboardAllowedRoles("/dashboard/tenant/invoices/abc/pay")).toEqual(["tenant"]);

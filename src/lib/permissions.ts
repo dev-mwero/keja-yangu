@@ -6,7 +6,7 @@ import { connectToDatabase } from "@/lib/mongoose";
 import { Property } from "@/models/Property";
 import { User } from "@/models/User";
 
-export type Role = "tenant" | "caretaker" | "custodian" | "owner" | "system-admin";
+export type Role = "tenant" | "caretaker" | "custodian" | "owner" | "admin" | "system-admin";
 
 export const CARETAKER_PRIVILEGES = [
   "create_property",
@@ -116,7 +116,7 @@ export function authenticate(request: Request): AuthUser | null {
 }
 
 export function isFullControlRole(role: Role): boolean {
-  return role === "owner" || role === "system-admin";
+  return role === "owner" || role === "admin" || role === "system-admin";
 }
 
 /**
@@ -124,7 +124,7 @@ export function isFullControlRole(role: Role): boolean {
  * custodian). Used to scope resource checks by `ownerId`.
  */
 export function isOwnerScopedRole(role: Role): boolean {
-  return role === "owner" || role === "custodian";
+  return role === "owner" || role === "admin" || role === "custodian";
 }
 
 export async function requireAuth(
@@ -232,7 +232,11 @@ export async function requirePermission(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const scopeOwnerId =
-      role === "system-admin" ? null : role === "owner" ? String(user._id) : managedByOwnerId;
+      role === "system-admin"
+        ? null
+        : role === "owner" || role === "admin"
+          ? String(user._id)
+          : managedByOwnerId;
     const ownsResource =
       !!resource &&
       (action === "property:edit" ||
@@ -461,7 +465,7 @@ export async function getTenantScope(request: NextRequest): Promise<NextResponse
   const userId = String(user._id);
   const managedByOwnerId = user.managedByOwnerId ?? "";
 
-  if (user.role === "owner") {
+  if (user.role === "owner" || user.role === "admin") {
     return { filter: { ownerId: userId }, userId, role: user.role, managedByOwnerId };
   }
   if (user.role === "custodian") {
@@ -495,7 +499,7 @@ export function tenantMatchesScope(
   tenant: { ownerId: string; propertyId: string },
   scope: TenantScope,
 ): boolean {
-  if (scope.role === "owner") {
+  if (scope.role === "owner" || scope.role === "admin") {
     return tenant.ownerId === scope.userId;
   }
   if (scope.role === "custodian") {

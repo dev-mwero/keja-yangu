@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { getRoleRoute } from "@/lib/role-routes";
 
 export const AuthGuard = ({
   children,
@@ -22,7 +23,7 @@ export const AuthGuard = ({
       return;
     }
     if (allowedRoles && !allowedRoles.includes(user.role)) {
-      router.push(`/dashboard/${user.role}`);
+      router.push(getRoleRoute(user.role));
     }
   }, [user, loading, router, allowedRoles]);
 

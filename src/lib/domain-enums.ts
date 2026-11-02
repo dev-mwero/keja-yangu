@@ -54,3 +54,30 @@ export const DEFAULT_PROPERTY_PURPOSE: PropertyPurpose = "residential";
 
 export const LEAD_STATUSES = ["new", "contacted", "approved", "rejected", "converted"] as const;
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
+
+export const ASSIGNMENT_ACCESS_ROLES = ["admin", "custodian", "caretaker"] as const;
+export type AssignmentAccessRole = (typeof ASSIGNMENT_ACCESS_ROLES)[number];
+
+export const ASSIGNMENT_SCOPE_TYPES = ["property", "block", "unit"] as const;
+export type AssignmentScopeType = (typeof ASSIGNMENT_SCOPE_TYPES)[number];
+
+export const ASSIGNMENT_STATUSES = [
+  "pending",
+  "active",
+  "suspended",
+  "revoked",
+  "expired",
+] as const;
+export type AssignmentStatus = (typeof ASSIGNMENT_STATUSES)[number];
+
+export const ASSIGNMENT_SOURCES = ["invitation", "claim", "migration", "system"] as const;
+export type AssignmentSource = (typeof ASSIGNMENT_SOURCES)[number];
+
+export const OWNERSHIP_HOLDER_TYPES = ["user", "external"] as const;
+export type OwnershipHolderType = (typeof OWNERSHIP_HOLDER_TYPES)[number];
+
+export const OWNERSHIP_STATUSES = ["active", "ended", "disputed"] as const;
+export type OwnershipStatus = (typeof OWNERSHIP_STATUSES)[number];
+
+export const PROPERTY_CLAIM_STATUSES = ["pending", "approved", "rejected", "withdrawn"] as const;
+export type PropertyClaimStatus = (typeof PROPERTY_CLAIM_STATUSES)[number];

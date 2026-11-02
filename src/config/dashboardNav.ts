@@ -26,7 +26,7 @@ export interface DashNavItem {
   icon: LucideIcon;
 }
 
-type Role = "tenant" | "caretaker" | "custodian" | "owner" | "system-admin";
+type Role = "tenant" | "caretaker" | "custodian" | "owner" | "admin" | "system-admin";
 
 interface Section {
   slug: string;

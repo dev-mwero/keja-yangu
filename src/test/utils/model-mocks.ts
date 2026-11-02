@@ -24,7 +24,9 @@ const stubs: Record<
   | "propertyView"
   | "unitFavorite"
   | "serviceFeeItem"
-  | "unitServiceFeeOverride",
+  | "unitServiceFeeOverride"
+  | "managementAssignment"
+  | "auditEvent",
   ModelStub
 > = {
   user: createModelStub(),
@@ -51,6 +53,8 @@ const stubs: Record<
   unitFavorite: createModelStub(),
   serviceFeeItem: createModelStub(),
   unitServiceFeeOverride: createModelStub(),
+  managementAssignment: createModelStub(),
+  auditEvent: createModelStub(),
 };
 
 /**
