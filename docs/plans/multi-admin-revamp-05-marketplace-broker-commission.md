@@ -1,9 +1,13 @@
 # Stage 1 — Marketplace, Broker and Commission Design
 
-**Status:** Draft for approval  
-**Date:** 2026-11-01  
+**Status:** Approved target design; marketplace phases not yet authorized
+**Date:** 2026-11-01; decision reconciliation: 2026-11-02
 **Depends on:** `multi-admin-revamp-03-domain-model.md`,
 `multi-admin-revamp-04-authorization.md`
+
+> The approved decisions in `multi-admin-revamp-09-approval.md` supersede open
+> product questions in this draft. Legal/Finance confirmations remain required
+> before real payouts.
 
 ---
 
@@ -28,14 +32,80 @@ The design must answer four questions for every tenancy:
 | Concern | Current | Target |
 | --- | --- | --- |
 | Listing unit | Property | Unit |
-| Availability | `Property.status = available` + `published` | `Listing.state = active` for an available/reserved unit |
+| Availability | `Property.status = available` + `published` | `Listing.state = active` for an available unit; reservation is a separate record |
 | Publisher | None | `ListingPublisher` (admin/broker) |
-| Public unit data | `includeUnits=all` leaks all units | Explicit public projection, no occupied/private data |
+| Public unit data | Legacy `includeUnits=all` path allowed broad unit results; current handler limits unauthenticated responses to available units | New listing projection remains unimplemented; keep occupied/private data excluded |
 | Application source | Property/unit only | Listing + publisher + attribution |
 | Broker identity | None | Verified `BrokerProfile` |
 | Broker authority | None | Scoped `BrokerAuthorization` |
 | Reward | None | Agreement + accrual + payout |
 | Audit | None | Every state change audited |
+
+## 2.1 Sequence diagrams
+
+### Listing publication and publisher authorization
+
+```mermaid
+sequenceDiagram
+  actor Admin
+  actor Broker
+  participant API as Listing API
+  participant Policy as Authorization
+  participant Billing as Unit Billing Assignment
+  participant Listing as Listing Service
+  participant Publisher as Listing Publisher
+
+  Admin->>API: Create or publish unit listing
+  API->>Policy: Check listing:publish on unit scope
+  Policy-->>API: Allow/deny
+  API->>Billing: Resolve active billing assignment
+  Billing-->>API: Billing account or missing
+  API->>Listing: Validate unit, terms and reservation state
+  Listing-->>API: Canonical listing id/version
+  API-->>Admin: Published listing
+
+  Admin->>API: Authorize broker for unit scope
+  API->>Policy: Check broker:authorize on same scope
+  Policy-->>API: Allow/deny
+  API->>Publisher: Create broker publisher and opaque share code
+  Publisher-->>Broker: Share link for canonical listing
+```
+
+### Inquiry, application, tenancy and shadow commission
+
+```mermaid
+sequenceDiagram
+  actor Prospect
+  actor Admin
+  participant Public as Public Listing API
+  participant Attribution as Attribution Service
+  participant Application as Application Service
+  participant Allocation as Allocation Service
+  participant Lease as Lease Store
+  participant Payment as Payment Settlement
+  participant Commission as Commission Shadow Service
+
+  Prospect->>Public: Open listing with publisher share code
+  Public->>Attribution: Validate active publisher and record provisional touch
+  Attribution-->>Public: Short-lived attribution context
+  Prospect->>Application: Submit application
+  Application->>Attribution: Resolve last valid touch (30-day window)
+  Attribution-->>Application: Lock attribution on submission
+  Application-->>Admin: Pending application and locked attribution
+  Admin->>Allocation: Approve and allocate requested unit
+  Allocation->>Lease: Create active Lease with unitId
+  Lease-->>Allocation: Lease persisted
+  Allocation-->>Admin: Unit allocated; listing channels suspended
+  Prospect->>Payment: Make first rent payment
+  Payment->>Payment: Settle payment idempotently
+  Payment->>Attribution: Confirm against active lease and payment
+  Payment->>Commission: Emit settled-rent event
+  Commission->>Commission: Calculate idempotent shadow accrual
+  Commission-->>Admin: Reconciliation report; no payout
+```
+
+These sequences show design intent only. Actual payout remains disabled until
+Legal/Finance confirms the decisions in approval 09 §4.6.
 
 ---
 
@@ -83,7 +153,8 @@ writes an audit event.
 A listing may become `active` only when:
 
 1. the unit exists and is not archived/merged;
-2. `Unit.status` is `available` (or `reserved` with a valid hold);
+2. `Unit.status` is `available`; any reservation is represented separately and
+  checked without adding `reserved` to `Unit.status` in the first release;
 3. the unit has an active `UnitBillingAssignment`;
 4. the publisher has `listing:publish` on the unit scope, or is a broker with
    verified profile + active `BrokerAuthorization` + active agreement;
@@ -176,7 +247,9 @@ The share code:
 - An admin can revoke a broker publisher independently of the broker's
   property-level authorisation; revocation affects only distribution.
 - If an exclusive agreement is enabled, publishing by other brokers is blocked;
-  admin direct publishing requires an explicit product decision.
+  admin direct publishing follows the same scope policy. Exclusivity is off in
+  the first release (approval plan M-06); enabling it later requires a separate
+  decision.
 
 ### 4.4 Publisher performance
 
@@ -246,10 +319,9 @@ An admin with `broker:authorize` can authorise a verified broker for:
 The authorization carries an effective period and can be suspended/revoked.
 A broker cannot self-authorise or expand scope.
 
-Who may authorise when multiple admins share a unit is a product decision.
-Default: any admin with `broker:authorize` on that unit scope, but the
-authorization and audit record name the granting admin. If co-management
-requires consent, add an approval workflow later.
+Approved: any admin with `broker:authorize` on that unit scope may authorise;
+no additional co-admin consent is required by default. Record the granting
+admin and scope in the audit trail (approval plan M-05/M-07).
 
 ### 6.2 Agreement
 
@@ -259,7 +331,9 @@ same scope. The agreement defines:
 - basis: first-month rent, percentage of collected rent, or fixed;
 - rate/fixed amount;
 - collection period for recurring rent;
-- payer: billing account, legal owner, or platform;
+- payer: billing account pays the broker directly; the platform records and
+  reconciles the obligation but does not hold or route funds (approval plan
+  B-12; Legal/Finance confirmation is still required);
 - tax withholding rate;
 - effective dates;
 - accepted-by-broker timestamp;
@@ -303,12 +377,13 @@ Recommended default:
 3. For an authenticated user, the most recent valid publisher touch within the
    attribution window is stored on the user's session/attribution record.
 4. A direct application creates a `platform`/`direct` attribution.
-5. On approval/allocation, the attribution becomes `locked` and then
-   `confirmed`.
+5. Lock attribution when the application is submitted. Confirm it only after
+  an active lease and the first successful payment; do not wait until
+  allocation to lock it (approval plan B-04/B-06).
 
 ### 7.3 Conflict rules
 
-Proposed default rules:
+Approved default rules (approval plan §4.3–4.4):
 
 | Scenario | Result |
 | --- | --- |
@@ -373,8 +448,10 @@ taxMinor = round(grossMinor * taxBps / 10000)
 netMinor = grossMinor - taxMinor
 ```
 
-- `rateBps = 10000` means 100% of the first month's rent for a first-month
-  basis. Product may cap this.
+- The supported agreement terms are fixed and/or percentage-based (approval
+  plan B-11). If `first_month_rent` is selected, its default rate and any cap
+  remain unresolved under D-04; do not assume `rateBps = 10000` or a 100% cap
+  is approved.
 - Rounding is half-up at the final minor-unit step; intermediate values use
   integer math.
 - Negative or zero basis creates no accrual.
@@ -418,9 +495,12 @@ This is a material product/legal decision:
 | Platform clearing pays | Platform receives rent/commission clearing and pays broker | Requires platform ledger, reconciliation and possibly licensing review |
 | Owner pays | Legal owner pays separately | Billing account is not the payer |
 
-Default for the plan: **billing account pays**, unless the product/legal review
-requires platform clearing. The ledger must record the payer even if funds move
-outside the platform.
+Platform-clearing and separate legal-owner payment are not first-release flows;
+reconsider only under a new product/legal decision.
+
+Approved design direction: **billing account pays directly**; the platform
+records and reconciles but does not route the funds. Legal/Finance must confirm
+the payer and workflow before payout functionality is enabled.
 
 ### 8.6 Payouts
 
@@ -698,16 +778,16 @@ same-origin, rate limit, `{ data }` / `{ error }`) apply.
 
 ---
 
-## 16. Open product decisions
+## 16. Approved decisions and external confirmations
 
-Recorded in `multi-admin-revamp-08-open-questions-risks.md`, notably:
+The decisions formerly listed here are resolved by
+`multi-admin-revamp-09-approval.md`: approximate public location (M-09),
+30-day last-touch locked at application submission (B-04), 90-day provisional
+attribution (B-05), non-exclusive publishing (M-06), independent scoped
+admins (M-07), direct billing-account payer as the design direction (B-12), no
+renewal commission (B-10), and soft duplicate detection with system-admin
+review (P-03).
 
-- exact public address visibility;
-- last-touch vs first-touch attribution;
-- attribution window and cooling-off period;
-- exclusive vs non-exclusive broker arrangements;
-- who may authorise a broker when multiple admins share a unit;
-- commission payer and whether funds pass through the platform;
-- commission tax/withholding and legal review;
-- commission on renewals or only new tenancies;
-- duplicate-property merge policy.
+The agreed direction does not replace external confirmation. Legal/Finance must
+still confirm the commission basis/rate, payer workflow, tax treatment,
+eligibility/clawback values, payout thresholds/cycle and retention policy.

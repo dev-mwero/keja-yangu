@@ -1,8 +1,13 @@
 # Stage 1 — Authorization Design
 
-**Status:** Draft for approval  
-**Date:** 2026-11-01  
+**Status:** Phase 1 implementation authorized 2026-11-02; enforcement rollout incomplete
+**Date:** 2026-11-01; decision reconciliation: 2026-11-02
 **Depends on:** `multi-admin-revamp-03-domain-model.md`
+
+> `multi-admin-revamp-09-approval.md` is authoritative for approved product
+> decisions. The repository has an assignment-backed policy foundation, but
+> most existing route families still use legacy checks or opt-in enforcement;
+> this document describes the target, not current universal behavior.
 
 ---
 
@@ -198,7 +203,7 @@ Additional mandatory checks:
 | Rate limit | Auth, public listing, application, payment, chat |
 | Tenant identity | Tenant action must resolve to the actor's own `Tenant`/`User` |
 | Broker ownership | Broker action must reference actor's own profile/authorisation |
-| Listing eligibility | Unit available/reserved + active billing assignment |
+| Listing eligibility | Unit available + active billing assignment; validate a separate active reservation record when reservations are implemented |
 | Broker publishing | Verified profile + active authorisation + active agreement |
 | Commission payment | `system-admin` only; no self-approval by broker |
 | Billing separation | Actor approving commission cannot be the broker |
@@ -331,7 +336,8 @@ To publish or distribute:
 - active authorisation;
 - active `CommissionAgreement` on the same scope;
 - verified profile;
-- listing is `draft`/`active` and unit is available/reserved;
+- listing is `draft`/`active` and unit is available; reservations are separate
+  records and must not add `reserved` to `Unit.status` in the first release;
 - no conflicting exclusive agreement (if exclusive is enabled);
 - publisher share code created.
 

@@ -1,7 +1,7 @@
 # Stage 1 — Gap Analysis
 
-**Status:** Draft for approval  
-**Date:** 2026-11-01  
+**Status:** Stage 1 complete; P0 and Phase 1 implementation authorized 2026-11-02
+**Date:** 2026-11-01; repository reconciliation: 2026-11-02
 **Baseline:** `multi-admin-revamp-01-architecture-audit.md`  
 **Purpose:** Compare the requested multi-admin marketplace/broker product with
 the current implementation and prioritise the work.
@@ -11,6 +11,9 @@ Severity:
 - **P0** — security, data-integrity or migration blocker.
 - **P1** — required to deliver the requested product.
 - **P2** — important operational/UX improvement, can follow the first release.
+
+> The gap rows below preserve the 2026-11-01 audit findings. See §10 for their
+> verified current disposition; that reconciliation takes precedence.
 
 ---
 
@@ -31,8 +34,8 @@ Severity:
 | Commission agreements | None | Missing |
 | Immutable acquisition attribution | None | Missing |
 | Commission accrual/payout | None | Missing |
-| Central, testable authorization | `requirePermission` plus route-local checks | Partial |
-| Immutable audit log | Ad-hoc `console.info` only | Missing |
+| Central, testable authorization | Legacy guard plus new assignment policy/enforcement adapter | Partial |
+| Immutable audit log | `AuditEvent` and audit helper exist; coverage is limited | Partial |
 | Safe migration from owner model | Greenfield `ownerId` everywhere | Missing |
 
 ---
@@ -45,7 +48,7 @@ Severity:
 | G-02 | P1 | No block collection. Blocks/floors are embedded in `Property.blocks[]`; units reference embedded ids. | `src/models/Property.ts:63`; `src/lib/property-structure.ts` | Two admins cannot independently add blocks to the same property; no cross-property block uniqueness. | Domain doc §5 |
 | G-03 | P1 | No physical property identity/dedupe. No county, street, plot number, geocode or normalised address. | `src/models/Property.ts` | Duplicate properties are likely as admins self-register; cannot merge safely. | Domain doc §3.3 |
 | G-04 | P1 | No ownership-interest model. Legal owners, landlords and managers are conflated. | `Property.ownerId`; `Invoice.ownerId`; `PaymentSplit` | Rent payee cannot differ from manager; multiple co-owners unsupported. | Domain doc §6 |
-| G-05 | P1 | No management assignment. Custodian scope is one `managedByOwnerId`; caretaker assignment is an array on property and is not used consistently. | `User.managedByOwnerId`; `Property.caretakerIds[]`; `permissions.ts` | Cannot grant/revoke scoped authority safely; no admin role at all. | Domain doc §4 |
+| G-05 | P1 | Assignment foundation exists, but it is not the universal source of staff authority. | `ManagementAssignment`, `lib/authorization.ts`, `lib/assignments.ts`, route-family enforcement | Legacy route checks and owner-derived scope remain; multi-admin access is not complete. | Domain doc §4 |
 | G-06 | P1 | No per-unit financial responsibility. Fees, payment credentials and invoice numbers are owner-scoped. | `OwnerPaymentConfig`; `ServiceFeeItem.ownerId`; `invoice-numbering.ts` | Different admins cannot bill different units under a common property. | Domain doc §7 |
 | G-07 | P1 | `Unit.tenantId[]` is a denormalised occupant cache; `Lease.unitId` is authoritative. | `src/models/Unit.ts:44`; `src/lib/allocation.ts` | Block/unit merges and admin transfer can corrupt occupancy if caches are copied without reconciliation. | Domain doc §5.6 |
 | G-08 | P1 | Current lease uniqueness supports one active lease per tenant; allocation repoints it rather than creating a second lease. | `src/models/Lease.ts`; `src/lib/allocation.ts:132-153` | "Multi-unit tenant" is not actually implemented and must not be assumed by the redesign. | Domain doc §6; D-16 |
@@ -53,7 +56,7 @@ Severity:
 | G-10 | P1 | No publisher/attribution model. | No matches for `broker|commission|attribution|referral` | Cannot reward a broker or track who sourced a tenant. | Marketplace doc §4–7 |
 | G-11 | P1 | No broker identity, verification, licence or contract state. | `User.role` excludes broker | Broker cannot register, be approved or act within scope. | Marketplace doc §5 |
 | G-12 | P1 | No commission ledger. `PaymentSplit` only distinguishes rent and service charge. | `src/models/PaymentSplit.ts` | Commission cannot be accrued, reversed or paid without corrupting settlement. | Marketplace doc §8 |
-| G-13 | P1 | No audit log for role, assignment, listing, attribution or commission changes. | `console.info` only | Disputes and privilege changes are not defensible. | Authz doc §8 |
+| G-13 | P1 | `AuditEvent` exists, but not every privileged change emits an audit event. | `models/AuditEvent.ts`; `lib/audit.ts`; assignment services | Listing, ownership, attribution and commission workflows still need comprehensive audit coverage. | Authz doc §8 |
 | G-14 | P1 | No schema/migration versioning. Scripts are ad hoc. | `scripts/*`, no migration runner | Large owner→admin migration cannot be tracked or safely rolled back. | Migration doc §4 |
 | G-15 | P2 | `Unit` has no explicit block/floor snapshot beyond ids/names; names can drift. | `src/models/Unit.ts`; `property-structure.ts` | Reports may show stale block/floor names after structure edits. | Domain doc §5.5 |
 
@@ -63,15 +66,15 @@ Severity:
 
 | ID | Severity | Gap | Evidence | Impact | Target |
 | --- | --- | --- | --- | --- | --- |
-| G-16 | **P0** | Public property detail with `includeUnits=all` returns all unit statuses/rents without auth. | `src/app/api/v1/properties/[id]/route.ts:85-105` | Occupied/rent data leak; brokers/tenants can see non-public inventory. | Marketplace doc §9 |
-| G-17 | **P0** | Any authenticated caretaker passes `unit:read`; `unit-summary` then treats caretaker as manager. | `src/lib/permissions.ts:248`; `src/app/api/v1/properties/[id]/unit-summary/route.ts:30` | Any caretaker can read any property's unit summary. | Authz doc §4 |
-| G-18 | **P0** | `unit-counts` has the same caretaker pass-through and counts arbitrary properties. | `src/app/api/v1/properties/[id]/unit-counts/route.ts:32`; `src/lib/permissions.ts:248` | Cross-portfolio occupancy disclosure. | Authz doc §4 |
-| G-19 | **P0** | Custodian document listing has no custodian filter branch; it falls through with an empty filter. | `src/app/api/v1/documents/route.ts:29-45` | Custodians can list all documents. | Authz doc §4 |
-| G-20 | P1 | Caretaker `application:manage` checks only `resource.ownerId`, not assigned property. | `permissions.ts:279-287`; `applications/[id]/route.ts:28` | Any caretaker with `manage_tenants` can decide applications across the owner's portfolio. | Authz doc §5 |
-| G-21 | P1 | Caretaker `move-request:manage` checks only owner scope, not assigned property. | `permissions.ts:262-269`; `move-requests/[id]/route.ts:23` | Same portfolio-wide overreach; approval can allocate/vacate. | Authz doc §5 |
-| G-22 | P1 | Caretaker `unit:manage` checks owner scope, not `caretakerIds`. | `permissions.ts:250-258`; `units/[id]/route.ts:55` | Any caretaker with `manage_units` can edit units in any property of the owner. | Authz doc §5 |
+| G-16 | **P0 — closed in code** | Public property detail now limits unauthenticated responses to available units; all-unit data requires a manager role. | `src/app/api/v1/properties/[id]/route.ts` | Regression coverage exists; include this route in the pre-release security check. | Marketplace doc §9 |
+| G-17 | **P0 — closed in code** | Unit summary now calls scoped `unit:read` permission checks for managers. | `src/lib/permissions.ts`; `unit-summary/route.ts` | Caretaker access is checked against assigned properties. | Authz doc §4 |
+| G-18 | **P0 — closed in code** | Unit counts now require authentication and scoped `unit:read`. | `unit-counts/route.ts`; `src/lib/permissions.ts` | Cross-portfolio count disclosure is addressed in the current handler. | Authz doc §4 |
+| G-19 | **P0 — closed in code** | Custodian document reads now filter by their managing owner. | `src/app/api/v1/documents/route.ts` | Keep role-specific document-scope tests in the Phase 0 gate. | Authz doc §4 |
+| G-20 | P1 — legacy-path scope fixed | Caretaker application management now checks the assigned property through `caretakerAssignedToProperty`. | `src/lib/permissions.ts`; application route | New central policy integration remains incomplete. | Authz doc §5 |
+| G-21 | P1 — legacy-path scope fixed | Caretaker move-request management now checks the assigned property. | `src/lib/permissions.ts`; move-request route | New central policy integration remains incomplete. | Authz doc §5 |
+| G-22 | P1 — legacy-path scope fixed | Caretaker unit management now checks the assigned property. | `src/lib/permissions.ts`; unit route | New central policy integration remains incomplete. | Authz doc §5 |
 | G-23 | P1 | `requirePermission` is action-specific and easy to bypass with a missing or incomplete resource. Several actions deliberately return `null` without a resource. | `permissions.ts` | New routes can ship with accidental cross-scope access. | Authz doc §6 |
-| G-24 | P1 | Nested dashboard paths receive `allowedRoles: undefined`; `AuthGuard` allows any signed-in user. | `src/app/dashboard/layout.tsx:10-19`; `src/components/AuthGuard.tsx` | UI exposes wrong dashboard data; API still blocks but UX and perceived isolation fail. | Authz doc §9 |
+| G-24 | P1 — fixed in code | `getDashboardAllowedRoles` matches dashboard prefixes, including nested pages. | `src/lib/role-routes.ts`; dashboard layout | API authorization remains the security boundary. | Authz doc §9 |
 | G-25 | P1 | `proxy.ts` only checks cookie presence, not JWT validity or role. | `src/proxy.ts:10` | Cannot rely on edge gate for authorisation; must remain defence in depth only. | Authz doc §10 |
 | G-26 | P1 | Owner/custodian actions compare `resource.ownerId` only after the route supplies a resource; some routes use resource-free permission checks then a separate scope helper. | `tenants/route.ts`; `invoices/route.ts` | Inconsistent enforcement and hard-to-audit coverage. | Authz doc §6 |
 | G-27 | P2 | Search builds custodian links to the owner dashboard. | `src/app/api/v1/search/route.ts` (custodian link branch) | Broken/incorrect navigation and data exposure. | Authz doc §9 |
@@ -137,13 +140,12 @@ Severity:
 
 ## 8. Priority order
 
-### P0 — fix before or during the first implementation phase
+### P0 — code fixes present; release gate remains
 
-1. Unit detail/summary/count cross-portfolio leaks (G-16, G-17, G-18).
-2. Custodian document scope leak (G-19).
-3. Add regression tests that prove the leaks are closed.
-
-These are existing production risks and do not require the new domain model.
+As of 2026-11-02, code fixes for the public-unit, summary/count and custodian
+document-scope findings (G-16–G-19) are present, and the full Vitest suite
+passes. Phase 0 must re-run the relevant regression tests and handle release,
+monitoring and risk acceptance; this audit does not claim a production release.
 
 ### P1 — required for the first redesign release
 
@@ -176,4 +178,22 @@ These are existing production risks and do not require the new domain model.
 - Do **not** delete legacy fields or records in the first release.
 - Do **not** expose broker/commission data on public endpoints.
 
-The next document defines the target domain model that closes these gaps.
+## 10. Current disposition (2026-11-02)
+
+- The Phase 0 P0 findings G-16–G-19 have corresponding code fixes. G-20–G-22
+  caretaker assigned-property checks and G-24 nested dashboard role matching
+  are also fixed in the legacy path.
+- Phase 1 is partially implemented: admin role scaffolding, assignment,
+  ownership and claim models, policy/resource loaders, assignment APIs,
+  capability endpoint, audit helper, shadow/enforcement adapter and assignment
+  backfill exist. Universal route enforcement, complete workflows, migration
+  execution and comprehensive audit coverage do not.
+- Phases 2–9 remain planned, not complete. In particular, canonical block and
+  billing domains, unit listings, broker onboarding/authorisation, attribution,
+  commission and legacy retirement are absent or incomplete. See §8 of the
+  current architecture audit for the full repository inventory and test
+  baseline.
+
+This document records approved design direction, not implementation
+authorization. Phase 0 remains gated by approval 09 and the remaining
+operational/external confirmations.

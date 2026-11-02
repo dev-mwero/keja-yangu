@@ -1,9 +1,13 @@
 # Stage 1 — Open Questions, Decisions and Risks
 
-**Status:** Draft for approval  
-**Date:** 2026-11-01  
+**Status:** Stage 1 complete; P0 and Phase 1 implementation authorized 2026-11-02
+**Date:** 2026-11-01; decision reconciliation: 2026-11-02
 **Purpose:** Put every unresolved business, legal and operational question in
 one place, with recommended defaults and the phase that is blocked by it.
+
+> `multi-admin-revamp-09-approval.md` records the approved design and subsequent
+> authorization for P0 and Phase 1 implementation. Later phases and production
+> migration/deployment remain gated; legal/financial gates remain for payouts.
 
 ---
 
@@ -21,7 +25,7 @@ Legend:
 | D-01 | Public listing address detail | Show county/estate/approximate location; hide exact plot/door until inquiry is accepted | Blocking | Phase 5 |
 | D-02 | Attribution model | Last valid publisher touch within 30 days; application locks attribution | Blocking | Phase 7 |
 | D-03 | Provisional attribution lifetime | 90 days, configurable | Defaultable | Phase 7 |
-| D-04 | Default commission basis | First month's rent, rate configured per agreement, capped at 100% of one month's rent | Blocking | Phase 8 |
+| D-04 | Commission basis and cap | Agreement-specific fixed and/or percentage terms; first-month default and any cap need Product clarification | Blocking | Phase 8 |
 | D-05 | Commission payer / fund flow | Billing account pays broker directly; platform records only | Blocking | Phase 8 |
 | D-06 | Commission tax/withholding | Configurable `taxBps`, applied to gross; legal/Finance confirm rate and remittance | Blocking | Phase 8 |
 | D-07 | Commission on renewals | No; only the first tenancy from a confirmed attribution | Defaultable | Phase 8 |
@@ -32,7 +36,7 @@ Legend:
 | D-12 | Who sets listing rent | Admin with `listing:publish`; brokers cannot change terms | Defaultable | Phase 5 |
 | D-13 | Duplicate property policy | Soft dedupe + claim + system-admin merge; no hard unique address in release 1 | Defaultable | Phase 2 |
 | D-14 | Property creation by caretaker/custodian | Admin-only in release 1; revisit portfolio-level create permission later | Defaultable | Phase 2 |
-| D-15 | `reserved` unit state | Do not introduce in release 1 | Deferred | Phase 5 |
+| D-15 | `reserved` `Unit.status` value | Do not add it in release 1; represent holds as separate reservation records | Resolved | Phase 5 |
 | D-16 | True multi-unit tenant | Keep one active lease per tenant in release 1 | Deferred | — |
 | D-17 | Legal owner dashboard access | No access by ownership alone; must hold an assignment | Blocking | Phase 1 |
 | D-18 | Broker licensing | Require identity/business verification; licence requirement subject to legal review | Blocking | Phase 6 |
@@ -51,6 +55,34 @@ Legend:
 | D-31 | Direct vs broker conflict after lock | No overwrite; system-admin dispute only | Defaultable | Phase 7 |
 | D-32 | Broker data retention | Keep attribution/commission records per finance/legal policy | Deferred | Phase 8 |
 
+### 1.1 Decision reconciliation to approval 09
+
+The following are approved design decisions; their implementation is not
+authorized by this register alone:
+
+| Original decision | Approved direction |
+| --- | --- |
+| D-01 | Approximate county/estate/area only; hide exact plot, door and unit identifiers until the inquiry/approval process permits disclosure (M-09). |
+| D-02 | Last valid publisher touch in 30 days; lock when the application is submitted (B-04). |
+| D-03 | 90-day configurable provisional attribution (B-05). |
+| D-05 | Billing account pays directly; platform records/reconciles but does not hold or route funds. Legal/Finance confirmation is still required before payouts (B-12). |
+| D-09–D-12 | Non-exclusive by default; scoped admins may act independently; admin controls canonical listing terms (M-06–M-08). |
+| D-13 | Soft duplicate detection and claims/disputes; system-admin handles review/merge (P-03/P-08). |
+| D-14 | Property creation is admin-only in release 1 (P-06). |
+| D-17 | Legal ownership alone grants no dashboard access; an explicit admin assignment is required (P-07). |
+| D-18 | Identity/business verification is required; statutory licence requirement remains for Legal to determine (B-02). |
+| D-19 | No tenant contact/internal data before consent or confirmed tenancy (B-03). |
+| D-25 | One canonical listing and canonical terms; publisher-specific share/attribution records (M-03/M-04). |
+| D-26/D-27 | No commission for existing or direct/platform-sourced tenants without valid new broker attribution (B-07/B-08). |
+| D-31 | Locked attribution is not overwritten; disputes go to system-admin with an immutable trail (B-09). |
+
+**Clarification still needed:** D-04's first-month-rent default and 100% cap are
+not explicitly ratified by approval 09, which instead permits fixed and/or
+percentage terms per agreement (B-11). Do not implement a global basis or cap
+until Product confirms the intended rule. Tax rate/incidence, payer workflow,
+eligibility/clawback values, payout cycle/threshold, statutory licensing and
+retention also retain the external approvals identified in approval 09 §4.6.
+
 ---
 
 ## 2. Questions that must be answered before Stage 2
@@ -68,39 +100,33 @@ Options:
    Legal are not ready.
 3. **Listings only** — no broker role yet.
 
-Default recommendation: ship listings and broker attribution before enabling
-payouts; commission can remain shadow-only until approved.
+Approved: ship listings and broker attribution before real settlement;
+commission may run in shadow mode. Do not enable payouts before Legal/Finance
+sign-off (approval 09 B-17).
 
 ### 2.2 Who pays the broker and does money pass through the platform?
 
-**Options:**
-
-- billing account pays directly (recommended);
-- platform clearing account pays;
-- legal owner pays outside the platform.
-
-This decision affects licensing, reconciliation, refunds, tax and the ledger.
-It must be settled before any payout code is enabled.
+Approved design direction: the billing account pays the broker directly and the
+platform records/reconciles without holding or routing funds (approval 09
+B-12). Legal/Finance must confirm the workflow and obligations before payout
+code is enabled; platform clearing is outside first release.
 
 ### 2.3 What is the attribution rule?
 
-Last-touch (recommended) rewards the publisher whose link the prospect used
-most recently before applying. First-touch rewards the first valid publisher.
-The rule must be agreed before any commission is paid. Application submission
-must lock the result.
+Approved: last valid publisher touch within 30 days wins; lock attribution when
+the application is submitted (approval 09 B-04). Provisional attribution lasts
+90 configurable days (B-05).
 
 ### 2.4 How much public location data is shown?
 
-Showing an exact plot/unit number increases privacy and fraud risk. Recommended:
-show estate/area and unit type publicly; release exact address and unit number
-after inquiry/approval. This changes public page content and SEO.
+Approved: show county/estate/approximate area and suitable unit information;
+hide exact plot, door and unit identifiers until the inquiry/approval process
+permits disclosure (approval 09 M-09).
 
 ### 2.5 Are brokers exclusive?
 
-Exclusive mandates require enforcement, notice periods and termination rules.
-Recommended: non-exclusive first. If exclusivity is required from day one, the
-authorisation/agreement model needs an exclusive flag and conflict handling
-before Phase 6.
+Approved: non-exclusive by default; no exclusive mandates in the first release
+(approval 09 M-06).
 
 ### 2.6 Is a broker licence mandatory?
 
@@ -110,27 +136,26 @@ cannot publish. Do not invent the requirement without legal input.
 
 ### 2.7 Can co-admins act independently?
 
-Recommended: yes, any admin with the relevant permission and scope can authorise
-a broker or set an agreement, with the granting admin recorded. If the business
-requires co-admin consent, add an approval workflow before Phase 6.
+Approved: admins may act independently within their granted scope; no additional
+co-admin consent is required by default, and the acting admin/scope is audited
+(approval 09 M-07).
 
 ### 2.8 Do legal owners get dashboard access automatically?
 
-Recommended: no. Ownership and management are separate. A legal owner who also
-manages must be granted an admin assignment. This avoids exposing tenant data to
-passive investors.
+Approved: legal ownership alone grants no dashboard access. A legal owner who
+manages must hold an explicit admin assignment (approval 09 P-07).
 
 ### 2.9 Can caretakers/custodians create properties?
 
-Recommended: admin-only in the first release. Current privilege-based creation
-is a migration edge case; if it must be preserved, add an explicit
-portfolio-level creation grant.
+Approved: property creation is admin-only in the first release. Reconsider
+staff creation later only through an explicit portfolio-level permission
+(approval 09 P-06).
 
 ### 2.10 What happens to existing owner accounts and communications?
 
-Recommended: migrate `owner` to `admin` after the compatibility cycle, keep
-legal-owner wording on financial documents, and communicate the change before
-the role update. Existing owners keep the same portfolio via assignments.
+Approved: migrate existing `owner` accounts to `admin` through a staged
+compatibility process, preserve their portfolio by explicit assignments, and
+retain legal-owner wording where appropriate (approval 09 P-09).
 
 ---
 
@@ -141,8 +166,8 @@ baseline.
 
 | ID | Risk | Severity | Likelihood | Mitigation |
 | --- | --- | --- | --- | --- |
-| R-01 | Existing P0 data leaks remain live while the redesign is planned | High | High | Fix P0 first in Phase 0; regression tests |
-| R-02 | Blind `owner → admin` rename breaks 327 role literals and 948 `ownerId` references | High | High | Role alias, staged cutover, codemod only with allow-list, full test matrix |
+| R-01 | P0 fixes are present in code but deployment/release verification is not recorded | High | Medium | Re-run regression checks and verify release state in Phase 0 |
+| R-02 | Blind `owner → admin` rename breaks 341 role literals and 985 `ownerId` references in `src/` | High | High | Role alias, staged cutover, codemod only with allow-list, full test matrix |
 | R-03 | Owner migration misses users/properties and locks admins out | High | Medium | Baseline report, assignment coverage checks, legacy fallback |
 | R-04 | Block mirror drifts from embedded blocks | High | Medium | Dual-write by id, reconciliation job, cutover only after zero drift |
 | R-05 | Invoice/payment history is altered or duplicated | Critical | Medium | Immutable checksums, no amount rewrites, idempotent migration, backup |
@@ -205,12 +230,12 @@ These are not decisions; they are working assumptions that must be confirmed.
 
 Before any implementation work starts:
 
-- [ ] All 8 Stage 1 documents reviewed and approved.
-- [ ] P0 problem statement and fix scope approved.
-- [ ] Decision D-01 (public data) approved.
-- [ ] Decision D-02 (attribution) approved or explicitly deferred.
-- [ ] Decision D-05 (commission payer) approved or commission deferred.
-- [ ] Decisions D-17 (legal owner access) and D-18/D-19 (broker) approved.
+- [x] All 8 Stage 1 documents reviewed and approved; audit reconciled to approval 09.
+- [x] P0 problem statement and release/fix scope explicitly accepted for Phase 0.
+- [x] Decision D-01 (public data) approved in approval 09 (M-09).
+- [x] Decision D-02 (attribution) approved in approval 09 (B-04).
+- [x] Decision D-05 (direct billing-account payer) approved as design direction (B-12); external Legal/Finance confirmation remains before payout enablement.
+- [x] Decisions D-17 and D-19 approved in approval 09; D-18 identity/business verification approved, statutory licence requirement pending Legal.
 - [ ] Legal/Finance sign-off recorded for commission, or commission removed
       from the first programme.
 - [ ] Backup/restore and staging clone verified.
@@ -220,4 +245,6 @@ Before any implementation work starts:
 - [ ] Engineering accepts the scope and sequencing in
       `multi-admin-revamp-07-phased-implementation.md`.
 
-Until this checklist is complete, the correct action is to stop at Stage 1.
+P0 and Phase 1 local implementation are authorized. The remaining checklist
+items are required before production migration/deployment or payout enablement;
+they do not block local code and test work in the authorized scope.

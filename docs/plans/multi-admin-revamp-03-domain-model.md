@@ -1,13 +1,17 @@
 # Stage 1 — Target Domain Model
 
-**Status:** Draft for approval  
-**Date:** 2026-11-01  
+**Status:** Approved target design; P0 and Phase 1 implementation authorized 2026-11-02; later phases gated
+**Date:** 2026-11-01; decision reconciliation: 2026-11-02
 **Depends on:** `multi-admin-revamp-01-architecture-audit.md`,
 `multi-admin-revamp-02-gap-analysis.md`
 
 > Logical design only. Field names are proposals, not committed production
 > schemas. All timestamps are UTC, all money is stored in integer minor units
 > unless a legacy field is explicitly called out.
+
+> `multi-admin-revamp-09-approval.md` is authoritative where this logical
+> proposal differs from its approved business decisions. The current repository
+> contains only part of this target; see the reconciliation in `01` and `02`.
 
 ---
 
@@ -294,7 +298,7 @@ The rentable record and occupancy subject.
 | `blockId` | string | Required |
 | `floorId` | string | Embedded floor id |
 | `name` / `code` | string | Unique per block among live rows |
-| `status` | enum | `available`, `occupied`, `reserved`, `maintenance` |
+| `status` | enum | `available`, `occupied`, `maintenance` |
 | `purpose` | string | |
 | `rent` | decimal | Base rent |
 | `serviceCharge` | decimal | Legacy fallback |
@@ -322,13 +326,33 @@ Rules:
 
 - `Lease.unitId` is authoritative occupancy. `Unit.tenantId` and
   `Unit.status` are updated only by `lib/allocation.ts`.
-- `reserved` is not currently a production state. If introduced, it must have
-  an owner, expiry and release path and must not block allocation without an
-  explicit hold.
+- Do not add `reserved` to `Unit.status` in the first release. Represent a hold
+  with a separate `UnitReservation` record with an owner, expiry and release
+  path; allocation and listing eligibility must validate that record.
 - The current one-active-lease-per-tenant policy remains in the first release.
   True multi-unit tenancy is a separate change (see open questions).
 
-### 5.3 Structure ownership
+### 5.3 `UnitReservation`
+
+A reservation is a time-bounded hold, not an occupancy state or a second
+occupancy writer.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `unitId` | string | Required |
+| `propertyId` | string | Denormalised for scoped queries |
+| `applicantUserId` | string | Holder of the reservation |
+| `applicationId` | string | Optional source application |
+| `status` | enum | `pending`, `active`, `expired`, `cancelled`, `converted` |
+| `startsAt` / `expiresAt` | Date | Active hold interval |
+| `createdByUserId` | string | Admin/staff granting the hold |
+| `releasedByUserId` / `releasedAt` | string/Date | Optional early release |
+
+At most one unexpired active reservation may hold a unit. Expiry/release is
+audited. A reservation suspends publisher channels but does not allocate the
+unit or replace `Lease.unitId` as occupancy authority.
+
+### 5.4 Structure ownership
 
 `PropertyStructure` operations are authorised against `property:structure:edit`
 on the property scope. Block/unit creation by an admin with block/unit
@@ -447,9 +471,10 @@ Invoice snapshot fields must include:
 
 ### 7.5 Commission
 
-Commission is **not** a `PaymentSplit` line. It is accrued after eligible rent
-settlement and paid from the billing account's payable balance or platform
-clearing, per agreement. See §8.5.
+Commission is **not** a `PaymentSplit` line. It is accrued after an active
+lease and the first successful rent payment. For the first release, the billing
+account pays the broker directly; the platform records and reconciles the
+obligation but does not hold or route funds. See §8.5 and approval 09 B-12.
 
 ---
 
@@ -491,8 +516,9 @@ Indexes:
 
 Rules:
 
-- A listing can exist only for a unit whose `status` is `available` or
-  `reserved`, and only when the unit has an active billing assignment.
+- A listing can exist only for an available unit, with a separate active
+  reservation checked where relevant, and only when the unit has an active
+  billing assignment.
 - Publishing requires `listing:publish` on the unit scope, or an active broker
   authorisation plus agreement.
 - Occupied units cannot remain `active`; allocation moves them to `let` and
@@ -575,7 +601,7 @@ records, invoices or internal notes.
 | `rateBps` | integer | Required for percentage bases |
 | `fixedAmountMinor` | integer | Required for fixed |
 | `collectionMonths` | integer | Default 1; for percentage basis |
-| `payer` | enum | `billing_account`, `property_owner`, `platform` |
+| `payer` | enum | `billing_account` for the first release; other fund flows require a new approved decision |
 | `taxBps` | integer | Withholding applied to gross |
 | `currency` | string | `KES` |
 | `status` | enum | `draft`, `pending_acceptance`, `active`, `expired`, `terminated` |
@@ -670,8 +696,9 @@ Indexes:
 Rules:
 
 - Accrual is created only after the rent portion of the invoice is settled.
-- `first_month_rent` creates one `initial` accrual, capped at the first month's
-  rent actually collected.
+- If Product approves a first-month basis, it creates one `initial` accrual.
+  The basis/rate/cap remains unresolved under D-04 and is not an approved
+  global default.
 - `percentage_of_collected_rent` creates at most one accrual per invoice period
   within `collectionMonths`.
 - A refund/cancellation within the eligibility window creates a `clawback`,
@@ -766,6 +793,8 @@ erDiagram
     BLOCK ||--o{ UNIT : contains
     BLOCK ||--o{ MANAGEMENT_ASSIGNMENT : scoped_to
     UNIT ||--o{ MANAGEMENT_ASSIGNMENT : scoped_to
+    UNIT ||--o{ UNIT_RESERVATION : held_by
+    USER ||--o{ UNIT_RESERVATION : applicant
     UNIT ||--o{ UNIT_BILLING_ASSIGNMENT : billed_by
     BILLING_ACCOUNT ||--o{ UNIT_BILLING_ASSIGNMENT : covers
     BILLING_ACCOUNT ||--|| PAYMENT_CONFIG : uses
@@ -835,13 +864,13 @@ authorization: pending ──activate──► active ──expire──► expi
 ### 11.4 Attribution
 
 ```text
-provisional ──application──► provisional (linked)
-     │                           │
-     ├──expiry──────────────────►expired
-     ├──reject──────────────────►rejected
-     └──tenancy confirm─────────►locked ──dispute/refund──►reversed
-                                   │
-                                   └──finalise──►confirmed
+provisional ──application submitted──► locked
+    │                                    │
+    ├──expiry───────────────────────►expired
+    └──application rejected─────────►rejected
+                            │
+locked ──active lease + first successful payment──►confirmed
+  └──dispute/refund──────────────────────────────►reversed
 ```
 
 ### 11.5 Commission
@@ -885,8 +914,9 @@ pending ──eligibility window──► eligible ──approve──► approv
 3. Prospect opens the share link; the server records a `provisional`
    `Attribution` with listing/publisher/broker snapshots.
 4. Prospect applies; `Application` references the listing and attribution.
-5. On approval/allocation, attribution locks and confirms against
-   `Tenant`/`Lease`; the listing becomes `let`.
+5. Application submission locks attribution. Confirm it only after an active
+  `Lease` and the first successful payment; allocation changes the listing to
+  `let` and suspends publisher channels.
 6. If no tenancy occurs by expiry, the attribution expires without commission.
 
 ### 12.4 Billing and commission
@@ -931,8 +961,8 @@ No legacy field is deleted in the first production release.
    `ManagementAssignment` whose scope contains the resource.
 3. Legal ownership never grants access; an assignment never changes ownership.
 4. Exactly one active `UnitBillingAssignment` exists for a unit at any instant.
-5. A listing requires an available/reserved unit and an active billing
-   assignment.
+5. A listing requires an available unit, no conflicting active reservation,
+  and an active billing assignment.
 6. One canonical listing per unit; multiple publishers attach to it.
 7. At most one confirmed attribution per tenancy; attribution history is
    append-only.

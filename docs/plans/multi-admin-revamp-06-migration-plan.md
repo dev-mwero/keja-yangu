@@ -1,7 +1,7 @@
 # Stage 1 — Migration Plan
 
-**Status:** Draft for approval  
-**Date:** 2026-11-01  
+**Status:** Approved migration approach; Phase 1 code authorized, production migration execution gated
+**Date:** 2026-11-01; repository reconciliation: 2026-11-02
 **Depends on:** `multi-admin-revamp-03-domain-model.md`
 
 ---
@@ -18,14 +18,19 @@
 5. Avoid long-running locks, destructive updates and any dependency on MongoDB
    transactions.
 
-Scale matters:
+Scale matters (recounted against Git-tracked source on 2026-11-02):
 
-- 948 `ownerId` references across 177 TypeScript/TSX files;
-- 327 `"owner"` role literals across 120 files;
-- 162 test files and 73 API route handlers;
-- 13 existing ad hoc migration scripts.
+- 985 `ownerId` references under `src/`;
+- 341 `"owner"` role literals across 127 TypeScript/TSX files;
+- 173 test files and 73 API route handlers;
+- 14 existing migration scripts, including `backfill-management-assignments.ts`.
 
 This is a staged data and code migration, not a search-and-replace.
+
+The assignment backfill and assignment/policy foundation already exist in code;
+they do not constitute a completed migration. No `MigrationRun` model/runner,
+staging apply report, financial checksum, or completed owner-to-admin migration
+was found. Preserve and extend the existing work rather than duplicating it.
 
 ---
 
@@ -178,6 +183,7 @@ invoice/payment reference, restore verified.
 - `PropertyClaim`
 - `Listing`
 - `ListingPublisher`
+- `UnitReservation` (new holds; no legacy reservation data to backfill)
 - `BrokerProfile`
 - `BrokerAuthorization`
 - `CommissionAgreement`

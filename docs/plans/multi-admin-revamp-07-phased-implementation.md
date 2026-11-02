@@ -1,13 +1,14 @@
 # Stage 1 — Phased Implementation Plan
 
-**Status:** Draft for approval  
-**Date:** 2026-11-01  
+**Status:** P0 and Phase 1 implementation authorized 2026-11-02; Phases 2–9 remain gated
+**Date:** 2026-11-01; repository reconciliation: 2026-11-02
 **Depends on:** `multi-admin-revamp-03-domain-model.md`,
 `04-authorization.md`, `05-marketplace-broker-commission.md`,
 `06-migration-plan.md`
 
-> Stage 1 ends with this plan being reviewed. No phase below starts until the
-> approval gate in §10 is passed.
+> This is sequencing guidance. The design direction is approved in
+> `multi-admin-revamp-09-approval.md`; no production implementation is
+> authorized until its remaining operational and external gates are met.
 
 ---
 
@@ -76,13 +77,17 @@ the admin dashboard.
   - public `includeUnits=all` unit data;
   - caretaker application/move-request/unit scope;
   - nested dashboard path guard.
+- Reconciliation: corresponding code fixes for these four P0 findings are now
+  present and the full Vitest suite passes; verify them again in the Phase 0
+  release gate rather than duplicating the fixes.
 - Add regression tests for every P0.
-- Fix or explicitly waive the pre-existing `npm run check` failures:
-  - `src/hooks/use-service-fees.ts`;
-  - `src/components/service-fees/ServiceFeesManager.tsx`;
-  - `src/components/service-fees/ServiceFeesManager.test.tsx`.
+- Current baseline: typecheck passes; full Vitest passes (173 files / 1,698
+  tests); read-only Biome reports one warning in `src/hooks/use-service-fees.ts`.
+  `npm run check` uses `--write`, so use a non-mutating Biome command for the
+  gate. Resolve or explicitly waive the current warning before exit.
 - Record the baseline counts and financial checksums.
-- Approve the decision register (`08-open-questions-risks.md`).
+- Reconcile the decision register with the approved decisions in
+  `09-approval.md`; record remaining Legal/Finance confirmations separately.
 - Confirm backup/restore and staging data availability.
 
 ### Exit criteria
@@ -107,8 +112,14 @@ domains onto it.
 
 - Add `admin` to the role enum and all central role maps, keeping `owner` as an
   alias.
+- Reuse the existing `admin` role literal and route mappings; they currently
+  route to the owner dashboard and are not a completed role cutover.
 - Implement `ManagementAssignment`, `PropertyOwnership`, `PropertyClaim` and
   `AuditEvent` models.
+- These models and parts of assignment, policy, audit and capability services
+  already exist. Audit coverage, claim/ownership workflows and route-family
+  enforcement remain incomplete; inventory and close gaps rather than
+  recreating these foundations.
 - Implement `authorize(actor, action, resource)` and resource loaders.
 - Add a capability endpoint for the frontend.
 - Add assignment CRUD/invitation for admins, custodians and caretakers.
@@ -466,9 +477,15 @@ The redesign is complete when:
 
 ---
 
-## 16. Stage 1 approval gate
+## 16. Stage 1 approval and implementation gate
 
-Do not start Phase 0 until:
+Stage 1 is complete. The user subsequently authorized Phase 0 P0 work and
+Phase 1 implementation on 2026-11-02. This authorization is limited to those
+scopes; do not start Phases 2–9. Backup/restore, staging and named operational
+owners remain required before production migration or deployment. Legal/Finance
+approval remains required before payout enablement.
+
+Before a production migration or deployment:
 
 - the 8 Stage 1 documents are reviewed;
 - the decision register has owners and accepted defaults;
@@ -477,5 +494,6 @@ Do not start Phase 0 until:
   commission to a later programme);
 - engineering accepts the compatibility/migration window and the P0 fix scope.
 
-**Stage 1 stops here.** No production code, schema or data changes are part of
-this deliverable.
+**Authorization boundary:** local code and test work is authorized for P0 and
+Phase 1 only. No production data changes or deployment are authorized by this
+document.

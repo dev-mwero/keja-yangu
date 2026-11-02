@@ -1,7 +1,7 @@
 # Stage 1 — Current Architecture Audit
 
-**Status:** Draft for approval  
-**Date:** 2026-11-01  
+**Status:** Stage 1 complete; P0 and Phase 1 implementation authorized 2026-11-02
+**Date:** 2026-11-01; repository reconciliation: 2026-11-02
 **Scope:** Audit of the existing Keja Yangu implementation to establish a factual
 baseline for the multi-admin, property-marketplace and broker redesign.  
 **Companion documents:** `multi-admin-revamp-02-gap-analysis.md`,
@@ -11,6 +11,9 @@ baseline for the multi-admin, property-marketplace and broker redesign.
 
 > This is a Stage 1 document. It does not authorise production-code or schema
 > changes. All proposals elsewhere in the Stage 1 set are subject to approval.
+
+> The detailed audit below is the 2026-11-01 snapshot. Section 8 records the
+> 2026-11-02 verification and takes precedence wherever the snapshot is stale.
 
 ---
 
@@ -417,6 +420,73 @@ also composes owner/caretaker URLs and has no broker/admin/branding model.
 - No general audit log. Some actions emit `console.info`; that is not an
   immutable audit trail.
 - No database transaction usage in the audited critical paths.
+
+## 8. Repository reconciliation (2026-11-02)
+
+This reconciliation was completed after review of the approval package in
+`multi-admin-revamp-09-approval.md`. It records the current repository state;
+the approved design remains a target, not implementation authorization.
+
+### 8.1 Updated source inventory
+
+Counts below are reproducible against Git-tracked `src/` files (except the
+migration-script and e2e counts, which use their named paths):
+
+| Measure | 2026-11-01 snapshot | 2026-11-02 verified |
+| --- | ---: | ---: |
+| `ownerId` references under `src/` | 948 | 985 |
+| `"owner"` role literals | 327 | 341 |
+| TypeScript files containing `"owner"` | 120 | 127 |
+| Vitest files | 162 | 173 |
+| API route files under `/api/v1` | 73 | 73 |
+| Migration scripts | 13 | 14 |
+| Tracked Playwright/e2e files | 0 | 0 |
+
+### 8.2 Implemented foundations
+
+- `admin` is present in the user role type and selected central role maps, but
+  currently routes to the owner dashboard; this is compatibility groundwork,
+  not the completed admin cutover.
+- `ManagementAssignment`, `PropertyOwnership`, `PropertyClaim` and `AuditEvent`
+  models exist. Assignment grant/accept/revoke services and routes, a capability
+  endpoint, policy/resource-loader code, audit helpers, a dry-run/apply
+  assignment backfill, and authorization shadow/enforcement adapters also exist.
+- The new authorization path remains opt-in by API route family and retains
+  legacy fallbacks. Assignment-backed access is therefore not yet the universal
+  authority path. Ownership/claim models do not yet have the complete approved
+  review, dispute or merge workflows, and audit coverage is partial.
+- The P0 public-unit projection, unit-summary/count scoping, custodian document
+  filtering and nested dashboard role guard findings in the original snapshot
+  have corresponding code fixes. The full current Vitest suite passes; this is
+  not evidence of staging data migration or operational sign-off.
+
+### 8.3 Still absent or incomplete
+
+- No canonical `Block` collection, property identity/deduplication workflow,
+  billing-account domain, unit billing assignment, or billing-account callback
+  adapter was found.
+- No unit `Listing`/publisher domain, broker profile/authorization/agreement,
+  attribution service, or commission accrual/payout domain was found.
+- Existing routes and financial records still use legacy owner scope. There is
+  no demonstrated owner-to-admin migration, general migration-run tracking,
+  full route-family cutover, or legacy-field retirement.
+- No tracked e2e suite was found. Backup/restore, staging-clone, financial
+  checksum and migration-runbook evidence were not available in the repository.
+
+### 8.4 Verification baseline
+
+- `npm run typecheck`: passed.
+- `npm run test`: passed, 173 files and 1,698 tests.
+- Read-only `npx biome check .`: one warning in
+  `src/hooks/use-service-fees.ts`; no fixes applied.
+- `npm run check` is not a read-only check in this repository: it invokes
+  `biome check --write .`. Do not use it as an audit command without accepting
+  possible file modifications.
+
+Phase 0 remains the next implementation phase, but the approval document
+explicitly withholds implementation authorization. Product/legal/finance
+confirmations and operational readiness must be handled under the approved
+gates before code, schema, migration or runtime work begins.
 
 ---
 
