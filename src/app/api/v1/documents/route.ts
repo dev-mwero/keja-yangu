@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   if (authError) return authError;
 
   await connectToDatabase();
-  const actor = await resolveDashboardActor(request);
+  const actor = await resolveDashboardActor(request, "document:read-own");
   if (actor instanceof NextResponse) return actor;
 
   const filter: Record<string, unknown> = {};
@@ -44,6 +44,18 @@ export async function GET(request: NextRequest) {
   } else if (actor.role === "caretaker") {
     filter.ownerId = actor.managedByOwnerId;
     filter.propertyId = { $in: actor.assignedPropertyIds };
+  } else if (actor.role === "admin") {
+    const scopes: Record<string, unknown>[] = [];
+    if (actor.propertyScopeIds.length > 0) {
+      scopes.push({ scope: "property", propertyId: { $in: actor.propertyScopeIds } });
+    }
+    if (actor.assignedTenantIds.length > 0) {
+      scopes.push({ scope: "tenant", tenantId: { $in: actor.assignedTenantIds } });
+    }
+    if (scopes.length === 0) {
+      return NextResponse.json(buildPaginationResult([], 0, page, limit));
+    }
+    filter.$or = scopes;
   } else if (actor.role !== "system-admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -72,7 +84,7 @@ export async function POST(request: NextRequest) {
   if (originError) return originError;
 
   await connectToDatabase();
-  const actor = await resolveDashboardActor(request);
+  const actor = await resolveDashboardActor(request, "document:manage");
   if (actor instanceof NextResponse) return actor;
 
   // Caretakers and custodians write for the owner they manage; owners and

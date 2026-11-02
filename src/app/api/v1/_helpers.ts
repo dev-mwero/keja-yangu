@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongoose";
-import { authenticate, type Role } from "@/lib/permissions";
+import { type Action, authenticate, getAdminAssignmentScope, type Role } from "@/lib/permissions";
 import { Property } from "@/models/Property";
 import { Tenant } from "@/models/Tenant";
 import { Unit } from "@/models/Unit";
@@ -62,6 +62,10 @@ export interface DashboardActor {
   tenantIds: string[];
   tenantPropertyIds: string[];
   tenantOwnerIds: string[];
+  propertyScopeIds: string[];
+  assignedBlockIds: string[];
+  assignedUnitIds: string[];
+  assignedTenantIds: string[];
 }
 
 /**
@@ -72,6 +76,7 @@ export interface DashboardActor {
  */
 export async function resolveDashboardActor(
   request: NextRequest,
+  action?: Action,
 ): Promise<DashboardActor | NextResponse> {
   const auth = authenticate(request);
   if (!auth) {
@@ -90,12 +95,27 @@ export async function resolveDashboardActor(
   let tenantIds: string[] = [];
   let tenantPropertyIds: string[] = [];
   let tenantOwnerIds: string[] = [];
+  let propertyScopeIds: string[] = [];
+  let assignedBlockIds: string[] = [];
+  let assignedUnitIds: string[] = [];
+  let assignedTenantIds: string[] = [];
 
   if (user.role === "caretaker" && managedByOwnerId) {
     const properties = await Property.find({ caretakerIds: userId, ownerId: managedByOwnerId })
       .select("_id")
       .lean();
     assignedPropertyIds = properties.map((p) => String(p._id));
+  }
+
+  if (user.role === "admin" && action) {
+    const scope = await getAdminAssignmentScope(userId, action);
+    assignedPropertyIds = scope.assignedPropertyIds;
+    propertyScopeIds = scope.propertyScopeIds;
+    assignedBlockIds = scope.assignedBlockIds;
+    assignedUnitIds = scope.assignedUnitIds;
+    assignedTenantIds = scope.assignedTenantIds;
+    tenantIds = scope.assignedTenantIds;
+    tenantPropertyIds = scope.propertyScopeIds;
   }
 
   // One Tenant query supplies the bound row ids, property ids and owner ids
@@ -115,6 +135,10 @@ export async function resolveDashboardActor(
     tenantIds,
     tenantPropertyIds,
     tenantOwnerIds,
+    propertyScopeIds,
+    assignedBlockIds,
+    assignedUnitIds,
+    assignedTenantIds,
   };
 }
 

@@ -524,6 +524,75 @@ export interface TenantScope {
   assignedTenantIds?: string[];
 }
 
+export interface AdminAssignmentScope {
+  assignedPropertyIds: string[];
+  propertyScopeIds: string[];
+  assignedBlockIds: string[];
+  assignedUnitIds: string[];
+  assignedTenantIds: string[];
+}
+
+export async function getAdminAssignmentScope(
+  userId: string,
+  action: Action,
+): Promise<AdminAssignmentScope> {
+  const now = new Date();
+  const assignments = await ManagementAssignment.find({
+    principalUserId: userId,
+    accessRole: "admin",
+    status: "active",
+  }).lean();
+  const activeAssignments = assignments.filter(
+    (assignment) =>
+      (assignment.permissions ?? []).includes(action) &&
+      (!assignment.startsAt || assignment.startsAt <= now) &&
+      (!assignment.endsAt || assignment.endsAt > now),
+  );
+  const assignedPropertyIds = [
+    ...new Set(activeAssignments.map((assignment) => assignment.propertyId)),
+  ];
+  const propertyScopeIds = [
+    ...new Set(
+      activeAssignments
+        .filter((assignment) => assignment.scopeType === "property")
+        .map((assignment) => assignment.propertyId),
+    ),
+  ];
+  const assignedBlockIds = [
+    ...new Set(
+      activeAssignments
+        .filter((assignment) => assignment.scopeType === "block" && assignment.blockId)
+        .map((assignment) => assignment.blockId),
+    ),
+  ];
+  const unitScopeQueries: Record<string, unknown>[] = [];
+  for (const assignment of activeAssignments) {
+    if (assignment.scopeType === "block" && assignment.blockId) {
+      unitScopeQueries.push({ propertyId: assignment.propertyId, blockId: assignment.blockId });
+    } else if (assignment.scopeType === "unit" && assignment.unitId) {
+      unitScopeQueries.push({ _id: assignment.unitId, propertyId: assignment.propertyId });
+    }
+  }
+  const scopedUnits = unitScopeQueries.length
+    ? await Unit.find({ $or: unitScopeQueries }).select("_id").lean()
+    : [];
+  const assignedUnitIds = [...new Set(scopedUnits.map((unit) => String(unit._id)))];
+  const leases = assignedUnitIds.length
+    ? await Lease.find({ unitId: { $in: assignedUnitIds }, status: "active" })
+        .select("tenantId")
+        .lean()
+    : [];
+  const assignedTenantIds = [...new Set(leases.map((lease) => String(lease.tenantId)))];
+
+  return {
+    assignedPropertyIds,
+    propertyScopeIds,
+    assignedBlockIds,
+    assignedUnitIds,
+    assignedTenantIds,
+  };
+}
+
 type TenantScopeAction = "tenant:manage" | "lease:manage" | "unit:manage";
 
 export async function getTenantScope(
@@ -549,61 +618,19 @@ export async function getTenantScope(
     return { filter, leaseFilter: filter, userId, role: user.role, managedByOwnerId };
   }
   if (user.role === "admin") {
-    const now = new Date();
-    const assignments = await ManagementAssignment.find({
-      principalUserId: userId,
-      accessRole: "admin",
-      status: "active",
-    }).lean();
-    const activeAssignments = assignments.filter(
-      (assignment) =>
-        assignment.permissions.includes(action) &&
-        (!assignment.startsAt || assignment.startsAt <= now) &&
-        (!assignment.endsAt || assignment.endsAt > now),
-    );
-    const propertyScopeIds = [
-      ...new Set(
-        activeAssignments
-          .filter((assignment) => assignment.scopeType === "property")
-          .map((assignment) => assignment.propertyId),
-      ),
-    ];
-    const unitScopeQueries: Record<string, unknown>[] = [];
-    for (const assignment of activeAssignments) {
-      if (assignment.scopeType === "block" && assignment.blockId) {
-        unitScopeQueries.push({
-          propertyId: assignment.propertyId,
-          blockId: assignment.blockId,
-        });
-      } else if (assignment.scopeType === "unit" && assignment.unitId) {
-        unitScopeQueries.push({
-          _id: assignment.unitId,
-          propertyId: assignment.propertyId,
-        });
-      }
-    }
-    const scopedUnits = unitScopeQueries.length
-      ? await Unit.find({ $or: unitScopeQueries }).select("_id").lean()
-      : [];
-    const assignedUnitIds = [...new Set(scopedUnits.map((unit) => String(unit._id)))];
-    const leases = assignedUnitIds.length
-      ? await Lease.find({ unitId: { $in: assignedUnitIds }, status: "active" })
-          .select("tenantId")
-          .lean()
-      : [];
-    const assignedTenantIds = [...new Set(leases.map((lease) => String(lease.tenantId)))];
+    const assignmentScope = await getAdminAssignmentScope(userId, action);
 
     const tenantClauses: Record<string, unknown>[] = [];
     const leaseClauses: Record<string, unknown>[] = [];
-    if (propertyScopeIds.length > 0) {
-      tenantClauses.push({ propertyId: { $in: propertyScopeIds } });
-      leaseClauses.push({ propertyId: { $in: propertyScopeIds } });
+    if (assignmentScope.propertyScopeIds.length > 0) {
+      tenantClauses.push({ propertyId: { $in: assignmentScope.propertyScopeIds } });
+      leaseClauses.push({ propertyId: { $in: assignmentScope.propertyScopeIds } });
     }
-    if (assignedTenantIds.length > 0) {
-      tenantClauses.push({ _id: { $in: assignedTenantIds } });
+    if (assignmentScope.assignedTenantIds.length > 0) {
+      tenantClauses.push({ _id: { $in: assignmentScope.assignedTenantIds } });
     }
-    if (assignedUnitIds.length > 0) {
-      leaseClauses.push({ unitId: { $in: assignedUnitIds } });
+    if (assignmentScope.assignedUnitIds.length > 0) {
+      leaseClauses.push({ unitId: { $in: assignmentScope.assignedUnitIds } });
     }
     const tenantFilter = tenantClauses.length
       ? tenantClauses.length === 1
@@ -622,12 +649,7 @@ export async function getTenantScope(
       userId,
       role: user.role,
       managedByOwnerId,
-      assignedPropertyIds: [
-        ...new Set(activeAssignments.map((assignment) => assignment.propertyId)),
-      ],
-      propertyScopeIds,
-      assignedUnitIds,
-      assignedTenantIds,
+      ...assignmentScope,
     };
   }
   if (user.role === "custodian") {

@@ -20,7 +20,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   }
 
   await connectToDatabase();
-  const actor = await resolveDashboardActor(request);
+  const actor = await resolveDashboardActor(request, "announcement:manage");
   if (actor instanceof NextResponse) return actor;
 
   const announcement = await Announcement.findById(id).lean();

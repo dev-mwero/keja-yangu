@@ -12,6 +12,19 @@ vi.mock("@/models/ManagementAssignment", () => ({
   ManagementAssignment: getModelStubs().managementAssignment,
 }));
 vi.mock("@/models/AuditEvent", () => ({ AuditEvent: getModelStubs().auditEvent }));
+vi.mock("@/lib/policy-resources", () => ({
+  loadUnitResource: vi.fn().mockImplementation((unitId: string) =>
+    Promise.resolve({
+      ok: true,
+      resource: {
+        propertyId: "property-1",
+        blockId: "block-1",
+        unitId,
+        lifecycleState: "active",
+      },
+    }),
+  ),
+}));
 vi.mock("@/lib/authorization-shadow", () => ({
   shadowSampleRate: vi.fn(() => 1),
   compareAuthorizationShadow: vi.fn().mockResolvedValue(null),

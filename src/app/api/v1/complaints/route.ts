@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
   if (authError) return authError;
 
   await connectToDatabase();
-  const actor = await resolveDashboardActor(request);
+  const actor = await resolveDashboardActor(request, "complaint:read-own");
   if (actor instanceof NextResponse) return actor;
 
   const filter: Record<string, unknown> = {};
@@ -51,6 +51,18 @@ export async function GET(request: NextRequest) {
   } else if (actor.role === "custodian") {
     // Custodians are owner-delegates: only the managing owner's portfolio.
     filter.ownerId = actor.managedByOwnerId;
+  } else if (actor.role === "admin") {
+    const scopes: Record<string, unknown>[] = [];
+    if (actor.propertyScopeIds.length > 0) {
+      scopes.push({ propertyId: { $in: actor.propertyScopeIds } });
+    }
+    if (actor.assignedUnitIds.length > 0) {
+      scopes.push({ unitId: { $in: actor.assignedUnitIds } });
+    }
+    if (scopes.length === 0) {
+      return NextResponse.json(buildPaginationResult([], 0, page, limit));
+    }
+    filter.$or = scopes;
   }
   if (status) filter.status = status;
 
@@ -93,7 +105,7 @@ export async function POST(request: NextRequest) {
   }
 
   await connectToDatabase();
-  const actor = await resolveDashboardActor(request);
+  const actor = await resolveDashboardActor(request, "complaint:create");
   if (actor instanceof NextResponse) return actor;
   if (actor.role !== "tenant") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
