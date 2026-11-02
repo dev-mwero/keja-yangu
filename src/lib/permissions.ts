@@ -271,6 +271,12 @@ export async function requirePermission(
       }
       return null;
     case "unit:read":
+      if (!resource || resource.ownerId !== managedByOwnerId) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      if (resource.caretakerIds && !resource.caretakerIds.includes(actorId)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
       return null;
     case "unit:manage":
       if (

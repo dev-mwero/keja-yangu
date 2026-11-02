@@ -39,9 +39,13 @@ export async function GET(request: NextRequest) {
     ];
   } else if (actor.role === "owner") {
     filter.ownerId = actor.userId;
+  } else if (actor.role === "custodian") {
+    filter.ownerId = actor.managedByOwnerId;
   } else if (actor.role === "caretaker") {
     filter.ownerId = actor.managedByOwnerId;
     filter.propertyId = { $in: actor.assignedPropertyIds };
+  } else if (actor.role !== "system-admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const [documents, total] = await Promise.all([

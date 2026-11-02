@@ -282,6 +282,19 @@ describe("requirePermission — caretaker", () => {
     expect((await guard("unit:manage", { resource: inScope }, noUnits))?.status).toBe(403);
   });
 
+  it("unit:read requires an assigned property in the managing owner's scope", async () => {
+    const mocker = caretakerUser([]);
+    const assigned = { ownerId: OTHER_OWNER_ID, caretakerIds: [CARETAKER_ID] };
+    expect(await guard("unit:read", { resource: assigned }, mocker)).toBeNull();
+
+    const notAssigned = { ownerId: OTHER_OWNER_ID, caretakerIds: [] };
+    expect((await guard("unit:read", { resource: notAssigned }, mocker))?.status).toBe(403);
+
+    const foreign = { ownerId: OWNER_ID, caretakerIds: [CARETAKER_ID] };
+    expect((await guard("unit:read", { resource: foreign }, mocker))?.status).toBe(403);
+    expect((await guard("unit:read", undefined, mocker))?.status).toBe(403);
+  });
+
   it("C6 — process_move_requests permits move-request:manage only in scope", async () => {
     const mocker = caretakerUser(["process_move_requests"]);
     const inScope = { ownerId: OTHER_OWNER_ID, caretakerIds: [CARETAKER_ID] };
