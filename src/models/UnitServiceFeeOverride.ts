@@ -22,13 +22,8 @@ unitServiceFeeOverrideSchema.index({ itemId: 1, unitId: 1 }, { unique: true });
 unitServiceFeeOverrideSchema.index({ unitId: 1 });
 unitServiceFeeOverrideSchema.index({ propertyId: 1, unitId: 1 });
 
-export type UnitServiceFeeOverrideDocument = InferSchemaType<
-  typeof unitServiceFeeOverrideSchema
->;
+export type UnitServiceFeeOverrideDocument = InferSchemaType<typeof unitServiceFeeOverrideSchema>;
 
 export const UnitServiceFeeOverride =
   models.UnitServiceFeeOverride ||
-  model<UnitServiceFeeOverrideDocument>(
-    "UnitServiceFeeOverride",
-    unitServiceFeeOverrideSchema,
-  );
+  model<UnitServiceFeeOverrideDocument>("UnitServiceFeeOverride", unitServiceFeeOverrideSchema);

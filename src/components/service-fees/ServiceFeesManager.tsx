@@ -34,7 +34,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { usePropertyServiceFees, createServiceFee, disableServiceFee, updateServiceFee } from "@/hooks/use-service-fees";
+import {
+  createServiceFee,
+  disableServiceFee,
+  updateServiceFee,
+  usePropertyServiceFees,
+} from "@/hooks/use-service-fees";
 import { useUnits } from "@/hooks/use-units";
 import { formatKES } from "@/lib/format";
 import type { ServiceFeeItem } from "@/types/service-fees";
@@ -394,14 +399,14 @@ function ServiceFeeForm({
               )}
             </div>
           )}
-          <label className="flex items-center justify-between gap-3 sm:col-span-2">
+          <div className="flex items-center justify-between gap-3 sm:col-span-2">
             <span className="text-sm font-medium">Active</span>
             <Switch
               checked={watch("active")}
               onCheckedChange={(active) => setValue("active", active)}
               aria-label="Active service fee"
             />
-          </label>
+          </div>
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onCancel} disabled={saving}>

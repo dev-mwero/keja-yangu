@@ -1,11 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type {
-  ResolvedServiceFee,
-  ServiceFeeItem,
-  ServiceFeeOverride,
-} from "@/types/service-fees";
+import type { ResolvedServiceFee, ServiceFeeItem, ServiceFeeOverride } from "@/types/service-fees";
 
 export interface ServiceFeePayload {
   label: string;
@@ -114,24 +110,20 @@ export async function updateServiceFee(
   itemId: string,
   payload: Partial<ServiceFeePayload>,
 ): Promise<ServiceFeeItem> {
-  return requestJson<ServiceFeeItem>(
-    `/api/v1/properties/${propertyId}/service-fees/${itemId}`,
-    {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    },
-  );
+  return requestJson<ServiceFeeItem>(`/api/v1/properties/${propertyId}/service-fees/${itemId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function disableServiceFee(
   propertyId: string,
   itemId: string,
 ): Promise<ServiceFeeItem> {
-  return requestJson<ServiceFeeItem>(
-    `/api/v1/properties/${propertyId}/service-fees/${itemId}`,
-    { method: "DELETE" },
-  );
+  return requestJson<ServiceFeeItem>(`/api/v1/properties/${propertyId}/service-fees/${itemId}`, {
+    method: "DELETE",
+  });
 }
 
 export async function saveUnitOverrides(

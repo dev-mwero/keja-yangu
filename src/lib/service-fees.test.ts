@@ -48,9 +48,7 @@ describe("resolveServiceFee", () => {
     expect(resolveServiceFee({ unitId: "unit-1", items: [selected], overrides: [] }).total).toBe(
       500,
     );
-    expect(resolveServiceFee({ unitId: "unit-2", items: [selected], overrides: [] }).total).toBe(
-      0,
-    );
+    expect(resolveServiceFee({ unitId: "unit-2", items: [selected], overrides: [] }).total).toBe(0);
   });
 
   it("applies an override amount and an override active flag", () => {

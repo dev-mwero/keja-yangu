@@ -1,5 +1,9 @@
 import { notifyInvoicePaid } from "@/lib/notifications";
-import { computeInvoicePaymentSplit, computePaymentSplit } from "@/lib/payment-split";
+import {
+  computeInvoicePaymentSplit,
+  computePaymentSplit,
+  type PaymentSplitResult,
+} from "@/lib/payment-split";
 import type { PaymentProviderName } from "@/lib/payments/provider";
 import { mapChannelToMethod, PROVIDER_LABELS, toMinorUnits } from "@/lib/payments/provider";
 import { Invoice } from "@/models/Invoice";
@@ -125,11 +129,8 @@ async function recordPaymentSplit(
 
     // Modern invoices carry an immutable rent/service-fee snapshot. Fall back
     // to the unit's legacy inclusive percentages only for older documents.
-    let split;
-    if (
-      typeof invoice.rentAmount === "number" &&
-      typeof invoice.serviceChargeAmount === "number"
-    ) {
+    let split: PaymentSplitResult;
+    if (typeof invoice.rentAmount === "number" && typeof invoice.serviceChargeAmount === "number") {
       split = computeInvoicePaymentSplit(invoice, amountMinor);
     } else {
       const unit = await Unit.findById(lease.unitId).lean();

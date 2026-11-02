@@ -210,7 +210,9 @@ export async function loadServiceFeesForUnits(
     UnitServiceFeeOverride.find({ unitId: { $in: uniqueUnitIds } }).lean(),
   ]);
 
-  const itemsByProperty = groupByProperty(items as Array<ServiceFeeItemLike & { propertyId: string }>);
+  const itemsByProperty = groupByProperty(
+    items as Array<ServiceFeeItemLike & { propertyId: string }>,
+  );
   const overridesByUnit = groupOverridesByUnit(overrides as UnitServiceFeeOverrideLike[]);
   const result = new Map<string, UnitServiceFee>();
 

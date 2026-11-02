@@ -2,10 +2,7 @@ import { isValidObjectId } from "mongoose";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { readJsonBody } from "@/app/api/v1/_helpers";
-import {
-  loadManagedProperty,
-  validatePropertyUnitIds,
-} from "@/app/api/v1/_service-fees";
+import { loadManagedProperty, validatePropertyUnitIds } from "@/app/api/v1/_service-fees";
 import { serviceFeeItemUpdateInput } from "@/lib/schemas";
 import { ServiceFeeItem } from "@/models/ServiceFeeItem";
 
@@ -38,9 +35,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   const appliesTo = parsed.data.appliesTo ?? (item.appliesTo as "all" | "selected") ?? "all";
   const existingUnitIds = (item.unitIds ?? []) as string[];
   const unitIds =
-    appliesTo === "selected"
-      ? [...new Set(parsed.data.unitIds ?? existingUnitIds)]
-      : [];
+    appliesTo === "selected" ? [...new Set(parsed.data.unitIds ?? existingUnitIds)] : [];
   if (appliesTo === "selected") {
     if (unitIds.length === 0) {
       return NextResponse.json(

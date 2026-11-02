@@ -292,7 +292,13 @@ const TenantPaymentsPage = () => {
                       </div>
                       {(invoice.serviceChargeAmount ?? 0) > 0 && (
                         <div className="mt-1 space-y-0.5 text-[11px] font-normal text-muted-foreground">
-                          <div>Rent {formatKES(invoice.rentAmount ?? Math.max(0, invoice.amountDue - (invoice.serviceChargeAmount ?? 0)))}</div>
+                          <div>
+                            Rent{" "}
+                            {formatKES(
+                              invoice.rentAmount ??
+                                Math.max(0, invoice.amountDue - (invoice.serviceChargeAmount ?? 0)),
+                            )}
+                          </div>
                           <div>Service fee {formatKES(invoice.serviceChargeAmount ?? 0)}</div>
                         </div>
                       )}

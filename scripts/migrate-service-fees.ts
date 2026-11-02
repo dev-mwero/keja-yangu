@@ -136,10 +136,7 @@ async function main() {
     if (!dryRun && itemId) {
       const existingIds = new Set<string>((item?.unitIds ?? []).map(String));
       for (const unit of propertyUnits) existingIds.add(String(unit._id));
-      await ServiceFeeItem.updateOne(
-        { _id: itemId },
-        { $set: { unitIds: [...existingIds] } },
-      );
+      await ServiceFeeItem.updateOne({ _id: itemId }, { $set: { unitIds: [...existingIds] } });
     }
 
     for (const [index, unit] of propertyUnits.entries()) {
@@ -178,7 +175,9 @@ async function main() {
     }
   }
 
-  console.log(`${dryRun ? "[dry-run] " : ""}Scanned ${units.length} legacy service-charge unit(s).`);
+  console.log(
+    `${dryRun ? "[dry-run] " : ""}Scanned ${units.length} legacy service-charge unit(s).`,
+  );
   console.log(`Created ${createdItems} template item(s).`);
   console.log(`Created/updated ${createdOverrides} unit override(s).`);
   console.log(`Removed ${removedOverrides} redundant override(s).`);

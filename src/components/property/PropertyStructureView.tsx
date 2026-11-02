@@ -22,8 +22,8 @@ import {
   validateBlocks,
 } from "@/components/property/PropertyStructureEditor";
 import { PropertyUnitsTable } from "@/components/property/PropertyUnitsTable";
-import { ServiceFeesManager } from "@/components/service-fees/ServiceFeesManager";
 import { StatCard } from "@/components/StatCard";
+import { ServiceFeesManager } from "@/components/service-fees/ServiceFeesManager";
 import { Button } from "@/components/ui/button";
 import type { DashNavItem } from "@/config/dashboardNav";
 import {
