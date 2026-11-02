@@ -10,10 +10,15 @@ vi.mock("@/lib/mongoose", () => ({
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Lead", () => ({ Lead: getModelStubs().lead }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
+vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
+vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
 
 import { GET, PATCH } from "@/app/api/v1/leads/[id]/route";
 
-const { user, lead, tenant } = getModelStubs();
+const { user, lead, tenant, managementAssignment } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
@@ -74,6 +79,37 @@ describe("GET /api/v1/leads/[id]", () => {
     expect(lead.findOne).toHaveBeenCalledWith({ _id: LEAD_ID, ownerId: OWNER_ID });
     const body = await json(res);
     expect(body.data as Record<string, unknown>).toEqual(existingLead);
+  });
+
+  it("scopes an admin to leads on assigned properties or units", async () => {
+    const PROP_ID = makeObjectId("property");
+    const SCOPED_ADMIN_ID = makeObjectId("scoped-admin");
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: SCOPED_ADMIN_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          permissions: ["lead:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    const propLead = makeLead({ _id: LEAD_ID, propertyId: PROP_ID, ownerId: OWNER_ID });
+    lead.findOne.mockReturnValue(buildQuery(propLead));
+
+    const res = await GET(
+      buildRequest("/api/v1/leads/x", { token: signToken(SCOPED_ADMIN_ID) }),
+      withParams(LEAD_ID),
+    );
+    expect(res.status).toBe(200);
+    expect(lead.findOne).toHaveBeenCalledWith({
+      _id: LEAD_ID,
+      $or: [{ propertyId: { $in: [PROP_ID] } }],
+    });
   });
 
   it("404 when the lead is not in the actor's portfolio", async () => {
@@ -248,5 +284,56 @@ describe("PATCH /api/v1/leads/[id]", () => {
     );
     const body = await json(res);
     expect(body.convertedTenantId).toBe(String(createdTenant._id));
+  });
+
+  it("admin advances lead when scope covers the property", async () => {
+    const PROP_ID = makeObjectId("property");
+    const SCOPED_ADMIN_ID = makeObjectId("scoped-admin");
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: SCOPED_ADMIN_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          permissions: ["lead:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    const propLead = makeLead({
+      _id: LEAD_ID,
+      propertyId: PROP_ID,
+      ownerId: OWNER_ID,
+      status: "new",
+    });
+    const updated = makeLead({
+      _id: LEAD_ID,
+      propertyId: PROP_ID,
+      ownerId: OWNER_ID,
+      status: "contacted",
+    });
+    lead.findOne.mockReturnValue(buildQuery(propLead));
+    lead.findOneAndUpdate.mockReturnValue(buildQuery(updated));
+
+    const res = await PATCH(
+      buildRequest("/api/v1/leads/x", {
+        method: "PATCH",
+        body: { status: "contacted" },
+        token: signToken(SCOPED_ADMIN_ID),
+      }),
+      withParams(LEAD_ID),
+    );
+    expect(res.status).toBe(200);
+    expect(lead.findOneAndUpdate).toHaveBeenCalledWith(
+      {
+        _id: LEAD_ID,
+        $or: [{ propertyId: { $in: [PROP_ID] } }],
+      },
+      { status: "contacted" },
+      { new: true },
+    );
   });
 });

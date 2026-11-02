@@ -11,10 +11,14 @@ vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Application", () => ({ Application: getModelStubs().application }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
+vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
 
 import { GET, POST } from "@/app/api/v1/applications/route";
 
-const { user, property, application, unit } = getModelStubs();
+const { user, property, application, unit, managementAssignment } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CUSTODIAN_ID = makeObjectId("custodian");
@@ -83,6 +87,31 @@ describe("GET /api/v1/applications", () => {
     expect(application.find).toHaveBeenCalledWith({
       ownerId: OWNER_ID,
       propertyId: { $in: [PROP_ID] },
+    });
+  });
+
+  it("scopes an admin to applications on assigned properties or units", async () => {
+    const ADMIN_ID = makeObjectId("admin");
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: ADMIN_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          permissions: ["application:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    listResult([]);
+
+    const res = await GET(buildRequest("/api/v1/applications", { token: signToken(ADMIN_ID) }));
+    expect(res.status).toBe(200);
+    expect(application.find).toHaveBeenCalledWith({
+      $or: [{ propertyId: { $in: [PROP_ID] } }],
     });
   });
 
