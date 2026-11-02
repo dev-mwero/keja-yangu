@@ -1,0 +1,481 @@
+# Stage 1 — Phased Implementation Plan
+
+**Status:** Draft for approval  
+**Date:** 2026-11-01  
+**Depends on:** `multi-admin-revamp-03-domain-model.md`,
+`04-authorization.md`, `05-marketplace-broker-commission.md`,
+`06-migration-plan.md`
+
+> Stage 1 ends with this plan being reviewed. No phase below starts until the
+> approval gate in §10 is passed.
+
+---
+
+## 1. Delivery principles
+
+1. **Security first.** Close the existing cross-portfolio leaks before growing
+   the domain.
+2. **Additive before replacement.** New tables/fields/flags first; legacy
+   fallbacks until verified.
+3. **One authority path.** Every phase moves routes onto the same policy
+   service; no new route-local owner checks.
+4. **Money is last.** Billing separation lands before commission; commission
+   runs in shadow mode before any payout.
+5. **Small reversals.** Each phase has a feature flag and a rollback step.
+6. **Evidence-based cutover.** Comparison reports, tests and audit counts, not
+   assumptions.
+
+---
+
+## 2. Dependency graph
+
+```text
+Phase 0  Safety, decisions, baseline
+   │
+   ▼
+Phase 1  Policy, assignments, audit foundation
+   │
+   ├──────────────┐
+   ▼              ▼
+Phase 2        Phase 5
+Inventory      Listings (admin only)
+   │              │
+   ▼              ▼
+Phase 3        Phase 6
+Billing        Brokers
+   │              │
+   └──────┬───────┘
+          ▼
+       Phase 7
+       Attribution
+          │
+          ▼
+       Phase 8
+       Commission
+          │
+          ▼
+       Phase 9
+       Stabilisation and legacy retirement
+```
+
+Phase 4 (admin role/UX cutover) can run in parallel with Phase 3 after
+assignments are enforced, but must finish before broker/commission depends on
+the admin dashboard.
+
+---
+
+## 3. Phase 0 — Safety and baseline
+
+**Goal:** establish a clean, measurable starting point.
+
+### Work
+
+- Fix the P0 authorization/privacy gaps:
+  - caretaker unit-summary/counts cross-portfolio reads;
+  - custodian document scope;
+  - public `includeUnits=all` unit data;
+  - caretaker application/move-request/unit scope;
+  - nested dashboard path guard.
+- Add regression tests for every P0.
+- Fix or explicitly waive the pre-existing `npm run check` failures:
+  - `src/hooks/use-service-fees.ts`;
+  - `src/components/service-fees/ServiceFeesManager.tsx`;
+  - `src/components/service-fees/ServiceFeesManager.test.tsx`.
+- Record the baseline counts and financial checksums.
+- Approve the decision register (`08-open-questions-risks.md`).
+- Confirm backup/restore and staging data availability.
+
+### Exit criteria
+
+- P0 regression tests pass.
+- Typecheck, test, build and Biome gates pass or have signed waivers.
+- Baseline report is stored with the migration run.
+- No production schema changes from this phase except security fixes.
+
+### Rollback
+
+Revert the P0 patch release. The fixes are independent of the redesign.
+
+---
+
+## 4. Phase 1 — Policy, assignments and audit foundation
+
+**Goal:** make scoped authority a first-class, tested service before moving
+domains onto it.
+
+### Work
+
+- Add `admin` to the role enum and all central role maps, keeping `owner` as an
+  alias.
+- Implement `ManagementAssignment`, `PropertyOwnership`, `PropertyClaim` and
+  `AuditEvent` models.
+- Implement `authorize(actor, action, resource)` and resource loaders.
+- Add a capability endpoint for the frontend.
+- Add assignment CRUD/invitation for admins, custodians and caretakers.
+- Backfill assignments from legacy `ownerId`/arrays in dry-run and apply modes.
+- Add prefix-aware dashboard guards and fix `AuthGuard`.
+- Add audit write on privileged changes; add outbox/retry if needed.
+- Run legacy and new authorization in shadow mode on sampled routes.
+
+### Exit criteria
+
+- Every action in the policy catalogue has allow/deny tests.
+- Shadow mismatch report is empty or explained.
+- Every property/unit staff route can resolve a resource and an assignment.
+- No route-free staff permission checks remain in the new code path.
+- Revocation takes effect within one request.
+- Existing owner/caretaker/custodian behavior is preserved under the fallback.
+
+### Rollback
+
+Disable the assignment flag; fall back to legacy owner/caretaker scope. New
+collections remain but are unused.
+
+---
+
+## 5. Phase 2 — Canonical inventory
+
+**Goal:** make property, block and unit records independent of management.
+
+### Work
+
+- Add `Block` collection and dual-write/mirror from embedded blocks.
+- Add `Property.lifecycleState`, identity fields and duplicate detection.
+- Add property claim/verification/merge flows (system-admin merge).
+- Update property creation to create the creator's admin assignment and billing
+  account.
+- Update structure edits to keep `Block` and embedded blocks consistent by id.
+- Add unit billing pointer (model only; billing behavior in Phase 3).
+- Migrate blocks and validate unit parent chains.
+- Keep legacy property public pages untouched.
+
+### Exit criteria
+
+- Every live unit resolves to a block in the same property.
+- Structure create/edit/delete preserves unit ids and occupancy.
+- Two admins can add blocks/units to the same property without overwriting each
+  other in staging tests.
+- Duplicate/claim flow is audited and does not auto-merge.
+- No occupancy write outside `lib/allocation.ts`.
+
+### Rollback
+
+Continue reading embedded blocks; disable the `Block` read flag. The mirror can
+be rebuilt from `Property.blocks[]`.
+
+---
+
+## 6. Phase 3 — Billing separation
+
+**Goal:** decouple management from payee and invoice ownership.
+
+### Work
+
+- Implement `BillingAccount`, `PaymentConfig`, `UnitBillingAssignment`.
+- Add `billingAccountId` to units, leases, invoices, payments, splits, service
+  fees and payment configs.
+- Backfill billing accounts, unit assignments, invoice/payment references and
+  fee scopes.
+- Switch invoice numbering to account-specific prefixes with retry on
+  duplicate numbers.
+- Add a legacy callback adapter:
+  - old `[ownerId]` route resolves `legacyOwnerId` → billing account;
+  - new `[billingAccountId]` route is deployed before new payments.
+- Update invoice generation and payment settlement to write/use billing
+  accounts.
+- Update service-fee resolution and payment-config APIs.
+- Add reconciliation for `Unit.billingAccountId` vs active assignment.
+- Keep legacy `ownerId` fields writable/readable.
+
+### Exit criteria
+
+- Historical invoices/payments/numbers unchanged (checksum).
+- New invoices use the right billing account and unique prefix.
+- In-flight old and new M-Pesa callbacks settle correctly in staging.
+- Manual property-level invoices still work.
+- No missing billing assignment for live units/leases/invoices.
+- Paystack and Daraja settlement tests pass.
+
+### Rollback
+
+New invoices can continue under the legacy numbering/owner fields if the flag
+is off. Do not reverse already-issued invoices. Keep callback adapters.
+
+---
+
+## 7. Phase 4 — Admin UX and role cutover
+
+**Goal:** make `admin` the operating role and remove owner-only UI assumptions.
+
+### Work
+
+- Add admin dashboards/navigation and broker/tenant redirect handling.
+- Update copy/labels from owner to admin where it means platform role, while
+  keeping legal-owner wording on invoices/contracts.
+- Update all role checks, hooks, components and fixtures to accept `admin`
+  (and `owner` as a legacy alias during the window).
+- Add admin onboarding/invitation and scoped assignment management UI.
+- Run the `owner → admin` data update in batches with `migratedFromOwner`.
+- Wait the JWT lifetime and one release cycle before removing the alias.
+- Audit every role change.
+
+### Exit criteria
+
+- Admin can complete all current owner workflows.
+- No dashboard/session regression for existing owners.
+- Role change count matches preflight.
+- Nested dashboard paths enforce the correct role.
+- New admins can be created without `migratedFromOwner`.
+
+### Rollback
+
+Restore `migratedFromOwner` users to `owner` within the approved window and
+re-enable owner aliases. Do not blanket-reverse new admins.
+
+---
+
+## 8. Phase 5 — Admin listings and public marketplace
+
+**Goal:** replace property-level advertising with unit-level listings.
+
+### Work
+
+- Implement `Listing` and `ListingPublisher` (admin publisher only in this
+  phase).
+- Add listing lifecycle, publish validation, expiry scheduler and audit.
+- Add public marketplace list/detail APIs and pages with safe projections.
+- Add listing management UI on units.
+- Add caching and purge on state transitions.
+- Backfill draft listings for currently available units; admins review and
+  publish.
+- Keep legacy `/properties` pages behind a flag until SEO/product sign-off.
+- Update unit-favourite notifications to listing activation.
+
+### Exit criteria
+
+- Occupied units never appear as available.
+- Public detail exposes no tenant/occupied/internal data.
+- One live listing per unit.
+- Publish/pause/let/withdraw transitions are audited and cache-purged.
+- Admin can list a unit end-to-end.
+
+### Rollback
+
+Disable the new public pages and return to legacy property pages. Draft
+listings remain for later.
+
+---
+
+## 9. Phase 6 — Brokers
+
+**Goal:** onboard and authorise brokers without granting internal access.
+
+### Work
+
+- Implement `BrokerProfile`, `BrokerAuthorization`,
+  `CommissionAgreement`.
+- Add broker signup/onboarding/verification UI.
+- Add admin broker authorisation and agreement UI.
+- Add broker dashboard: authorisations, listings, share links, redacted
+  prospects.
+- Add publisher creation for brokers with active auth + agreement.
+- Add broker suspension/revocation and audit.
+- Add privacy redaction before any tenant data is shown.
+
+### Exit criteria
+
+- Unverified/suspended brokers cannot access marketplace data.
+- A broker cannot publish outside an active authorisation/agreement.
+- Broker cannot see tenant/invoice/internal data.
+- Admin with unit scope can authorise only that unit.
+- Revocation blocks new publishing/attribution immediately.
+
+### Rollback
+
+Disable broker publishing and broker dashboard. Existing profiles/
+authorisations remain as drafts/history.
+
+---
+
+## 10. Phase 7 — Attribution
+
+**Goal:** reliably record who sourced a tenancy.
+
+### Work
+
+- Implement `Attribution`, share-code capture and server-side validation.
+- Capture provisional attribution on inquiry/application.
+- Add conflict rules (last-touch window, immutable after application).
+- Link application → tenant → lease; confirm attribution at allocation.
+- Add dispute/resolution flow for system-admin.
+- Add redacted broker prospect views.
+- Add attribution reports and audit.
+- Run reconciliation: no confirmed attribution without tenancy; no tenancy with
+  two confirmations.
+
+### Exit criteria
+
+- Every broker-sourced application has a valid attribution.
+- Direct/admin applications have explicit `platform`/`direct` attribution.
+- Confirmed attribution is unique per tenancy.
+- Attribution history is append-only.
+- Disputes produce a superseding record, not an edit.
+
+### Rollback
+
+Stop accepting share-code captures; keep recorded history. Applications can be
+attributed manually by system-admin during the freeze.
+
+---
+
+## 11. Phase 8 — Commission
+
+**Goal:** accrue and pay commission safely.
+
+### Work
+
+- Implement `CommissionAccrual` and `CommissionPayout`.
+- Add commission math with a single rounding function and agreement snapshots.
+- Integrate with settled rent only; no service charge/deposit.
+- Run in **shadow mode**: compute accruals, compare to a finance report, pay
+  nothing.
+- Add eligibility delay, approval, payout, failure and clawback flows.
+- Add segregation of duties:
+  - broker cannot approve/pay;
+  - admin cannot execute payout;
+  - system-admin executes.
+- Add payout batches, statements and notifications.
+- Add reconciliation/aging reports.
+- Complete finance/legal review of payer, tax and fund flow.
+
+### Exit criteria
+
+- Shadow accruals reconcile to expected amounts for a full cycle.
+- Duplicate settlement replays do not duplicate accruals.
+- Refund/cancellation produces a clawback/reversal.
+- Broker/admin/system-admin permissions are enforced.
+- Payout failure restores accruals to `approved`.
+- Finance/legal sign-off recorded.
+
+### Rollback
+
+Turn off payout execution first, then accrual creation. Preserve accrual history
+and mark the run as void with an audit reason. Never delete accruals.
+
+---
+
+## 12. Phase 9 — Stabilisation and legacy retirement
+
+**Goal:** remove dual paths safely.
+
+### Work
+
+- Run daily reconciliation for assignments, billing and blocks for at least one
+  release cycle.
+- Remove legacy fallbacks only after zero unexplained drift.
+- Deprecate/redirect legacy public pages per product/SEO decision.
+- Remove `owner` role aliases and legacy assignment derivation.
+- Decide when to stop writing legacy `ownerId` fields.
+- Update documentation, runbooks and on-call dashboards.
+- Add e2e coverage for the steady state.
+
+### Exit criteria
+
+- No production route uses legacy owner scope.
+- No live data depends on `managedByOwnerId`/`caretakerIds` for authorization.
+- Legacy fields are read-only/deprecated with a removal plan.
+- Rollback no longer requires legacy fallback for day-to-day operations.
+- Tests and runbooks reflect the new model.
+
+---
+
+## 13. Cross-cutting testing gates
+
+Every phase must keep these green:
+
+| Gate | Command / evidence |
+| --- | --- |
+| Format/lint | `./node_modules/.bin/biome check .` |
+| Types | `npm run typecheck` |
+| Unit/integration | `npm run test` |
+| Coverage | `npm run test:coverage` |
+| Build | `npm run build` |
+| Migration dry-run | report attached to the phase |
+| Migration apply | staging clone, checksum report |
+| Authorization matrix | allow/deny table complete for touched routes |
+| Audit | every privileged mutation emits an event |
+| Performance | p95 API latency and Mongo query counts within agreed SLO |
+
+Add Playwright e2e before Phase 5 (public marketplace is the highest-value
+end-to-end flow). At minimum:
+
+1. admin creates property/units and lists;
+2. broker applies/gets verified/authorised;
+3. broker shares link, prospect applies;
+4. admin approves, tenant pays, commission accrues;
+5. system-admin pays, statement visible;
+6. refund triggers clawback.
+
+---
+
+## 14. Feature flags
+
+Suggested flags (names may change):
+
+```text
+assignment_auth_read
+assignment_auth_write
+canonical_blocks
+billing_accounts
+billing_callbacks_v2
+admin_role
+marketplace_listings
+marketplace_public
+broker_portal
+attribution
+commission_shadow
+commission_payouts
+```
+
+Rules:
+
+- flags default off in production;
+- flags are checked server-side;
+- public page and API flags are separate;
+- every flag has an owner and a removal date;
+- flag state is logged in release notes;
+- no flag may bypass authorization.
+
+---
+
+## 15. Definition of done for the programme
+
+The redesign is complete when:
+
+1. A property has no implicit single owner/manager.
+2. Admin/custodian/caretaker authority is assignment-based and revocable.
+3. Legal ownership and billing responsibility are separate and visible.
+4. Units can be listed individually by multiple authorised publishers.
+5. Brokers are verified, scoped and unable to see internal data.
+6. Attribution is captured server-side and is immutable after confirmation.
+7. Commission is accrued from settled rent, approved and paid with separation
+   of duties.
+8. All privileged actions are audited.
+9. Legacy owner fields are retired or formally deprecated with a removal plan.
+10. Security, migration, e2e and finance reconciliations pass.
+
+---
+
+## 16. Stage 1 approval gate
+
+Do not start Phase 0 until:
+
+- the 8 Stage 1 documents are reviewed;
+- the decision register has owners and accepted defaults;
+- product approves the public-data/privacy model;
+- finance/legal approve the commission payer and tax model (or explicitly defer
+  commission to a later programme);
+- engineering accepts the compatibility/migration window and the P0 fix scope.
+
+**Stage 1 stops here.** No production code, schema or data changes are part of
+this deliverable.
