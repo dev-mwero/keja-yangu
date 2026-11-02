@@ -58,7 +58,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const { tenant } = scoped;
 
   const authError = await requirePermission(request, "unit:manage", {
-    resource: { ownerId: tenant.ownerId },
+    resource: { ownerId: tenant.ownerId, propertyId: tenant.propertyId },
   });
   if (authError) return authError;
 
@@ -102,7 +102,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   const { tenant } = scoped;
 
   const authError = await requirePermission(request, "unit:manage", {
-    resource: { ownerId: tenant.ownerId },
+    resource: { ownerId: tenant.ownerId, propertyId: tenant.propertyId },
   });
   if (authError) return authError;
 

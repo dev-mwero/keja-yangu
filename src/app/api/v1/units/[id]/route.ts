@@ -31,7 +31,7 @@ export async function GET(request: NextRequest, ctx: RouteContext) {
   }
 
   const authError = await requirePermission(request, "unit:read", {
-    resource: { ownerId: unit.ownerId },
+    resource: { ownerId: unit.ownerId, propertyId: unit.propertyId },
   });
   if (authError) return authError;
 
@@ -53,7 +53,7 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
   }
 
   const authError = await requirePermission(request, "unit:manage", {
-    resource: { ownerId: unit.ownerId },
+    resource: { ownerId: unit.ownerId, propertyId: unit.propertyId },
   });
   if (authError) return authError;
 
@@ -132,7 +132,7 @@ export async function DELETE(request: NextRequest, ctx: RouteContext) {
   }
 
   const authError = await requirePermission(request, "unit:manage", {
-    resource: { ownerId: unit.ownerId },
+    resource: { ownerId: unit.ownerId, propertyId: unit.propertyId },
   });
   if (authError) return authError;
 

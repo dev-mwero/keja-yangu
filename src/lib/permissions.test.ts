@@ -63,7 +63,9 @@ function custodianUser(overrides: Partial<TestUser> = {}) {
 
 async function guard(
   action: Action,
-  opts: { resource?: { ownerId?: string; caretakerIds?: string[] } } | undefined,
+  opts:
+    | { resource?: { ownerId?: string; caretakerIds?: string[]; propertyId?: string } }
+    | undefined,
   mocker: TestUser,
 ) {
   user.findById.mockReturnValue(buildQuery(mocker));
@@ -280,6 +282,20 @@ describe("requirePermission — caretaker", () => {
     expect((await guard("unit:manage", undefined, mocker))?.status).toBe(403);
     const noUnits = caretakerUser(["edit_property"]);
     expect((await guard("unit:manage", { resource: inScope }, noUnits))?.status).toBe(403);
+
+    const notAssigned = { ownerId: OTHER_OWNER_ID, caretakerIds: [] };
+    expect((await guard("unit:manage", { resource: notAssigned }, mocker))?.status).toBe(403);
+
+    const propertyId = makeObjectId("scoped-property");
+    property.findOne.mockReturnValue(buildQuery({ _id: propertyId }));
+    expect(
+      await guard("unit:manage", { resource: { ownerId: OTHER_OWNER_ID, propertyId } }, mocker),
+    ).toBeNull();
+    expect(property.findOne).toHaveBeenCalledWith({
+      _id: propertyId,
+      ownerId: OTHER_OWNER_ID,
+      caretakerIds: CARETAKER_ID,
+    });
   });
 
   it("unit:read requires an assigned property in the managing owner's scope", async () => {
@@ -303,6 +319,24 @@ describe("requirePermission — caretaker", () => {
     expect((await guard("move-request:manage", { resource: foreign }, mocker))?.status).toBe(403);
     const noPriv = caretakerUser(["manage_units"]);
     expect((await guard("move-request:manage", { resource: inScope }, noPriv))?.status).toBe(403);
+
+    const notAssigned = { ownerId: OTHER_OWNER_ID, caretakerIds: [] };
+    expect((await guard("move-request:manage", { resource: notAssigned }, mocker))?.status).toBe(
+      403,
+    );
+  });
+
+  it("C7 — application:manage requires an assigned property", async () => {
+    const mocker = caretakerUser(["manage_tenants"]);
+    const assigned = { ownerId: OTHER_OWNER_ID, caretakerIds: [CARETAKER_ID] };
+    const notAssigned = { ownerId: OTHER_OWNER_ID, caretakerIds: [] };
+    expect(await guard("application:manage", { resource: assigned }, mocker)).toBeNull();
+    expect((await guard("application:manage", { resource: notAssigned }, mocker))?.status).toBe(
+      403,
+    );
+    expect(
+      (await guard("application:manage", { resource: assigned }, caretakerUser([])))?.status,
+    ).toBe(403);
   });
 
   it("C7 — caretakers cannot manage custodians", async () => {

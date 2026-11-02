@@ -9,6 +9,7 @@ vi.mock("@/lib/mongoose", () => ({
 }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
+vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/lib/notifications", () => ({
   notifyUnitAvailable: vi.fn().mockResolvedValue(true),
 }));
@@ -16,14 +17,16 @@ vi.mock("@/lib/notifications", () => ({
 import { DELETE, GET, PATCH } from "@/app/api/v1/units/[id]/route";
 import { notifyUnitAvailable } from "@/lib/notifications";
 
-const { user, unit } = getModelStubs();
+const { user, unit, property } = getModelStubs();
 const notifyUnitAvailableMock = vi.mocked(notifyUnitAvailable);
 
 const OWNER_ID = makeObjectId("owner");
 const CUSTODIAN_ID = makeObjectId("custodian");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
 const TENANT_ID = makeObjectId("tenant");
+const CARETAKER_ID = makeObjectId("caretaker");
 const UNIT_ID = makeObjectId("unit");
+const UNIT_PROPERTY_ID = makeObjectId("unit-property");
 
 function unitDoc(overrides = {}) {
   return makeUnit({ _id: UNIT_ID, ownerId: OWNER_ID, ...overrides });
@@ -96,12 +99,77 @@ describe("GET /api/v1/units/[id]", () => {
     );
     expect(res.status).toBe(403);
   });
+
+  it("403 when a caretaker reads a unit outside their assigned properties", async () => {
+    user.findById.mockReturnValue(
+      buildQuery(
+        makeUser({
+          _id: CARETAKER_ID,
+          role: "caretaker",
+          managedByOwnerId: OWNER_ID,
+        }),
+      ),
+    );
+    unit.findById.mockReturnValue(buildQuery(unitDoc({ propertyId: UNIT_PROPERTY_ID })));
+    property.findOne.mockReturnValue(buildQuery(null));
+
+    const res = await GET(
+      buildRequest(`/api/v1/units/${UNIT_ID}`, { token: signToken(CARETAKER_ID) }),
+      withParams(UNIT_ID),
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it("allows a caretaker to read a unit in an assigned property", async () => {
+    user.findById.mockReturnValue(
+      buildQuery(
+        makeUser({
+          _id: CARETAKER_ID,
+          role: "caretaker",
+          managedByOwnerId: OWNER_ID,
+        }),
+      ),
+    );
+    unit.findById.mockReturnValue(buildQuery(unitDoc({ propertyId: UNIT_PROPERTY_ID })));
+    property.findOne.mockReturnValue(buildQuery({ _id: UNIT_PROPERTY_ID }));
+
+    const res = await GET(
+      buildRequest(`/api/v1/units/${UNIT_ID}`, { token: signToken(CARETAKER_ID) }),
+      withParams(UNIT_ID),
+    );
+    expect(res.status).toBe(200);
+  });
 });
 
 describe("PATCH /api/v1/units/[id]", () => {
   beforeEach(() => {
     resetModelStubs();
     notifyUnitAvailableMock.mockClear();
+  });
+
+  it("403 when a caretaker edits a unit outside their assigned properties", async () => {
+    user.findById.mockReturnValue(
+      buildQuery(
+        makeUser({
+          _id: CARETAKER_ID,
+          role: "caretaker",
+          managedByOwnerId: OWNER_ID,
+          privileges: ["manage_units"],
+        }),
+      ),
+    );
+    unit.findById.mockResolvedValue(unitDoc({ propertyId: UNIT_PROPERTY_ID }));
+    property.findOne.mockReturnValue(buildQuery(null));
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/units/${UNIT_ID}`, {
+        method: "PATCH",
+        token: signToken(CARETAKER_ID),
+        body: { status: "maintenance" },
+      }),
+      withParams(UNIT_ID),
+    );
+    expect(res.status).toBe(403);
   });
 
   it("owner updates unit status and rent", async () => {

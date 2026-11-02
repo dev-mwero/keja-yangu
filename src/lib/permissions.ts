@@ -139,10 +139,34 @@ export async function requireAuth(
   return null;
 }
 
+interface PermissionResource {
+  ownerId?: string;
+  caretakerIds?: string[];
+  propertyId?: string;
+}
+
+async function caretakerAssignedToProperty(
+  actorId: string,
+  managedByOwnerId: string,
+  resource: PermissionResource | undefined,
+): Promise<boolean> {
+  if (!resource) return false;
+  if (resource.caretakerIds) return resource.caretakerIds.includes(actorId);
+  if (!resource.propertyId) return false;
+  const property = await Property.findOne({
+    _id: resource.propertyId,
+    ownerId: managedByOwnerId,
+    caretakerIds: actorId,
+  })
+    .select("_id")
+    .lean();
+  return property !== null;
+}
+
 export async function requirePermission(
   request: NextRequest,
   action: Action,
-  opts?: { resource?: { ownerId?: string; caretakerIds?: string[] } },
+  opts?: { resource?: PermissionResource },
 ): Promise<NextResponse | null> {
   const token = request.cookies.get("keja-token")?.value;
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -271,10 +295,11 @@ export async function requirePermission(
       }
       return null;
     case "unit:read":
-      if (!resource || resource.ownerId !== managedByOwnerId) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-      if (resource.caretakerIds && !resource.caretakerIds.includes(actorId)) {
+      if (
+        !resource ||
+        resource.ownerId !== managedByOwnerId ||
+        !(await caretakerAssignedToProperty(actorId, managedByOwnerId, resource))
+      ) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
       return null;
@@ -282,7 +307,8 @@ export async function requirePermission(
       if (
         !privileges.includes("manage_units") ||
         !resource ||
-        resource.ownerId !== managedByOwnerId
+        resource.ownerId !== managedByOwnerId ||
+        !(await caretakerAssignedToProperty(actorId, managedByOwnerId, resource))
       ) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
@@ -293,7 +319,8 @@ export async function requirePermission(
       if (
         !privileges.includes("process_move_requests") ||
         !resource ||
-        resource.ownerId !== managedByOwnerId
+        resource.ownerId !== managedByOwnerId ||
+        !(await caretakerAssignedToProperty(actorId, managedByOwnerId, resource))
       ) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
@@ -302,7 +329,8 @@ export async function requirePermission(
       if (
         !privileges.includes("manage_tenants") ||
         !resource ||
-        resource.ownerId !== managedByOwnerId
+        resource.ownerId !== managedByOwnerId ||
+        !(await caretakerAssignedToProperty(actorId, managedByOwnerId, resource))
       ) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
