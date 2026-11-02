@@ -71,3 +71,4 @@ describe("proxy middleware", () => {
     expect(res.status).toBe(200);
   });
 });
+

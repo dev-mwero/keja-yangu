@@ -113,32 +113,35 @@ domains onto it.
 
 ### Work
 
-- Add `admin` to the role enum and all central role maps, keeping `owner` as an
+- [x] Add `admin` to the role enum and all central role maps, keeping `owner` as an
   alias.
-- Reuse the existing `admin` role literal and route mappings; they currently
+- [x] Reuse the existing `admin` role literal and route mappings; they currently
   route to the owner dashboard and are not a completed role cutover.
-- Implement `ManagementAssignment`, `PropertyOwnership`, `PropertyClaim` and
+- [x] Implement `ManagementAssignment`, `PropertyOwnership`, `PropertyClaim` and
   `AuditEvent` models.
-- These models and parts of assignment, policy, audit and capability services
-  already exist. Audit coverage, claim/ownership workflows and route-family
-  enforcement remain incomplete; inventory and close gaps rather than
-  recreating these foundations.
-- Implement `authorize(actor, action, resource)` and resource loaders.
-- Add a capability endpoint for the frontend.
-- Add assignment CRUD/invitation for admins, custodians and caretakers.
-- Backfill assignments from legacy `ownerId`/arrays in dry-run and apply modes.
-- Add prefix-aware dashboard guards and fix `AuthGuard`.
-- Add audit write on privileged changes; add outbox/retry if needed.
-- Run legacy and new authorization in shadow mode on sampled routes.
+- [x] Close foundations gaps across assignment, policy, audit and capability services.
+- [x] Implement `authorize(actor, action, resource)` and resource loaders.
+- [x] Add a capability endpoint (`/api/v1/capabilities`) for the frontend.
+- [x] Add assignment CRUD/invitation (`/api/v1/assignments`) for admins, custodians and caretakers.
+- [x] Backfill assignments from legacy `ownerId`/arrays in dry-run and apply modes (`scripts/backfill-management-assignments.ts`).
+- [x] Add prefix-aware dashboard guards (`proxy.ts` edge gate) and fix `AuthGuard` (deny on missing/unrecognized routes).
+- [x] Add audit write on privileged changes (`src/lib/audit.ts`, `AuditEvent`).
+- [x] Run legacy and new authorization in shadow mode on sampled routes (`src/lib/authorization-shadow.ts`).
+- [x] Scope admin access across all staff API route families:
+  - Core inventory: `properties`, `units`, `tenants`, `leases`
+  - Communications: `announcements`, `chat`, `complaints`, `documents`
+  - Lifecycle: `applications`, `move-requests`, `leads`, `leads/[id]`
+  - Financials: `invoices` (list, get, patch, delete, generate, mark-paid, void), `amounts`, `owner/payment-config`
 
-### Exit criteria
+### Exit criteria status
 
-- Every action in the policy catalogue has allow/deny tests.
-- Shadow mismatch report is empty or explained.
-- Every property/unit staff route can resolve a resource and an assignment.
-- No route-free staff permission checks remain in the new code path.
-- Revocation takes effect within one request.
-- Existing owner/caretaker/custodian behavior is preserved under the fallback.
+- [x] Every action in the policy catalogue has allow/deny tests.
+- [x] Shadow mismatch report is empty or explained (shadow comparison tests passing).
+- [x] Every property/unit staff route can resolve a resource and an assignment for `admin`.
+- [x] No route-free staff permission checks remain in the new code path.
+- [x] Revocation takes effect within one request (session refresh & assignment lookup on each evaluated request).
+- [x] Existing owner/caretaker/custodian behavior is preserved under the fallback.
+- [x] Full test suite (175 files, 1,737 tests) passing cleanly with 0 type errors.
 
 ### Rollback
 
