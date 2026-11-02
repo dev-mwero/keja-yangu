@@ -1,6 +1,6 @@
 # Plan: Property Completion Date & Hierarchy-wide Purpose (with Overrides)
 
-**Status:** Proposed  
+**Status:** Implemented in code; focused verification passed, full-suite verification pending
 **Author:** Antigravity  
 **Date:** 2026-10-26  
 
@@ -105,12 +105,12 @@ When building unit inserts:
 
 ## 6. Implementation Checklist
 
-- [ ] Create domain enum and helper `effectivePurpose(...)`
-- [ ] Update `Property` and `Unit` Mongoose schemas + write schema unit tests
-- [ ] Update `src/lib/schemas/structure.ts`, `src/lib/schemas/unit.ts`, and properties API routes
-- [ ] Update `buildUnitInserts` in `src/lib/units.ts` and reconciliation in `src/lib/property-structure.ts`
-- [ ] Update `useProperties` and `useUnits` TypeScript interfaces and factories
-- [ ] Update UI components (`PropertyDialog`, `PropertyStructureEditor`, `PropertyUnitsTable`)
-- [ ] Run `npx tsc --noEmit` and `npx @biomejs/biome check`
+- [x] Create domain enum and helper `effectivePurpose(...)`
+- [x] Update `Property` and `Unit` Mongoose schemas + write schema unit tests
+- [x] Update `src/lib/schemas/structure.ts`, `src/lib/schemas/unit.ts`, and properties API routes
+- [x] Update `buildUnitInserts` in `src/lib/units.ts` and reconciliation in `src/lib/property-structure.ts`
+- [x] Update `useProperties` and `useUnits` TypeScript interfaces and factories
+- [x] Update UI components (`PropertyDialog`, `PropertyStructureEditor`, `PropertyUnitsTable`, `UnitsView`)
+- [ ] Run full `npx @biomejs/biome check`
 - [ ] Run full test suite `npx vitest run` to ensure all existing and new tests pass cleanly
 

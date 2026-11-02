@@ -48,8 +48,13 @@ import type { DashNavItem } from "@/config/dashboardNav";
 import { useProperties } from "@/hooks/use-properties";
 import { usePropertyTenants, useTenantMutations } from "@/hooks/use-tenants";
 import { type Unit, type UnitStatus, useUnitMutations, useUnits } from "@/hooks/use-units";
-import { UNIT_STATUSES } from "@/lib/domain-enums";
-import { effectiveRent } from "@/lib/schemas/structure";
+import {
+  DEFAULT_PROPERTY_PURPOSE,
+  PROPERTY_PURPOSES,
+  type PropertyPurpose,
+  UNIT_STATUSES,
+} from "@/lib/domain-enums";
+import { effectivePurpose, effectiveRent } from "@/lib/schemas/structure";
 import { matchesQuery } from "@/lib/search";
 
 interface Props {
@@ -81,7 +86,12 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
   );
   const { assignUnit, vacateUnit, pending: assignPending } = useTenantMutations();
 
-  const [form, setForm] = useState({ name: "", status: "available" as UnitStatus, rent: "" });
+  const [form, setForm] = useState({
+    name: "",
+    status: "available" as UnitStatus,
+    purpose: "inherit" as PropertyPurpose | "inherit",
+    rent: "",
+  });
 
   const propertyById = useMemo(
     () => Object.fromEntries(properties.map((p) => [p._id, p])),
@@ -106,6 +116,7 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
     setForm({
       name: unit.name,
       status: unit.status,
+      purpose: unit.purpose ?? "inherit",
       rent: unit.rent === null || unit.rent === undefined ? "" : String(unit.rent),
     });
   };
@@ -116,6 +127,7 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
       await updateUnit(editing._id, {
         name: form.name.trim() || editing.name,
         status: form.status,
+        purpose: form.purpose === "inherit" ? null : form.purpose,
         rent: form.rent === "" ? null : Number(form.rent),
       });
       toast.success("Unit updated");
@@ -177,6 +189,18 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
   const baseRent = (unit: Unit): number => {
     const property = propertyById[unit.propertyId];
     return effectiveRent(unit.rent, null, null, property?.price ?? 0);
+  };
+
+  const unitPurpose = (unit: Unit): PropertyPurpose => {
+    const property = propertyById[unit.propertyId];
+    const block = property?.blocks?.find((candidate) => candidate._id === unit.blockId);
+    const floor = block?.floors.find((candidate) => candidate._id === unit.floorId);
+    return effectivePurpose(
+      unit.purpose,
+      floor?.purpose,
+      block?.purpose,
+      property?.purpose ?? DEFAULT_PROPERTY_PURPOSE,
+    );
   };
 
   return (
@@ -259,7 +283,15 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
             ) : (
               filtered.map((unit) => (
                 <TableRow key={unit._id}>
-                  <TableCell className="font-medium">{unit.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <div>{unit.name}</div>
+                    <Badge
+                      variant="outline"
+                      className="mt-1 text-[10px] font-normal capitalize text-muted-foreground"
+                    >
+                      {unitPurpose(unit)}
+                    </Badge>
+                  </TableCell>
                   <TableCell className="text-muted-foreground">
                     {propertyById[unit.propertyId]?.title ?? "—"}
                   </TableCell>
@@ -298,7 +330,12 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
                           <UserMinus className="h-4 w-4" />
                         </Button>
                       )}
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(unit)}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Edit ${unit.name}`}
+                        onClick={() => openEdit(unit)}
+                      >
                         <Pencil className="h-4 w-4" />
                       </Button>
                       <Button
@@ -342,6 +379,30 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
                 value={form.rent}
                 onChange={(e) => setForm((f) => ({ ...f, rent: e.target.value }))}
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Purpose</Label>
+              <Select
+                value={form.purpose}
+                onValueChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    purpose: value as PropertyPurpose | "inherit",
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Inherit" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="inherit">Inherit</SelectItem>
+                  {PROPERTY_PURPOSES.map((purpose) => (
+                    <SelectItem key={purpose} value={purpose} className="capitalize">
+                      {purpose}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Status</Label>
