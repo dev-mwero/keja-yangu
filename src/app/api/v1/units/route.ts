@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
 import { authenticate } from "@/lib/permissions";
+import { ManagementAssignment } from "@/models/ManagementAssignment";
 import { Property } from "@/models/Property";
 import { Tenant } from "@/models/Tenant";
 import { Unit } from "@/models/Unit";
@@ -51,6 +52,48 @@ export async function GET(request: NextRequest) {
     filter.propertyId = { $in: tenantPropertyIds };
   } else if (role === "owner") {
     filter.ownerId = String(user._id);
+  } else if (role === "admin") {
+    const now = new Date();
+    const assignments = await ManagementAssignment.find({
+      principalUserId: String(user._id),
+      accessRole: "admin",
+      status: "active",
+    }).lean();
+    const activeReadAssignments = assignments.filter(
+      (assignment) =>
+        assignment.permissions.includes("unit:read") &&
+        (!assignment.startsAt || assignment.startsAt <= now) &&
+        (!assignment.endsAt || assignment.endsAt > now),
+    );
+    const propertyIds = [
+      ...new Set(
+        activeReadAssignments
+          .filter((assignment) => assignment.scopeType === "property")
+          .map((assignment) => assignment.propertyId),
+      ),
+    ];
+    const blockIds = [
+      ...new Set(
+        activeReadAssignments
+          .filter((assignment) => assignment.scopeType === "block" && assignment.blockId)
+          .map((assignment) => assignment.blockId),
+      ),
+    ];
+    const unitIds = [
+      ...new Set(
+        activeReadAssignments
+          .filter((assignment) => assignment.scopeType === "unit" && assignment.unitId)
+          .map((assignment) => assignment.unitId),
+      ),
+    ];
+    const scopeQueries: Record<string, unknown>[] = [];
+    if (propertyIds.length > 0) scopeQueries.push({ propertyId: { $in: propertyIds } });
+    if (blockIds.length > 0) scopeQueries.push({ blockId: { $in: blockIds } });
+    if (unitIds.length > 0) scopeQueries.push({ _id: { $in: unitIds } });
+    if (scopeQueries.length === 0) {
+      return NextResponse.json(buildPaginationResult([], 0, page, limit));
+    }
+    filter.$or = scopeQueries;
   } else if (role === "custodian") {
     if (!user.managedByOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
