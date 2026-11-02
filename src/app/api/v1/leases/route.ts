@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { readJsonBody } from "@/app/api/v1/_helpers";
 import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
-import { getTenantScope, requirePermission } from "@/lib/permissions";
+import { getTenantScope, requirePermission, tenantMatchesScope } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { leaseInput } from "@/lib/schemas";
 import { Lease } from "@/models/Lease";
@@ -30,13 +30,18 @@ export async function GET(request: NextRequest) {
   const authError = await requirePermission(request, "lease:manage");
   if (authError) return authError;
 
-  const scope = await getTenantScope(request);
+  const scope = await getTenantScope(request, "lease:manage");
   if (scope instanceof NextResponse) return scope;
 
   const filter: Record<string, unknown> = { ...scope.filter };
   if (status) filter.status = status;
   if (tenantId) filter.tenantId = tenantId;
-  if (propertyId) filter.propertyId = propertyId;
+  if (propertyId) {
+    if (scope.role === "admin" && !scope.assignedPropertyIds?.includes(propertyId)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    filter.propertyId = propertyId;
+  }
 
   const [leases, total] = await Promise.all([
     Lease.find(filter)
@@ -70,7 +75,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const scope = await getTenantScope(request);
+  const scope = await getTenantScope(request, "lease:manage");
   if (scope instanceof NextResponse) return scope;
 
   await connectToDatabase();
@@ -80,6 +85,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Property not found" }, { status: 404 });
   }
   if (scope.role === "owner" && property.ownerId !== scope.userId) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (scope.role === "admin" && !scope.assignedPropertyIds?.includes(parsed.data.propertyId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -113,6 +121,16 @@ export async function POST(request: NextRequest) {
       { error: "Unit does not belong to the specified property" },
       { status: 400 },
     );
+  }
+  if (
+    scope.role === "admin" &&
+    !scope.propertyScopeIds?.includes(parsed.data.propertyId) &&
+    !scope.assignedUnitIds?.includes(String(unit._id))
+  ) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!tenantMatchesScope(tenant, scope)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const occupantUserId = tenant.userId || "";
   if (unit.status !== "occupied" || !unit.tenantId.includes(occupantUserId)) {

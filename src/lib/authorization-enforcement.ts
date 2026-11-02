@@ -108,11 +108,12 @@ export async function enforceScopedAuthorization(input: {
   action: Action;
   resource?: EnforcementResource;
   legacyAllowed: boolean;
+  force?: boolean;
 }): Promise<AuthorizationResult | null> {
-  if (!isRouteFamilyEnforced(input.request)) return null;
+  if (!input.force && !isRouteFamilyEnforced(input.request)) return null;
 
   const requestedResource = toPolicyResource(input.resource);
-  if (!requestedResource && !isResourceFreePolicyAction(input.action)) return null;
+  if (!requestedResource && !isResourceFreePolicyAction(input.action) && !input.force) return null;
 
   const context = await loadActorContext(input.actorUserId);
   if (!context) return null;
@@ -122,10 +123,28 @@ export async function enforceScopedAuthorization(input: {
   if (context.actor.role === "tenant") return null;
   if (isLegacyActorWithoutAssignments(context)) return null;
 
+  if (!requestedResource && !isResourceFreePolicyAction(input.action)) {
+    if (input.resource) {
+      return { allowed: false, reason: "resource-required" };
+    }
+    const hasScopedPermission = context.assignments.some(
+      (assignment) =>
+        evaluateActorPolicy(context, input.action as PolicyAction, {
+          propertyId: assignment.propertyId,
+          blockId: assignment.blockId || undefined,
+          unitId: assignment.unitId || undefined,
+        }).allowed,
+    );
+    return {
+      allowed: hasScopedPermission,
+      reason: hasScopedPermission ? "assignment-scope" : "no-matching-assignment",
+    };
+  }
+
   const policyResource = input.resource
     ? await resolvePolicyResource(input.resource)
     : requestedResource;
-  if (requestedResource?.unitId && !policyResource) {
+  if ((requestedResource?.unitId || input.resource) && !policyResource) {
     return { allowed: false, reason: "inconsistent-resource" };
   }
 

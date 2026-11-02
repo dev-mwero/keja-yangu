@@ -26,7 +26,7 @@ interface RouteContext {
  * properties, custodian → managing owner, system-admin → all).
  */
 async function loadScopedTenant(request: NextRequest, id: string) {
-  const scope = await getTenantScope(request);
+  const scope = await getTenantScope(request, "unit:manage");
   if (scope instanceof NextResponse) return scope;
 
   await connectToDatabase();

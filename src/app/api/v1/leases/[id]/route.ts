@@ -24,14 +24,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
   await connectToDatabase();
 
-  const scope = await getTenantScope(request);
+  const scope = await getTenantScope(request, "lease:manage");
   if (scope instanceof NextResponse) return scope;
 
-  const lease = await Lease.findById(id).select(LEASE_SAFE_FIELDS).lean();
+  const lease = await Lease.findOne({ _id: id, ...scope.leaseFilter })
+    .select(LEASE_SAFE_FIELDS)
+    .lean();
   if (!lease) {
-    return NextResponse.json({ error: "Lease not found" }, { status: 404 });
-  }
-  if (scope.role === "owner" && lease.ownerId !== scope.userId) {
     return NextResponse.json({ error: "Lease not found" }, { status: 404 });
   }
 

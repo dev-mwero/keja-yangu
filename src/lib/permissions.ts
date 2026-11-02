@@ -5,7 +5,10 @@ import { enforceScopedAuthorization } from "@/lib/authorization-enforcement";
 import { compareAuthorizationShadow, shadowSampleRate } from "@/lib/authorization-shadow";
 import { getJwtSecret } from "@/lib/jwt";
 import { connectToDatabase } from "@/lib/mongoose";
+import { Lease } from "@/models/Lease";
+import { ManagementAssignment } from "@/models/ManagementAssignment";
 import { Property } from "@/models/Property";
+import { Unit } from "@/models/Unit";
 import { User } from "@/models/User";
 
 export type Role = "tenant" | "caretaker" | "custodian" | "owner" | "admin" | "system-admin";
@@ -455,6 +458,7 @@ export async function requirePermission(
       action,
       resource: opts?.resource,
       legacyAllowed: result === null,
+      force: auth.role === "admin",
     });
     if (enforced) {
       if (enforced.allowed) return null;
@@ -510,13 +514,22 @@ export async function getCaretakerContext(userId: string): Promise<UserCtx> {
 
 export interface TenantScope {
   filter: Record<string, unknown>;
+  leaseFilter?: Record<string, unknown>;
   userId: string;
   role: Role;
   managedByOwnerId: string;
   assignedPropertyIds?: string[];
+  propertyScopeIds?: string[];
+  assignedUnitIds?: string[];
+  assignedTenantIds?: string[];
 }
 
-export async function getTenantScope(request: NextRequest): Promise<NextResponse | TenantScope> {
+type TenantScopeAction = "tenant:manage" | "lease:manage" | "unit:manage";
+
+export async function getTenantScope(
+  request: NextRequest,
+  action: TenantScopeAction = "tenant:manage",
+): Promise<NextResponse | TenantScope> {
   const auth = authenticate(request);
   if (!auth) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -531,17 +544,101 @@ export async function getTenantScope(request: NextRequest): Promise<NextResponse
   const userId = String(user._id);
   const managedByOwnerId = user.managedByOwnerId ?? "";
 
-  if (user.role === "owner" || user.role === "admin") {
-    return { filter: { ownerId: userId }, userId, role: user.role, managedByOwnerId };
+  if (user.role === "owner") {
+    const filter = { ownerId: userId };
+    return { filter, leaseFilter: filter, userId, role: user.role, managedByOwnerId };
+  }
+  if (user.role === "admin") {
+    const now = new Date();
+    const assignments = await ManagementAssignment.find({
+      principalUserId: userId,
+      accessRole: "admin",
+      status: "active",
+    }).lean();
+    const activeAssignments = assignments.filter(
+      (assignment) =>
+        assignment.permissions.includes(action) &&
+        (!assignment.startsAt || assignment.startsAt <= now) &&
+        (!assignment.endsAt || assignment.endsAt > now),
+    );
+    const propertyScopeIds = [
+      ...new Set(
+        activeAssignments
+          .filter((assignment) => assignment.scopeType === "property")
+          .map((assignment) => assignment.propertyId),
+      ),
+    ];
+    const unitScopeQueries: Record<string, unknown>[] = [];
+    for (const assignment of activeAssignments) {
+      if (assignment.scopeType === "block" && assignment.blockId) {
+        unitScopeQueries.push({
+          propertyId: assignment.propertyId,
+          blockId: assignment.blockId,
+        });
+      } else if (assignment.scopeType === "unit" && assignment.unitId) {
+        unitScopeQueries.push({
+          _id: assignment.unitId,
+          propertyId: assignment.propertyId,
+        });
+      }
+    }
+    const scopedUnits = unitScopeQueries.length
+      ? await Unit.find({ $or: unitScopeQueries }).select("_id").lean()
+      : [];
+    const assignedUnitIds = [...new Set(scopedUnits.map((unit) => String(unit._id)))];
+    const leases = assignedUnitIds.length
+      ? await Lease.find({ unitId: { $in: assignedUnitIds }, status: "active" })
+          .select("tenantId")
+          .lean()
+      : [];
+    const assignedTenantIds = [...new Set(leases.map((lease) => String(lease.tenantId)))];
+
+    const tenantClauses: Record<string, unknown>[] = [];
+    const leaseClauses: Record<string, unknown>[] = [];
+    if (propertyScopeIds.length > 0) {
+      tenantClauses.push({ propertyId: { $in: propertyScopeIds } });
+      leaseClauses.push({ propertyId: { $in: propertyScopeIds } });
+    }
+    if (assignedTenantIds.length > 0) {
+      tenantClauses.push({ _id: { $in: assignedTenantIds } });
+    }
+    if (assignedUnitIds.length > 0) {
+      leaseClauses.push({ unitId: { $in: assignedUnitIds } });
+    }
+    const tenantFilter = tenantClauses.length
+      ? tenantClauses.length === 1
+        ? tenantClauses[0]
+        : { $or: tenantClauses }
+      : { _id: { $in: [] } };
+    const leaseFilter = leaseClauses.length
+      ? leaseClauses.length === 1
+        ? leaseClauses[0]
+        : { $or: leaseClauses }
+      : { _id: { $in: [] } };
+
+    return {
+      filter: action === "lease:manage" ? leaseFilter : tenantFilter,
+      leaseFilter,
+      userId,
+      role: user.role,
+      managedByOwnerId,
+      assignedPropertyIds: [
+        ...new Set(activeAssignments.map((assignment) => assignment.propertyId)),
+      ],
+      propertyScopeIds,
+      assignedUnitIds,
+      assignedTenantIds,
+    };
   }
   if (user.role === "custodian") {
     if (!managedByOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    return { filter: { ownerId: managedByOwnerId }, userId, role: user.role, managedByOwnerId };
+    const filter = { ownerId: managedByOwnerId };
+    return { filter, leaseFilter: filter, userId, role: user.role, managedByOwnerId };
   }
   if (user.role === "system-admin") {
-    return { filter: {}, userId, role: user.role, managedByOwnerId };
+    return { filter: {}, leaseFilter: {}, userId, role: user.role, managedByOwnerId };
   }
   if (user.role === "caretaker") {
     if (!managedByOwnerId) {
@@ -551,6 +648,7 @@ export async function getTenantScope(request: NextRequest): Promise<NextResponse
     const assignedPropertyIds = properties.map((p) => String(p._id));
     return {
       filter: { propertyId: { $in: assignedPropertyIds }, ownerId: managedByOwnerId },
+      leaseFilter: { propertyId: { $in: assignedPropertyIds }, ownerId: managedByOwnerId },
       userId,
       role: user.role,
       managedByOwnerId,
@@ -562,11 +660,17 @@ export async function getTenantScope(request: NextRequest): Promise<NextResponse
 }
 
 export function tenantMatchesScope(
-  tenant: { ownerId: string; propertyId: string },
+  tenant: { _id?: unknown; ownerId: string; propertyId: string },
   scope: TenantScope,
 ): boolean {
-  if (scope.role === "owner" || scope.role === "admin") {
+  if (scope.role === "owner") {
     return tenant.ownerId === scope.userId;
+  }
+  if (scope.role === "admin") {
+    return (
+      (scope.propertyScopeIds?.includes(tenant.propertyId) ?? false) ||
+      (scope.assignedTenantIds?.includes(String(tenant._id ?? "")) ?? false)
+    );
   }
   if (scope.role === "custodian") {
     return tenant.ownerId === scope.managedByOwnerId;

@@ -180,6 +180,26 @@ describe("enforceScopedAuthorization", () => {
     expect(decision).toEqual({ allowed: true, reason: "assignment" });
   });
 
+  it("enforces admin assignments even when the route family is not enabled", async () => {
+    process.env.AUTHZ_ENFORCE_ROUTE_FAMILIES = "properties";
+    loadContextMock.mockResolvedValue(
+      context("admin", {
+        accessRole: "admin",
+        permissions: ["tenant:manage"],
+      }),
+    );
+
+    await expect(
+      enforceScopedAuthorization({
+        request: request("/api/v1/tenants"),
+        actorUserId: USER_ID,
+        action: "tenant:manage",
+        legacyAllowed: false,
+        force: true,
+      }),
+    ).resolves.toEqual({ allowed: true, reason: "assignment-scope" });
+  });
+
   it("resolves the block for a unit-scoped assignment before policy evaluation", async () => {
     loadContextMock.mockResolvedValue(
       context("caretaker", {

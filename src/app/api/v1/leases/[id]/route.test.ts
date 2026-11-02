@@ -65,7 +65,7 @@ describe("GET /api/v1/leases/[id]", () => {
 
   it("404 when absent", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
-    leaseStub.findById.mockReturnValue(buildQuery(null));
+    leaseStub.findOne.mockReturnValue(buildQuery(null));
     const res = await GET(
       buildRequest(`/api/v1/leases/${LEASE_ID}`, { token: signToken(OWNER_ID) }),
       withParams(LEASE_ID),
@@ -75,9 +75,7 @@ describe("GET /api/v1/leases/[id]", () => {
 
   it("404 for another owner's lease (existence hidden)", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
-    leaseStub.findById.mockReturnValue(
-      buildQuery(makeLease({ _id: LEASE_ID, ownerId: OTHER_OWNER_ID })),
-    );
+    leaseStub.findOne.mockReturnValue(buildQuery(null));
     const res = await GET(
       buildRequest(`/api/v1/leases/${LEASE_ID}`, { token: signToken(OWNER_ID) }),
       withParams(LEASE_ID),
@@ -87,12 +85,13 @@ describe("GET /api/v1/leases/[id]", () => {
 
   it("200 for an in-scope lease", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
-    leaseStub.findById.mockReturnValue(buildQuery(inScopeLease()));
+    leaseStub.findOne.mockReturnValue(buildQuery(inScopeLease()));
     const res = await GET(
       buildRequest(`/api/v1/leases/${LEASE_ID}`, { token: signToken(OWNER_ID) }),
       withParams(LEASE_ID),
     );
     expect(res.status).toBe(200);
+    expect(leaseStub.findOne).toHaveBeenCalledWith({ _id: LEASE_ID, ownerId: OWNER_ID });
     const body = await json(res);
     expect((body.data as { ownerId?: string }).ownerId).toBe(OWNER_ID);
   });
