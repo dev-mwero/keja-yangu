@@ -16,16 +16,18 @@ export const AuthGuard = ({
   const { user, loading } = useAuth();
   const router = useRouter();
 
+  const isAllowed = Boolean(user && allowedRoles?.includes(user.role));
+
   useEffect(() => {
     if (loading) return;
     if (!user) {
       router.push("/auth");
       return;
     }
-    if (allowedRoles && !allowedRoles.includes(user.role)) {
+    if (!isAllowed) {
       router.push(getRoleRoute(user.role));
     }
-  }, [user, loading, router, allowedRoles]);
+  }, [user, loading, router, isAllowed]);
 
   if (loading) {
     return (
@@ -35,8 +37,7 @@ export const AuthGuard = ({
     );
   }
 
-  if (!user) return null;
-  if (allowedRoles && !allowedRoles.includes(user.role)) return null;
+  if (!user || !isAllowed) return null;
 
   return <>{children}</>;
 };
