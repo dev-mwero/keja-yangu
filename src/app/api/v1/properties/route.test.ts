@@ -10,10 +10,13 @@ vi.mock("@/lib/mongoose", () => ({
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 
 import { GET, POST } from "@/app/api/v1/properties/route";
 
-const { user, property, unit } = getModelStubs();
+const { user, property, unit, managementAssignment } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
@@ -183,6 +186,53 @@ describe("GET /api/v1/properties", () => {
     const body = await json(res);
     expect(property.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
     expect(body.data).toHaveLength(1);
+  });
+
+  it("scopes an admin to assigned properties and blocks", async () => {
+    const adminId = makeObjectId("assigned-admin");
+    const assignedPropertyId = makeObjectId("assigned-property");
+    const assignedBlockId = makeObjectId("assigned-block");
+    const otherBlockId = makeObjectId("other-block");
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: adminId, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "block",
+          propertyId: assignedPropertyId,
+          blockId: assignedBlockId,
+          permissions: ["property:read"],
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+          status: "active",
+        },
+      ]),
+    );
+    const propertyDoc = Object.assign(makeProperty({ _id: assignedPropertyId }), {
+      blocks: [
+        { _id: assignedBlockId, name: "Assigned block", floors: [] },
+        { _id: otherBlockId, name: "Other block", floors: [] },
+      ],
+    });
+    property.find.mockReturnValue(buildQuery([propertyDoc]));
+    property.countDocuments.mockResolvedValue(1);
+
+    const res = await GET(buildRequest("/api/v1/properties", { token: signToken(adminId) }));
+
+    expect(res.status).toBe(200);
+    expect(managementAssignment.find).toHaveBeenCalledWith({
+      principalUserId: adminId,
+      accessRole: "admin",
+      status: "active",
+    });
+    expect(property.find).toHaveBeenCalledWith({ _id: { $in: [assignedPropertyId] } });
+    const body = await json(res);
+    expect(body.data).toMatchObject([
+      {
+        _id: assignedPropertyId,
+        blocks: [{ _id: assignedBlockId, name: "Assigned block", floors: [] }],
+      },
+    ]);
   });
 
   it("applies ownerId and status filters for authenticated requests", async () => {

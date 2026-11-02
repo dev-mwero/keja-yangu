@@ -10,6 +10,7 @@ import { validatePropertyStaffAssignments } from "@/lib/property-staff";
 import { isActivePropertyTypeKey } from "@/lib/property-type-store";
 import { blockInput, MAX_UNITS_PER_PROPERTY } from "@/lib/schemas/structure";
 import { buildUnitInserts, countRequestedUnits } from "@/lib/units";
+import { ManagementAssignment } from "@/models/ManagementAssignment";
 import { Property } from "@/models/Property";
 import { Unit } from "@/models/Unit";
 import { User } from "@/models/User";
@@ -82,6 +83,57 @@ export async function GET(request: NextRequest) {
     filter.ownerId = authUser.userId;
     if (caretakerId) filter.caretakerIds = caretakerId;
     if (status) filter.status = status;
+  } else if (actorDoc.role === "admin") {
+    const now = new Date();
+    const assignments = await ManagementAssignment.find({
+      principalUserId: authUser.userId,
+      accessRole: "admin",
+      status: "active",
+    }).lean();
+    const activeReadAssignments = assignments.filter(
+      (assignment) =>
+        assignment.permissions.includes("property:read") &&
+        (!assignment.startsAt || assignment.startsAt <= now) &&
+        (!assignment.endsAt || assignment.endsAt > now),
+    );
+    const propertyIds = [
+      ...new Set(activeReadAssignments.map((assignment) => assignment.propertyId)),
+    ];
+    filter._id = { $in: propertyIds };
+    if (ownerId) filter.ownerId = ownerId;
+    if (status) filter.status = status;
+
+    const [properties, total] = await Promise.all([
+      Property.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      Property.countDocuments(filter),
+    ]);
+
+    const scopedProperties = properties.map((property) => {
+      const propertyAssignments = activeReadAssignments.filter(
+        (assignment) => assignment.propertyId === String(property._id),
+      );
+      if (propertyAssignments.some((assignment) => assignment.scopeType === "property")) {
+        return property;
+      }
+
+      const blockIds = new Set(
+        propertyAssignments
+          .filter((assignment) => assignment.scopeType === "block" && assignment.blockId)
+          .map((assignment) => assignment.blockId),
+      );
+      return {
+        ...property,
+        blocks: blockIds.size
+          ? (property.blocks ?? []).filter((block: { _id?: unknown }) =>
+              blockIds.has(String(block._id)),
+            )
+          : [],
+        caretakerIds: [],
+        custodianIds: [],
+      };
+    });
+
+    return NextResponse.json(buildPaginationResult(scopedProperties, total, page, limit));
   } else if (actorDoc.role === "custodian") {
     if (!actorDoc.managedByOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
