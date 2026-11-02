@@ -7,16 +7,20 @@ import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-m
 vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("@/lib/audit", () => ({
+  writeAuditEvent: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
+vi.mock("@/models/Block", () => ({ Block: getModelStubs().block }));
 vi.mock("@/models/ManagementAssignment", () => ({
   ManagementAssignment: getModelStubs().managementAssignment,
 }));
 
 import { GET, POST } from "@/app/api/v1/properties/route";
 
-const { user, property, unit, managementAssignment } = getModelStubs();
+const { user, property, unit, managementAssignment, block } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
@@ -747,6 +751,150 @@ describe("POST /api/v1/properties", () => {
       expect.objectContaining({
         purpose: "commercial",
         dateCompleted: expect.any(Date),
+      }),
+    );
+  });
+
+  it("admin create auto-assigns management assignment and dual-writes blocks", async () => {
+    const ADMIN_ID = makeObjectId("admin-creator");
+    const adminUser = makeUser({ _id: ADMIN_ID, role: "admin" });
+    user.findById.mockReturnValue(buildQuery(adminUser));
+    managementAssignment.find.mockReturnValue(buildQuery([]));
+    const createdPropId = makeObjectId("created-prop");
+    property.create.mockResolvedValue({
+      ...validCreatedProperty,
+      _id: createdPropId,
+      ownerId: ADMIN_ID,
+      createdById: ADMIN_ID,
+      blocks: [
+        {
+          _id: "block-alpha",
+          name: "Alpha Block",
+          order: 0,
+          rentOverride: null,
+          purpose: null,
+          floors: [{ _id: "floor-0", level: 0, unitsPerFloor: 1 }],
+        },
+      ],
+    });
+    unit.insertMany.mockResolvedValue([]);
+    block.insertMany.mockResolvedValue([]);
+    managementAssignment.create.mockResolvedValue({});
+
+    const res = await POST(
+      buildRequest("/api/v1/properties", {
+        method: "POST",
+        token: signToken(ADMIN_ID, { role: "admin" }),
+        body: {
+          ...validPropertyBody,
+          blocks: [
+            {
+              name: "Alpha Block",
+              floors: [{ level: 0, unitsPerFloor: 1 }],
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(res.status).toBe(201);
+    const json = await res.json();
+    expect(json.duplicateCandidates).toEqual([]);
+    expect(property.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identityHash: expect.any(String),
+      }),
+    );
+    expect(block.insertMany).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          propertyId: String(createdPropId),
+          name: "Alpha Block",
+          legacyEmbeddedId: "block-alpha",
+        }),
+      ],
+      { ordered: false },
+    );
+    expect(managementAssignment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        principalUserId: ADMIN_ID,
+        accessRole: "admin",
+        scopeType: "property",
+        propertyId: String(createdPropId),
+        status: "active",
+      }),
+    );
+  });
+
+  it("admin create auto-assigns management assignment and dual-writes blocks", async () => {
+    const ADMIN_ID = makeObjectId("admin-creator");
+    const adminUser = makeUser({ _id: ADMIN_ID, role: "admin" });
+    user.findById.mockReturnValue(buildQuery(adminUser));
+    managementAssignment.find.mockReturnValue(buildQuery([]));
+    const createdPropId = makeObjectId("created-prop");
+    property.create.mockResolvedValue({
+      ...validCreatedProperty,
+      _id: createdPropId,
+      ownerId: ADMIN_ID,
+      createdById: ADMIN_ID,
+      blocks: [
+        {
+          _id: "block-alpha",
+          name: "Alpha Block",
+          order: 0,
+          rentOverride: null,
+          purpose: null,
+          floors: [
+            { _id: "floor-0", level: 0, unitsPerFloor: 1 },
+          ],
+        },
+      ],
+    });
+    unit.insertMany.mockResolvedValue([]);
+    block.insertMany.mockResolvedValue([]);
+    managementAssignment.create.mockResolvedValue({});
+
+    const res = await POST(
+      buildRequest("/api/v1/properties", {
+        method: "POST",
+        token: signToken(ADMIN_ID, { role: "admin" }),
+        body: {
+          ...validPropertyBody,
+          blocks: [
+            {
+              name: "Alpha Block",
+              floors: [{ level: 0, unitsPerFloor: 1 }],
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(res.status).toBe(201);
+    const json = await res.json();
+    expect(json.duplicateCandidates).toEqual([]);
+    expect(property.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identityHash: expect.any(String),
+      }),
+    );
+    expect(block.insertMany).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          propertyId: String(createdPropId),
+          name: "Alpha Block",
+          legacyEmbeddedId: "block-alpha",
+        }),
+      ],
+      { ordered: false },
+    );
+    expect(managementAssignment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        principalUserId: ADMIN_ID,
+        accessRole: "admin",
+        scopeType: "property",
+        propertyId: String(createdPropId),
+        status: "active",
       }),
     );
   });

@@ -81,3 +81,6 @@ export type OwnershipStatus = (typeof OWNERSHIP_STATUSES)[number];
 
 export const PROPERTY_CLAIM_STATUSES = ["pending", "approved", "rejected", "withdrawn"] as const;
 export type PropertyClaimStatus = (typeof PROPERTY_CLAIM_STATUSES)[number];
+
+export const PROPERTY_LIFECYCLE_STATES = ["active", "decommissioned", "merged"] as const;
+export type PropertyLifecycleState = (typeof PROPERTY_LIFECYCLE_STATES)[number];

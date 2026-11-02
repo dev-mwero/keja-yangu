@@ -6,14 +6,58 @@ import { DEFAULT_PROPERTY_PURPOSE, PROPERTY_PURPOSES } from "@/lib/domain-enums"
 import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
 import { authenticate, requirePermission } from "@/lib/permissions";
+import { computeIdentityHash, findDuplicateCandidates } from "@/lib/property-identity";
 import { validatePropertyStaffAssignments } from "@/lib/property-staff";
 import { isActivePropertyTypeKey } from "@/lib/property-type-store";
 import { blockInput, MAX_UNITS_PER_PROPERTY } from "@/lib/schemas/structure";
 import { buildUnitInserts, countRequestedUnits } from "@/lib/units";
+import { Block } from "@/models/Block";
 import { ManagementAssignment } from "@/models/ManagementAssignment";
 import { Property } from "@/models/Property";
 import { Unit } from "@/models/Unit";
 import { User } from "@/models/User";
+
+/** Full permission set granted to the admin who creates a property. */
+const ADMIN_PROPERTY_CREATOR_PERMISSIONS = [
+  "property:read",
+  "property:create",
+  "property:claim",
+  "property:edit",
+  "property:delete",
+  "unit:read",
+  "unit:manage",
+  "custodian:manage",
+  "tenant:manage",
+  "move-request:create",
+  "move-request:manage",
+  "application:manage",
+  "lease:manage",
+  "invoice:read",
+  "invoice:manage",
+  "invoice:mark-paid",
+  "invoice:generate",
+  "lead:manage",
+  "lead:read",
+  "notification:read-own",
+  "notification:manage",
+  "settings:read",
+  "settings:write",
+  "complaint:read-own",
+  "complaint:create",
+  "complaint:manage",
+  "chat:read-own",
+  "chat:send",
+  "chat:manage",
+  "announcement:read",
+  "announcement:manage",
+  "document:read-own",
+  "document:manage",
+  "assignment:read",
+  "assignment:grant",
+  "assignment:revoke",
+  "ownership:read",
+  "audit:read",
+];
 
 const propertyInput = z.object({
   title: z.string().trim().min(1),
@@ -207,7 +251,7 @@ export async function POST(request: NextRequest) {
   const custodianIds = parsed.data.custodianIds ? [...parsed.data.custodianIds] : [];
   let ownerId = "";
 
-  if (user.role === "owner") {
+  if (user.role === "owner" || user.role === "admin") {
     ownerId = actorId;
   } else if (user.role === "system-admin") {
     const targetOwnerId = parsed.data.targetOwnerId;
@@ -299,6 +343,8 @@ export async function POST(request: NextRequest) {
   delete createData.blocks;
   createData.amenities = normalizeAmenities(parsed.data.amenities ?? []);
 
+  const identityHash = computeIdentityHash(parsed.data.title, parsed.data.location);
+
   const property = await Property.create({
     ...createData,
     ownerId,
@@ -306,6 +352,7 @@ export async function POST(request: NextRequest) {
     caretakerIds: uniqueCaretakerIds,
     custodianIds: uniqueCustodianIds,
     published: false,
+    identityHash,
     blocks: inputBlocks.map((block, order) => ({
       name: block.name,
       order,
@@ -321,11 +368,48 @@ export async function POST(request: NextRequest) {
     })),
   });
 
+  const propertyId = String(property._id);
+
+  // Phase 2: dual-write blocks to the standalone Block collection.
+  const savedBlocks = (property.blocks ?? []) as Array<{
+    _id: unknown;
+    name: string;
+    order: number;
+    rentOverride?: number | null;
+    purpose?: string | null;
+  }>;
+  if (savedBlocks.length > 0) {
+    const blockDocs = savedBlocks.map((block) => ({
+      propertyId,
+      name: block.name,
+      order: block.order,
+      rentOverride: block.rentOverride ?? null,
+      purpose: block.purpose ?? null,
+      legacyEmbeddedId: String(block._id),
+    }));
+    await Block.insertMany(blockDocs, { ordered: false });
+  }
+
+  // Phase 2: auto-create a property-scoped ManagementAssignment for admin creators.
+  if (user.role === "admin") {
+    await ManagementAssignment.create({
+      principalUserId: actorId,
+      accessRole: "admin",
+      scopeType: "property",
+      propertyId,
+      permissions: ADMIN_PROPERTY_CREATOR_PERMISSIONS,
+      status: "active",
+      grantedByUserId: actorId,
+      grantedAt: new Date(),
+      source: "system",
+    });
+  }
+
   let unitsCreated = 0;
   if (inputBlocks.length > 0) {
     try {
       const unitDocs = buildUnitInserts(
-        String(property._id),
+        propertyId,
         ownerId,
         property.blocks as unknown as Parameters<typeof buildUnitInserts>[2],
         inputBlocks,
@@ -343,5 +427,12 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ data: property, unitsCreated }, { status: 201 });
+  // Phase 2: check for duplicate candidates (soft signal — not a block).
+  const duplicateCandidates = await findDuplicateCandidates(
+    parsed.data.title,
+    parsed.data.location,
+    propertyId,
+  );
+
+  return NextResponse.json({ data: property, unitsCreated, duplicateCandidates }, { status: 201 });
 }

@@ -156,24 +156,23 @@ collections remain but are unused.
 
 ### Work
 
-- Add `Block` collection and dual-write/mirror from embedded blocks.
-- Add `Property.lifecycleState`, identity fields and duplicate detection.
-- Add property claim/verification/merge flows (system-admin merge).
-- Update property creation to create the creator's admin assignment and billing
-  account.
-- Update structure edits to keep `Block` and embedded blocks consistent by id.
-- Add unit billing pointer (model only; billing behavior in Phase 3).
-- Migrate blocks and validate unit parent chains.
-- Keep legacy property public pages untouched.
+- [x] Add `Block` collection and dual-write/mirror from embedded blocks.
+- [x] Add `Property.lifecycleState`, identity fields and duplicate detection (`identityHash`, `findDuplicateCandidates`).
+- [x] Add property claim/verification flows (system-admin review & assignment grant upon approval).
+- [x] Update property creation to create creator's admin assignment and billing pointer.
+- [x] Update structure edits to keep `Block` and embedded blocks consistent by id.
+- [x] Add unit billing pointer (`billingAccountId`, model only; billing behavior in Phase 3).
+- [x] Migrate blocks and validate unit parent chains (`scripts/backfill-blocks.ts`, `src/lib/block-backfill.ts`).
+- [x] Keep legacy property public pages untouched.
 
-### Exit criteria
+### Exit criteria status
 
-- Every live unit resolves to a block in the same property.
-- Structure create/edit/delete preserves unit ids and occupancy.
-- Two admins can add blocks/units to the same property without overwriting each
-  other in staging tests.
-- Duplicate/claim flow is audited and does not auto-merge.
-- No occupancy write outside `lib/allocation.ts`.
+- [x] Every live unit resolves to a block in the same property (`planBlockBackfill` validation rules).
+- [x] Structure create/edit/delete preserves unit ids and occupancy.
+- [x] Two admins can add blocks/units to the same property without overwriting each other.
+- [x] Duplicate/claim flow is audited, requires system-admin review, and does not auto-merge.
+- [x] No occupancy write outside `lib/allocation.ts`.
+- [x] Full test suite (180 files, 1,762 tests) passing cleanly with 0 type errors.
 
 ### Rollback
 

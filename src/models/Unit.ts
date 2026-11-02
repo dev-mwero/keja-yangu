@@ -44,6 +44,9 @@ const unitSchema = new Schema(
     tenantId: { type: [String], default: [] },
     // Set when the unit is soft-deleted (hidden from reads, restorable).
     deletedAt: { type: Date, default: null },
+    // Phase 2: billing pointer (model-only; billing behavior wired in Phase 3).
+    // References a future `BillingAccount` document for this unit's payee.
+    billingAccountId: { type: String, default: "" },
   },
   {
     timestamps: true,
