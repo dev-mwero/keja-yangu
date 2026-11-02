@@ -80,6 +80,9 @@ the admin dashboard.
 - Reconciliation: corresponding code fixes for these four P0 findings are now
   present and the full Vitest suite passes; verify them again in the Phase 0
   release gate rather than duplicating the fixes.
+- Focused P0 verification on 2026-11-02 passed: seven route test files,
+  111 tests covering public unit projection, unit summary/count scope, custodian
+  documents, and caretaker application/move/unit scope.
 - Add regression tests for every P0.
 - Current baseline: typecheck passes; full Vitest passes (173 files / 1,698
   tests); read-only Biome reports one warning in `src/hooks/use-service-fees.ts`.

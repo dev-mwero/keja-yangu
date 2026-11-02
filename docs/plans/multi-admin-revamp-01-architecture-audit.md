@@ -477,6 +477,9 @@ migration-script and e2e counts, which use their named paths):
 
 - `npm run typecheck`: passed.
 - `npm run test`: passed, 173 files and 1,698 tests.
+- Focused P0 regression run: passed, seven route files and 111 tests
+  (`properties/[id]`, unit summary/counts, documents, applications, move
+  requests, and units).
 - Read-only `npx biome check .`: one warning in
   `src/hooks/use-service-fees.ts`; no fixes applied.
 - `npm run check` is not a read-only check in this repository: it invokes
