@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
 
   const filter: Record<string, unknown> = {};
   const role = user.role;
+  let caretakerAssignedPropertyIds: string[] | null = null;
 
   // For tenants we scope by the tenancy's propertyId (and, when a
   // propertyId is requested, only their own property). This lets a tenant
@@ -59,11 +60,15 @@ export async function GET(request: NextRequest) {
     if (!user.managedByOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    const assigned = await Property.find({ caretakerIds: String(user._id) })
+    const assigned = await Property.find({
+      caretakerIds: String(user._id),
+      ownerId: user.managedByOwnerId,
+    })
       .select("_id")
       .lean();
+    caretakerAssignedPropertyIds = assigned.map((property) => String(property._id));
     filter.ownerId = user.managedByOwnerId;
-    filter.propertyId = { $in: assigned.map((p) => String(p._id)) };
+    filter.propertyId = { $in: caretakerAssignedPropertyIds };
   } else if (role !== "system-admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -80,6 +85,9 @@ export async function GET(request: NextRequest) {
       }
       filter.propertyId = propertyId;
     } else {
+      if (role === "caretaker" && !caretakerAssignedPropertyIds?.includes(propertyId)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
       filter.propertyId = propertyId;
     }
   }

@@ -83,6 +83,25 @@ describe("GET /api/v1/units", () => {
     expect(unit.find).toHaveBeenCalledWith({ ownerId: OWNER_ID, propertyId: { $in: [p1] } });
   });
 
+  it("403 when a caretaker requests units for an unassigned property", async () => {
+    const assignedPropertyId = makeObjectId("assigned-property");
+    const otherPropertyId = makeObjectId("other-property");
+    user.findById.mockReturnValue(
+      buildQuery(makeUser({ _id: CARETAKER_ID, role: "caretaker", managedByOwnerId: OWNER_ID })),
+    );
+    property.find.mockReturnValue(buildQuery([{ _id: assignedPropertyId }]));
+    listResult([]);
+
+    const res = await GET(
+      buildRequest(`/api/v1/units?propertyId=${otherPropertyId}`, {
+        token: signToken(CARETAKER_ID),
+      }),
+    );
+
+    expect(res.status).toBe(403);
+    expect(unit.find).not.toHaveBeenCalled();
+  });
+
   it("scopes a tenant to units at their tenancy's property", async () => {
     const PROP_ID = makeObjectId("prop");
     user.findById.mockReturnValue(
