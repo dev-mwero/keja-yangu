@@ -7,6 +7,7 @@ vi.mock("@/lib/authorization", async (importOriginal) => {
   return { ...actual, loadActorContext: vi.fn() };
 });
 vi.mock("@/lib/audit", () => ({ writeAuditEvent: vi.fn() }));
+vi.mock("@/lib/policy-resources", () => ({ loadUnitResource: vi.fn() }));
 
 import { writeAuditEvent } from "@/lib/audit";
 import { type ActorContext, loadActorContext } from "@/lib/authorization";
@@ -17,9 +18,11 @@ import {
   routeFamily,
   toPolicyResource,
 } from "@/lib/authorization-enforcement";
+import { loadUnitResource } from "@/lib/policy-resources";
 
 const loadContextMock = vi.mocked(loadActorContext);
 const writeAuditMock = vi.mocked(writeAuditEvent);
+const loadUnitResourceMock = vi.mocked(loadUnitResource);
 const USER_ID = "user-1";
 
 function context(
@@ -51,6 +54,15 @@ function request(path = "/api/v1/units/unit-1") {
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.AUTHZ_ENFORCE_ROUTE_FAMILIES = "units";
+  loadUnitResourceMock.mockResolvedValue({
+    ok: true,
+    resource: {
+      propertyId: "property-1",
+      blockId: "block-1",
+      unitId: "unit-1",
+      lifecycleState: "active",
+    },
+  });
 });
 
 afterEach(() => {
@@ -168,7 +180,53 @@ describe("enforceScopedAuthorization", () => {
     expect(decision).toEqual({ allowed: true, reason: "assignment" });
   });
 
+  it("resolves the block for a unit-scoped assignment before policy evaluation", async () => {
+    loadContextMock.mockResolvedValue(
+      context("caretaker", {
+        scopeType: "unit",
+        blockId: "block-1",
+        unitId: "unit-1",
+        permissions: ["unit:manage"],
+      }),
+    );
+
+    await expect(
+      enforceScopedAuthorization({
+        request: request(),
+        actorUserId: USER_ID,
+        action: "unit:manage",
+        resource: { propertyId: "property-1", unitId: "unit-1" },
+        legacyAllowed: false,
+      }),
+    ).resolves.toEqual({ allowed: true, reason: "assignment" });
+    expect(loadUnitResourceMock).toHaveBeenCalledWith("unit-1");
+  });
+
+  it("denies an assignment check when the unit parent chain is inconsistent", async () => {
+    loadContextMock.mockResolvedValue(context("caretaker", { permissions: ["unit:manage"] }));
+    loadUnitResourceMock.mockResolvedValue({ ok: false, reason: "inconsistent-parent" });
+
+    await expect(
+      enforceScopedAuthorization({
+        request: request(),
+        actorUserId: USER_ID,
+        action: "unit:manage",
+        resource: { propertyId: "property-1", unitId: "unit-1" },
+        legacyAllowed: true,
+      }),
+    ).resolves.toEqual({ allowed: false, reason: "inconsistent-resource" });
+  });
+
   it("respects unit scope on block assignments", async () => {
+    loadUnitResourceMock.mockResolvedValue({
+      ok: true,
+      resource: {
+        propertyId: "property-1",
+        blockId: "block-2",
+        unitId: "unit-1",
+        lifecycleState: "active",
+      },
+    });
     loadContextMock.mockResolvedValue(
       context("caretaker", {
         scopeType: "block",

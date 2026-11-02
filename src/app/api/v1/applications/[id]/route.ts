@@ -26,7 +26,11 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
   }
 
   const authError = await requirePermission(request, "application:manage", {
-    resource: { ownerId: application.ownerId, propertyId: application.propertyId },
+    resource: {
+      ownerId: application.ownerId,
+      propertyId: application.propertyId,
+      unitId: application.unitId ? String(application.unitId) : undefined,
+    },
   });
   if (authError) return authError;
 

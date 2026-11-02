@@ -9,6 +9,7 @@ import {
   type PolicyResource,
 } from "@/lib/authorization";
 import type { Action } from "@/lib/permissions";
+import { loadUnitResource } from "@/lib/policy-resources";
 
 export interface EnforcementResource {
   _id?: unknown;
@@ -73,6 +74,23 @@ export function toPolicyResource(
   };
 }
 
+async function resolvePolicyResource(
+  resource: EnforcementResource,
+): Promise<PolicyResource | null> {
+  const requested = toPolicyResource(resource);
+  if (!requested) return null;
+  if (!requested.unitId) return requested;
+
+  const resolved = await loadUnitResource(requested.unitId);
+  if (!resolved.ok || resolved.resource.propertyId !== requested.propertyId) return null;
+  if (requested.blockId && resolved.resource.blockId !== requested.blockId) return null;
+
+  return {
+    ...resolved.resource,
+    lifecycleState: requested.lifecycleState ?? resolved.resource.lifecycleState,
+  };
+}
+
 function isLegacyActorWithoutAssignments(
   context: NonNullable<Awaited<ReturnType<typeof loadActorContext>>>,
 ): boolean {
@@ -93,8 +111,8 @@ export async function enforceScopedAuthorization(input: {
 }): Promise<AuthorizationResult | null> {
   if (!isRouteFamilyEnforced(input.request)) return null;
 
-  const policyResource = toPolicyResource(input.resource);
-  if (!policyResource && !isResourceFreePolicyAction(input.action)) return null;
+  const requestedResource = toPolicyResource(input.resource);
+  if (!requestedResource && !isResourceFreePolicyAction(input.action)) return null;
 
   const context = await loadActorContext(input.actorUserId);
   if (!context) return null;
@@ -104,7 +122,18 @@ export async function enforceScopedAuthorization(input: {
   if (context.actor.role === "tenant") return null;
   if (isLegacyActorWithoutAssignments(context)) return null;
 
-  const decision = evaluateActorPolicy(context, input.action as PolicyAction, policyResource);
+  const policyResource = input.resource
+    ? await resolvePolicyResource(input.resource)
+    : requestedResource;
+  if (requestedResource?.unitId && !policyResource) {
+    return { allowed: false, reason: "inconsistent-resource" };
+  }
+
+  const decision = evaluateActorPolicy(
+    context,
+    input.action as PolicyAction,
+    policyResource ?? undefined,
+  );
   if (decision.allowed !== input.legacyAllowed) {
     try {
       await writeAuditEvent({
