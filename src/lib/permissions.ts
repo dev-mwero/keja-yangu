@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { enforceScopedAuthorization } from "@/lib/authorization-enforcement";
 import { compareAuthorizationShadow, shadowSampleRate } from "@/lib/authorization-shadow";
 import { getJwtSecret } from "@/lib/jwt";
 import { connectToDatabase } from "@/lib/mongoose";
@@ -140,10 +141,14 @@ export async function requireAuth(
   return null;
 }
 
-interface PermissionResource {
+export interface PermissionResource {
+  _id?: unknown;
   ownerId?: string;
   caretakerIds?: string[];
   propertyId?: string;
+  blockId?: string;
+  unitId?: string;
+  lifecycleState?: "draft" | "active" | "archived" | "merged";
 }
 
 async function caretakerAssignedToProperty(
@@ -430,8 +435,9 @@ async function requirePermissionLegacy(
 }
 
 /**
- * Legacy permission entry point. Runs the scoped policy in shadow mode on a
- * sampled subset of decisions without changing the legacy response.
+ * Permission entry point. Route families listed in
+ * `AUTHZ_ENFORCE_ROUTE_FAMILIES` are decided by the scoped policy; all others
+ * keep the legacy response while optionally running shadow comparison.
  */
 export async function requirePermission(
   request: NextRequest,
@@ -439,17 +445,42 @@ export async function requirePermission(
   opts?: { resource?: PermissionResource },
 ): Promise<NextResponse | null> {
   const result = await requirePermissionLegacy(request, action, opts);
-  if (shadowSampleRate() <= 0) return result;
-  if (opts?.resource && !opts.resource.propertyId) return result;
-
   const auth = authenticate(request);
   if (!auth) return result;
+
+  try {
+    const enforced = await enforceScopedAuthorization({
+      request,
+      actorUserId: auth.userId,
+      action,
+      resource: opts?.resource,
+      legacyAllowed: result === null,
+    });
+    if (enforced) {
+      if (enforced.allowed) return null;
+      return result ?? NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+  } catch (error) {
+    console.error("Authorization enforcement failed", error);
+    return NextResponse.json({ error: "Authorization unavailable" }, { status: 500 });
+  }
+
+  if (shadowSampleRate() <= 0) return result;
+
+  const policyResource = opts?.resource?.propertyId
+    ? {
+        propertyId: opts.resource.propertyId,
+        blockId: opts.resource.blockId,
+        unitId: opts.resource.unitId,
+      }
+    : undefined;
+  if (opts?.resource && !policyResource) return result;
 
   try {
     await compareAuthorizationShadow({
       actorUserId: auth.userId,
       action,
-      resource: opts?.resource?.propertyId ? { propertyId: opts.resource.propertyId } : undefined,
+      resource: policyResource,
       legacyAllowed: result === null,
       request: {
         ip: request.headers.get("x-forwarded-for"),

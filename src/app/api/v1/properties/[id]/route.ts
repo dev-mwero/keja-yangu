@@ -113,7 +113,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     return NextResponse.json({ error: "Property not found" }, { status: 404 });
   }
 
-  const authError = await requirePermission(request, "property:edit", { resource: property });
+  const authError = await requirePermission(request, "property:edit", {
+    resource: { ...property, propertyId: String(property._id) },
+  });
   if (authError) return authError;
 
   const body = await request.json();
@@ -195,7 +197,9 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     return NextResponse.json({ error: "Property not found" }, { status: 404 });
   }
 
-  const authError = await requirePermission(request, "property:delete", { resource: property });
+  const authError = await requirePermission(request, "property:delete", {
+    resource: { ...property, propertyId: String(property._id) },
+  });
   if (authError) return authError;
 
   const referencingTenant = await Tenant.exists({ propertyId: id });

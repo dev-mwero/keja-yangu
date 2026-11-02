@@ -197,6 +197,10 @@ const RESOURCE_FREE_ACTIONS = new Set<PolicyAction>([
   "assignment:read",
 ]);
 
+export function isResourceFreePolicyAction(action: PolicyAction): boolean {
+  return RESOURCE_FREE_ACTIONS.has(action);
+}
+
 function normalizeAccessRole(role: Role): AccessRole | null {
   if (role === "owner") return "admin";
   if (role === "admin" || role === "custodian" || role === "caretaker") return role;
