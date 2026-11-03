@@ -37,6 +37,18 @@ vi.mock("@/models/ManagementAssignment", async () => {
   const { getModelStubs: get } = await import("@/test/utils/model-mocks");
   return { ManagementAssignment: get().managementAssignment };
 });
+vi.mock("@/models/Unit", async () => {
+  const { getModelStubs: get } = await import("@/test/utils/model-mocks");
+  return { Unit: get().unit };
+});
+vi.mock("@/models/BillingAccount", async () => {
+  const { getModelStubs: get } = await import("@/test/utils/model-mocks");
+  return { BillingAccount: get().billingAccount };
+});
+vi.mock("@/models/UnitBillingAssignment", async () => {
+  const { getModelStubs: get } = await import("@/test/utils/model-mocks");
+  return { UnitBillingAssignment: get().unitBillingAssignment };
+});
 
 import { POST } from "@/app/api/v1/invoices/generate/route";
 import { notifyLeaseExpiry } from "@/lib/notifications";
@@ -48,6 +60,9 @@ const {
   invoice: invoiceStub,
   tenant: tenantStub,
   managementAssignment,
+  unit: unitStub,
+  billingAccount: billingAccountStub,
+  unitBillingAssignment: unitBillingAssignmentStub,
 } = getModelStubs();
 const notifyLeaseExpiryMock = vi.mocked(notifyLeaseExpiry);
 
@@ -88,6 +103,9 @@ describe("POST /api/v1/invoices/generate", () => {
     resetModelStubs();
     notifyLeaseExpiryMock.mockClear();
     tenantStub.find.mockReturnValue(buildQuery([]));
+    billingAccountStub.find.mockReturnValue(buildQuery([]));
+    unitStub.find.mockReturnValue(buildQuery([]));
+    unitBillingAssignmentStub.find.mockReturnValue(buildQuery([]));
   });
 
   it("403 for a mismatched origin", async () => {

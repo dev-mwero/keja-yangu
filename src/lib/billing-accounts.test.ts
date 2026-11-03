@@ -2,29 +2,36 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
-// Module mocks — must be declared before importing the module under test
+// Hoisted stubs — vi.hoisted runs before vi.mock factories
 // ---------------------------------------------------------------------------
-
-vi.mock("@/lib/mongoose", () => ({ connectToDatabase: vi.fn().mockResolvedValue(undefined) }));
-vi.mock("@/lib/invoicing", () => ({ assertValidPeriod: vi.fn() }));
 
 const { billingAccountStub, unitStub, unitBillingAssignmentStub } = vi.hoisted(() => ({
   billingAccountStub: {
+    find: vi.fn(),
     findOne: vi.fn(),
     findOneAndUpdate: vi.fn(),
     exists: vi.fn(),
     create: vi.fn(),
   },
   unitStub: {
+    find: vi.fn(),
     findById: vi.fn(),
     updateOne: vi.fn(),
   },
   unitBillingAssignmentStub: {
+    find: vi.fn(),
     findOne: vi.fn(),
     updateMany: vi.fn(),
     create: vi.fn(),
   },
 }));
+
+// ---------------------------------------------------------------------------
+// Module mocks
+// ---------------------------------------------------------------------------
+
+vi.mock("@/lib/mongoose", () => ({ connectToDatabase: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("@/lib/invoicing", () => ({ assertValidPeriod: vi.fn() }));
 vi.mock("@/models/BillingAccount", () => ({ BillingAccount: billingAccountStub }));
 vi.mock("@/models/Unit", () => ({ Unit: unitStub }));
 vi.mock("@/models/UnitBillingAssignment", () => ({
@@ -37,8 +44,11 @@ vi.mock("@/models/UnitBillingAssignment", () => ({
 
 import {
   assignBillingAccountToUnit,
+  billingFieldsFromAccount,
   getOrCreateBillingAccountForOwner,
   nextBillingAccountInvoiceNumber,
+  resolveBillingAccountForLease,
+  resolveBillingAccountForOwner,
   resolveBillingAccountForUnit,
   sanitizeInvoicePrefix,
 } from "@/lib/billing-accounts";
@@ -164,6 +174,92 @@ describe("getOrCreateBillingAccountForOwner", () => {
     expect(billingAccountStub.create).toHaveBeenCalledWith(
       expect.objectContaining({ legalEntityName: "My Company Ltd" }),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// billingFieldsFromAccount
+// ---------------------------------------------------------------------------
+
+describe("billingFieldsFromAccount", () => {
+  it("returns null for null/undefined input", () => {
+    expect(billingFieldsFromAccount(null)).toBeNull();
+    expect(billingFieldsFromAccount(undefined)).toBeNull();
+  });
+
+  it("maps account fields to denormalised invoice fields", () => {
+    const account = {
+      _id: "ba-1",
+      ownerAdminId: "admin-1",
+      legalEntityName: "Acme Ltd",
+      invoicePrefix: "ACME",
+    };
+    const result = billingFieldsFromAccount(account);
+    expect(result).toEqual({
+      billingAccountId: "ba-1",
+      billingAdminId: "admin-1",
+      billingSnapshot: {
+        legalEntityName: "Acme Ltd",
+        invoicePrefix: "ACME",
+      },
+    });
+  });
+
+  it("defaults missing optional fields to empty strings", () => {
+    const result = billingFieldsFromAccount({ _id: "ba-2" });
+    expect(result?.billingAdminId).toBe("");
+    expect(result?.billingSnapshot.legalEntityName).toBe("");
+    expect(result?.billingSnapshot.invoicePrefix).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveBillingAccountForLease
+// ---------------------------------------------------------------------------
+
+describe("resolveBillingAccountForLease", () => {
+  it("resolves by billingAccountId first", async () => {
+    const account = { _id: "ba-1", invoicePrefix: "X" };
+    billingAccountStub.findOne.mockResolvedValue(null); // owner fallback
+    // loadBillingAccountLookup will query BillingAccount.find for explicit IDs
+    billingAccountStub.find = vi.fn().mockReturnValue({
+      lean: () => Promise.resolve([account]),
+    });
+    unitStub.find = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({ lean: () => Promise.resolve([]) }),
+    });
+    unitBillingAssignmentStub.find = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({ lean: () => Promise.resolve([]) }),
+    });
+
+    const result = await resolveBillingAccountForLease({
+      billingAccountId: "ba-1",
+      ownerId: "o-1",
+    });
+    expect(result).toEqual(account);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveBillingAccountForOwner
+// ---------------------------------------------------------------------------
+
+describe("resolveBillingAccountForOwner", () => {
+  it("finds an owner's active account", async () => {
+    const account = { _id: "ba-1", ownerAdminId: "o-1" };
+    billingAccountStub.findOne.mockReturnValue({ lean: () => Promise.resolve(account) });
+
+    const result = await resolveBillingAccountForOwner("o-1");
+    expect(result).toEqual(account);
+    expect(billingAccountStub.findOne).toHaveBeenCalledWith(
+      expect.objectContaining({ ownerAdminId: "o-1", status: "active" }),
+    );
+  });
+
+  it("returns null when no account exists", async () => {
+    billingAccountStub.findOne.mockReturnValue({ lean: () => Promise.resolve(null) });
+    const result = await resolveBillingAccountForOwner("o-missing");
+    expect(result).toBeNull();
   });
 });
 

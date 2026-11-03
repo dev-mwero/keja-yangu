@@ -1,6 +1,12 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { isDuplicateKeyError, readJsonBody, resolveInvoiceActor } from "@/app/api/v1/_helpers";
+import {
+  isDuplicateKeyError,
+  isInvoiceNumberCollision,
+  readJsonBody,
+  resolveInvoiceActor,
+} from "@/app/api/v1/_helpers";
+import { billingFieldsFromAccount, loadBillingAccountLookup } from "@/lib/billing-accounts";
 import { generateForPeriod } from "@/lib/invoice-generation";
 import { nextInvoiceNumber } from "@/lib/invoice-numbering";
 import { currentPeriod } from "@/lib/invoicing";
@@ -140,19 +146,42 @@ export async function POST(request: NextRequest) {
     unitChargeByLeaseId,
   });
 
+  const billingLookup = await loadBillingAccountLookup({
+    unitIds,
+    billingAccountIds: leases.map((lease) => lease.billingAccountId),
+    ownerIds: leases.map((lease) => lease.ownerId),
+  });
+
   let created = 0;
   let skippedCount = skipped.length;
   for (const draft of toCreate) {
-    draft.invoiceNumber = await nextInvoiceNumber(draft.ownerId, period, {
-      billingAccountId: draft.billingAccountId,
-    });
-    try {
-      await Invoice.create(draft);
-      created += 1;
-    } catch (error) {
-      if (!isDuplicateKeyError(error)) throw error;
-      skippedCount += 1;
+    const account =
+      (draft.billingAccountId
+        ? billingLookup.byAccountId.get(draft.billingAccountId)
+        : undefined) ??
+      billingLookup.byUnitId.get(draft.unitId ?? "") ??
+      billingLookup.byOwnerId.get(draft.ownerId);
+    const billingFields = billingFieldsFromAccount(account);
+    if (billingFields) Object.assign(draft, billingFields);
+
+    // The unique invoiceNumber index is the backstop for a lost counter race:
+    // reserve again and retry, but treat any other duplicate as a skip.
+    let persisted = false;
+    for (let attempt = 0; attempt < 3 && !persisted; attempt += 1) {
+      draft.invoiceNumber = await nextInvoiceNumber(draft.ownerId, period, {
+        billingAccountId: draft.billingAccountId,
+      });
+      try {
+        await Invoice.create(draft);
+        persisted = true;
+        created += 1;
+      } catch (error) {
+        if (isInvoiceNumberCollision(error)) continue;
+        if (!isDuplicateKeyError(error)) throw error;
+        break;
+      }
     }
+    if (!persisted) skippedCount += 1;
   }
 
   console.info(

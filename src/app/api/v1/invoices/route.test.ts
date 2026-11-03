@@ -40,6 +40,14 @@ vi.mock("@/models/Unit", async () => {
   const { getModelStubs: get } = await import("@/test/utils/model-mocks");
   return { Unit: get().unit };
 });
+vi.mock("@/models/BillingAccount", async () => {
+  const { getModelStubs: get } = await import("@/test/utils/model-mocks");
+  return { BillingAccount: get().billingAccount };
+});
+vi.mock("@/models/UnitBillingAssignment", async () => {
+  const { getModelStubs: get } = await import("@/test/utils/model-mocks");
+  return { UnitBillingAssignment: get().unitBillingAssignment };
+});
 
 import { GET, POST } from "@/app/api/v1/invoices/route";
 import { notifyOverdueInvoices } from "@/lib/notifications";
@@ -51,6 +59,9 @@ const {
   lease: leaseStub,
   invoice: invoiceStub,
   managementAssignment,
+  unit: unitStub,
+  billingAccount: billingAccountStub,
+  unitBillingAssignment: unitBillingAssignmentStub,
 } = getModelStubs();
 const notifyOverdueInvoicesMock = vi.mocked(notifyOverdueInvoices);
 
@@ -286,6 +297,10 @@ describe("GET /api/v1/invoices", () => {
 describe("POST /api/v1/invoices", () => {
   beforeEach(() => {
     resetModelStubs();
+    billingAccountStub.find.mockReturnValue(buildQuery([]));
+    billingAccountStub.findOne.mockReturnValue(buildQuery(null));
+    unitStub.find.mockReturnValue(buildQuery([]));
+    unitBillingAssignmentStub.find.mockReturnValue(buildQuery([]));
   });
 
   it("403 for a mismatched origin", async () => {
@@ -401,7 +416,10 @@ describe("POST /api/v1/invoices", () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     leaseStub.findById.mockReturnValue(buildQuery(inScopeLease()));
     user.findOneAndUpdate.mockReturnValue(buildQuery({ invoiceCounters: {} }));
-    invoiceStub.create.mockRejectedValue({ code: 11000 });
+    invoiceStub.create.mockRejectedValue({
+      code: 11000,
+      keyPattern: { leaseId: 1, period: 1 },
+    });
 
     const res = await POST(
       buildRequest("/api/v1/invoices", {

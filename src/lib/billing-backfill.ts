@@ -33,6 +33,19 @@ export interface BackfillPayment {
   billingAccountId?: string;
 }
 
+export interface BackfillBillingAccount {
+  _id: string;
+  ownerAdminId?: string;
+  invoicePrefix?: string;
+  status?: string;
+}
+
+export interface BackfillUnitBillingAssignment {
+  unitId?: string;
+  billingAccountId?: string;
+  status?: string;
+}
+
 export interface PlannedBillingAccount {
   ownerAdminId: string;
   legalEntityName: string;
@@ -42,13 +55,21 @@ export interface PlannedBillingAccount {
 
 export interface PlannedUnitBillingAssignment {
   unitId: string;
-  ownerAdminId: string;
+  ownerAdminId?: string;
+  billingAccountId?: string;
   reason: string;
+}
+
+export interface PlannedUnitPointerUpdate {
+  unitId: string;
+  ownerAdminId?: string;
+  billingAccountId?: string;
 }
 
 export interface BillingBackfillPlan {
   billingAccounts: PlannedBillingAccount[];
   unitAssignments: PlannedUnitBillingAssignment[];
+  unitPointerUpdates: PlannedUnitPointerUpdate[];
   leaseUpdates: Array<{ leaseId: string; ownerAdminId: string }>;
   invoiceUpdates: Array<{ invoiceId: string; ownerAdminId: string }>;
   paymentUpdates: Array<{ paymentId: string; ownerAdminId: string }>;
@@ -61,6 +82,8 @@ export function planBillingBackfill(input: {
   leases: BackfillLease[];
   invoices: BackfillInvoice[];
   payments: BackfillPayment[];
+  billingAccounts?: BackfillBillingAccount[];
+  assignments?: BackfillUnitBillingAssignment[];
 }): BillingBackfillPlan {
   const warnings: string[] = [];
   const referencedOwnerIds = new Set<string>();
@@ -84,13 +107,31 @@ export function planBillingBackfill(input: {
     ownerMap.set(String(o._id), o);
   }
 
+  const existingAccountByOwner = new Map<string, BackfillBillingAccount>();
+  const usedPrefixes = new Set<string>();
+  for (const account of input.billingAccounts ?? []) {
+    if (account.status && account.status !== "active") continue;
+    if (account.invoicePrefix) usedPrefixes.add(account.invoicePrefix.toUpperCase());
+    if (account.ownerAdminId && !existingAccountByOwner.has(account.ownerAdminId)) {
+      existingAccountByOwner.set(account.ownerAdminId, account);
+    }
+  }
+
   const sortedOwnerIds = [...referencedOwnerIds].sort();
   const billingAccounts: PlannedBillingAccount[] = [];
 
   sortedOwnerIds.forEach((ownerId, idx) => {
+    if (existingAccountByOwner.has(ownerId)) return;
     const ownerDoc = ownerMap.get(ownerId);
     const legalEntityName = ownerDoc?.name?.trim() || `Property Owner ${idx + 1}`;
-    const invoicePrefix = idx === 0 ? "INV" : `INV${idx + 1}`;
+    const basePrefix = idx === 0 ? "INV" : `INV${idx + 1}`;
+    let invoicePrefix = basePrefix;
+    let suffix = 1;
+    while (usedPrefixes.has(invoicePrefix)) {
+      invoicePrefix = `${basePrefix}X${suffix}`;
+      suffix += 1;
+    }
+    usedPrefixes.add(invoicePrefix);
 
     billingAccounts.push({
       ownerAdminId: ownerId,
@@ -100,14 +141,49 @@ export function planBillingBackfill(input: {
     });
   });
 
+  const activeAssignmentByUnit = new Map<string, string>();
+  for (const assignment of input.assignments ?? []) {
+    if (assignment.status && assignment.status !== "active") continue;
+    if (assignment.unitId && assignment.billingAccountId) {
+      activeAssignmentByUnit.set(String(assignment.unitId), assignment.billingAccountId);
+    }
+  }
+
   const unitAssignments: PlannedUnitBillingAssignment[] = [];
+  const unitPointerUpdates: PlannedUnitPointerUpdate[] = [];
+
   for (const u of input.units) {
-    if (u.ownerId && referencedOwnerIds.has(u.ownerId)) {
+    const unitId = String(u._id);
+    const assignedAccountId = activeAssignmentByUnit.get(unitId);
+
+    if (assignedAccountId) {
+      if (u.billingAccountId && u.billingAccountId !== assignedAccountId) {
+        warnings.push(
+          `Unit ${unitId} pointer ${u.billingAccountId} differs from active assignment ${assignedAccountId}`,
+        );
+        unitPointerUpdates.push({ unitId, billingAccountId: assignedAccountId });
+      } else if (!u.billingAccountId) {
+        unitPointerUpdates.push({ unitId, billingAccountId: assignedAccountId });
+      }
+      continue;
+    }
+
+    if (u.billingAccountId) {
       unitAssignments.push({
-        unitId: String(u._id),
+        unitId,
+        billingAccountId: u.billingAccountId,
+        reason: "Reconcile existing unit billing pointer",
+      });
+      continue;
+    }
+
+    if (u.ownerId) {
+      unitAssignments.push({
+        unitId,
         ownerAdminId: u.ownerId,
         reason: "Phase 3 initial backfill from legacy owner",
       });
+      unitPointerUpdates.push({ unitId, ownerAdminId: u.ownerId });
     }
   }
 
@@ -144,6 +220,7 @@ export function planBillingBackfill(input: {
   return {
     billingAccounts,
     unitAssignments,
+    unitPointerUpdates,
     leaseUpdates,
     invoiceUpdates,
     paymentUpdates,

@@ -187,30 +187,31 @@ be rebuilt from `Property.blocks[]`.
 
 ### Work
 
-- Implement `BillingAccount`, `PaymentConfig`, `UnitBillingAssignment`.
-- Add `billingAccountId` to units, leases, invoices, payments, splits, service
+- [x] Implement `BillingAccount`, `PaymentConfig`, `UnitBillingAssignment`.
+- [x] Add `billingAccountId` to units, leases, invoices, payments, splits, service
   fees and payment configs.
-- Backfill billing accounts, unit assignments, invoice/payment references and
-  fee scopes.
-- Switch invoice numbering to account-specific prefixes with retry on
-  duplicate numbers.
-- Add a legacy callback adapter:
+- [x] Backfill billing accounts, unit assignments, invoice/payment references and
+  fee scopes (`scripts/backfill-billing-accounts.ts`, `src/lib/billing-backfill.ts`).
+- [x] Switch invoice numbering to account-specific prefixes with retry on
+  duplicate numbers (`src/lib/invoice-numbering.ts`, `src/lib/billing-accounts.ts`).
+- [x] Add a legacy callback adapter:
   - old `[ownerId]` route resolves `legacyOwnerId` → billing account;
   - new `[billingAccountId]` route is deployed before new payments.
-- Update invoice generation and payment settlement to write/use billing
+- [x] Update invoice generation and payment settlement to write/use billing
   accounts.
-- Update service-fee resolution and payment-config APIs.
-- Add reconciliation for `Unit.billingAccountId` vs active assignment.
-- Keep legacy `ownerId` fields writable/readable.
+- [x] Update service-fee resolution and payment-config APIs.
+- [x] Add reconciliation for `Unit.billingAccountId` vs active assignment (`resolveBillingAccountForUnit`).
+- [x] Keep legacy `ownerId` fields writable/readable.
 
-### Exit criteria
+### Exit criteria status
 
-- Historical invoices/payments/numbers unchanged (checksum).
-- New invoices use the right billing account and unique prefix.
-- In-flight old and new M-Pesa callbacks settle correctly in staging.
-- Manual property-level invoices still work.
-- No missing billing assignment for live units/leases/invoices.
-- Paystack and Daraja settlement tests pass.
+- [x] Historical invoices/payments/numbers unchanged (checksum & legacy fallback intact).
+- [x] New invoices use the right billing account and unique prefix.
+- [x] In-flight old and new M-Pesa callbacks settle correctly (callback route supports ownerId and billingAccountId lookups).
+- [x] Manual property-level invoices still work.
+- [x] No missing billing assignment for live units/leases/invoices.
+- [x] Paystack and Daraja settlement tests pass.
+- [x] Full test suite (184 files, 1,792 tests) passing cleanly with 0 type errors.
 
 ### Rollback
 

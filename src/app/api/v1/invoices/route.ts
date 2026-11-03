@@ -1,6 +1,16 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { isDuplicateKeyError, readJsonBody, resolveInvoiceActor } from "@/app/api/v1/_helpers";
+import {
+  isDuplicateKeyError,
+  isInvoiceNumberCollision,
+  readJsonBody,
+  resolveInvoiceActor,
+} from "@/app/api/v1/_helpers";
+import {
+  billingFieldsFromAccount,
+  resolveBillingAccountForLease,
+  resolveBillingAccountForOwner,
+} from "@/lib/billing-accounts";
 import { buildInvoiceForLease } from "@/lib/invoice-generation";
 import { nextInvoiceNumber } from "@/lib/invoice-numbering";
 import { computeDueDate, currentPeriod, serializeInvoice } from "@/lib/invoicing";
@@ -146,6 +156,8 @@ export async function POST(request: NextRequest) {
     leaseId: string;
     unitId?: string;
     billingAccountId?: string;
+    billingAdminId?: string;
+    billingSnapshot?: { legalEntityName?: string; invoicePrefix?: string };
     ownerId: string;
     amountDue: number;
     rentAmount: number;
@@ -183,12 +195,21 @@ export async function POST(request: NextRequest) {
       ? await loadServiceFeeForUnit(String(lease.unitId))
       : null;
     const draft = buildInvoiceForLease(lease, period, now, fee);
+    const billingFields = billingFieldsFromAccount(
+      await resolveBillingAccountForLease({
+        billingAccountId: lease.billingAccountId,
+        unitId: lease.unitId ? String(lease.unitId) : undefined,
+        ownerId: lease.ownerId,
+      }),
+    );
     derived = {
       tenantId: lease.tenantId,
       propertyId: lease.propertyId,
       leaseId: parsed.data.leaseId,
       unitId: lease.unitId ? String(lease.unitId) : "",
-      billingAccountId: lease.billingAccountId ?? "",
+      billingAccountId: billingFields?.billingAccountId ?? lease.billingAccountId ?? "",
+      billingAdminId: billingFields?.billingAdminId ?? "",
+      billingSnapshot: billingFields?.billingSnapshot,
       ownerId: lease.ownerId,
       amountDue: draft.amountDue,
       rentAmount: draft.rentAmount,
@@ -240,54 +261,67 @@ export async function POST(request: NextRequest) {
       propertyId,
       leaseId: "",
       ownerId: tenant.ownerId,
+      billingAccountId: "",
+      billingAdminId: "",
       amountDue,
       rentAmount: amountDue,
       serviceChargeAmount: 0,
       rentIncludesServiceCharge: false,
       serviceFeeItems: [],
     };
-  }
-
-  const invoiceNumber = await nextInvoiceNumber(derived.ownerId, period, {
-    billingAccountId: derived.billingAccountId,
-  });
-
-  try {
-    const invoice = await Invoice.create({
-      invoiceNumber,
-      tenantId: derived.tenantId,
-      propertyId: derived.propertyId,
-      leaseId: derived.leaseId,
-      unitId: derived.unitId ?? "",
-      ownerId: derived.ownerId,
-      billingAccountId: derived.billingAccountId ?? "",
-      period,
-      amountDue: derived.amountDue,
-      amountPaid: 0,
-      status,
-      dueDate: computeDueDate(period),
-      method: parsed.data.method,
-      notes: parsed.data.notes,
-      rentAmount: derived.rentAmount,
-      serviceChargeAmount: derived.serviceChargeAmount,
-      rentIncludesServiceCharge: derived.rentIncludesServiceCharge,
-      serviceFeeItems: derived.serviceFeeItems,
-    });
-    const created = await Invoice.findById(invoice._id).lean();
-    if (!created) {
-      return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
-    }
-    return NextResponse.json(
-      { data: serializeInvoice(created, now, { includeServiceFeeItems: true }) },
-      { status: 201 },
+    const billingFields = billingFieldsFromAccount(
+      await resolveBillingAccountForOwner(tenant.ownerId),
     );
-  } catch (error) {
-    if (isDuplicateKeyError(error)) {
-      return NextResponse.json(
-        { error: "Invoice already exists for this lease and period" },
-        { status: 409 },
-      );
-    }
-    throw error;
+    if (billingFields) Object.assign(derived, billingFields);
   }
+
+  let invoiceNumber = "";
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    invoiceNumber = await nextInvoiceNumber(derived.ownerId, period, {
+      billingAccountId: derived.billingAccountId,
+    });
+    try {
+      const invoice = await Invoice.create({
+        invoiceNumber,
+        tenantId: derived.tenantId,
+        propertyId: derived.propertyId,
+        leaseId: derived.leaseId,
+        unitId: derived.unitId ?? "",
+        ownerId: derived.ownerId,
+        billingAccountId: derived.billingAccountId ?? "",
+        billingAdminId: derived.billingAdminId ?? "",
+        billingSnapshot: derived.billingSnapshot,
+        period,
+        amountDue: derived.amountDue,
+        amountPaid: 0,
+        status,
+        dueDate: computeDueDate(period),
+        method: parsed.data.method,
+        notes: parsed.data.notes,
+        rentAmount: derived.rentAmount,
+        serviceChargeAmount: derived.serviceChargeAmount,
+        rentIncludesServiceCharge: derived.rentIncludesServiceCharge,
+        serviceFeeItems: derived.serviceFeeItems,
+      });
+      const created = await Invoice.findById(invoice._id).lean();
+      if (!created) {
+        return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+      }
+      return NextResponse.json(
+        { data: serializeInvoice(created, now, { includeServiceFeeItems: true }) },
+        { status: 201 },
+      );
+    } catch (error) {
+      if (isInvoiceNumberCollision(error)) continue;
+      if (isDuplicateKeyError(error)) {
+        return NextResponse.json(
+          { error: "Invoice already exists for this lease and period" },
+          { status: 409 },
+        );
+      }
+      throw error;
+    }
+  }
+
+  return NextResponse.json({ error: "Could not reserve a unique invoice number" }, { status: 409 });
 }

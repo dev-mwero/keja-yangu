@@ -161,7 +161,7 @@ async function main() {
   }
 
   for (const uba of plan.unitAssignments) {
-    const baId = accountIdByOwner.get(uba.ownerAdminId);
+    const baId = uba.ownerAdminId ? accountIdByOwner.get(uba.ownerAdminId) : undefined;
     if (!baId) continue;
 
     await UnitBillingAssignment.findOneAndUpdate(

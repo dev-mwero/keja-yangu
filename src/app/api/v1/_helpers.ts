@@ -220,3 +220,14 @@ export function isDuplicateKeyError(error: unknown): boolean {
     (error as { code?: unknown }).code === 11000
   );
 }
+
+/**
+ * True when a duplicate-key failure is the invoice-number backstop (as opposed
+ * to the lease+period uniqueness rule). Missing `keyPattern` (stubbed errors)
+ * is treated as a number collision so callers can safely retry.
+ */
+export function isInvoiceNumberCollision(error: unknown): boolean {
+  if (!isDuplicateKeyError(error)) return false;
+  const keyPattern = (error as { keyPattern?: Record<string, unknown> }).keyPattern;
+  return !keyPattern || "invoiceNumber" in keyPattern;
+}
