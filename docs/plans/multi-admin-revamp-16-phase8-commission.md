@@ -1,6 +1,6 @@
 # Phase 8 — Commission
 
-**Status:** Plan Approved — Implementation In Progress  
+**Status:** Implemented (shadow mode; live payouts gated)  
 **Goal:** accrue commission from collected rent, run in shadow mode, and only then
 enable controlled payouts with segregation of duties and clawbacks.  
 **Depends on:** Phase 7 complete (`feat/revamp`, attribution + confirmed lease linkage)
@@ -50,13 +50,13 @@ enable controlled payouts with segregation of duties and clawbacks.
 
 ### 1.2 Exit Criteria
 
-- [ ] Shadow accruals reconcile to expected amounts for a synthetic full cycle.
-- [ ] Duplicate settlement replays do not duplicate accruals.
-- [ ] Refund/cancellation produces a reversal or clawback.
-- [ ] Broker/admin/system-admin permissions are enforced.
-- [ ] Payout failure restores accruals to `approved`.
+- [x] Shadow accruals reconcile to expected amounts for a synthetic full cycle.
+- [x] Duplicate settlement replays do not duplicate accruals.
+- [x] Refund/cancellation produces a reversal or clawback.
+- [x] Broker/admin/system-admin permissions are enforced.
+- [x] Payout failure restores accruals to `approved`.
 - [ ] Finance/legal sign-off recorded before enabling live payouts.
-- [ ] `tsc --noEmit`, Biome, Vitest and `npm run build` pass.
+- [x] `tsc --noEmit`, Biome, Vitest and `npm run build` pass.
 
 ---
 
@@ -235,3 +235,49 @@ privileged mutation.
 - Tax handling and withholding basis.
 - Minimum payout threshold and monthly cut-off.
 - Clawback window and escalation limits.
+
+---
+
+## 12. Implementation Notes (2026-11-04)
+
+Implemented locally; no live database mutation, payout or deployment was performed.
+
+### Added
+
+- `src/models/CommissionAccrual.ts` — ledger with agreement snapshot, unique
+  replay mutex on `{ attributionId, invoiceId, kind }`, eligibility and payout indexes.
+- `src/models/CommissionPayout.ts` — frozen accrual batches with execution evidence.
+- `src/lib/commission.ts` — calculator, shadow accrual, eligibility, approval,
+  payout create/execute/fail, clawback, duplication/consistency reconciliation.
+- `src/lib/domain-enums.ts` — commission accrual kinds/statuses and payout statuses.
+- API routes:
+  - `GET /api/v1/commissions`
+  - `POST /api/v1/commissions/[id]/approve`
+  - `POST /api/v1/commissions/[id]/clawback`
+  - `GET|POST /api/v1/admin/commission-payouts`
+  - `POST /api/v1/admin/commission-payouts/[id]/pay`
+  - `POST /api/v1/admin/commission-payouts/[id]/fail`
+  - `GET /api/v1/brokers/commissions`
+- Settlement hooks (best-effort, non-fatal) in `src/lib/payments/settle.ts`,
+  staff mark-paid and tenant mark-paid routes.
+- `scripts/backfill-commissions.ts` — dry-run by default; `--apply` creates
+  shadow accruals only.
+- `scripts/reconcile-commissions.ts` — flags paid-without-batch, unpaid batch and
+  duplicate accruals.
+- Broker dashboard commissions tab and `/dashboard/system-admin/commissions`
+  management page/nav.
+- Tests for calculator, lifecycle, idempotency, reconciliation, models and routes.
+
+### Verification
+
+- `npx tsc --noEmit` — clean.
+- `npx biome check --write .` — no errors (existing warnings remain).
+- `npm run test` — 220 files / 1959 tests passed.
+- `npm run build` — succeeded; `/dashboard/system-admin/commissions` in route table.
+
+### Still open before live payout
+
+- D-04 `first_month_rent` default rate/cap and other section 11 commercial/legal
+  decisions.
+- Finance/legal sign-off.
+- Keep `COMMISSION_PAYOUTS_ENABLED=false` until sign-off; execution returns `409`.

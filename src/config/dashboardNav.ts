@@ -121,6 +121,11 @@ export const systemAdminNav: DashNavItem[] = [
     icon: Tags,
   },
   { to: "/dashboard/system-admin/recycle-bin", label: "Recycle Bin", icon: Trash2 },
+  {
+    to: "/dashboard/system-admin/commissions",
+    label: "Commissions",
+    icon: Calculator,
+  },
 ];
 
 interface TenantSection {

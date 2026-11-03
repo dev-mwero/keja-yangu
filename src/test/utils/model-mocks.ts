@@ -36,7 +36,9 @@ const stubs: Record<
   | "brokerProfile"
   | "brokerAuthorization"
   | "commissionAgreement"
-  | "attribution",
+  | "attribution"
+  | "commissionAccrual"
+  | "commissionPayout",
   ModelStub
 > = {
   user: createModelStub(),
@@ -75,6 +77,8 @@ const stubs: Record<
   brokerAuthorization: createModelStub(),
   commissionAgreement: createModelStub(),
   attribution: createModelStub(),
+  commissionAccrual: createModelStub(),
+  commissionPayout: createModelStub(),
 };
 
 /**

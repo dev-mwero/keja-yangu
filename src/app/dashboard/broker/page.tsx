@@ -29,6 +29,7 @@ export default function BrokerDashboard() {
   const [authorizations, setAuthorizations] = useState<any[]>([]);
   const [agreements, setAgreements] = useState<any[]>([]);
   const [prospects, setProspects] = useState<any[]>([]);
+  const [commissions, setCommissions] = useState<any[]>([]);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   // Profile form state
@@ -87,6 +88,13 @@ export default function BrokerDashboard() {
       if (prospectRes.ok) {
         const prospectData = await prospectRes.json();
         setProspects(prospectData.prospects || []);
+      }
+
+      // Fetch commission accruals
+      const commissionRes = await fetch("/api/v1/brokers/commissions");
+      if (commissionRes.ok) {
+        const commissionData = await commissionRes.json();
+        setCommissions(commissionData.data || []);
       }
     } catch (err) {
       console.error(err);
@@ -245,9 +253,10 @@ export default function BrokerDashboard() {
         </div>
 
         <Tabs defaultValue="listings" className="w-full">
-          <TabsList className="grid w-full grid-cols-4 max-w-xl">
+          <TabsList className="grid w-full grid-cols-5 max-w-2xl">
             <TabsTrigger value="listings">Market Listings</TabsTrigger>
             <TabsTrigger value="prospects">Prospects</TabsTrigger>
+            <TabsTrigger value="commissions">Commissions</TabsTrigger>
             <TabsTrigger value="authorizations">Authorizations</TabsTrigger>
             <TabsTrigger value="profile">Profile & Terms</TabsTrigger>
           </TabsList>
@@ -397,6 +406,103 @@ export default function BrokerDashboard() {
                     ))}
                   </TableBody>
                 </Table>
+              )}
+            </div>
+          </TabsContent>
+
+          {/* Commissions Tab */}
+          <TabsContent value="commissions" className="mt-6 space-y-4">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="rounded-xl border border-border bg-card p-4">
+                <p className="text-xs text-muted-foreground">Pending / Eligible</p>
+                <p className="mt-1 text-xl font-semibold">
+                  {formatKES(
+                    commissions
+                      .filter((c) => c.status === "pending" || c.status === "eligible")
+                      .reduce((sum, c) => sum + (c.netMinor || 0), 0) / 100,
+                  )}
+                </p>
+              </div>
+              <div className="rounded-xl border border-border bg-card p-4">
+                <p className="text-xs text-muted-foreground">Approved for payout</p>
+                <p className="mt-1 text-xl font-semibold">
+                  {formatKES(
+                    commissions
+                      .filter((c) => c.status === "approved")
+                      .reduce((sum, c) => sum + (c.netMinor || 0), 0) / 100,
+                  )}
+                </p>
+              </div>
+              <div className="rounded-xl border border-border bg-card p-4">
+                <p className="text-xs text-muted-foreground">Paid to date</p>
+                <p className="mt-1 text-xl font-semibold">
+                  {formatKES(
+                    commissions
+                      .filter((c) => c.status === "paid")
+                      .reduce((sum, c) => sum + (c.netMinor || 0), 0) / 100,
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border bg-card">
+              <div className="border-b border-border p-4">
+                <h3 className="font-semibold">Commission Accruals</h3>
+                <p className="text-xs text-muted-foreground">
+                  Commission accrues from collected rent only. Payouts are released after finance
+                  approval; tax is withheld at the agreed rate.
+                </p>
+              </div>
+
+              {commissions.length === 0 ? (
+                <div className="p-8 text-center text-sm text-muted-foreground">
+                  No commission accrued yet. Accruals appear after a tenant&apos;s rent payment
+                  settles on an attributed lease.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Invoice</TableHead>
+                        <TableHead>Basis</TableHead>
+                        <TableHead>Gross</TableHead>
+                        <TableHead>Tax</TableHead>
+                        <TableHead>Net</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {commissions.map((c) => (
+                        <TableRow key={c._id}>
+                          <TableCell className="font-mono text-xs">{c.invoiceId}</TableCell>
+                          <TableCell className="capitalize">
+                            {String(c.kind).replace(/_/g, " ")}
+                          </TableCell>
+                          <TableCell>{formatKES((c.grossMinor || 0) / 100)}</TableCell>
+                          <TableCell>{formatKES((c.taxMinor || 0) / 100)}</TableCell>
+                          <TableCell className="font-medium">
+                            {formatKES((c.netMinor || 0) / 100)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                c.status === "paid"
+                                  ? "default"
+                                  : c.status === "reversed" || c.status === "disputed"
+                                    ? "destructive"
+                                    : "outline"
+                              }
+                              className="capitalize"
+                            >
+                              {c.status}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </div>
           </TabsContent>

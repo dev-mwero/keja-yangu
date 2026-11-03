@@ -1,3 +1,4 @@
+import { accrueCommissionForSettledInvoice } from "@/lib/commission";
 import { notifyInvoicePaid } from "@/lib/notifications";
 import {
   computeInvoicePaymentSplit,
@@ -265,6 +266,16 @@ export async function applyProviderPayment(
 
   // Record how the settled payment divides between rent and service charge.
   await recordPaymentSplit(payment, invoice, input.amountMinor);
+
+  // Shadow commission accrual — must never block or overturn settlement.
+  try {
+    await accrueCommissionForSettledInvoice(updated);
+  } catch (error) {
+    console.warn(
+      `[commission] accrual failed reference=${input.providerReference} invoice=${String(invoice._id)}`,
+      error,
+    );
+  }
 
   return { outcome: "settled" };
 }

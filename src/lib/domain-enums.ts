@@ -134,3 +134,26 @@ export const ATTRIBUTION_STATUSES = [
   "disputed",
 ] as const;
 export type AttributionStatus = (typeof ATTRIBUTION_STATUSES)[number];
+
+export const COMMISSION_ACCRUAL_KINDS = ["initial", "recurring", "adjustment", "clawback"] as const;
+export type CommissionAccrualKind = (typeof COMMISSION_ACCRUAL_KINDS)[number];
+
+export const COMMISSION_ACCRUAL_STATUSES = [
+  "pending",
+  "eligible",
+  "approved",
+  "paid",
+  "reversed",
+  "disputed",
+] as const;
+export type CommissionAccrualStatus = (typeof COMMISSION_ACCRUAL_STATUSES)[number];
+
+export const COMMISSION_PAYOUT_STATUSES = [
+  "draft",
+  "approved",
+  "processing",
+  "paid",
+  "failed",
+  "void",
+] as const;
+export type CommissionPayoutStatus = (typeof COMMISSION_PAYOUT_STATUSES)[number];
