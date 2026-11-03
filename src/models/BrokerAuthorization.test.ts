@@ -31,4 +31,3 @@ describe("BrokerAuthorization schema", () => {
     expect(err?.errors.grantedByUserId).toBeDefined();
   });
 });
-

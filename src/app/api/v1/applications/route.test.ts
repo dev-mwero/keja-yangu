@@ -15,6 +15,9 @@ vi.mock("@/models/ManagementAssignment", () => ({
   ManagementAssignment: getModelStubs().managementAssignment,
 }));
 vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
+vi.mock("@/lib/attributions", () => ({
+  bindApplicationAttribution: vi.fn().mockResolvedValue(null),
+}));
 
 import { GET, POST } from "@/app/api/v1/applications/route";
 

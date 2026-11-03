@@ -100,9 +100,7 @@ async function main() {
   const isApply = args.includes("--apply");
   const isDryRun = !isApply || args.includes("--dry-run");
 
-  const mongoUri =
-    process.env.MONGODB_URI ||
-    "mongodb://localhost:27017/keja-yangu?replicaSet=rs0";
+  const mongoUri = process.env.MONGODB_URI || "mongodb://localhost:27017/keja-yangu?replicaSet=rs0";
 
   console.log(`Connecting to MongoDB at ${mongoUri}...`);
   await mongoose.connect(mongoUri);
@@ -170,9 +168,7 @@ async function main() {
   }
 
   if (isDryRun) {
-    console.log(
-      "\nDRY RUN complete. No changes written. Use --apply to create draft listings.",
-    );
+    console.log("\nDRY RUN complete. No changes written. Use --apply to create draft listings.");
   } else {
     console.log("\nAPPLYING CHANGES...");
     if (plan.plannedListings.length > 0) {
@@ -211,4 +207,3 @@ main().catch((err) => {
   console.error("Backfill failed:", err);
   process.exit(1);
 });
-

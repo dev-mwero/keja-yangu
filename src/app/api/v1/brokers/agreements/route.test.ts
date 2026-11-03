@@ -93,4 +93,3 @@ describe("/api/v1/brokers/agreements", () => {
     });
   });
 });
-

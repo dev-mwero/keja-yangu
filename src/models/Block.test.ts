@@ -24,4 +24,3 @@ describe("Block schema", () => {
     expect(err?.errors.name).toBeDefined();
   });
 });
-

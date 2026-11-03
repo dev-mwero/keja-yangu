@@ -21,10 +21,7 @@ describe("getDashboardAllowedRoles", () => {
       "system-admin",
     ]);
     expect(getDashboardAllowedRoles("/dashboard/broker")).toEqual(["broker", "system-admin"]);
-    expect(getDashboardAllowedRoles("/dashboard/broker")).toEqual([
-      "broker",
-      "system-admin",
-    ]);
+    expect(getDashboardAllowedRoles("/dashboard/broker")).toEqual(["broker", "system-admin"]);
   });
 
   it("matches nested dashboard paths", () => {

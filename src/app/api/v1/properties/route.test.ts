@@ -844,9 +844,7 @@ describe("POST /api/v1/properties", () => {
           order: 0,
           rentOverride: null,
           purpose: null,
-          floors: [
-            { _id: "floor-0", level: 0, unitsPerFloor: 1 },
-          ],
+          floors: [{ _id: "floor-0", level: 0, unitsPerFloor: 1 }],
         },
       ],
     });

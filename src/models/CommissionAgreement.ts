@@ -61,4 +61,3 @@ export type CommissionAgreementDocument = InferSchemaType<typeof commissionAgree
 export const CommissionAgreement =
   models.CommissionAgreement ||
   model<CommissionAgreementDocument>("CommissionAgreement", commissionAgreementSchema);
-

@@ -31,9 +31,7 @@ describe("planListingBackfill", () => {
 
     expect(result.plannedListings).toHaveLength(1);
     expect(result.plannedListings[0].unitId).toBe("unit-1");
-    expect(result.plannedListings[0].headline).toBe(
-      "Kilimani Heights - Unit 1A",
-    );
+    expect(result.plannedListings[0].headline).toBe("Kilimani Heights - Unit 1A");
     expect(result.plannedListings[0].askingRent).toBe(32000);
     expect(result.plannedListings[0].state).toBe("draft");
     expect(result.skippedUnits).toHaveLength(0);
@@ -89,9 +87,7 @@ describe("planListingBackfill", () => {
 
     expect(result.plannedListings).toHaveLength(0);
     expect(result.skippedUnits).toHaveLength(1);
-    expect(result.skippedUnits[0].reason).toBe(
-      "Already has active or draft listing",
-    );
+    expect(result.skippedUnits[0].reason).toBe("Already has active or draft listing");
   });
 
   it("warns when rent is missing or zero", () => {
@@ -119,4 +115,3 @@ describe("planListingBackfill", () => {
     expect(result.warnings[0]).toContain("zero or unset rent");
   });
 });
-

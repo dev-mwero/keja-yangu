@@ -1,6 +1,6 @@
 # Phase 7 — Acquisition Attribution
 
-**Status:** Plan Proposed — Implementation Ready  
+**Status:** Implemented — Verification Pending Review  
 **Goal:** Reliably record who sourced a tenancy, enforce server-side attribution validation and conflict resolution, lock attribution on application submission, and confirm attribution upon unit lease allocation.  
 **Depends on:** Phase 6 complete (`feat/revamp`, commit `8fcbf5c`)
 
@@ -33,13 +33,13 @@
    - Build `src/lib/attribution-reconciliation.ts` and CLI runner `scripts/reconcile-attributions.ts` verifying that every confirmed attribution maps to an active lease and no lease has multiple confirmed attributions.
 
 ### 1.2 Exit Criteria (from Multi-Admin Revamp Master Plan)
-- [ ] Every broker-sourced application has a validated server-side attribution record.
-- [ ] Direct and admin applications have explicit `direct` / `platform` attribution.
-- [ ] Confirmed attribution is strictly unique per tenancy/lease (enforced by schema and application logic).
-- [ ] Attribution history is append-only (disputes create superseding records).
-- [ ] Unit allocation automatically links application → lease and confirms attribution.
-- [ ] Broker prospect views strictly redact tenant contact info and PII.
-- [ ] Full Vitest test suite, TypeScript typecheck (`tsc --noEmit`), and Biome linting pass cleanly.
+- [x] Every broker-sourced application has a validated server-side attribution record.
+- [x] Direct and admin applications have explicit `direct` / `platform` attribution.
+- [x] Confirmed attribution is strictly unique per tenancy/lease (enforced by schema and application logic).
+- [x] Attribution history is append-only (disputes create superseding records).
+- [x] Unit allocation automatically links application → lease and confirms attribution.
+- [x] Broker prospect views strictly redact tenant contact info and PII.
+- [x] Full Vitest test suite, TypeScript typecheck (`tsc --noEmit`), and Biome linting pass cleanly.
 
 ---
 
@@ -150,3 +150,24 @@ export interface IAttribution {
    - Wire prospects tab in `/dashboard/broker` to display redacted prospect pipeline.
 6. **Step 6: Full Verification**:
    - Run typecheck, Biome linting, and full test suite (`npm test -- --run`).
+
+---
+
+## 7. Implementation Notes
+
+**Delivered:**
+- `Attribution` model, enums, service layer, reconciliation module, and CLI runner.
+- Application submission binds and locks attribution (awaited, non-fatal).
+- `allocateUnit` confirms attribution for the created/refreshed lease and links the application.
+- API routes: `POST /api/v1/attribution/touch`, `GET /api/v1/brokers/prospects`,
+  `GET /api/v1/admin/attributions`, `POST /api/v1/admin/attributions/[id]/dispute`.
+- Marketplace applications forward `ref` share codes and listing ids; broker dashboard
+  shows the redacted prospects pipeline.
+- Route/service/model tests added; full Vitest suite (213 files / 1918 tests), `tsc --noEmit`,
+  and Biome check pass.
+
+**Deferred:**
+- The 30-day last-touch window and 90-day provisional lifespan are not enforced yet.
+  Touch validation is stateless, so application submission binds the share code directly.
+  Enforcing the windows requires a persisted touch-session store and is tracked as a follow-up.
+

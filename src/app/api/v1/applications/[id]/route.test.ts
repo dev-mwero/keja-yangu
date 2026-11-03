@@ -13,6 +13,9 @@ vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
+vi.mock("@/lib/attributions", () => ({
+  confirmAttributionForLease: vi.fn().mockResolvedValue(null),
+}));
 
 import { DELETE, PATCH } from "@/app/api/v1/applications/[id]/route";
 

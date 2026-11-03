@@ -11,6 +11,10 @@ export const applicationFormSchema = z.object({
 export const applicationCreateInput = applicationFormSchema.extend({
   propertyId: z.string().trim().min(1),
   unitId: z.string().trim().min(1).optional(),
+  /** Broker share code captured from the URL when the tenant landed on the listing. */
+  shareCode: z.string().trim().min(1).max(64).optional(),
+  /** Listing id the tenant applied from (used for attribution). */
+  listingId: z.string().trim().min(1).optional(),
 });
 
 export const applicationDecisionInput = z.object({

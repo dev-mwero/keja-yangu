@@ -15,6 +15,9 @@ vi.mock("@/models/AuditEvent", () => ({ AuditEvent: getModelStubs().auditEvent }
 vi.mock("@/lib/notifications", () => ({
   notifyUnitAvailable: vi.fn().mockResolvedValue(true),
 }));
+vi.mock("@/lib/attributions", () => ({
+  confirmAttributionForLease: vi.fn().mockResolvedValue(null),
+}));
 
 import { AllocationError, allocateUnit, vacateUnit } from "@/lib/allocation";
 import { notifyUnitAvailable } from "@/lib/notifications";

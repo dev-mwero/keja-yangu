@@ -34,4 +34,3 @@ describe("CommissionAgreement schema", () => {
     expect(err?.errors.createdByUserId).toBeDefined();
   });
 });
-

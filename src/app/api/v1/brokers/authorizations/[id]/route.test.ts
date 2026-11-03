@@ -77,4 +77,3 @@ describe("/api/v1/brokers/authorizations/[id]", () => {
     expect(data.authorization.status).toBe("revoked");
   });
 });
-

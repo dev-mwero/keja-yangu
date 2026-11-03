@@ -47,4 +47,3 @@ export type BrokerAuthorizationDocument = InferSchemaType<typeof brokerAuthoriza
 export const BrokerAuthorization =
   models.BrokerAuthorization ||
   model<BrokerAuthorizationDocument>("BrokerAuthorization", brokerAuthorizationSchema);
-

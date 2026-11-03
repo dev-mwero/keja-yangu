@@ -290,4 +290,3 @@ const AdminTasksPage = () => {
 };
 
 export default AdminTasksPage;
-

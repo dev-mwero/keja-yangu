@@ -123,39 +123,14 @@ export type CommissionBasis = (typeof COMMISSION_BASES)[number];
 export const COMMISSION_AGREEMENT_STATUSES = ["draft", "active", "terminated"] as const;
 export type CommissionAgreementStatus = (typeof COMMISSION_AGREEMENT_STATUSES)[number];
 
-export const BROKER_PROFILE_STATUSES = [
-  "pending",
-  "verified",
-  "rejected",
-  "suspended",
-] as const;
-export type BrokerProfileStatus = (typeof BROKER_PROFILE_STATUSES)[number];
+export const ATTRIBUTION_SOURCES = ["broker", "direct", "platform", "admin"] as const;
+export type AttributionSource = (typeof ATTRIBUTION_SOURCES)[number];
 
-export const BROKER_AUTH_STATUSES = [
-  "active",
-  "suspended",
-  "revoked",
+export const ATTRIBUTION_STATUSES = [
+  "provisional",
+  "locked",
+  "confirmed",
+  "reversed",
+  "disputed",
 ] as const;
-export type BrokerAuthStatus = (typeof BROKER_AUTH_STATUSES)[number];
-
-export const BROKER_SCOPE_TYPES = [
-  "property",
-  "block",
-  "unit",
-] as const;
-export type BrokerScopeType = (typeof BROKER_SCOPE_TYPES)[number];
-
-export const COMMISSION_BASES = [
-  "first_month_rent",
-  "percentage_of_rent",
-  "fixed",
-] as const;
-export type CommissionBasis = (typeof COMMISSION_BASES)[number];
-
-export const COMMISSION_AGREEMENT_STATUSES = [
-  "draft",
-  "active",
-  "terminated",
-] as const;
-export type CommissionAgreementStatus = (typeof COMMISSION_AGREEMENT_STATUSES)[number];
-
+export type AttributionStatus = (typeof ATTRIBUTION_STATUSES)[number];

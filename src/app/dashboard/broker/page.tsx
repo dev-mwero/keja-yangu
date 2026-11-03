@@ -28,6 +28,7 @@ export default function BrokerDashboard() {
   const [listings, setListings] = useState<any[]>([]);
   const [authorizations, setAuthorizations] = useState<any[]>([]);
   const [agreements, setAgreements] = useState<any[]>([]);
+  const [prospects, setProspects] = useState<any[]>([]);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   // Profile form state
@@ -79,6 +80,13 @@ export default function BrokerDashboard() {
       if (listRes.ok) {
         const listData = await listRes.json();
         setListings(listData.listings || []);
+      }
+
+      // Fetch redacted attributed prospects
+      const prospectRes = await fetch("/api/v1/brokers/prospects");
+      if (prospectRes.ok) {
+        const prospectData = await prospectRes.json();
+        setProspects(prospectData.prospects || []);
       }
     } catch (err) {
       console.error(err);
@@ -237,8 +245,9 @@ export default function BrokerDashboard() {
         </div>
 
         <Tabs defaultValue="listings" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 max-w-md">
+          <TabsList className="grid w-full grid-cols-4 max-w-xl">
             <TabsTrigger value="listings">Market Listings</TabsTrigger>
+            <TabsTrigger value="prospects">Prospects</TabsTrigger>
             <TabsTrigger value="authorizations">Authorizations</TabsTrigger>
             <TabsTrigger value="profile">Profile & Terms</TabsTrigger>
           </TabsList>
@@ -343,6 +352,51 @@ export default function BrokerDashboard() {
                     </TableBody>
                   </Table>
                 </div>
+              )}
+            </div>
+          </TabsContent>
+
+          {/* Prospects Tab */}
+          <TabsContent value="prospects" className="mt-6 space-y-4">
+            <div className="rounded-xl border border-border bg-card">
+              <div className="border-b border-border p-4">
+                <h3 className="font-semibold">Attributed Prospects</h3>
+                <p className="text-xs text-muted-foreground">
+                  Applications that originated from your tracked share links. Tenant contact details
+                  are withheld — only reference codes and status are shown.
+                </p>
+              </div>
+
+              {prospects.length === 0 ? (
+                <div className="p-8 text-center text-sm text-muted-foreground">
+                  No prospects yet. Share your listing links to start tracking attributed
+                  applications.
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Reference</TableHead>
+                      <TableHead>Unit</TableHead>
+                      <TableHead>Applied</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {prospects.map((p) => (
+                      <TableRow key={p.id}>
+                        <TableCell className="font-mono text-xs">{p.referenceCode}</TableCell>
+                        <TableCell className="font-medium">{p.unitHeadline}</TableCell>
+                        <TableCell>{new Date(p.appliedAt).toLocaleDateString()}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize">
+                            {p.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               )}
             </div>
           </TabsContent>

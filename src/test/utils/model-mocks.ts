@@ -35,7 +35,8 @@ const stubs: Record<
   | "listingPublisher"
   | "brokerProfile"
   | "brokerAuthorization"
-  | "commissionAgreement",
+  | "commissionAgreement"
+  | "attribution",
   ModelStub
 > = {
   user: createModelStub(),
@@ -73,6 +74,7 @@ const stubs: Record<
   brokerProfile: createModelStub(),
   brokerAuthorization: createModelStub(),
   commissionAgreement: createModelStub(),
+  attribution: createModelStub(),
 };
 
 /**

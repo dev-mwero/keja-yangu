@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { bindApplicationAttribution } from "@/lib/attributions";
 import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
 import { authenticate, getAdminAssignmentScope } from "@/lib/permissions";
@@ -162,6 +163,24 @@ export async function POST(request: NextRequest) {
     message: parsed.data.message ?? "",
     status: "pending",
   });
+
+  // Lock the sourcing attribution before responding. Non-fatal: a failed
+  // attribution lookup must not discard an otherwise valid application.
+  if (unitId) {
+    const { shareCode, listingId } = parsed.data;
+    try {
+      await bindApplicationAttribution({
+        applicationId: String(created._id),
+        shareCode: shareCode || undefined,
+        unitId,
+        propertyId: parsed.data.propertyId,
+        listingId: listingId || undefined,
+        actorUserId: auth.userId,
+      });
+    } catch {
+      // Non-fatal attribution bookkeeping
+    }
+  }
 
   return NextResponse.json({ data: created }, { status: 201 });
 }

@@ -85,6 +85,10 @@ export default function ListingDetailPage() {
 
     setSubmitting(true);
     try {
+      const referralCode =
+        typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("ref") || ""
+          : "";
       const res = await fetch("/api/v1/applications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -92,6 +96,10 @@ export default function ListingDetailPage() {
           propertyId: listing.property.id,
           unitId: listing.unit.id,
           unitName: listing.unit.name,
+          name: user.name || "",
+          email: user.email || "",
+          listingId: listing.id,
+          shareCode: referralCode || listing.publisher?.shareCode || undefined,
           message:
             applyForm.message || `Application for Unit ${listing.unit.name} (${listing.headline})`,
         }),

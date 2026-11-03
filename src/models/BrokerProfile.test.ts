@@ -28,4 +28,3 @@ describe("BrokerProfile schema", () => {
     expect(err?.errors.email).toBeDefined();
   });
 });
-

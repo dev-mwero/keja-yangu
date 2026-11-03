@@ -1,3 +1,4 @@
+import { confirmAttributionForLease } from "@/lib/attributions";
 import { markListingLetForUnit } from "@/lib/listings";
 import { notifyUnitAvailable } from "@/lib/notifications";
 import { Lease } from "@/models/Lease";
@@ -79,6 +80,8 @@ export interface AllocateUnitInput {
   startDate?: Date;
   frequency?: "monthly";
   notes?: string;
+  /** Application that sourced this allocation, used to confirm its attribution. */
+  applicationId?: string;
 }
 
 /**
@@ -160,6 +163,22 @@ export async function allocateUnit(
       await markListingLetForUnit(String(claimed._id), occupantUserId || String(tenant.ownerId));
     } catch {
       // Non-fatal if listing service encounters an issue
+    }
+
+    // Confirm the acquisition attribution for the new lease. Non-fatal: an
+    // occupancy must never roll back because attribution bookkeeping failed.
+    const leaseId = String((lease as { _id?: unknown })?._id ?? "");
+    if (leaseId) {
+      try {
+        await confirmAttributionForLease(
+          String(claimed._id),
+          leaseId,
+          input.applicationId,
+          occupantUserId,
+        );
+      } catch {
+        // Non-fatal attribution bookkeeping
+      }
     }
 
     return { unit: claimed, tenant: updatedTenant, lease };

@@ -17,6 +17,9 @@ vi.mock("@/lib/notifications", () => ({
   notifyMoveRequestDecided: vi.fn().mockResolvedValue(true),
   notifyUnitAvailable: vi.fn().mockResolvedValue(true),
 }));
+vi.mock("@/lib/attributions", () => ({
+  confirmAttributionForLease: vi.fn().mockResolvedValue(null),
+}));
 
 import { PATCH } from "@/app/api/v1/move-requests/[id]/route";
 import { notifyMoveRequestDecided } from "@/lib/notifications";
