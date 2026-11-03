@@ -32,7 +32,10 @@ const stubs: Record<
   | "billingAccount"
   | "unitBillingAssignment"
   | "listing"
-  | "listingPublisher",
+  | "listingPublisher"
+  | "brokerProfile"
+  | "brokerAuthorization"
+  | "commissionAgreement",
   ModelStub
 > = {
   user: createModelStub(),
@@ -67,6 +70,9 @@ const stubs: Record<
   unitBillingAssignment: createModelStub(),
   listing: createModelStub(),
   listingPublisher: createModelStub(),
+  brokerProfile: createModelStub(),
+  brokerAuthorization: createModelStub(),
+  commissionAgreement: createModelStub(),
 };
 
 /**

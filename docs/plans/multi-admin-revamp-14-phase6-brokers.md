@@ -1,6 +1,6 @@
 # Phase 6 — Brokers
 
-**Status:** Plan Proposed — Ready for Review  
+**Status:** Complete  
 **Goal:** Onboard and authorise brokers without granting internal access to tenant or financial ledgers.  
 **Depends on:** Phase 5 complete (`feat/revamp`, commit `2d40c90`)
 
@@ -31,12 +31,12 @@
    - Admin Broker Management at `/dashboard/admin/brokers` (or integrated into property/unit views) to review, authorize, and set commission terms.
 
 ### 1.2 Exit Criteria (from Multi-Admin Revamp Master Plan)
-- [ ] Unverified or suspended brokers cannot access marketplace distribution tools or generate share links.
-- [ ] A broker cannot publish or generate share links outside an active authorization and active commission agreement on that exact scope.
-- [ ] Broker views and endpoints strictly prevent leaking tenant names, contact details, lease contracts, or internal financial accounts.
-- [ ] Admins can authorize brokers only within their assigned property/block/unit scope.
-- [ ] Revocation or suspension takes effect immediately on publisher distribution.
-- [ ] Full Vitest test suite, TypeScript typecheck (`tsc --noEmit`), and Biome linting pass cleanly.
+- [x] Unverified or suspended brokers cannot access marketplace distribution tools or generate share links.
+- [x] A broker cannot publish or generate share links outside an active authorization and active commission agreement on that exact scope.
+- [x] Broker views and endpoints strictly prevent leaking tenant names, contact details, lease contracts, or internal financial accounts.
+- [x] Admins can authorize brokers only within their assigned property/block/unit scope.
+- [x] Revocation or suspension takes effect immediately on publisher distribution.
+- [x] Full Vitest test suite (206 files, 1,886 tests), TypeScript typecheck (`tsc --noEmit`), and Biome linting pass cleanly.
 
 ---
 
@@ -178,3 +178,4 @@ export interface ICommissionAgreement {
 5. **Step 5: Full Verification**:
    - Run `npm run typecheck`, Biome checks, and the full test suite (`npm test -- --run`).
    - Confirm all exit criteria are satisfied before committing.
+

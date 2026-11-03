@@ -1,4 +1,11 @@
-export type Role = "tenant" | "caretaker" | "custodian" | "owner" | "admin" | "system-admin";
+export type Role =
+  | "tenant"
+  | "caretaker"
+  | "custodian"
+  | "owner"
+  | "admin"
+  | "broker"
+  | "system-admin";
 
 export const roleRoute: Record<Role, string> = {
   tenant: "/dashboard/tenant",
@@ -6,6 +13,7 @@ export const roleRoute: Record<Role, string> = {
   custodian: "/dashboard/custodian",
   owner: "/dashboard/owner",
   admin: "/dashboard/admin",
+  broker: "/dashboard/broker",
   "system-admin": "/dashboard/system-admin",
 };
 
@@ -15,6 +23,7 @@ const dashboardRoles: Array<[string, Role[]]> = [
   ["/dashboard/admin", ["admin", "owner", "system-admin"]],
   ["/dashboard/owner", ["owner", "admin", "system-admin"]],
   ["/dashboard/custodian", ["custodian", "owner", "admin", "system-admin"]],
+  ["/dashboard/broker", ["broker", "system-admin"]],
   ["/dashboard/tenant", ["tenant"]],
   ["/dashboard/caretaker", ["caretaker", "system-admin"]],
   ["/dashboard/system-admin", ["system-admin"]],

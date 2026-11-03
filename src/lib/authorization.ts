@@ -12,7 +12,10 @@ export type PolicyAction =
   | "assignment:revoke"
   | "ownership:read"
   | "ownership:manage"
-  | "audit:read";
+  | "audit:read"
+  | "broker:authorize"
+  | "broker:revoke"
+  | "broker:agreement:manage";
 
 export type AccessRole = "admin" | "custodian" | "caretaker";
 
@@ -92,6 +95,9 @@ const ADMIN_ACTIONS: PolicyAction[] = [
   "assignment:revoke",
   "ownership:read",
   "audit:read",
+  "broker:authorize",
+  "broker:revoke",
+  "broker:agreement:manage",
 ];
 
 const CUSTODIAN_ACTIONS: PolicyAction[] = [

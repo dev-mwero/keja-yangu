@@ -13,6 +13,7 @@ import {
   MessagesSquare,
   Search,
   Settings,
+  Shield,
   Tags,
   Trash2,
   UserCog,
@@ -26,7 +27,7 @@ export interface DashNavItem {
   icon: LucideIcon;
 }
 
-type Role = "tenant" | "caretaker" | "custodian" | "owner" | "admin" | "system-admin";
+type Role = "tenant" | "caretaker" | "custodian" | "owner" | "admin" | "broker" | "system-admin";
 
 interface Section {
   slug: string;
@@ -42,6 +43,7 @@ const baseSections = [
   { slug: "/applications", label: "Applications", icon: FileText },
   { slug: "/move-requests", label: "Move Requests", icon: ArrowLeftRight },
   { slug: "/team", label: "Team", icon: UserCog },
+  { slug: "/brokers", label: "Brokers", icon: Shield },
   { slug: "/tasks", label: "Tasks & Maintenance", icon: Wrench },
   { slug: "/accounting", label: "Accounting", icon: Calculator },
   { slug: "/reports", label: "Reports", icon: FileBarChart },
@@ -52,7 +54,11 @@ const baseSections = [
 ] satisfies readonly Section[];
 
 const caretakerSections = baseSections.filter(
-  (s) => s.slug !== "/tenants" && s.slug !== "/team" && s.slug !== "/applications",
+  (s) =>
+    s.slug !== "/tenants" &&
+    s.slug !== "/team" &&
+    s.slug !== "/applications" &&
+    s.slug !== "/brokers",
 );
 const custodianSections = baseSections.filter((s) =>
   [
@@ -73,12 +79,21 @@ const systemAdminSections = baseSections.filter((s) =>
   ["", "/portfolio", "/tenants", "/notifications", "/accounting"].includes(s.slug),
 );
 
+const brokerSections = [
+  { slug: "", label: "Overview", icon: Home },
+  { slug: "/listings", label: "Market Listings", icon: Building2 },
+  { slug: "/authorizations", label: "Authorizations", icon: UserCog },
+  { slug: "/prospects", label: "Prospects", icon: Users },
+  { slug: "/profile", label: "Broker Profile", icon: Settings },
+] satisfies readonly Section[];
+
 export const buildDashboardNav = (role: Exclude<Role, "tenant">): DashNavItem[] => {
   const base = `/dashboard/${role}`;
   let sectionsToUse = baseSections;
   if (role === "caretaker") sectionsToUse = caretakerSections;
   if (role === "custodian") sectionsToUse = custodianSections;
   if (role === "system-admin") sectionsToUse = systemAdminSections;
+  if (role === "broker") sectionsToUse = brokerSections;
   return sectionsToUse.map((s) => ({
     to: `${base}${s.slug}`,
     label: s.label,
@@ -90,6 +105,7 @@ export const adminNav = buildDashboardNav("admin");
 export const ownerNav = buildDashboardNav("owner");
 export const caretakerNav = buildDashboardNav("caretaker");
 export const custodianNav = buildDashboardNav("custodian");
+export const brokerNav = buildDashboardNav("broker");
 
 export const caretakerNavWithTenants: DashNavItem[] = [
   ...caretakerNav,

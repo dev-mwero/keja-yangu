@@ -15,6 +15,7 @@ export type ThreadViewerRole =
   | "admin"
   | "caretaker"
   | "custodian"
+  | "broker"
   | "system-admin";
 
 /**

@@ -291,23 +291,24 @@ listings remain for later.
 
 ### Work
 
-- Implement `BrokerProfile`, `BrokerAuthorization`,
+- [x] Implement `BrokerProfile`, `BrokerAuthorization`,
   `CommissionAgreement`.
-- Add broker signup/onboarding/verification UI.
-- Add admin broker authorisation and agreement UI.
-- Add broker dashboard: authorisations, listings, share links, redacted
+- [x] Add broker signup/onboarding/verification UI.
+- [x] Add admin broker authorisation and agreement UI.
+- [x] Add broker dashboard: authorisations, listings, share links, redacted
   prospects.
-- Add publisher creation for brokers with active auth + agreement.
-- Add broker suspension/revocation and audit.
-- Add privacy redaction before any tenant data is shown.
+- [x] Add publisher creation for brokers with active auth + agreement.
+- [x] Add broker suspension/revocation and audit.
+- [x] Add privacy redaction before any tenant data is shown.
 
 ### Exit criteria
 
-- Unverified/suspended brokers cannot access marketplace data.
-- A broker cannot publish outside an active authorisation/agreement.
-- Broker cannot see tenant/invoice/internal data.
-- Admin with unit scope can authorise only that unit.
-- Revocation blocks new publishing/attribution immediately.
+- [x] Unverified/suspended brokers cannot access marketplace data.
+- [x] A broker cannot publish outside an active authorisation/agreement.
+- [x] Broker cannot see tenant/invoice/internal data.
+- [x] Admin with unit scope can authorise only that unit.
+- [x] Revocation blocks new publishing/attribution immediately.
+- [x] Full test suite (206 files, 1,886 tests) passing cleanly with 0 type errors.
 
 ### Rollback
 

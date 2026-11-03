@@ -96,14 +96,7 @@ export const UNIT_BILLING_ASSIGNMENT_STATUSES = [
 ] as const;
 export type UnitBillingAssignmentStatus = (typeof UNIT_BILLING_ASSIGNMENT_STATUSES)[number];
 
-export const LISTING_STATES = [
-  "draft",
-  "active",
-  "paused",
-  "let",
-  "expired",
-  "withdrawn",
-] as const;
+export const LISTING_STATES = ["draft", "active", "paused", "let", "expired", "withdrawn"] as const;
 export type ListingState = (typeof LISTING_STATES)[number];
 
 export const LISTING_VISIBILITIES = ["public", "unlisted"] as const;
@@ -112,10 +105,57 @@ export type ListingVisibility = (typeof LISTING_VISIBILITIES)[number];
 export const LISTING_PUBLISHER_ROLES = ["admin", "broker"] as const;
 export type ListingPublisherRole = (typeof LISTING_PUBLISHER_ROLES)[number];
 
-export const LISTING_PUBLISHER_STATES = [
-  "active",
-  "paused",
-  "revoked",
-  "expired",
-] as const;
+export const LISTING_PUBLISHER_STATES = ["active", "paused", "revoked", "expired"] as const;
 export type ListingPublisherState = (typeof LISTING_PUBLISHER_STATES)[number];
+
+export const BROKER_PROFILE_STATUSES = ["pending", "verified", "rejected", "suspended"] as const;
+export type BrokerProfileStatus = (typeof BROKER_PROFILE_STATUSES)[number];
+
+export const BROKER_AUTH_STATUSES = ["active", "suspended", "revoked"] as const;
+export type BrokerAuthStatus = (typeof BROKER_AUTH_STATUSES)[number];
+
+export const BROKER_SCOPE_TYPES = ["property", "block", "unit"] as const;
+export type BrokerScopeType = (typeof BROKER_SCOPE_TYPES)[number];
+
+export const COMMISSION_BASES = ["first_month_rent", "percentage_of_rent", "fixed"] as const;
+export type CommissionBasis = (typeof COMMISSION_BASES)[number];
+
+export const COMMISSION_AGREEMENT_STATUSES = ["draft", "active", "terminated"] as const;
+export type CommissionAgreementStatus = (typeof COMMISSION_AGREEMENT_STATUSES)[number];
+
+export const BROKER_PROFILE_STATUSES = [
+  "pending",
+  "verified",
+  "rejected",
+  "suspended",
+] as const;
+export type BrokerProfileStatus = (typeof BROKER_PROFILE_STATUSES)[number];
+
+export const BROKER_AUTH_STATUSES = [
+  "active",
+  "suspended",
+  "revoked",
+] as const;
+export type BrokerAuthStatus = (typeof BROKER_AUTH_STATUSES)[number];
+
+export const BROKER_SCOPE_TYPES = [
+  "property",
+  "block",
+  "unit",
+] as const;
+export type BrokerScopeType = (typeof BROKER_SCOPE_TYPES)[number];
+
+export const COMMISSION_BASES = [
+  "first_month_rent",
+  "percentage_of_rent",
+  "fixed",
+] as const;
+export type CommissionBasis = (typeof COMMISSION_BASES)[number];
+
+export const COMMISSION_AGREEMENT_STATUSES = [
+  "draft",
+  "active",
+  "terminated",
+] as const;
+export type CommissionAgreementStatus = (typeof COMMISSION_AGREEMENT_STATUSES)[number];
+

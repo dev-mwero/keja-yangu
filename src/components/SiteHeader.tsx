@@ -21,6 +21,7 @@ const dashboardLinks: Record<string, { href: string; label: string }> = {
   custodian: { href: "/dashboard/custodian", label: "Dashboard" },
   owner: { href: "/dashboard/admin", label: "Dashboard" },
   admin: { href: "/dashboard/admin", label: "Dashboard" },
+  broker: { href: "/dashboard/broker", label: "Dashboard" },
   "system-admin": { href: "/dashboard/system-admin", label: "Dashboard" },
 };
 

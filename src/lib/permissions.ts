@@ -11,7 +11,14 @@ import { Property } from "@/models/Property";
 import { Unit } from "@/models/Unit";
 import { User } from "@/models/User";
 
-export type Role = "tenant" | "caretaker" | "custodian" | "owner" | "admin" | "system-admin";
+export type Role =
+  | "tenant"
+  | "caretaker"
+  | "custodian"
+  | "owner"
+  | "admin"
+  | "broker"
+  | "system-admin";
 
 export const CARETAKER_PRIVILEGES = [
   "create_property",

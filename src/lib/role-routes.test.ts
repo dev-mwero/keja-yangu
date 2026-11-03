@@ -20,6 +20,11 @@ describe("getDashboardAllowedRoles", () => {
       "admin",
       "system-admin",
     ]);
+    expect(getDashboardAllowedRoles("/dashboard/broker")).toEqual(["broker", "system-admin"]);
+    expect(getDashboardAllowedRoles("/dashboard/broker")).toEqual([
+      "broker",
+      "system-admin",
+    ]);
   });
 
   it("matches nested dashboard paths", () => {
@@ -54,5 +59,9 @@ describe("getRoleRoute", () => {
 
   it("routes owner to /dashboard/owner", () => {
     expect(getRoleRoute("owner")).toBe("/dashboard/owner");
+  });
+
+  it("routes broker to /dashboard/broker", () => {
+    expect(getRoleRoute("broker")).toBe("/dashboard/broker");
   });
 });
