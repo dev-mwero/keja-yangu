@@ -95,3 +95,27 @@ export const UNIT_BILLING_ASSIGNMENT_STATUSES = [
   "disputed",
 ] as const;
 export type UnitBillingAssignmentStatus = (typeof UNIT_BILLING_ASSIGNMENT_STATUSES)[number];
+
+export const LISTING_STATES = [
+  "draft",
+  "active",
+  "paused",
+  "let",
+  "expired",
+  "withdrawn",
+] as const;
+export type ListingState = (typeof LISTING_STATES)[number];
+
+export const LISTING_VISIBILITIES = ["public", "unlisted"] as const;
+export type ListingVisibility = (typeof LISTING_VISIBILITIES)[number];
+
+export const LISTING_PUBLISHER_ROLES = ["admin", "broker"] as const;
+export type ListingPublisherRole = (typeof LISTING_PUBLISHER_ROLES)[number];
+
+export const LISTING_PUBLISHER_STATES = [
+  "active",
+  "paused",
+  "revoked",
+  "expired",
+] as const;
+export type ListingPublisherState = (typeof LISTING_PUBLISHER_STATES)[number];

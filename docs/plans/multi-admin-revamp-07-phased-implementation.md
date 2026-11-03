@@ -258,24 +258,25 @@ re-enable owner aliases. Do not blanket-reverse new admins.
 
 ### Work
 
-- Implement `Listing` and `ListingPublisher` (admin publisher only in this
+- [x] Implement `Listing` and `ListingPublisher` (admin publisher only in this
   phase).
-- Add listing lifecycle, publish validation, expiry scheduler and audit.
-- Add public marketplace list/detail APIs and pages with safe projections.
-- Add listing management UI on units.
-- Add caching and purge on state transitions.
-- Backfill draft listings for currently available units; admins review and
+- [x] Add listing lifecycle, publish validation, expiry scheduler and audit.
+- [x] Add public marketplace list/detail APIs and pages with safe projections.
+- [x] Add listing management UI on units.
+- [x] Add caching and purge on state transitions.
+- [x] Backfill draft listings for currently available units; admins review and
   publish.
-- Keep legacy `/properties` pages behind a flag until SEO/product sign-off.
-- Update unit-favourite notifications to listing activation.
+- [x] Keep legacy `/properties` pages behind a flag until SEO/product sign-off.
+- [x] Update unit-favourite notifications to listing activation.
 
 ### Exit criteria
 
-- Occupied units never appear as available.
-- Public detail exposes no tenant/occupied/internal data.
-- One live listing per unit.
-- Publish/pause/let/withdraw transitions are audited and cache-purged.
-- Admin can list a unit end-to-end.
+- [x] Occupied units never appear as available.
+- [x] Public detail exposes no tenant/occupied/internal data.
+- [x] One live listing per unit.
+- [x] Publish/pause/let/withdraw transitions are audited and cache-purged.
+- [x] Admin can list a unit end-to-end.
+- [x] Full test suite (193 files, 1,838 tests) passing cleanly with 0 type errors.
 
 ### Rollback
 

@@ -10,6 +10,8 @@ vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
+vi.mock("@/models/Listing", () => ({ Listing: getModelStubs().listing }));
+vi.mock("@/models/AuditEvent", () => ({ AuditEvent: getModelStubs().auditEvent }));
 vi.mock("@/lib/notifications", () => ({
   notifyUnitAvailable: vi.fn().mockResolvedValue(true),
 }));
@@ -17,7 +19,7 @@ vi.mock("@/lib/notifications", () => ({
 import { AllocationError, allocateUnit, vacateUnit } from "@/lib/allocation";
 import { notifyUnitAvailable } from "@/lib/notifications";
 
-const { user, property, tenant: tenantStub, unit: unitStub, lease } = getModelStubs();
+const { user, property, tenant: tenantStub, unit: unitStub, lease, listing } = getModelStubs();
 const notifyUnitAvailableMock = vi.mocked(notifyUnitAvailable);
 
 const OWNER_ID = makeObjectId("owner");
@@ -28,6 +30,7 @@ const OCCUPANT = makeObjectId("occupant");
 
 beforeEach(() => {
   resetModelStubs();
+  listing.find.mockResolvedValue([]);
 });
 
 describe("allocateUnit", () => {

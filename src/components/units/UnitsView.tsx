@@ -4,6 +4,8 @@ import {
   CheckCircle2,
   Clock,
   DoorOpen,
+  ExternalLink,
+  Globe,
   Loader2,
   Pencil,
   Trash2,
@@ -85,6 +87,12 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
     { enabled: assigningUnit !== null },
   );
   const { assignUnit, vacateUnit, pending: assignPending } = useTenantMutations();
+
+  const [listingUnit, setListingUnit] = useState<Unit | null>(null);
+  const [unitListing, setUnitListing] = useState<any | null>(null);
+  const [listingLoading, setListingLoading] = useState(false);
+  const [listingHeadline, setListingHeadline] = useState("");
+  const [listingRent, setListingRent] = useState("");
 
   const [form, setForm] = useState({
     name: "",
@@ -201,6 +209,78 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
       block?.purpose,
       property?.purpose ?? DEFAULT_PROPERTY_PURPOSE,
     );
+  };
+
+  const openListingModal = async (unit: Unit) => {
+    setListingUnit(unit);
+    setListingLoading(true);
+    const prop = propertyById[unit.propertyId];
+    setListingHeadline(`${prop?.title || "Property"} - Unit ${unit.name}`);
+    setListingRent(String(baseRent(unit)));
+    try {
+      const res = await fetch(`/api/v1/listings?unitId=${unit._id}`);
+      if (res.ok) {
+        const json = await res.json();
+        setUnitListing(json.data?.[0] || null);
+      } else {
+        setUnitListing(null);
+      }
+    } catch {
+      setUnitListing(null);
+    } finally {
+      setListingLoading(false);
+    }
+  };
+
+  const createListingDraft = async () => {
+    if (!listingUnit) return;
+    try {
+      const rent = Number(listingRent);
+      if (!rent || rent <= 0) {
+        toast.error("Please provide a valid asking rent");
+        return;
+      }
+      const res = await fetch("/api/v1/listings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          propertyId: listingUnit.propertyId,
+          blockId: listingUnit.blockId,
+          unitId: listingUnit._id,
+          headline: listingHeadline.trim(),
+          askingRent: rent,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to create listing");
+      }
+      const data = await res.json();
+      setUnitListing(data.listing);
+      toast.success("Draft listing created");
+    } catch (err: any) {
+      toast.error(err.message || "Could not create listing");
+    }
+  };
+
+  const updateListingAction = async (action: "publish" | "pause" | "withdraw") => {
+    if (!unitListing) return;
+    try {
+      const res = await fetch(`/api/v1/listings/${unitListing._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.details?.join?.(", ") || err.error || `Failed to ${action} listing`);
+      }
+      const data = await res.json();
+      setUnitListing(data.listing);
+      toast.success(`Listing updated to ${data.listing.state}`);
+    } catch (err: any) {
+      toast.error(err.message || `Could not ${action} listing`);
+    }
   };
 
   return (
@@ -330,6 +410,15 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
                           <UserMinus className="h-4 w-4" />
                         </Button>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Marketplace listing for ${unit.name}`}
+                        title="Marketplace Listing"
+                        onClick={() => openListingModal(unit)}
+                      >
+                        <Globe className="h-4 w-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -523,6 +612,144 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
               Unassign tenant
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={listingUnit !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setListingUnit(null);
+            setUnitListing(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Marketplace Listing — Unit {listingUnit?.name}</DialogTitle>
+            <DialogDescription>
+              Manage public marketplace offer and canonical listing state.
+            </DialogDescription>
+          </DialogHeader>
+
+          {listingLoading ? (
+            <div className="py-8 text-center text-muted-foreground">
+              <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" />
+              <p className="mt-2 text-xs">Loading listing status...</p>
+            </div>
+          ) : unitListing ? (
+            <div className="space-y-4 py-2">
+              <div className="rounded-xl border border-border bg-muted/40 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Status</p>
+                    <Badge
+                      className="mt-1 capitalize"
+                      variant={
+                        unitListing.state === "active"
+                          ? "default"
+                          : unitListing.state === "let"
+                            ? "secondary"
+                            : "outline"
+                      }
+                    >
+                      {unitListing.state}
+                    </Badge>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground">Asking Rent</p>
+                    <p className="font-semibold text-foreground">
+                      KES {Number(unitListing.askingRent).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 border-t border-border pt-3">
+                  <p className="text-xs text-muted-foreground">Headline</p>
+                  <p className="text-sm font-medium text-foreground">{unitListing.headline}</p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 pt-2">
+                {unitListing.state === "draft" && (
+                  <Button size="sm" onClick={() => updateListingAction("publish")}>
+                    Publish Listing
+                  </Button>
+                )}
+
+                {unitListing.state === "active" && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => updateListingAction("pause")}
+                    >
+                      Pause Listing
+                    </Button>
+                    <Button size="sm" variant="secondary" asChild>
+                      <a
+                        href={`/marketplace/${unitListing._id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        View Live
+                      </a>
+                    </Button>
+                  </>
+                )}
+
+                {unitListing.state === "paused" && (
+                  <Button size="sm" onClick={() => updateListingAction("publish")}>
+                    Resume Listing
+                  </Button>
+                )}
+
+                {unitListing.state !== "withdrawn" && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-destructive hover:bg-destructive/10"
+                    onClick={() => updateListingAction("withdraw")}
+                  >
+                    Withdraw
+                  </Button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4 py-2">
+              <p className="text-sm text-muted-foreground">
+                No active or draft listing exists for this unit. Create a draft offer below:
+              </p>
+
+              <div className="space-y-1">
+                <Label htmlFor="listing-headline">Headline</Label>
+                <Input
+                  id="listing-headline"
+                  value={listingHeadline}
+                  onChange={(e) => setListingHeadline(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="listing-rent">Asking Rent (KES)</Label>
+                <Input
+                  id="listing-rent"
+                  type="number"
+                  value={listingRent}
+                  onChange={(e) => setListingRent(e.target.value)}
+                />
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button variant="outline" onClick={() => setListingUnit(null)}>
+                  Cancel
+                </Button>
+                <Button onClick={createListingDraft}>Create Draft Listing</Button>
+              </DialogFooter>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </DashboardShell>

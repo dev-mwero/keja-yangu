@@ -1,6 +1,6 @@
 # Phase 5 — Admin Listings & Public Marketplace
 
-**Status:** Plan Proposed — Implementation Ready  
+**Status:** Complete  
 **Goal:** Replace property-level advertising with unit-level canonical listings and public marketplace discovery.  
 **Depends on:** Phase 4 complete (`feat/revamp`, commit `bb3144b`)
 
@@ -192,3 +192,4 @@ export interface IListingPublisher {
 5. **Step 5: Full Verification**:
    - Run `npm run typecheck`, `biome check`, and full test suite (`npm test -- --run`).
    - Confirm all exit criteria are satisfied.
+

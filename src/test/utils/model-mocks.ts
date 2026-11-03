@@ -30,7 +30,9 @@ const stubs: Record<
   | "block"
   | "propertyClaim"
   | "billingAccount"
-  | "unitBillingAssignment",
+  | "unitBillingAssignment"
+  | "listing"
+  | "listingPublisher",
   ModelStub
 > = {
   user: createModelStub(),
@@ -63,6 +65,8 @@ const stubs: Record<
   propertyClaim: createModelStub(),
   billingAccount: createModelStub(),
   unitBillingAssignment: createModelStub(),
+  listing: createModelStub(),
+  listingPublisher: createModelStub(),
 };
 
 /**
