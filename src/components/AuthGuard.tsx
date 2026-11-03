@@ -16,7 +16,13 @@ export const AuthGuard = ({
   const { user, loading } = useAuth();
   const router = useRouter();
 
-  const isAllowed = Boolean(user && allowedRoles?.includes(user.role));
+  const isAllowed = Boolean(
+    user &&
+      allowedRoles &&
+      (allowedRoles.includes(user.role) ||
+        (user.role === "admin" && allowedRoles.includes("owner")) ||
+        (user.role === "owner" && allowedRoles.includes("admin"))),
+  );
 
   useEffect(() => {
     if (loading) return;

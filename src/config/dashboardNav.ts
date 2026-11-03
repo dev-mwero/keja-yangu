@@ -86,6 +86,7 @@ export const buildDashboardNav = (role: Exclude<Role, "tenant">): DashNavItem[] 
   }));
 };
 
+export const adminNav = buildDashboardNav("admin");
 export const ownerNav = buildDashboardNav("owner");
 export const caretakerNav = buildDashboardNav("caretaker");
 export const custodianNav = buildDashboardNav("custodian");

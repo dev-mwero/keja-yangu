@@ -5,13 +5,14 @@ export const roleRoute: Record<Role, string> = {
   caretaker: "/dashboard/caretaker",
   custodian: "/dashboard/custodian",
   owner: "/dashboard/owner",
-  admin: "/dashboard/owner",
+  admin: "/dashboard/admin",
   "system-admin": "/dashboard/system-admin",
 };
 
 export const getRoleRoute = (role: Role): string => roleRoute[role] ?? "/dashboard";
 
 const dashboardRoles: Array<[string, Role[]]> = [
+  ["/dashboard/admin", ["admin", "owner", "system-admin"]],
   ["/dashboard/owner", ["owner", "admin", "system-admin"]],
   ["/dashboard/custodian", ["custodian", "owner", "admin", "system-admin"]],
   ["/dashboard/tenant", ["tenant"]],

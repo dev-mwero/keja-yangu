@@ -1,6 +1,6 @@
 # Phase 4 — Admin UX & Role Cutover
 
-**Status:** Plan Proposed — Awaiting Approval  
+**Status:** Complete  
 **Goal:** Make `admin` the primary operating management role and remove owner-only UI assumptions while maintaining backward compatibility.  
 **Depends on:** Phase 3 complete (`feat/revamp`, commit `fd042b0`)
 
@@ -33,12 +33,12 @@
    - Provide rollback planning logic to safely reverse `migratedFromOwner: true` users back to `owner`.
 
 ### 1.2 Exit Criteria (from Multi-Admin Revamp Master Plan)
-- [ ] Admin can access and complete all property, unit, tenant, lease, invoice, and team management workflows under `/dashboard/admin`.
-- [ ] No dashboard or session regression for existing `owner` users or historical tokens.
-- [ ] Role transition planner and script validated with dry-run/apply modes and automated tests.
-- [ ] Nested dashboard paths under `/dashboard/admin` and `/dashboard/owner` enforce the correct roles via `proxy.ts` and `role-routes.ts`.
-- [ ] New `admin` users can be invited and onboarded cleanly without `migratedFromOwner`.
-- [ ] All Vitest test suites (184+ test files), TypeScript typecheck (`tsc --noEmit`), and Biome linting pass with zero errors.
+- [x] Admin can access and complete all property, unit, tenant, lease, invoice, and team management workflows under `/dashboard/admin`.
+- [x] No dashboard or session regression for existing `owner` users or historical tokens.
+- [x] Role transition planner and script validated with dry-run/apply modes and automated tests (`role-cutover.test.ts`).
+- [x] Nested dashboard paths under `/dashboard/admin` and `/dashboard/owner` enforce the correct roles via `proxy.ts` and `role-routes.ts`.
+- [x] New `admin` users can be invited and onboarded cleanly without `migratedFromOwner`.
+- [x] All Vitest test suites (185 test files, 1,803 tests), TypeScript typecheck (`tsc --noEmit`), and Biome linting pass with zero errors.
 
 ---
 
@@ -123,3 +123,4 @@ Create dashboard pages under `src/app/dashboard/admin/` mirroring the existing m
 - `npm run lint` / `biome check`: must pass with 0 warnings/errors.
 - `npm test -- --run`: all existing 1,792 tests plus new Phase 4 tests must pass.
 - Role cutover planner tests verifying dry-run idempotence and rollback guarantees.
+

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  adminNav,
   caretakerNav,
   custodianNav,
   ownerNav,
@@ -49,6 +50,17 @@ describe("tenant navigation", () => {
       "/dashboard/tenant/notifications",
       "/dashboard/tenant/settings",
     ]);
+  });
+});
+
+describe("admin navigation", () => {
+  it("provides full admin dashboard sections pointing to /dashboard/admin", () => {
+    expect(adminNav.some((item) => item.to === "/dashboard/admin")).toBe(true);
+    expect(adminNav.some((item) => item.to === "/dashboard/admin/portfolio")).toBe(true);
+    expect(adminNav.some((item) => item.to === "/dashboard/admin/units")).toBe(true);
+    expect(adminNav.some((item) => item.to === "/dashboard/admin/tenants")).toBe(true);
+    expect(adminNav.some((item) => item.to === "/dashboard/admin/accounting")).toBe(true);
+    expect(adminNav.some((item) => item.to === "/dashboard/admin/team")).toBe(true);
   });
 });
 

@@ -38,6 +38,11 @@ describe("proxy middleware", () => {
     const res = await proxy(req);
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toBe("http://localhost:3000/dashboard/owner");
+
+    const adminReq = buildDashboardRequest("/dashboard", makeToken("admin"));
+    const adminRes = await proxy(adminReq);
+    expect(adminRes.status).toBe(307);
+    expect(adminRes.headers.get("location")).toBe("http://localhost:3000/dashboard/admin");
   });
 
   it("allows owner accessing /dashboard/owner", async () => {
@@ -46,8 +51,20 @@ describe("proxy middleware", () => {
     expect(res.status).toBe(200);
   });
 
+  it("allows admin accessing /dashboard/admin and nested pages", async () => {
+    const req = buildDashboardRequest("/dashboard/admin/portfolio/123", makeToken("admin"));
+    const res = await proxy(req);
+    expect(res.status).toBe(200);
+  });
+
   it("allows admin accessing /dashboard/owner and nested pages", async () => {
     const req = buildDashboardRequest("/dashboard/owner/portfolio/123", makeToken("admin"));
+    const res = await proxy(req);
+    expect(res.status).toBe(200);
+  });
+
+  it("allows owner accessing /dashboard/admin during migration window", async () => {
+    const req = buildDashboardRequest("/dashboard/admin", makeToken("owner"));
     const res = await proxy(req);
     expect(res.status).toBe(200);
   });
@@ -71,4 +88,3 @@ describe("proxy middleware", () => {
     expect(res.status).toBe(200);
   });
 });
-

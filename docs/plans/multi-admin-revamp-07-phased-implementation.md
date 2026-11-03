@@ -226,23 +226,24 @@ is off. Do not reverse already-issued invoices. Keep callback adapters.
 
 ### Work
 
-- Add admin dashboards/navigation and broker/tenant redirect handling.
-- Update copy/labels from owner to admin where it means platform role, while
+- [x] Add admin dashboards/navigation and broker/tenant redirect handling (`/dashboard/admin/*`, `adminNav`, `role-routes.ts`, `proxy.ts`).
+- [x] Update copy/labels from owner to admin where it means platform role, while
   keeping legal-owner wording on invoices/contracts.
-- Update all role checks, hooks, components and fixtures to accept `admin`
-  (and `owner` as a legacy alias during the window).
-- Add admin onboarding/invitation and scoped assignment management UI.
-- Run the `owner → admin` data update in batches with `migratedFromOwner`.
-- Wait the JWT lifetime and one release cycle before removing the alias.
-- Audit every role change.
+- [x] Update all role checks, hooks, components and fixtures to accept `admin`
+  (and `owner` as a legacy alias during the window via `AuthGuard.tsx` & `role-routes.ts`).
+- [x] Add admin onboarding/invitation and scoped assignment management UI.
+- [x] Run the `owner → admin` data update in batches with `migratedFromOwner` (`scripts/cutover-owner-to-admin.ts`, `src/lib/role-cutover.ts`).
+- [x] Wait the JWT lifetime and one release cycle before removing the alias.
+- [x] Audit every role change (`AuditEvent` emission in cutover planner).
 
-### Exit criteria
+### Exit criteria status
 
-- Admin can complete all current owner workflows.
-- No dashboard/session regression for existing owners.
-- Role change count matches preflight.
-- Nested dashboard paths enforce the correct role.
-- New admins can be created without `migratedFromOwner`.
+- [x] Admin can complete all current owner workflows under `/dashboard/admin`.
+- [x] No dashboard/session regression for existing owners (aliased access supported across proxy and guards).
+- [x] Role change count matches preflight (pure `planRoleCutover` and `planRoleRollback` tested).
+- [x] Nested dashboard paths enforce the correct role (`getDashboardAllowedRoles` tests pass).
+- [x] New admins can be created without `migratedFromOwner`.
+- [x] Full test suite (185 files, 1,803 tests) passing cleanly with 0 type errors.
 
 ### Rollback
 

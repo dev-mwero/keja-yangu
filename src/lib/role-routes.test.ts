@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { getDashboardAllowedRoles } from "@/lib/role-routes";
+import { getDashboardAllowedRoles, getRoleRoute } from "@/lib/role-routes";
 
 describe("getDashboardAllowedRoles", () => {
   it("matches dashboard roots", () => {
+    expect(getDashboardAllowedRoles("/dashboard/admin")).toEqual([
+      "admin",
+      "owner",
+      "system-admin",
+    ]);
     expect(getDashboardAllowedRoles("/dashboard/owner")).toEqual([
       "owner",
       "admin",
@@ -18,6 +23,11 @@ describe("getDashboardAllowedRoles", () => {
   });
 
   it("matches nested dashboard paths", () => {
+    expect(getDashboardAllowedRoles("/dashboard/admin/portfolio/123")).toEqual([
+      "admin",
+      "owner",
+      "system-admin",
+    ]);
     expect(getDashboardAllowedRoles("/dashboard/owner/portfolio/123")).toEqual([
       "owner",
       "admin",
@@ -31,7 +41,18 @@ describe("getDashboardAllowedRoles", () => {
   });
 
   it("does not match lookalike prefixes", () => {
+    expect(getDashboardAllowedRoles("/dashboard/adminfoo")).toBeUndefined();
     expect(getDashboardAllowedRoles("/dashboard/ownerfoo")).toBeUndefined();
     expect(getDashboardAllowedRoles("/dashboard/tenantx/1")).toBeUndefined();
+  });
+});
+
+describe("getRoleRoute", () => {
+  it("routes admin to /dashboard/admin", () => {
+    expect(getRoleRoute("admin")).toBe("/dashboard/admin");
+  });
+
+  it("routes owner to /dashboard/owner", () => {
+    expect(getRoleRoute("owner")).toBe("/dashboard/owner");
   });
 });

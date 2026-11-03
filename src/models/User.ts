@@ -24,6 +24,7 @@ export interface IUser {
   verificationToken?: string;
   verificationTokenExpiry?: Date;
   invoiceCounters: Record<string, number>;
+  migratedFromOwner?: boolean;
   settings: IUserSettings;
 }
 
@@ -80,6 +81,7 @@ const userSchema = new Schema<IUser>(
     verificationToken: { type: String },
     verificationTokenExpiry: { type: Date },
     invoiceCounters: { type: Schema.Types.Map, of: Number, default: {} },
+    migratedFromOwner: { type: Boolean, default: false },
     settings: { type: userSettingsSchema, default: () => ({}) },
   },
   {

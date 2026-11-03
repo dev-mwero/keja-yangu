@@ -19,4 +19,13 @@ describe("User schema — optional email", () => {
     );
     expect(sparse).toBeDefined();
   });
+
+  it("migratedFromOwner defaults to false", () => {
+    const doc = new User({
+      name: "Test User",
+      passwordHash: "hash123",
+      role: "admin",
+    });
+    expect(doc.migratedFromOwner).toBe(false);
+  });
 });
