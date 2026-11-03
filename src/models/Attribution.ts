@@ -16,6 +16,8 @@ const attributionSchema = new Schema(
     brokerUserId: { type: String, trim: true, default: "" },
     commissionAgreementId: { type: String, trim: true, default: "" },
     shareCode: { type: String, trim: true, default: "" },
+    touchToken: { type: String, trim: true, default: "" },
+    touchExpiresAt: { type: Date, default: null },
     source: {
       type: String,
       enum: [...ATTRIBUTION_SOURCES],
@@ -59,6 +61,25 @@ attributionSchema.index(
       status: { $in: ["provisional", "locked"] },
       applicationId: { $gt: "" },
     },
+  },
+);
+
+attributionSchema.index(
+  { touchToken: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      touchToken: { $gt: "" },
+    },
+  },
+);
+
+// Provisional touches expire; locked/confirmed records have touchExpiresAt null.
+attributionSchema.index(
+  { touchExpiresAt: 1 },
+  {
+    expireAfterSeconds: 0,
+    partialFilterExpression: { status: "provisional" },
   },
 );
 

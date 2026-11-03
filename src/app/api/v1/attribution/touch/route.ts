@@ -29,6 +29,8 @@ export async function POST(request: NextRequest) {
       valid: result.valid,
       reason: result.reason,
       source: result.source,
+      touchToken: result.touchToken,
+      expiresAt: result.expiresAt,
       listingId: result.listing?._id ? String(result.listing._id) : undefined,
       propertyId: result.listing?.propertyId,
       brokerUserId: result.brokerUserId,

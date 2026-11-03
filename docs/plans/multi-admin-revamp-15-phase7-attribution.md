@@ -161,13 +161,12 @@ export interface IAttribution {
 - `allocateUnit` confirms attribution for the created/refreshed lease and links the application.
 - API routes: `POST /api/v1/attribution/touch`, `GET /api/v1/brokers/prospects`,
   `GET /api/v1/admin/attributions`, `POST /api/v1/admin/attributions/[id]/dispute`.
-- Marketplace applications forward `ref` share codes and listing ids; broker dashboard
-  shows the redacted prospects pipeline.
-- Route/service/model tests added; full Vitest suite (213 files / 1918 tests), `tsc --noEmit`,
-  and Biome check pass.
-
-**Deferred:**
-- The 30-day last-touch window and 90-day provisional lifespan are not enforced yet.
-  Touch validation is stateless, so application submission binds the share code directly.
-  Enforcing the windows requires a persisted touch-session store and is tracked as a follow-up.
+- Marketplace applications forward `ref` share codes, listing ids, and persisted touch
+  tokens; broker dashboard shows the redacted prospects pipeline.
+- Touch tokens are persisted as `provisional` attributions with a 90-day TTL. Application
+  submission only locks a touch when it is within the 30-day last-touch window, still maps
+  to the same unit, and the share code/authorization remains valid; stale touches are
+  retired as `reversed`.
+- Route/service/model tests added; full Vitest suite, `tsc --noEmit`, Biome check, and
+  `npm run build` pass.
 

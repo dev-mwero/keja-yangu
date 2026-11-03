@@ -13,6 +13,8 @@ export const applicationCreateInput = applicationFormSchema.extend({
   unitId: z.string().trim().min(1).optional(),
   /** Broker share code captured from the URL when the tenant landed on the listing. */
   shareCode: z.string().trim().min(1).max(64).optional(),
+  /** Persisted touch token proving when the share code was last used. */
+  touchToken: z.string().trim().min(1).max(128).optional(),
   /** Listing id the tenant applied from (used for attribution). */
   listingId: z.string().trim().min(1).optional(),
 });

@@ -154,6 +154,42 @@ describe("Attribution domain services", () => {
       expect(res.brokerUserId).toBe("broker-1");
       expect(res.commissionAgreementId).toBe("agr-1");
     });
+
+    it("persists a provisional touch with an expiring token", async () => {
+      listingPublisherStub.findOne.mockReturnValue(
+        buildQuery({
+          _id: "pub-1",
+          listingId: "list-1",
+          publisherRole: "admin",
+          publisherUserId: "admin-1",
+        }),
+      );
+      listingStub.findById.mockReturnValue(
+        buildQuery({
+          _id: "list-1",
+          unitId: "unit-1",
+          propertyId: "prop-1",
+          state: "active",
+        }),
+      );
+
+      const res = await recordProvisionalTouch("adm_123", "unit-1");
+
+      expect(res.valid).toBe(true);
+      expect(res.touchToken).toMatch(/^att_/);
+      expect(res.expiresAt?.getTime()).toBeGreaterThan(Date.now());
+      expect(attributionStub.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          unitId: "unit-1",
+          propertyId: "prop-1",
+          listingId: "list-1",
+          shareCode: "adm_123",
+          touchToken: res.touchToken,
+          status: "provisional",
+          source: "admin",
+        }),
+      );
+    });
   });
 
   describe("bindApplicationAttribution", () => {
@@ -201,6 +237,107 @@ describe("Attribution domain services", () => {
           applicationId: "app-1",
           source: "direct",
           status: "locked",
+        }),
+      );
+    });
+
+    it("locks a valid persisted touch token", async () => {
+      attributionStub.findOne.mockReturnValueOnce(buildQuery(null)).mockReturnValueOnce(
+        buildQuery({
+          _id: "attr-touch",
+          status: "provisional",
+          shareCode: "brk_valid",
+          unitId: "unit-1",
+          propertyId: "prop-1",
+          touchTimestamp: new Date(),
+          touchExpiresAt: new Date(Date.now() + 60_000),
+        }),
+      );
+
+      listingPublisherStub.findOne.mockReturnValue(
+        buildQuery({
+          _id: "pub-1",
+          listingId: "list-1",
+          publisherRole: "broker",
+          publisherUserId: "broker-1",
+        }),
+      );
+      listingStub.findById.mockReturnValue(
+        buildQuery({
+          _id: "list-1",
+          unitId: "unit-1",
+          propertyId: "prop-1",
+          state: "active",
+        }),
+      );
+      brokerProfileStub.findOne.mockReturnValue(buildQuery({ status: "verified" }));
+      brokerAuthorizationStub.findOne.mockReturnValue(buildQuery({ _id: "auth-1" }));
+      commissionAgreementStub.findOne.mockReturnValue(buildQuery({ _id: "agr-1" }));
+      attributionStub.updateOne.mockResolvedValue({ modifiedCount: 1 });
+      attributionStub.findById.mockReturnValue(
+        buildQuery({
+          _id: "attr-touch",
+          applicationId: "app-1",
+          source: "broker",
+          status: "locked",
+        }),
+      );
+
+      const res = await bindApplicationAttribution({
+        applicationId: "app-1",
+        touchToken: "att_token",
+        unitId: "unit-1",
+        propertyId: "prop-1",
+      });
+
+      expect(res.status).toBe("locked");
+      expect(attributionStub.updateOne).toHaveBeenCalledWith(
+        { _id: "attr-touch", status: "provisional" },
+        expect.objectContaining({
+          $set: expect.objectContaining({
+            applicationId: "app-1",
+            status: "locked",
+            source: "broker",
+            touchExpiresAt: null,
+          }),
+        }),
+      );
+      expect(attributionStub.create).not.toHaveBeenCalled();
+    });
+
+    it("retires a touch that fell outside the 30-day window", async () => {
+      const staleTouch = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+      attributionStub.findOne.mockReturnValueOnce(buildQuery(null)).mockReturnValueOnce(
+        buildQuery({
+          _id: "attr-stale",
+          status: "provisional",
+          shareCode: "brk_stale",
+          unitId: "unit-1",
+          touchTimestamp: staleTouch,
+          touchExpiresAt: new Date(Date.now() + 60_000),
+        }),
+      );
+      attributionStub.updateOne.mockResolvedValue({ modifiedCount: 1 });
+      attributionStub.create.mockResolvedValue({ _id: "attr-direct" });
+      attributionStub.findById.mockReturnValue(
+        buildQuery({ _id: "attr-direct", source: "direct", status: "locked" }),
+      );
+
+      const res = await bindApplicationAttribution({
+        applicationId: "app-1",
+        touchToken: "att_stale",
+        unitId: "unit-1",
+        propertyId: "prop-1",
+      });
+
+      expect(res.source).toBe("direct");
+      expect(attributionStub.updateOne).toHaveBeenCalledWith(
+        { _id: "attr-stale", status: "provisional" },
+        expect.objectContaining({
+          $set: expect.objectContaining({
+            status: "reversed",
+            reversalReason: expect.stringContaining("30-day"),
+          }),
         }),
       );
     });

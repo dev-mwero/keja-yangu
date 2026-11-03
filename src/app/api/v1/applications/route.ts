@@ -167,11 +167,12 @@ export async function POST(request: NextRequest) {
   // Lock the sourcing attribution before responding. Non-fatal: a failed
   // attribution lookup must not discard an otherwise valid application.
   if (unitId) {
-    const { shareCode, listingId } = parsed.data;
+    const { shareCode, touchToken, listingId } = parsed.data;
     try {
       await bindApplicationAttribution({
         applicationId: String(created._id),
         shareCode: shareCode || undefined,
+        touchToken: touchToken || undefined,
         unitId,
         propertyId: parsed.data.propertyId,
         listingId: listingId || undefined,

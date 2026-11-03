@@ -17,6 +17,8 @@ describe("Attribution schema", () => {
     expect(doc.lockedAt).toBeNull();
     expect(doc.confirmedAt).toBeNull();
     expect(doc.supersededByAttributionId).toBe("");
+    expect(doc.touchToken).toBe("");
+    expect(doc.touchExpiresAt).toBeNull();
   });
 
   it("fails validation when required fields are missing", () => {

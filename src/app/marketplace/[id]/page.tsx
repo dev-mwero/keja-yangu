@@ -46,6 +46,32 @@ export default function ListingDetailPage() {
   const { toast } = useToast();
   const router = useRouter();
 
+  const touchTokenKey = listing ? `attribution-touch:${listing.id}` : "";
+
+  useEffect(() => {
+    if (!listing) return;
+    const shareCode =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("ref") || ""
+        : "";
+    if (!shareCode) return;
+
+    fetch("/api/v1/attribution/touch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ shareCode, unitId: listing.unit.id }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.data?.valid && data.data.touchToken) {
+          sessionStorage.setItem(`attribution-touch:${listing.id}`, data.data.touchToken);
+        }
+      })
+      .catch(() => {
+        // A failed touch capture must not block browsing.
+      });
+  }, [listing]);
+
   useEffect(() => {
     if (!listingIdOrShareCode) return;
     setLoading(true);
@@ -89,6 +115,9 @@ export default function ListingDetailPage() {
         typeof window !== "undefined"
           ? new URLSearchParams(window.location.search).get("ref") || ""
           : "";
+      const touchToken = touchTokenKey
+        ? sessionStorage.getItem(touchTokenKey) || undefined
+        : undefined;
       const res = await fetch("/api/v1/applications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -100,6 +129,7 @@ export default function ListingDetailPage() {
           email: user.email || "",
           listingId: listing.id,
           shareCode: referralCode || listing.publisher?.shareCode || undefined,
+          touchToken,
           message:
             applyForm.message || `Application for Unit ${listing.unit.name} (${listing.headline})`,
         }),

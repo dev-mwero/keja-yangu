@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { writeAuditEvent } from "@/lib/audit";
 import type { AttributionSource } from "@/lib/domain-enums";
 import { connectToDatabase } from "@/lib/mongoose";
@@ -12,6 +13,11 @@ import { Listing } from "@/models/Listing";
 import { ListingPublisher } from "@/models/ListingPublisher";
 import { toRedactedProspectView } from "./brokers";
 
+/** A share-code touch only attributes a tenancy for 30 days. */
+export const ATTRIBUTION_TOUCH_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+/** Provisional touch records are discarded after 90 days. */
+export const ATTRIBUTION_PROVISIONAL_LIFESPAN_MS = 90 * 24 * 60 * 60 * 1000;
+
 export interface ValidateTouchResult {
   valid: boolean;
   reason?: string;
@@ -22,7 +28,13 @@ export interface ValidateTouchResult {
   source: AttributionSource;
 }
 
-export async function recordProvisionalTouch(
+export interface ProvisionalTouchResult extends ValidateTouchResult {
+  touchToken?: string;
+  touchedAt?: Date;
+  expiresAt?: Date;
+}
+
+export async function validateShareCode(
   shareCode: string,
   unitId: string,
 ): Promise<ValidateTouchResult> {
@@ -107,13 +119,68 @@ export async function recordProvisionalTouch(
   };
 }
 
+/**
+ * Validates a public share code and persists a short-lived provisional touch.
+ * The returned token lets the application submission prove when the tenant
+ * last touched the link, which is what the 30-day attribution window checks.
+ */
+export async function recordProvisionalTouch(
+  shareCode: string,
+  unitId: string,
+): Promise<ProvisionalTouchResult> {
+  const result = await validateShareCode(shareCode, unitId);
+  if (!result.valid || !result.publisher || !result.listing) {
+    return result;
+  }
+
+  const touchedAt = new Date();
+  const expiresAt = new Date(touchedAt.getTime() + ATTRIBUTION_PROVISIONAL_LIFESPAN_MS);
+  const touchToken = `att_${randomBytes(16).toString("hex")}`;
+
+  await Attribution.create({
+    unitId,
+    propertyId: String(result.listing.propertyId),
+    listingId: String(result.listing._id),
+    publisherId: String(result.publisher._id),
+    publisherUserId: result.publisher.publisherUserId,
+    brokerUserId: result.brokerUserId || "",
+    commissionAgreementId: result.commissionAgreementId || "",
+    shareCode: shareCode.trim(),
+    touchToken,
+    touchExpiresAt: expiresAt,
+    source: result.source,
+    status: "provisional",
+    touchTimestamp: touchedAt,
+  });
+
+  return { ...result, touchToken, touchedAt, expiresAt };
+}
+
 export interface BindApplicationAttributionInput {
   applicationId: string;
   shareCode?: string;
+  touchToken?: string;
   unitId: string;
   propertyId: string;
   listingId?: string;
   actorUserId?: string;
+}
+
+async function writeAttributionLocked(attribution: any, input: BindApplicationAttributionInput) {
+  await writeAuditEvent({
+    actor: {
+      userId: input.actorUserId || "system",
+      role: attribution.source === "broker" ? "broker" : "applicant",
+    },
+    action: "attribution.locked",
+    entityType: "attribution",
+    entityId: String(attribution._id),
+    scope: {
+      propertyId: input.propertyId,
+      unitId: input.unitId,
+    },
+    after: attribution,
+  });
 }
 
 export async function bindApplicationAttribution(input: BindApplicationAttributionInput) {
@@ -134,6 +201,74 @@ export async function bindApplicationAttribution(input: BindApplicationAttributi
     return existing;
   }
 
+  // Prefer the persisted touch token: it proves when the tenant last touched
+  // the shared link, so stale touches fall back to an unattributed application.
+  if (input.touchToken) {
+    const touch = (await Attribution.findOne({
+      touchToken: input.touchToken,
+      status: "provisional",
+    }).lean()) as any;
+
+    if (touch) {
+      const now = Date.now();
+      const touchedAt = new Date(touch.touchTimestamp ?? touch.createdAt ?? now).getTime();
+      const expiresAt = touch.touchExpiresAt
+        ? new Date(touch.touchExpiresAt).getTime()
+        : touchedAt + ATTRIBUTION_PROVISIONAL_LIFESPAN_MS;
+      const withinTouchWindow = now - touchedAt <= ATTRIBUTION_TOUCH_WINDOW_MS;
+      const withinLifespan = now <= expiresAt;
+      const matchesUnit = String(touch.unitId) === input.unitId;
+
+      const validation =
+        withinTouchWindow && withinLifespan && matchesUnit && touch.shareCode
+          ? await validateShareCode(touch.shareCode, input.unitId)
+          : { valid: false, source: "direct" as AttributionSource };
+
+      if (validation.valid && validation.publisher && validation.listing) {
+        const lockedAt = new Date();
+        await Attribution.updateOne(
+          { _id: touch._id, status: "provisional" },
+          {
+            $set: {
+              applicationId: input.applicationId,
+              propertyId: input.propertyId,
+              listingId: String(validation.listing._id),
+              publisherId: String(validation.publisher._id),
+              publisherUserId: validation.publisher.publisherUserId,
+              brokerUserId: validation.brokerUserId || "",
+              commissionAgreementId: validation.commissionAgreementId || "",
+              source: validation.source,
+              status: "locked",
+              lockedAt,
+              touchExpiresAt: null,
+            },
+          },
+        );
+
+        const locked = (await Attribution.findById(touch._id).lean()) as any;
+        await writeAttributionLocked(locked, input);
+        return locked;
+      }
+
+      // Expired/invalid touch: retire it so it can never be attributed later.
+      await Attribution.updateOne(
+        { _id: touch._id, status: "provisional" },
+        {
+          $set: {
+            status: "reversed",
+            reversedAt: new Date(),
+            reversalReason: !withinTouchWindow
+              ? "Touch fell outside the 30-day attribution window"
+              : !withinLifespan
+                ? "Provisional attribution lifespan expired"
+                : "Share code or broker authorization no longer valid",
+            touchExpiresAt: null,
+          },
+        },
+      );
+    }
+  }
+
   let source: AttributionSource = "direct";
   let publisherId = "";
   let publisherUserId = "";
@@ -142,7 +277,7 @@ export async function bindApplicationAttribution(input: BindApplicationAttributi
   let listingId = input.listingId || "";
 
   if (input.shareCode) {
-    const touch = await recordProvisionalTouch(input.shareCode, input.unitId);
+    const touch = await validateShareCode(input.shareCode, input.unitId);
     if (touch.valid) {
       source = touch.source;
       publisherId = String(touch.publisher._id);
@@ -170,21 +305,7 @@ export async function bindApplicationAttribution(input: BindApplicationAttributi
   });
 
   const createdDoc = (await Attribution.findById(created._id).lean()) as any;
-
-  await writeAuditEvent({
-    actor: {
-      userId: input.actorUserId || "system",
-      role: source === "broker" ? "broker" : "applicant",
-    },
-    action: "attribution.locked",
-    entityType: "attribution",
-    entityId: String(createdDoc._id),
-    scope: {
-      propertyId: input.propertyId,
-      unitId: input.unitId,
-    },
-    after: createdDoc,
-  });
+  await writeAttributionLocked(createdDoc, input);
 
   return createdDoc;
 }
