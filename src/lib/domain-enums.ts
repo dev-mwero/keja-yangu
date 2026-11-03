@@ -84,3 +84,14 @@ export type PropertyClaimStatus = (typeof PROPERTY_CLAIM_STATUSES)[number];
 
 export const PROPERTY_LIFECYCLE_STATES = ["active", "decommissioned", "merged"] as const;
 export type PropertyLifecycleState = (typeof PROPERTY_LIFECYCLE_STATES)[number];
+
+export const BILLING_ACCOUNT_STATUSES = ["active", "suspended", "closed"] as const;
+export type BillingAccountStatus = (typeof BILLING_ACCOUNT_STATUSES)[number];
+
+export const UNIT_BILLING_ASSIGNMENT_STATUSES = [
+  "active",
+  "scheduled",
+  "ended",
+  "disputed",
+] as const;
+export type UnitBillingAssignmentStatus = (typeof UNIT_BILLING_ASSIGNMENT_STATUSES)[number];

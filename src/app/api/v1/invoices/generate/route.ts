@@ -143,7 +143,9 @@ export async function POST(request: NextRequest) {
   let created = 0;
   let skippedCount = skipped.length;
   for (const draft of toCreate) {
-    draft.invoiceNumber = await nextInvoiceNumber(draft.ownerId, period);
+    draft.invoiceNumber = await nextInvoiceNumber(draft.ownerId, period, {
+      billingAccountId: draft.billingAccountId,
+    });
     try {
       await Invoice.create(draft);
       created += 1;

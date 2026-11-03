@@ -9,6 +9,7 @@ import { type InferSchemaType, model, models, Schema } from "mongoose";
 const unitServiceFeeOverrideSchema = new Schema(
   {
     ownerId: { type: String, required: true },
+    billingAccountId: { type: String, default: "" },
     propertyId: { type: String, required: true },
     itemId: { type: String, required: true },
     unitId: { type: String, required: true },

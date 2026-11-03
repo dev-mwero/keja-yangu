@@ -144,6 +144,8 @@ export async function POST(request: NextRequest) {
     tenantId: string;
     propertyId: string;
     leaseId: string;
+    unitId?: string;
+    billingAccountId?: string;
     ownerId: string;
     amountDue: number;
     rentAmount: number;
@@ -185,6 +187,8 @@ export async function POST(request: NextRequest) {
       tenantId: lease.tenantId,
       propertyId: lease.propertyId,
       leaseId: parsed.data.leaseId,
+      unitId: lease.unitId ? String(lease.unitId) : "",
+      billingAccountId: lease.billingAccountId ?? "",
       ownerId: lease.ownerId,
       amountDue: draft.amountDue,
       rentAmount: draft.rentAmount,
@@ -244,7 +248,9 @@ export async function POST(request: NextRequest) {
     };
   }
 
-  const invoiceNumber = await nextInvoiceNumber(derived.ownerId, period);
+  const invoiceNumber = await nextInvoiceNumber(derived.ownerId, period, {
+    billingAccountId: derived.billingAccountId,
+  });
 
   try {
     const invoice = await Invoice.create({
@@ -252,7 +258,9 @@ export async function POST(request: NextRequest) {
       tenantId: derived.tenantId,
       propertyId: derived.propertyId,
       leaseId: derived.leaseId,
+      unitId: derived.unitId ?? "",
       ownerId: derived.ownerId,
+      billingAccountId: derived.billingAccountId ?? "",
       period,
       amountDue: derived.amountDue,
       amountPaid: 0,

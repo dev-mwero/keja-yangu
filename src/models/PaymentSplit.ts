@@ -7,6 +7,7 @@ export interface IPaymentSplit {
   unitId: string;
   propertyId: string;
   ownerId: string;
+  billingAccountId?: string;
   period: string;
   rentMinor: number;
   serviceChargeMinor: number;
@@ -20,6 +21,7 @@ const paymentSplitSchema = new Schema<IPaymentSplit>(
     unitId: { type: String, required: true },
     propertyId: { type: String, required: true },
     ownerId: { type: String, required: true },
+    billingAccountId: { type: String, default: "" },
     period: { type: String, required: true, match: PERIOD_REGEX },
     rentMinor: { type: Number, required: true, min: 0 },
     serviceChargeMinor: { type: Number, required: true, min: 0 },

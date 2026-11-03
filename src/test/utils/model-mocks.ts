@@ -28,7 +28,9 @@ const stubs: Record<
   | "managementAssignment"
   | "auditEvent"
   | "block"
-  | "propertyClaim",
+  | "propertyClaim"
+  | "billingAccount"
+  | "unitBillingAssignment",
   ModelStub
 > = {
   user: createModelStub(),
@@ -59,6 +61,8 @@ const stubs: Record<
   auditEvent: createModelStub(),
   block: createModelStub(),
   propertyClaim: createModelStub(),
+  billingAccount: createModelStub(),
+  unitBillingAssignment: createModelStub(),
 };
 
 /**

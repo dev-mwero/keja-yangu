@@ -63,7 +63,7 @@ export async function POST(
   const payment = await Payment.findOne({
     provider: "mpesa",
     providerReference: callback.checkoutRequestId,
-    ownerId,
+    $or: [{ ownerId }, { billingAccountId: ownerId }],
   }).lean();
   if (!payment) {
     console.warn(`[payments] mpesa callback unknown checkout=${callback.checkoutRequestId}`);

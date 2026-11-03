@@ -9,6 +9,7 @@ export interface InvoiceLease {
   propertyId: string;
   ownerId: string;
   unitId?: string;
+  billingAccountId?: string;
   rentAmount: number;
   frequency: string;
   startDate: Date;
@@ -22,7 +23,14 @@ export interface InvoiceDraft {
   tenantId: string;
   propertyId: string;
   leaseId: string;
+  unitId?: string;
   ownerId: string;
+  billingAccountId?: string;
+  billingAdminId?: string;
+  billingSnapshot?: {
+    legalEntityName?: string;
+    invoicePrefix?: string;
+  };
   period: string;
   amountDue: number;
   amountPaid: number;
@@ -98,7 +106,9 @@ export function buildInvoiceForLease(
     tenantId: lease.tenantId,
     propertyId: lease.propertyId,
     leaseId: leaseIdOf(lease),
+    unitId: lease.unitId ?? "",
     ownerId: lease.ownerId,
+    billingAccountId: lease.billingAccountId ?? "",
     period,
     amountDue,
     amountPaid: 0,
