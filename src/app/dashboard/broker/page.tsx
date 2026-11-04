@@ -31,6 +31,7 @@ export default function BrokerDashboard() {
   const [prospects, setProspects] = useState<any[]>([]);
   const [commissions, setCommissions] = useState<any[]>([]);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [tab, setTab] = useState("listings");
 
   // Profile form state
   const [agencyName, setAgencyName] = useState("");
@@ -105,6 +106,15 @@ export default function BrokerDashboard() {
   useEffect(() => {
     fetchBrokerData();
   }, [fetchBrokerData]);
+
+  useEffect(() => {
+    const syncTabFromHash = () => {
+      if (window.location.hash === "#commissions") setTab("commissions");
+    };
+    syncTabFromHash();
+    window.addEventListener("hashchange", syncTabFromHash);
+    return () => window.removeEventListener("hashchange", syncTabFromHash);
+  }, []);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -252,7 +262,7 @@ export default function BrokerDashboard() {
           )}
         </div>
 
-        <Tabs defaultValue="listings" className="w-full">
+        <Tabs value={tab} onValueChange={setTab} className="w-full">
           <TabsList className="grid w-full grid-cols-5 max-w-2xl">
             <TabsTrigger value="listings">Market Listings</TabsTrigger>
             <TabsTrigger value="prospects">Prospects</TabsTrigger>

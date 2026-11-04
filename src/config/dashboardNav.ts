@@ -84,6 +84,7 @@ const brokerSections = [
   { slug: "/listings", label: "Market Listings", icon: Building2 },
   { slug: "/authorizations", label: "Authorizations", icon: UserCog },
   { slug: "/prospects", label: "Prospects", icon: Users },
+  { slug: "#commissions", label: "Commissions", icon: Calculator },
   { slug: "/profile", label: "Broker Profile", icon: Settings },
 ] satisfies readonly Section[];
 
@@ -101,7 +102,14 @@ export const buildDashboardNav = (role: Exclude<Role, "tenant">): DashNavItem[] 
   }));
 };
 
-export const adminNav = buildDashboardNav("admin");
+export const adminNav: DashNavItem[] = [
+  ...buildDashboardNav("admin"),
+  {
+    to: "/dashboard/admin/commissions",
+    label: "Commissions",
+    icon: Calculator,
+  },
+];
 export const ownerNav = buildDashboardNav("owner");
 export const caretakerNav = buildDashboardNav("caretaker");
 export const custodianNav = buildDashboardNav("custodian");

@@ -22,6 +22,25 @@ export const DEFAULT_MIN_PAYOUT_MINOR = 0;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PERCENT_DENOMINATOR = 10_000;
 
+function readNonNegativeIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+export function commissionEligibilityDelayDays(): number {
+  return readNonNegativeIntEnv("COMMISSION_ELIGIBILITY_DELAY_DAYS", DEFAULT_ELIGIBILITY_DELAY_DAYS);
+}
+
+export function commissionMinPayoutMinor(): number {
+  return readNonNegativeIntEnv("COMMISSION_MIN_PAYOUT_MINOR", DEFAULT_MIN_PAYOUT_MINOR);
+}
+
+export function commissionClawbackWindowDays(): number {
+  return readNonNegativeIntEnv("COMMISSION_CLAWBACK_WINDOW_DAYS", CLAWBACK_WINDOW_DAYS);
+}
+
 /** Half-up integer rounding used for every commission amount. */
 export function roundHalfUp(numerator: number, denominator: number): number {
   if (denominator === 0) return 0;
@@ -112,13 +131,17 @@ function isDuplicateKeyError(error: unknown): boolean {
   );
 }
 
-/**
- * Create a shadow accrual for a settled invoice. Idempotent on
- * `{ attributionId, invoiceId, kind }`; safe to call from every settlement path.
- */
-export async function accrueCommissionForSettledInvoice(invoice: SettledInvoiceLike) {
-  await connectToDatabase();
+interface CommissionContext {
+  attribution: any;
+  agreement: any;
+  calculation: CommissionCalculation;
+  leaseId: string;
+  invoiceId: string;
+}
 
+async function resolveCommissionContext(
+  invoice: SettledInvoiceLike,
+): Promise<CommissionContext | null> {
   const leaseId = String(invoice.leaseId ?? "");
   const invoiceId = String(invoice._id ?? "");
   if (!leaseId || !invoiceId) return null;
@@ -146,7 +169,7 @@ export async function accrueCommissionForSettledInvoice(invoice: SettledInvoiceL
       basis: agreement.basis,
       rateBps: agreement.rateBps,
       fixedAmountMinor: agreement.fixedAmountMinor,
-      taxBps: DEFAULT_TAX_BPS,
+      taxBps: agreement.taxBps ?? DEFAULT_TAX_BPS,
       currency: agreement.currency,
     },
     collectedRentMinor: toMinorUnits(collectedRentMajor),
@@ -156,7 +179,43 @@ export async function accrueCommissionForSettledInvoice(invoice: SettledInvoiceL
 
   if (!calculation) return null;
 
-  const eligibilityAt = new Date(Date.now() + DEFAULT_ELIGIBILITY_DELAY_DAYS * DAY_MS);
+  return { attribution, agreement, calculation, leaseId, invoiceId };
+}
+
+/**
+ * Compute the commission that a settlement would accrue without writing it.
+ * Used by the backfill dry-run so finance can compare projected totals.
+ */
+export async function previewCommissionForSettledInvoice(invoice: SettledInvoiceLike) {
+  await connectToDatabase();
+  const context = await resolveCommissionContext(invoice);
+  if (!context) return null;
+
+  const { attribution, agreement, calculation, leaseId, invoiceId } = context;
+  return {
+    invoiceId,
+    leaseId,
+    attributionId: String(attribution._id),
+    agreementId: String(agreement._id),
+    brokerUserId: attribution.brokerUserId,
+    propertyId: String(attribution.propertyId || ""),
+    unitId: String(attribution.unitId || ""),
+    ...calculation,
+  };
+}
+
+/**
+ * Create a shadow accrual for a settled invoice. Idempotent on
+ * `{ attributionId, invoiceId, kind }`; safe to call from every settlement path.
+ */
+export async function accrueCommissionForSettledInvoice(invoice: SettledInvoiceLike) {
+  await connectToDatabase();
+  const context = await resolveCommissionContext(invoice);
+  if (!context) return null;
+
+  const { attribution, agreement, calculation, leaseId, invoiceId } = context;
+
+  const eligibilityAt = new Date(Date.now() + commissionEligibilityDelayDays() * DAY_MS);
 
   try {
     const created = await CommissionAccrual.create({
@@ -172,7 +231,7 @@ export async function accrueCommissionForSettledInvoice(invoice: SettledInvoiceL
         basis: agreement.basis,
         rateBps: agreement.rateBps ?? 0,
         fixedAmountMinor: agreement.fixedAmountMinor ?? 0,
-        taxBps: DEFAULT_TAX_BPS,
+        taxBps: agreement.taxBps ?? DEFAULT_TAX_BPS,
         currency: calculation.currency,
         paymentTerms: agreement.paymentTerms || "",
       },
@@ -290,7 +349,7 @@ export async function createPayoutBatch(
   const taxMinor = accruals.reduce((sum, a) => sum + (a.taxMinor ?? 0), 0);
   const netMinor = accruals.reduce((sum, a) => sum + (a.netMinor ?? 0), 0);
 
-  if (netMinor < DEFAULT_MIN_PAYOUT_MINOR) {
+  if (netMinor < commissionMinPayoutMinor()) {
     throw new Error("Payout total is below the configured minimum threshold");
   }
 
@@ -438,6 +497,12 @@ export async function createClawback(actor: CommissionActor, accrualId: string, 
     });
 
     return (await CommissionAccrual.findById(accrualId).lean()) as any;
+  }
+
+  const clawbackWindowDays = commissionClawbackWindowDays();
+  const paidAtMs = accrual.paidAt ? new Date(accrual.paidAt).getTime() : null;
+  if (paidAtMs && Date.now() - paidAtMs > clawbackWindowDays * DAY_MS) {
+    throw new Error(`Clawback window of ${clawbackWindowDays} days has expired`);
   }
 
   const clawback = await CommissionAccrual.create({

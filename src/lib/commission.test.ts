@@ -2,11 +2,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   accrueCommissionForSettledInvoice,
   approveAccrual,
+  commissionClawbackWindowDays,
+  commissionEligibilityDelayDays,
+  commissionMinPayoutMinor,
   computeCommission,
   createClawback,
   createPayoutBatch,
   executePayout,
   failPayout,
+  previewCommissionForSettledInvoice,
   reconcileCommissions,
   roundHalfUp,
 } from "@/lib/commission";
@@ -100,6 +104,20 @@ describe("commission calculator", () => {
     expect(fixed).toMatchObject({ grossMinor: 250_000, netMinor: 250_000 });
   });
 
+  it("reads commission settings from the environment with safe defaults", () => {
+    expect(commissionEligibilityDelayDays()).toBe(7);
+    expect(commissionMinPayoutMinor()).toBe(0);
+    expect(commissionClawbackWindowDays()).toBe(30);
+
+    vi.stubEnv("COMMISSION_ELIGIBILITY_DELAY_DAYS", "3");
+    vi.stubEnv("COMMISSION_MIN_PAYOUT_MINOR", "50000");
+    vi.stubEnv("COMMISSION_CLAWBACK_WINDOW_DAYS", "14");
+    expect(commissionEligibilityDelayDays()).toBe(3);
+    expect(commissionMinPayoutMinor()).toBe(50_000);
+    expect(commissionClawbackWindowDays()).toBe(14);
+    vi.unstubAllEnvs();
+  });
+
   it("returns null for a zero basis", () => {
     const result = computeCommission({
       agreement: { basis: "percentage_of_rent", rateBps: 500 },
@@ -134,6 +152,7 @@ describe("settlement accrual", () => {
         basis: "percentage_of_rent",
         rateBps: 500,
         fixedAmountMinor: 0,
+        taxBps: 1_600,
         currency: "KES",
       }),
     );
@@ -157,11 +176,43 @@ describe("settlement accrual", () => {
         invoiceId: "inv-1",
         kind: "recurring",
         grossMinor: 250_000,
-        netMinor: 250_000,
+        taxMinor: 40_000,
+        netMinor: 210_000,
         status: "pending",
         metadata: { shadow: true },
       }),
     );
+  });
+
+  it("previews an accrual without writing", async () => {
+    attributionStub.findOne.mockReturnValue(
+      buildQuery({
+        _id: "attr-1",
+        status: "confirmed",
+        brokerUserId: "broker-1",
+        commissionAgreementId: "agr-1",
+        propertyId: "prop-1",
+        unitId: "unit-1",
+      }),
+    );
+    agreementStub.findById.mockReturnValue(
+      buildQuery({ _id: "agr-1", basis: "percentage_of_rent", rateBps: 500 }),
+    );
+    accrualStub.countDocuments.mockResolvedValue(0);
+
+    const preview = await previewCommissionForSettledInvoice({
+      _id: "inv-1",
+      leaseId: "lease-1",
+      rentAmount: 50_000,
+    });
+
+    expect(preview).toMatchObject({
+      invoiceId: "inv-1",
+      brokerUserId: "broker-1",
+      grossMinor: 250_000,
+      netMinor: 250_000,
+    });
+    expect(accrualStub.create).not.toHaveBeenCalled();
   });
 
   it("returns the existing accrual when a replay hits the unique key", async () => {
@@ -359,14 +410,12 @@ describe("commission lifecycle", () => {
   });
 
   it("flags duplicate accruals for the same invoice", async () => {
-    accrualStub.find
-      .mockReturnValueOnce(buildQuery([]))
-      .mockReturnValueOnce(
-        buildQuery([
-          { _id: "acc-1", attributionId: "attr-1", invoiceId: "inv-1", kind: "initial" },
-          { _id: "acc-2", attributionId: "attr-1", invoiceId: "inv-1", kind: "initial" },
-        ]),
-      );
+    accrualStub.find.mockReturnValueOnce(buildQuery([])).mockReturnValueOnce(
+      buildQuery([
+        { _id: "acc-1", attributionId: "attr-1", invoiceId: "inv-1", kind: "initial" },
+        { _id: "acc-2", attributionId: "attr-1", invoiceId: "inv-1", kind: "initial" },
+      ]),
+    );
     payoutStub.find.mockReturnValue(buildQuery([]));
 
     const report = await reconcileCommissions();
@@ -374,6 +423,36 @@ describe("commission lifecycle", () => {
     expect(report.ok).toBe(false);
     expect(report.duplicateAccruals).toHaveLength(1);
     expect(report.duplicateAccruals[0].accrualIds).toEqual(["acc-1", "acc-2"]);
+  });
+
+  it("rejects batches below the configured minimum payout", async () => {
+    vi.stubEnv("COMMISSION_MIN_PAYOUT_MINOR", "50000");
+    accrualStub.updateMany.mockResolvedValue({ modifiedCount: 0 });
+    accrualStub.find.mockReturnValue(
+      buildQuery([{ _id: "acc-1", grossMinor: 10_000, taxMinor: 0, netMinor: 10_000 }]),
+    );
+    await expect(
+      createPayoutBatch({ userId: "sys-1", role: "system-admin" }, "broker-1"),
+    ).rejects.toThrow("minimum threshold");
+    vi.unstubAllEnvs();
+  });
+
+  it("rejects a clawback after the configured window", async () => {
+    vi.stubEnv("COMMISSION_CLAWBACK_WINDOW_DAYS", "30");
+    accrualStub.findById.mockReturnValue(
+      buildQuery({
+        _id: "acc-1",
+        status: "paid",
+        kind: "initial",
+        netMinor: 10_000,
+        paidAt: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000),
+      }),
+    );
+
+    await expect(
+      createClawback({ userId: "sys-1", role: "system-admin" }, "acc-1", "Late clawback"),
+    ).rejects.toThrow("Clawback window");
+    vi.unstubAllEnvs();
   });
 
   it("appends a negative clawback for an already-paid accrual", async () => {
@@ -386,6 +465,7 @@ describe("commission lifecycle", () => {
           netMinor: 10_000,
           invoiceId: "inv-1",
           brokerUserId: "broker-1",
+          paidAt: new Date(),
         }),
       )
       .mockReturnValueOnce(buildQuery({ _id: "acc-claw", status: "eligible" }));

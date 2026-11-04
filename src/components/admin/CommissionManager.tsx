@@ -39,7 +39,7 @@ function money(minor: number) {
   return formatKES((minor || 0) / 100);
 }
 
-export function CommissionManager() {
+export function CommissionManager({ canManagePayouts = true }: { canManagePayouts?: boolean }) {
   const [accruals, setAccruals] = useState<Accrual[]>([]);
   const [payouts, setPayouts] = useState<Payout[]>([]);
   const [loading, setLoading] = useState(true);
@@ -217,122 +217,126 @@ export function CommissionManager() {
         )}
       </div>
 
-      <div className="rounded-xl border border-border bg-card">
-        <div className="border-b border-border p-4">
-          <h3 className="font-semibold">Ready to Batch</h3>
-          <p className="text-xs text-muted-foreground">
-            Approved accruals grouped by broker. Payout execution stays blocked until
-            COMMISSION_PAYOUTS_ENABLED=true.
-          </p>
-        </div>
-        {approvedByBroker.length === 0 ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">
-            No approved accruals waiting for payout.
+      {canManagePayouts && (
+        <div className="rounded-xl border border-border bg-card">
+          <div className="border-b border-border p-4">
+            <h3 className="font-semibold">Ready to Batch</h3>
+            <p className="text-xs text-muted-foreground">
+              Approved accruals grouped by broker. Payout execution stays blocked until
+              COMMISSION_PAYOUTS_ENABLED=true.
+            </p>
           </div>
-        ) : (
-          <div className="divide-y divide-border">
-            {approvedByBroker.map(([brokerUserId, rows]) => {
-              const total = rows.reduce((sum, row) => sum + row.netMinor, 0);
-              return (
-                <div
-                  key={brokerUserId}
-                  className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div>
-                    <p className="font-mono text-xs">{brokerUserId}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {rows.length} accrual{rows.length === 1 ? "" : "s"} • {money(total)}
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    disabled={busyId === brokerUserId}
-                    onClick={() =>
-                      createPayout(
-                        brokerUserId,
-                        rows.map((row) => row._id),
-                      )
-                    }
+          {approvedByBroker.length === 0 ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">
+              No approved accruals waiting for payout.
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {approvedByBroker.map(([brokerUserId, rows]) => {
+                const total = rows.reduce((sum, row) => sum + row.netMinor, 0);
+                return (
+                  <div
+                    key={brokerUserId}
+                    className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between"
                   >
-                    Create Payout Batch
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      <div className="rounded-xl border border-border bg-card">
-        <div className="border-b border-border p-4">
-          <h3 className="font-semibold">Payout Batches</h3>
-          <p className="text-xs text-muted-foreground">
-            Execute only after finance sign-off. Failures restore accruals for retry.
-          </p>
+                    <div>
+                      <p className="font-mono text-xs">{brokerUserId}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {rows.length} accrual{rows.length === 1 ? "" : "s"} • {money(total)}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      disabled={busyId === brokerUserId}
+                      onClick={() =>
+                        createPayout(
+                          brokerUserId,
+                          rows.map((row) => row._id),
+                        )
+                      }
+                    >
+                      Create Payout Batch
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
-        {payouts.length === 0 ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">No payouts yet.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Batch</TableHead>
-                  <TableHead>Broker</TableHead>
-                  <TableHead>Net</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {payouts.map((payout) => (
-                  <TableRow key={payout._id}>
-                    <TableCell className="font-mono text-xs">{payout.batchCode}</TableCell>
-                    <TableCell className="font-mono text-xs">{payout.brokerUserId}</TableCell>
-                    <TableCell>{money(payout.netMinor)}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          payout.status === "failed"
-                            ? "destructive"
-                            : payout.status === "paid"
-                              ? "default"
-                              : "outline"
-                        }
-                        className="capitalize"
-                      >
-                        {payout.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {payout.status === "approved" && (
-                        <>
-                          <Button
-                            size="sm"
-                            disabled={busyId === payout._id}
-                            onClick={() => pay(payout._id)}
-                          >
-                            Pay
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="ml-2"
-                            disabled={busyId === payout._id}
-                            onClick={() => fail(payout._id)}
-                          >
-                            Fail
-                          </Button>
-                        </>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+      )}
+
+      {canManagePayouts && (
+        <div className="rounded-xl border border-border bg-card">
+          <div className="border-b border-border p-4">
+            <h3 className="font-semibold">Payout Batches</h3>
+            <p className="text-xs text-muted-foreground">
+              Execute only after finance sign-off. Failures restore accruals for retry.
+            </p>
           </div>
-        )}
-      </div>
+          {payouts.length === 0 ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">No payouts yet.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Batch</TableHead>
+                    <TableHead>Broker</TableHead>
+                    <TableHead>Net</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {payouts.map((payout) => (
+                    <TableRow key={payout._id}>
+                      <TableCell className="font-mono text-xs">{payout.batchCode}</TableCell>
+                      <TableCell className="font-mono text-xs">{payout.brokerUserId}</TableCell>
+                      <TableCell>{money(payout.netMinor)}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            payout.status === "failed"
+                              ? "destructive"
+                              : payout.status === "paid"
+                                ? "default"
+                                : "outline"
+                          }
+                          className="capitalize"
+                        >
+                          {payout.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {payout.status === "approved" && (
+                          <>
+                            <Button
+                              size="sm"
+                              disabled={busyId === payout._id}
+                              onClick={() => pay(payout._id)}
+                            >
+                              Pay
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="ml-2"
+                              disabled={busyId === payout._id}
+                              onClick={() => fail(payout._id)}
+                            >
+                              Fail
+                            </Button>
+                          </>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

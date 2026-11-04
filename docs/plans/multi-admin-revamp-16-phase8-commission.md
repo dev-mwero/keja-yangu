@@ -1,6 +1,6 @@
 # Phase 8 — Commission
 
-**Status:** Implemented (shadow mode; live payouts gated)  
+**Status:** Implementation complete — awaiting finance/legal sign-off (shadow mode)  
 **Goal:** accrue commission from collected rent, run in shadow mode, and only then
 enable controlled payouts with segregation of duties and clawbacks.  
 **Depends on:** Phase 7 complete (`feat/revamp`, attribution + confirmed lease linkage)
@@ -228,13 +228,30 @@ privileged mutation.
 
 ---
 
-## 11. Open Decisions (must be resolved before live payout)
+## 11. Launch Decisions
 
-- D-04: `first_month_rent` default rate/cap.
-- Payer confirmation (approved direction: billing account pays broker directly).
-- Tax handling and withholding basis.
-- Minimum payout threshold and monthly cut-off.
-- Clawback window and escalation limits.
+Resolved 2026-11-04 with product direction:
+
+- **D-04:** `first_month_rent` = 100% of one month (`rateBps: 10000`), uncapped,
+  overridable per agreement.
+- **Payer:** billing account pays the broker directly.
+- **Tax:** withhold from `agreement.taxBps`; default `0` until legal confirms the
+  withholding basis. Snapshot the applied rate on every accrual.
+- **Minimum payout:** `COMMISSION_MIN_PAYOUT_MINOR`, default `0` at launch.
+- **Cut-off:** manual batching at launch; automated monthly cut-off later.
+- **Clawback window:** `COMMISSION_CLAWBACK_WINDOW_DAYS`, default `30` days from
+  `paidAt`; later reversals require a manual adjustment.
+
+Configuration knobs:
+
+```text
+COMMISSION_PAYOUTS_ENABLED=false        # live execution gate
+COMMISSION_ELIGIBILITY_DELAY_DAYS=7     # settlement -> eligible
+COMMISSION_MIN_PAYOUT_MINOR=0           # batch floor
+COMMISSION_CLAWBACK_WINDOW_DAYS=30      # paid clawback window
+```
+
+Finance/legal sign-off is still required before enabling live payouts.
 
 ---
 
@@ -275,9 +292,15 @@ Implemented locally; no live database mutation, payout or deployment was perform
 - `npm run test` — 220 files / 1959 tests passed.
 - `npm run build` — succeeded; `/dashboard/system-admin/commissions` in route table.
 
+### Follow-up completed (same day)
+
+- Accruals now use `agreement.taxBps` (was hardcoded to `0`) and snapshot it.
+- Eligibility delay, minimum payout and clawback window are env-configurable and
+  enforced; paid clawbacks outside the window are rejected.
+- Backfill dry-run now prints projected gross/tax/net totals for finance.
+- Admin-role commissions page added; broker nav deep-links to the commissions tab.
+
 ### Still open before live payout
 
-- D-04 `first_month_rent` default rate/cap and other section 11 commercial/legal
-  decisions.
 - Finance/legal sign-off.
 - Keep `COMMISSION_PAYOUTS_ENABLED=false` until sign-off; execution returns `409`.

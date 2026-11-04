@@ -1,4 +1,7 @@
-import { accrueCommissionForSettledInvoice } from "@/lib/commission";
+import {
+  accrueCommissionForSettledInvoice,
+  previewCommissionForSettledInvoice,
+} from "@/lib/commission";
 import { connectToDatabase } from "@/lib/mongoose";
 import { Invoice } from "@/models/Invoice";
 
@@ -28,10 +31,27 @@ async function main() {
   let created = 0;
   let skipped = 0;
   let failed = 0;
+  let previewCount = 0;
+  let previewGross = 0;
+  let previewTax = 0;
+  let previewNet = 0;
 
   for (const invoice of invoices) {
     if (!apply) {
-      skipped += 1;
+      try {
+        const preview = await previewCommissionForSettledInvoice(invoice);
+        if (preview) {
+          previewCount += 1;
+          previewGross += preview.grossMinor;
+          previewTax += preview.taxMinor;
+          previewNet += preview.netMinor;
+        } else {
+          skipped += 1;
+        }
+      } catch (error) {
+        failed += 1;
+        console.error(`[commission] preview failed invoice=${String(invoice._id)}`, error);
+      }
       continue;
     }
 
@@ -51,7 +71,12 @@ async function main() {
     console.log(`Skipped (no attribution/agreement/zero basis): ${skipped}`);
     console.log(`Failed: ${failed}`);
   } else {
-    console.log(`Candidate invoices: ${invoices.length}`);
+    console.log(`Invoices with payable commission: ${previewCount}`);
+    console.log(`Skipped (no attribution/agreement/zero basis): ${skipped}`);
+    console.log(`Failed: ${failed}`);
+    console.log(`Projected gross: ${(previewGross / 100).toFixed(2)} KES`);
+    console.log(`Projected tax: ${(previewTax / 100).toFixed(2)} KES`);
+    console.log(`Projected net: ${(previewNet / 100).toFixed(2)} KES`);
     console.log("Payout execution stays disabled; --apply only creates shadow accruals.");
   }
 
