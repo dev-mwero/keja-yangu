@@ -1,6 +1,6 @@
 # Phase 9 — Stabilisation and Legacy Retirement
 
-**Status:** Plan approved — local implementation in progress  
+**Status:** Local audit foundation implemented — production soak pending  
 **Goal:** prove the new assignment/billing model has zero unexplained drift, then
 retire legacy owner-scoped paths without breaking day-to-day operations.  
 **Depends on:** Phases 1–8 complete on `feat/revamp`.
@@ -108,8 +108,8 @@ critical-path spec before removing fallbacks.
 
 ## 3. Exit Criteria
 
-- [ ] Read-only readiness audit implemented and tested.
-- [ ] Runbook published with daily audit and rollback steps.
+- [x] Read-only readiness audit implemented and tested.
+- [x] Runbook published with daily audit and rollback steps.
 - [ ] Daily reconciliation run green for one release cycle.
 - [ ] Zero unexplained assignment/billing/block drift.
 - [ ] Legacy public pages retired or redirected per product/SEO sign-off.
@@ -137,8 +137,14 @@ critical-path spec before removing fallbacks.
 
 Local work completes the audit foundation only:
 
-- Added `src/lib/legacy-readiness.ts` and tests.
+- Added `src/lib/legacy-readiness.ts` and `src/lib/legacy-readiness.test.ts`
+  (6 tests covering clean state, legacy references, owner-role users, orphan
+  assignments, block/unit drift, billing drift and soft deletes).
 - Added `scripts/phase9-readiness.ts` (read-only; exits non-zero on drift).
-- Added `docs/runbooks/phase9-stabilisation.md`.
+- Added `docs/runbooks/phase9-stabilisation.md` with daily order, escalation,
+  rollback and the retirement-PR checklist.
+- Verified `npx tsc --noEmit` and `npx vitest run src/lib/legacy-readiness.test.ts`.
 
-Production-dependent retirement steps remain gated as described above.
+Production-dependent retirement steps remain gated as described above. The next
+step is running the audit against a production replica daily for one release
+cycle and collecting the evidence pack for the retirement PR.
