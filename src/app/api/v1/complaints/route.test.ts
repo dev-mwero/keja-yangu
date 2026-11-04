@@ -1,7 +1,13 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildRequest, signToken } from "@/test/utils/api-request";
-import { makeComplaint, makeObjectId, makeTenant, makeUser } from "@/test/utils/factories";
+import {
+  makeComplaint,
+  makeObjectId,
+  makeTenant,
+  makeUnit,
+  makeUser,
+} from "@/test/utils/factories";
 import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-mocks";
 
 vi.mock("@/lib/mongoose", () => ({
@@ -10,16 +16,25 @@ vi.mock("@/lib/mongoose", () => ({
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
+vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 vi.mock("@/models/Complaint", () => ({ Complaint: getModelStubs().complaint }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
+vi.mock("@/lib/notifications", () => ({
+  notifyComplaintCreated: vi.fn().mockResolvedValue(true),
+}));
 
 import { GET, POST } from "@/app/api/v1/complaints/route";
+import { notifyComplaintCreated } from "@/lib/notifications";
 
-const { user, property, tenant, complaint } = getModelStubs();
+const { user, property, tenant, unit, complaint, managementAssignment } = getModelStubs();
 
 const USER_ID = makeObjectId("user");
 const OWNER_ID = makeObjectId("owner");
 const TENANT_ID = makeObjectId("tenant");
 const PROPERTY_ID = makeObjectId("p1");
+const UNIT_ID = makeObjectId("unit");
 const COMPLAINT_ID = makeObjectId("complaint");
 
 function tenantUser() {
@@ -103,6 +118,34 @@ describe("GET /api/v1/complaints", () => {
     expect(complaint.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
   });
 
+  it("scopes an admin to property-assigned complaints", async () => {
+    const ADMIN_ID = makeObjectId("complaint-admin");
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: ADMIN_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["complaint:read-own"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    complaint.find.mockReturnValue(buildQuery([]).sort({ createdAt: -1 }).skip(0).limit(20));
+    complaint.countDocuments.mockResolvedValue(0);
+    property.find.mockReturnValue(buildQuery([]));
+
+    const res = await GET(buildRequest("/api/v1/complaints", { token: signToken(ADMIN_ID) }));
+
+    expect(res.status).toBe(200);
+    expect(complaint.find).toHaveBeenCalledWith({
+      $or: [{ propertyId: { $in: [PROPERTY_ID] } }],
+    });
+  });
+
   it("caretaker scopes to managed owner + assigned properties", async () => {
     const caretaker = makeUser({
       _id: makeObjectId("caretaker"),
@@ -122,6 +165,22 @@ describe("GET /api/v1/complaints", () => {
     });
   });
 
+  it("custodian scopes to the managing owner only", async () => {
+    user.findById.mockReturnValue(
+      buildQuery(
+        makeUser({ _id: makeObjectId("custodian"), role: "custodian", managedByOwnerId: OWNER_ID }),
+      ),
+    );
+    complaint.find.mockReturnValue(buildQuery([]).sort({ createdAt: -1 }).skip(0).limit(20));
+    complaint.countDocuments.mockResolvedValue(0);
+
+    const res = await GET(
+      buildRequest("/api/v1/complaints", { token: signToken(makeObjectId("custodian")) }),
+    );
+    expect(res.status).toBe(200);
+    expect(complaint.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
+  });
+
   it("tenant with no bound rows gets an empty page", async () => {
     user.findById.mockReturnValue(buildQuery(tenantUser()));
     tenant.find.mockReturnValue(buildQuery([]));
@@ -136,8 +195,11 @@ describe("GET /api/v1/complaints", () => {
 });
 
 describe("POST /api/v1/complaints", () => {
+  const notifyComplaintCreatedMock = vi.mocked(notifyComplaintCreated);
+
   beforeEach(() => {
     resetModelStubs();
+    notifyComplaintCreatedMock.mockReset().mockResolvedValue(true);
   });
 
   it("401 when unauthenticated", async () => {
@@ -202,6 +264,7 @@ describe("POST /api/v1/complaints", () => {
         makeTenant({ _id: TENANT_ID, propertyId: PROPERTY_ID, ownerId: OWNER_ID, userId: USER_ID }),
       ]),
     );
+    unit.findOne.mockReturnValue(buildQuery(null));
     const created = makeComplaint({
       _id: COMPLAINT_ID,
       tenantId: TENANT_ID,
@@ -221,11 +284,18 @@ describe("POST /api/v1/complaints", () => {
       }),
     );
     expect(res.status).toBe(201);
+    expect(unit.findOne).toHaveBeenCalledWith({
+      propertyId: PROPERTY_ID,
+      tenantId: USER_ID,
+      status: "occupied",
+      deletedAt: null,
+    });
     expect(complaint.create).toHaveBeenCalledWith(
       expect.objectContaining({
         tenantId: TENANT_ID,
         propertyId: PROPERTY_ID,
         ownerId: OWNER_ID,
+        unitId: "",
         subject: "Leak",
         category: "Maintenance",
         priority: "low",
@@ -234,6 +304,115 @@ describe("POST /api/v1/complaints", () => {
     );
     const body = await json(res);
     expect((body.data as { status?: string }).status).toBe("open");
+    expect(notifyComplaintCreatedMock).toHaveBeenCalledTimes(1);
+    expect(notifyComplaintCreatedMock).toHaveBeenCalledWith(created);
+  });
+
+  it("stores the occupied unit on the complaint", async () => {
+    user.findById.mockReturnValue(buildQuery(tenantUser()));
+    tenant.find.mockReturnValue(
+      buildQuery([
+        makeTenant({ _id: TENANT_ID, propertyId: PROPERTY_ID, ownerId: OWNER_ID, userId: USER_ID }),
+      ]),
+    );
+    unit.findOne.mockReturnValue(buildQuery(makeUnit({ _id: UNIT_ID, propertyId: PROPERTY_ID })));
+    const created = makeComplaint({
+      _id: COMPLAINT_ID,
+      tenantId: TENANT_ID,
+      propertyId: PROPERTY_ID,
+      ownerId: OWNER_ID,
+      unitId: UNIT_ID,
+      status: "open",
+    });
+    complaint.create.mockResolvedValue(created);
+    complaint.findById.mockReturnValue(buildQuery(created));
+    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, title: "Sunlit Studio" }]));
+    unit.find.mockReturnValue(buildQuery([{ _id: UNIT_ID, name: "3A" }]));
+
+    const res = await POST(
+      buildRequest("/api/v1/complaints", {
+        method: "POST",
+        token: signToken(USER_ID),
+        body: { subject: "Leak", category: "Maintenance", message: "Leaking", priority: "low" },
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect(complaint.create).toHaveBeenCalledWith(expect.objectContaining({ unitId: UNIT_ID }));
+    expect(notifyComplaintCreatedMock).toHaveBeenCalledWith(created);
+    const body = await json(res);
+    expect((body.data as { unitName?: string }).unitName).toBe("3A");
+  });
+
+  it("resolves the unit within the chosen property for a multi-property tenant", async () => {
+    user.findById.mockReturnValue(buildQuery(tenantUser()));
+    const p1 = makeObjectId("p1");
+    const p2 = makeObjectId("p2");
+    tenant.find.mockReturnValue(
+      buildQuery([
+        makeTenant({ _id: makeObjectId("t1"), propertyId: p1, userId: USER_ID }),
+        makeTenant({ _id: makeObjectId("t2"), propertyId: p2, userId: USER_ID }),
+      ]),
+    );
+    unit.findOne.mockReturnValue(buildQuery(makeUnit({ _id: UNIT_ID, propertyId: p2 })));
+    const created = makeComplaint({
+      _id: COMPLAINT_ID,
+      tenantId: makeObjectId("t2"),
+      propertyId: p2,
+      ownerId: OWNER_ID,
+      unitId: UNIT_ID,
+      status: "open",
+    });
+    complaint.create.mockResolvedValue(created);
+    complaint.findById.mockReturnValue(buildQuery(created));
+    property.find.mockReturnValue(buildQuery([{ _id: p2, title: "Riverside" }]));
+    unit.find.mockReturnValue(buildQuery([{ _id: UNIT_ID, name: "1B" }]));
+
+    const res = await POST(
+      buildRequest("/api/v1/complaints", {
+        method: "POST",
+        token: signToken(USER_ID),
+        body: {
+          subject: "Leak",
+          category: "Maintenance",
+          message: "Leaking",
+          priority: "low",
+          propertyId: p2,
+        },
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect(unit.findOne).toHaveBeenCalledWith(
+      expect.objectContaining({ propertyId: p2, tenantId: USER_ID }),
+    );
+    expect(complaint.create).toHaveBeenCalledWith(
+      expect.objectContaining({ unitId: UNIT_ID, propertyId: p2 }),
+    );
+    expect(notifyComplaintCreatedMock).toHaveBeenCalledWith(created);
+  });
+
+  it("enriches unitName on GET", async () => {
+    user.findById.mockReturnValue(buildQuery(tenantUser()));
+    tenant.find.mockReturnValue(
+      buildQuery([makeTenant({ _id: TENANT_ID, propertyId: PROPERTY_ID, userId: USER_ID })]),
+    );
+    const row = makeComplaint({
+      _id: COMPLAINT_ID,
+      tenantId: TENANT_ID,
+      propertyId: PROPERTY_ID,
+      ownerId: OWNER_ID,
+      unitId: UNIT_ID,
+    });
+    complaint.find.mockReturnValue(buildQuery([row]).sort({ createdAt: -1 }).skip(0).limit(20));
+    complaint.countDocuments.mockResolvedValue(1);
+    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, title: "Sunlit Studio" }]));
+    unit.find.mockReturnValue(buildQuery([{ _id: UNIT_ID, name: "3A" }]));
+
+    const res = await GET(buildRequest("/api/v1/complaints", { token: signToken(USER_ID) }));
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    const data = body.data as Array<Record<string, unknown>>;
+    expect(data[0].unitName).toBe("3A");
+    expect(data[0].property).toBe("Sunlit Studio");
   });
 
   it("400 when a multi-property tenant omits the property", async () => {

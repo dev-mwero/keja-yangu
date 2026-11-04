@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Unit } from "@/hooks/use-units";
@@ -6,16 +6,36 @@ import type { Unit } from "@/hooks/use-units";
 const mocks = vi.hoisted(() => {
   const units: Array<Record<string, unknown>> = [];
   const properties: Array<Record<string, unknown>> = [];
+  const unassignedTenants: Array<Record<string, unknown>> = [];
+  const assignUnit = vi.fn();
+  const vacateUnit = vi.fn();
+  const updateUnit = vi.fn();
   return {
     units,
     properties,
+    unassignedTenants,
+    assignUnit,
+    vacateUnit,
+    updateUnit,
     useUnits: () => ({ units, loading: false, error: null, refetch: vi.fn() }),
     useUnitMutations: () => ({
-      updateUnit: vi.fn(),
+      updateUnit,
       deleteUnit: vi.fn(),
       pending: false,
     }),
     useProperties: () => ({ properties, loading: false, error: null, refetch: vi.fn() }),
+    usePropertyTenants: () => ({
+      tenants: [],
+      unassignedTenants,
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    }),
+    useTenantMutations: () => ({
+      assignUnit,
+      vacateUnit,
+      pending: false,
+    }),
   };
 });
 
@@ -32,6 +52,10 @@ vi.mock("@/hooks/use-units", () => ({
   useUnitMutations: mocks.useUnitMutations,
 }));
 vi.mock("@/hooks/use-properties", () => ({ useProperties: mocks.useProperties }));
+vi.mock("@/hooks/use-tenants", () => ({
+  usePropertyTenants: mocks.usePropertyTenants,
+  useTenantMutations: mocks.useTenantMutations,
+}));
 
 import { UnitsView } from "@/components/units/UnitsView";
 
@@ -42,9 +66,11 @@ const unitA = {
   blockName: "Block A",
   floorLabel: "Ground",
   floorLevel: 0,
+  blockId: "block-1",
+  floorId: "floor-1",
   rent: 10000,
   status: "available",
-  tenantId: "",
+  tenantId: [] as string[],
 } as Unit;
 
 const unitB = {
@@ -56,13 +82,17 @@ const unitB = {
   floorLevel: 2,
   rent: 20000,
   status: "occupied",
-  tenantId: "ten-1",
+  tenantId: ["ten-1"],
 } as Unit;
 
 describe("UnitsView search", () => {
   beforeEach(() => {
     mocks.units.length = 0;
     mocks.properties.length = 0;
+    mocks.unassignedTenants.length = 0;
+    mocks.assignUnit.mockReset();
+    mocks.vacateUnit.mockReset();
+    mocks.updateUnit.mockReset();
   });
 
   it("filters units by the search box", async () => {
@@ -81,5 +111,128 @@ describe("UnitsView search", () => {
 
     expect(screen.getByText("B2")).toBeInTheDocument();
     expect(screen.queryByText("A1")).not.toBeInTheDocument();
+  });
+});
+
+describe("UnitsView assignment", () => {
+  beforeEach(() => {
+    mocks.units.length = 0;
+    mocks.properties.length = 0;
+    mocks.unassignedTenants.length = 0;
+    mocks.assignUnit.mockReset();
+    mocks.vacateUnit.mockReset();
+    mocks.updateUnit.mockReset();
+    mocks.assignUnit.mockResolvedValue(undefined);
+    mocks.vacateUnit.mockResolvedValue(undefined);
+  });
+
+  const seedUnits = () => {
+    mocks.units.push(
+      unitA as unknown as Record<string, unknown>,
+      unitB as unknown as Record<string, unknown>,
+    );
+    mocks.properties.push({
+      _id: "prop-1",
+      title: "Sunset Villa",
+      purpose: "commercial",
+      blocks: [
+        {
+          _id: "block-1",
+          purpose: "residential",
+          floors: [{ _id: "floor-1", purpose: "storage" }],
+        },
+      ],
+    });
+    mocks.properties.push({ _id: "prop-2", title: "River Court" });
+  };
+
+  it("offers Assign for available units and Unassign for occupied units", async () => {
+    seedUnits();
+
+    render(<UnitsView nav={[]} roleName="Owner" />);
+
+    expect(await screen.findByRole("button", { name: "Assign tenant to A1" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Unassign tenant from B2" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Unassign tenant from A1" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Assign tenant to B2" })).not.toBeInTheDocument();
+  });
+
+  it("hides assignment actions when canManage is false", async () => {
+    seedUnits();
+
+    render(<UnitsView nav={[]} roleName="Custodian" canManage={false} />);
+
+    expect(await screen.findByText("A1")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Assign tenant to A1" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Unassign tenant from B2" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows inherited purpose and saves a unit purpose override", async () => {
+    seedUnits();
+    mocks.updateUnit.mockResolvedValue(undefined);
+
+    const user = userEvent.setup();
+    render(<UnitsView nav={[]} roleName="Owner" />);
+
+    expect(screen.getByText("storage")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Edit A1" }));
+
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getAllByRole("combobox")[0]);
+    await user.click(await screen.findByRole("option", { name: "commercial" }));
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(mocks.updateUnit).toHaveBeenCalledWith("u1", {
+        name: "A1",
+        status: "available",
+        purpose: "commercial",
+        rent: 10000,
+      }),
+    );
+  });
+
+  it("assigns an unassigned tenant to an available unit", async () => {
+    seedUnits();
+    mocks.unassignedTenants.push({
+      _id: "ten-9",
+      name: "Mary Njeri",
+      email: "mary@keja.co",
+      propertyId: "prop-1",
+      ownerId: "owner-1",
+      status: "active",
+    });
+
+    const user = userEvent.setup();
+    render(<UnitsView nav={[]} roleName="Owner" />);
+
+    await user.click(await screen.findByRole("button", { name: "Assign tenant to A1" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("combobox"));
+    await user.click(await screen.findByRole("option", { name: /Mary Njeri/ }));
+    await user.click(within(dialog).getByRole("button", { name: "Assign tenant" }));
+
+    await waitFor(() => expect(mocks.assignUnit).toHaveBeenCalledWith("ten-9", "u1"));
+    expect(await screen.findByRole("button", { name: "Assign tenant to A1" })).toBeInTheDocument();
+  });
+
+  it("unassigns the tenant from an occupied unit", async () => {
+    seedUnits();
+
+    const user = userEvent.setup();
+    render(<UnitsView nav={[]} roleName="Owner" />);
+
+    await user.click(await screen.findByRole("button", { name: "Unassign tenant from B2" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Unassign tenant" }));
+
+    await waitFor(() => expect(mocks.vacateUnit).toHaveBeenCalledWith("ten-1"));
+    expect(
+      await screen.findByRole("button", { name: "Unassign tenant from B2" }),
+    ).toBeInTheDocument();
   });
 });

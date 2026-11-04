@@ -10,10 +10,10 @@ export interface IUserSettings {
 }
 
 export interface IUser {
-  email: string;
+  email?: string;
   name: string;
   passwordHash: string;
-  role: "tenant" | "caretaker" | "custodian" | "owner" | "system-admin";
+  role: "tenant" | "caretaker" | "custodian" | "owner" | "admin" | "broker" | "system-admin";
   privileges: string[];
   managedByOwnerId: string;
   isActive: boolean;
@@ -24,6 +24,7 @@ export interface IUser {
   verificationToken?: string;
   verificationTokenExpiry?: Date;
   invoiceCounters: Record<string, number>;
+  migratedFromOwner?: boolean;
   settings: IUserSettings;
 }
 
@@ -41,12 +42,12 @@ const userSettingsSchema = new Schema<IUserSettings>(
 
 const userSchema = new Schema<IUser>(
   {
-    email: { type: String, required: true, unique: true, trim: true, lowercase: true },
+    email: { type: String, required: false, trim: true, lowercase: true },
     name: { type: String, required: true, trim: true },
     passwordHash: { type: String, required: true },
     role: {
       type: String,
-      enum: ["tenant", "caretaker", "custodian", "owner", "system-admin"],
+      enum: ["tenant", "caretaker", "custodian", "owner", "admin", "broker", "system-admin"],
       required: true,
     },
     privileges: {
@@ -63,6 +64,7 @@ const userSchema = new Schema<IUser>(
         "manage_announcements",
         "send_messages",
         "manage_documents",
+        "assign_privileges",
       ],
       default: [],
     },
@@ -79,6 +81,7 @@ const userSchema = new Schema<IUser>(
     verificationToken: { type: String },
     verificationTokenExpiry: { type: Date },
     invoiceCounters: { type: Schema.Types.Map, of: Number, default: {} },
+    migratedFromOwner: { type: Boolean, default: false },
     settings: { type: userSettingsSchema, default: () => ({}) },
   },
   {
@@ -87,7 +90,8 @@ const userSchema = new Schema<IUser>(
 );
 
 userSchema.index({ role: 1, managedByOwnerId: 1 });
-userSchema.index({ phone: 1 });
+userSchema.index({ phone: 1 }, { unique: true, partialFilterExpression: { phone: { $gt: "" } } });
+userSchema.index({ email: 1 }, { unique: true, sparse: true });
 
 export type UserDocument = InferSchemaType<IUser>;
 

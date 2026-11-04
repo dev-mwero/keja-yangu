@@ -91,6 +91,9 @@ function stubFetch() {
           }),
         });
       }
+      if (href.includes("/api/v1/tenants")) {
+        return Promise.resolve({ ok: true, json: async () => ({ data: [] }) });
+      }
       return Promise.resolve({ ok: true, json: async () => ({ data: property }) });
     }),
   );

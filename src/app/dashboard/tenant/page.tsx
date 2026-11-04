@@ -4,6 +4,7 @@ import { CheckCircle2, Clock, FileText, XCircle } from "lucide-react";
 import Link from "next/link";
 import { DashboardShell } from "@/components/DashboardShell";
 import { PropertyCard } from "@/components/PropertyCard";
+import { RecentlyViewedProperties } from "@/components/property/RecentlyViewedProperties";
 import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,25 @@ const TenantDashboard = () => {
   const approvedTitle = applications.find((a) => a.status === "approved")?.propertyTitle;
   const recent = applications.slice(0, 5);
 
+  // Average time from submission to decision across decided applications.
+  const decided = applications.filter((a) => a.decidedAt);
+  const avgResponseHours =
+    decided.length > 0
+      ? Math.round(
+          decided.reduce(
+            (sum, a) =>
+              sum + (new Date(a.decidedAt as string).getTime() - new Date(a.submittedAt).getTime()),
+            0,
+          ) /
+            decided.length /
+            3_600_000,
+        )
+      : null;
+  const responseHint =
+    avgResponseHours === null
+      ? "Awaiting your first decision"
+      : `Avg. response ${avgResponseHours}h`;
+
   return (
     <DashboardShell
       roleName="Tenant"
@@ -69,21 +89,21 @@ const TenantDashboard = () => {
           label="Total applications"
           value={totalCount}
           icon={FileText}
-          href="/dashboard/tenant/applications"
+          href="/dashboard/tenant/requests"
         />
         <StatCard
           label="Pending review"
           value={pendingCount}
           icon={Clock}
-          hint="Avg. response 18h"
-          href="/dashboard/tenant/applications"
+          hint={responseHint}
+          href="/dashboard/tenant/requests"
         />
         <StatCard
           label="Approved"
           value={approvedCount}
           hint={approvedTitle}
           icon={CheckCircle2}
-          href="/dashboard/tenant/applications"
+          href="/dashboard/tenant/requests"
         />
       </div>
 
@@ -171,6 +191,7 @@ const TenantDashboard = () => {
             ))
           )}
         </div>
+        <RecentlyViewedProperties />
       </div>
     </DashboardShell>
   );

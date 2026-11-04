@@ -1,7 +1,7 @@
 # Phase 5 — Navigation / IA consolidation
 
 Part of [Simplify user flows](./README.md).
-Status: spec ready · Depends on: Phase 4 (nice-to-have) · Risk: low
+Status: **shipped** (`14d6df6`) · Depends on: Phase 4 (nice-to-have) · Risk: low
 
 > **Goal:** the tenant dashboard reflects the simple mental model — *my home, my
 > requests, my messages* — instead of 12 flat items. Owner/caretaker nav is left

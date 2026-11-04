@@ -1,11 +1,13 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { bindApplicationAttribution } from "@/lib/attributions";
 import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
-import { authenticate } from "@/lib/permissions";
+import { authenticate, getAdminAssignmentScope } from "@/lib/permissions";
 import { applicationCreateInput } from "@/lib/schemas/application";
 import { Application } from "@/models/Application";
 import { Property } from "@/models/Property";
+import { Unit } from "@/models/Unit";
 import { User } from "@/models/User";
 
 export async function GET(request: NextRequest) {
@@ -41,6 +43,19 @@ export async function GET(request: NextRequest) {
       .lean();
     filter.ownerId = user.managedByOwnerId;
     filter.propertyId = { $in: assigned.map((p) => String(p._id)) };
+  } else if (role === "admin") {
+    const scope = await getAdminAssignmentScope(String(user._id), "application:manage");
+    const scopes: Record<string, unknown>[] = [];
+    if (scope.propertyScopeIds.length > 0) {
+      scopes.push({ propertyId: { $in: scope.propertyScopeIds } });
+    }
+    if (scope.assignedUnitIds.length > 0) {
+      scopes.push({ unitId: { $in: scope.assignedUnitIds } });
+    }
+    if (scopes.length === 0) {
+      return NextResponse.json(buildPaginationResult([], 0, page, limit));
+    }
+    filter.$or = scopes;
   } else if (role !== "system-admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -62,9 +77,19 @@ export async function GET(request: NextRequest) {
     : [];
   const propertyTitleById = new Map(properties.map((p) => [String(p._id), String(p.title ?? "")]));
 
+  // Resolve requested unit names so the table can show which unit was asked for.
+  const unitIds = [...new Set(items.map((a) => String(a.unitId ?? "")).filter(Boolean))];
+  const units = unitIds.length
+    ? await Unit.find({ _id: { $in: unitIds } })
+        .select("name")
+        .lean()
+    : [];
+  const unitNameById = new Map(units.map((u) => [String(u._id), String(u.name ?? "")]));
+
   const enriched = items.map((a) => ({
     ...a,
     propertyTitle: propertyTitleById.get(String(a.propertyId)) ?? "",
+    unitName: unitNameById.get(String(a.unitId ?? "")) ?? "",
   }));
 
   return NextResponse.json(buildPaginationResult(enriched, total, page, limit));
@@ -90,8 +115,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Only tenants can apply for a home" }, { status: 403 });
   }
 
-  const property = await Property.findById(parsed.data.propertyId).select("_id ownerId").lean();
+  const property = await Property.findById(parsed.data.propertyId)
+    .select("_id ownerId published status")
+    .lean();
   if (!property) return NextResponse.json({ error: "Property not found" }, { status: 404 });
+  if (!property.published || property.status !== "available") {
+    return NextResponse.json({ error: "This home is not accepting applications" }, { status: 409 });
+  }
+
+  const unitId = parsed.data.unitId ?? "";
+  if (unitId) {
+    const unit = await Unit.findById(unitId).select("_id propertyId status").lean();
+    if (!unit) return NextResponse.json({ error: "Unit not found" }, { status: 404 });
+    if (String(unit.propertyId) !== parsed.data.propertyId) {
+      return NextResponse.json(
+        { error: "That unit is not part of this property" },
+        { status: 400 },
+      );
+    }
+    if (unit.status !== "available") {
+      return NextResponse.json({ error: "That unit is no longer available" }, { status: 409 });
+    }
+  }
 
   const applicantUserId = String(user._id);
   const existing = await Application.findOne({
@@ -110,6 +155,7 @@ export async function POST(request: NextRequest) {
 
   const created = await Application.create({
     propertyId: parsed.data.propertyId,
+    unitId,
     ownerId: property.ownerId,
     applicantUserId,
     applicantName: parsed.data.name,
@@ -117,6 +163,25 @@ export async function POST(request: NextRequest) {
     message: parsed.data.message ?? "",
     status: "pending",
   });
+
+  // Lock the sourcing attribution before responding. Non-fatal: a failed
+  // attribution lookup must not discard an otherwise valid application.
+  if (unitId) {
+    const { shareCode, touchToken, listingId } = parsed.data;
+    try {
+      await bindApplicationAttribution({
+        applicationId: String(created._id),
+        shareCode: shareCode || undefined,
+        touchToken: touchToken || undefined,
+        unitId,
+        propertyId: parsed.data.propertyId,
+        listingId: listingId || undefined,
+        actorUserId: auth.userId,
+      });
+    } catch {
+      // Non-fatal attribution bookkeeping
+    }
+  }
 
   return NextResponse.json({ data: created }, { status: 201 });
 }

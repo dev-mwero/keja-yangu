@@ -8,6 +8,9 @@ vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/models/Payment", () => ({ Payment: getModelStubs().payment }));
+vi.mock("@/models/BillingAccount", () => ({
+  BillingAccount: getModelStubs().billingAccount,
+}));
 vi.mock("@/lib/payments/settle", () => ({ applyProviderPayment: vi.fn() }));
 
 import { POST } from "@/app/api/v1/payments/mpesa/callback/[ownerId]/[token]/route";
@@ -15,6 +18,7 @@ import { buildMpesaCallbackToken } from "@/lib/payments/mpesa";
 import { applyProviderPayment } from "@/lib/payments/settle";
 
 const { payment: paymentStub } = getModelStubs();
+const { billingAccount: billingAccountStub } = getModelStubs();
 const applyProviderPaymentMock = vi.mocked(applyProviderPayment);
 
 const OWNER_ID = makeObjectId("callback-owner");
@@ -83,6 +87,7 @@ async function json(res: Response) {
 describe("POST /api/v1/payments/mpesa/callback/[ownerId]/[token]", () => {
   beforeEach(() => {
     resetModelStubs();
+    billingAccountStub.findOne.mockReturnValue(buildQuery(null));
     process.env.MPESA_CALLBACK_SECRET = SECRET;
     applyProviderPaymentMock.mockReset();
     applyProviderPaymentMock.mockResolvedValue({ outcome: "settled" });
@@ -130,6 +135,28 @@ describe("POST /api/v1/payments/mpesa/callback/[ownerId]/[token]", () => {
     expect(res.status).toBe(200);
     await expect(json(res)).resolves.toEqual({ received: true });
     expect(applyProviderPaymentMock).not.toHaveBeenCalled();
+  });
+
+  it("200 settles a billing-account callback via its legacy owner", async () => {
+    const BILLING_ID = makeObjectId("billing-account");
+    billingAccountStub.findOne.mockReturnValue(
+      buildQuery({ _id: BILLING_ID, ownerAdminId: OWNER_ID, legacyOwnerId: OWNER_ID }),
+    );
+    paymentStub.findOne
+      .mockReturnValueOnce(buildQuery(null))
+      .mockReturnValueOnce(buildQuery(pendingPayment()));
+    paymentStub.updateOne.mockResolvedValue(undefined);
+
+    const res = await POST(
+      callbackRequest(),
+      context(BILLING_ID, buildMpesaCallbackToken(BILLING_ID)),
+    );
+
+    expect(res.status).toBe(200);
+    await expect(json(res)).resolves.toEqual({ received: true });
+    expect(applyProviderPaymentMock).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: "mpesa", providerReference: CHECKOUT_ID }),
+    );
   });
 
   it("200 settles the invoice on a successful callback and records the receipt", async () => {

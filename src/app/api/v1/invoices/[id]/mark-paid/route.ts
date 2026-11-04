@@ -2,7 +2,8 @@ import { isValidObjectId } from "mongoose";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { readJsonBody, resolveInvoiceActor } from "@/app/api/v1/_helpers";
-import { canMarkPaid, serializeInvoice } from "@/lib/invoicing";
+import { accrueCommissionForSettledInvoice } from "@/lib/commission";
+import { canMarkPaid, resolveManualPayment, serializeInvoice } from "@/lib/invoicing";
 import { connectToDatabase } from "@/lib/mongoose";
 import { notifyInvoicePaid } from "@/lib/notifications";
 import { requirePermission } from "@/lib/permissions";
@@ -31,10 +32,18 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   const authError = await requirePermission(request, "invoice:mark-paid", { resource: invoice });
   if (authError) return authError;
 
-  const actor = await resolveInvoiceActor(request);
+  const actor = await resolveInvoiceActor(request, "invoice:mark-paid");
   if (actor instanceof NextResponse) return actor;
 
   if (actor.role === "caretaker" && !actor.assignedPropertyIds.includes(invoice.propertyId)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  if (
+    actor.role === "admin" &&
+    !actor.propertyScopeIds.includes(invoice.propertyId) &&
+    !(invoice.unitId && actor.assignedUnitIds.includes(invoice.unitId))
+  ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -55,7 +64,17 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   }
 
   const now = new Date();
-  const amountPaid = parsed.data.amount ?? invoice.amountDue;
+  const settlement = resolveManualPayment(invoice, parsed.data.amount);
+  if (!settlement.ok) {
+    if (settlement.reason === "exceeds-balance") {
+      return NextResponse.json(
+        { error: "Amount exceeds the outstanding balance" },
+        { status: 400 },
+      );
+    }
+    return NextResponse.json({ error: "Invoice is already paid" }, { status: 409 });
+  }
+
   let paidAt = now;
   if (parsed.data.paidAt) {
     paidAt = new Date(parsed.data.paidAt);
@@ -65,8 +84,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   }
 
   const updateData: Record<string, unknown> = {
-    status: "paid",
-    amountPaid,
+    status: settlement.status,
+    amountPaid: settlement.amountPaid,
     paidAt,
     paidBy: actor.userId,
     paidByRole: actor.role,
@@ -78,7 +97,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     updateData.paymentDescription = parsed.data.description;
 
   const updated = await Invoice.findOneAndUpdate(
-    { _id: id, status: { $in: ["pending", "draft"] } },
+    {
+      _id: id,
+      status: { $in: ["pending", "draft"] },
+      // Optimistic guard: bail out if a concurrent writer changed the paid
+      // amount between our read and this update rather than losing a payment.
+      amountPaid: invoice.amountPaid ?? 0,
+    },
     updateData,
     {
       new: true,
@@ -88,12 +113,21 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   if (!updated) {
     // A concurrent writer (e.g. the Paystack webhook) settled the invoice
     // between our read and this conditional update — never overwrite it.
-    return NextResponse.json({ error: "Invoice is already paid or voided" }, { status: 409 });
+    return NextResponse.json({ error: "Invoice was updated by another request" }, { status: 409 });
   }
 
-  console.info(`[invoicing] mark-paid actor=${actor.userId} role=${actor.role} invoice=${id}`);
+  console.info(
+    `[invoicing] mark-paid actor=${actor.userId} role=${actor.role} invoice=${id} amountPaid=${settlement.amountPaid} status=${settlement.status}`,
+  );
 
-  await notifyInvoicePaid(updated);
+  if (updated.status === "paid") {
+    await notifyInvoicePaid(updated);
+    try {
+      await accrueCommissionForSettledInvoice(updated);
+    } catch (error) {
+      console.warn(`[commission] accrual failed invoice=${id}`, error);
+    }
+  }
 
   return NextResponse.json({ data: serializeInvoice(updated, now) });
 }

@@ -53,6 +53,15 @@ describe("useTenants", () => {
     );
   });
 
+  it("skips fetching when disabled", async () => {
+    stubFetch({ json: { data: [tenant] } });
+    const { result } = renderHook(() => useTenants(undefined, { enabled: false }));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(fetch).not.toHaveBeenCalled();
+    expect(result.current.tenants).toEqual([]);
+  });
+
   it("surfaces an API error message", async () => {
     stubFetch({ ok: false, json: { error: "Forbidden" } });
     const { result } = renderHook(() => useTenants());
@@ -86,7 +95,7 @@ describe("useTenantMutations", () => {
         email: "amina@keja.co",
         propertyId: "prop-1",
       });
-      expect(created).toEqual(tenant);
+      expect(created).toEqual({ tenant });
     });
     expect(fetch).toHaveBeenCalledWith(
       "/api/v1/tenants",
@@ -126,4 +135,33 @@ describe("useTenantMutations", () => {
     });
     expect(fetch).toHaveBeenCalledWith("/api/v1/tenants/ten-1", { method: "DELETE" });
   });
+});
+
+it("fetches property tenants and returns unassigned only", async () => {
+  const assigned: Tenant = {
+    _id: "ten-2",
+    name: "John Kamau",
+    email: "john@keja.co",
+    propertyId: "prop-1",
+    ownerId: "owner-1",
+    status: "active",
+    unit: { _id: "unit-1", name: "1A", blockName: "Block A" },
+  };
+  const unassigned: Tenant = {
+    _id: "ten-3",
+    name: "Mary Njeri",
+    email: "mary@keja.co",
+    propertyId: "prop-1",
+    ownerId: "owner-1",
+    status: "active",
+  };
+  stubFetch({ json: { data: [assigned, unassigned] } });
+  const { usePropertyTenants } = await import("@/hooks/use-tenants");
+  const { result } = renderHook(() => usePropertyTenants("prop-1"));
+
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  expect(fetch).toHaveBeenCalledWith(expect.stringContaining("status=active"));
+  expect(fetch).toHaveBeenCalledWith(expect.stringContaining("propertyId=prop-1"));
+  expect(result.current.unassignedTenants).toHaveLength(1);
+  expect(result.current.unassignedTenants[0]._id).toBe("ten-3");
 });

@@ -26,7 +26,7 @@ const second: AppNotification = {
   title: "Complaint resolved",
   body: "Your complaint was marked resolved.",
   data: { complaintId: "comp-1" },
-  link: "/dashboard/tenant/complaints",
+  link: "/dashboard/tenant/home",
 };
 
 function jsonReply(json: unknown) {

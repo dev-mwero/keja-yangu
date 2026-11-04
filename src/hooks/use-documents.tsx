@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { DocumentCategory, DocumentScope } from "@/lib/domain-enums";
 import type { DashboardDocument } from "@/types/communications";
 
 /**
@@ -46,4 +47,45 @@ export function useDocuments() {
   const refetch = useCallback(() => setReload((n) => n + 1), []);
 
   return { items, loading, error, refetch };
+}
+
+export interface CreateDocumentInput {
+  name: string;
+  category: DocumentCategory;
+  scope?: DocumentScope;
+  /** Empty string = portfolio-wide landlord document. */
+  propertyId?: string;
+  tenantId?: string;
+  sizeLabel?: string;
+}
+
+/** Creates a document metadata row via `POST /api/v1/documents`. */
+export function useDocumentMutations() {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const createDocument = useCallback(async (input: CreateDocumentInput) => {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/v1/documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to create document");
+      }
+      return json.data as DashboardDocument;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to create document";
+      setError(message);
+      throw err;
+    } finally {
+      setPending(false);
+    }
+  }, []);
+
+  return { createDocument, pending, error };
 }

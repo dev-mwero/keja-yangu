@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import {
+  PropertyStructureEditor,
   PropertyStructurePreview,
   summarizeStructure,
 } from "@/components/property/PropertyStructureEditor";
@@ -122,5 +123,19 @@ describe("PropertyStructurePreview", () => {
     expect(screen.getByText("Block A")).toBeInTheDocument();
     expect(screen.getByText(/Rent Ksh 25,000/)).toBeInTheDocument();
     expect(screen.getByText(/2 units · GA, GB/)).toBeInTheDocument();
+  });
+});
+
+describe("PropertyStructureEditor", () => {
+  it("labels the floor input as Floor rather than Level", () => {
+    render(
+      <PropertyStructureEditor
+        blocks={[block({ floors: [{ level: 0, unitsPerFloor: 1 }] })]}
+        onChange={() => {}}
+      />,
+    );
+
+    expect(screen.getByLabelText("Floor")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Level")).not.toBeInTheDocument();
   });
 });

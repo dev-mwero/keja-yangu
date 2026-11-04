@@ -1,11 +1,12 @@
 "use client";
 
-import { ArrowLeftRight } from "lucide-react";
+import { ArrowLeftRight, Clock, LogIn, LogOut } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { DashboardShell } from "@/components/DashboardShell";
 import { SearchInput } from "@/components/SearchInput";
+import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +26,7 @@ import {
 } from "@/components/ui/table";
 import type { DashNavItem } from "@/config/dashboardNav";
 import {
+  type MoveRequest,
   type MoveRequestStatus,
   useMoveRequestMutations,
   useMoveRequests,
@@ -45,7 +47,11 @@ export function MoveRequestsView({ nav, roleName, canDecide = true }: Props) {
   const { moveRequests, loading, refetch } = useMoveRequests(
     statusFilter === "all" ? undefined : { status: statusFilter },
   );
+  // Unfiltered fetch so the stat cards reflect every status, not just the current filter.
+  const { moveRequests: allRequests, loading: allLoading } = useMoveRequests();
   const { decide, pending } = useMoveRequestMutations();
+
+  const countBy = (fn: (mr: MoveRequest) => boolean) => allRequests.filter(fn).length;
 
   const visible = moveRequests.filter((mr) =>
     matchesQuery(
@@ -78,6 +84,29 @@ export function MoveRequestsView({ nav, roleName, canDecide = true }: Props) {
       title="Move Requests"
       subtitle="Approve or reject tenant move-in and move-out requests."
     >
+      <div className="mb-6 grid gap-4 md:grid-cols-4">
+        <StatCard
+          label="Total requests"
+          value={allLoading ? "…" : allRequests.length}
+          icon={ArrowLeftRight}
+        />
+        <StatCard
+          label="Pending review"
+          value={allLoading ? "…" : countBy((mr) => mr.status === "pending")}
+          icon={Clock}
+        />
+        <StatCard
+          label="Move-ins"
+          value={allLoading ? "…" : countBy((mr) => mr.type === "move-in")}
+          icon={LogIn}
+        />
+        <StatCard
+          label="Move-outs"
+          value={allLoading ? "…" : countBy((mr) => mr.type === "move-out")}
+          icon={LogOut}
+        />
+      </div>
+
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Select
           value={statusFilter}

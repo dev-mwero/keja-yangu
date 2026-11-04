@@ -150,6 +150,60 @@ export function useThreadMessages(threadId: string | null, pollMs?: number) {
   return { messages, loading, error, appendMessage };
 }
 
+export interface ChatContact {
+  userId: string;
+  name: string;
+  role: "owner" | "caretaker";
+  propertyId: string;
+  property: string;
+}
+
+/**
+ * Fetches the owner/caretaker contacts a tenant can start a conversation with.
+ * Pass `enabled: false` on staff pages so they never hit the tenant-only route.
+ */
+export function useChatContacts(enabled = true) {
+  const [items, setItems] = useState<ChatContact[]>([]);
+  const [loading, setLoading] = useState(enabled);
+  const [error, setError] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
+
+  useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    void reload;
+    const fetchItems = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch("/api/v1/chat/contacts");
+        const json = await res.json();
+        if (cancelled) return;
+        if (res.ok) {
+          setItems(json.data ?? []);
+          setError(null);
+        } else {
+          setError(json.error || "Failed to fetch contacts");
+        }
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Network error");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    void fetchItems();
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, reload]);
+
+  const refetch = useCallback(() => setReload((n) => n + 1), []);
+
+  return { items, loading, error, refetch };
+}
+
 /** Chat mutations: sending, marking a thread read, and starting a thread. */
 export function useChatMutations() {
   const [pending, setPending] = useState(false);

@@ -3,15 +3,16 @@ import { NextResponse } from "next/server";
 import { readJsonBody } from "@/app/api/v1/_helpers";
 import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
-import { getTenantScope, requirePermission } from "@/lib/permissions";
+import { getTenantScope, requirePermission, tenantMatchesScope } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { leaseInput } from "@/lib/schemas";
 import { Lease } from "@/models/Lease";
 import { Property } from "@/models/Property";
 import { Tenant } from "@/models/Tenant";
+import { Unit } from "@/models/Unit";
 
 const LEASE_SAFE_FIELDS =
-  "tenantId propertyId ownerId rentAmount frequency startDate endDate status notes createdAt updatedAt";
+  "tenantId propertyId ownerId unitId rentAmount frequency startDate endDate status notes createdAt updatedAt";
 
 export async function GET(request: NextRequest) {
   const { page, limit } = parsePagination({
@@ -29,13 +30,18 @@ export async function GET(request: NextRequest) {
   const authError = await requirePermission(request, "lease:manage");
   if (authError) return authError;
 
-  const scope = await getTenantScope(request);
+  const scope = await getTenantScope(request, "lease:manage");
   if (scope instanceof NextResponse) return scope;
 
   const filter: Record<string, unknown> = { ...scope.filter };
   if (status) filter.status = status;
   if (tenantId) filter.tenantId = tenantId;
-  if (propertyId) filter.propertyId = propertyId;
+  if (propertyId) {
+    if (scope.role === "admin" && !scope.assignedPropertyIds?.includes(propertyId)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    filter.propertyId = propertyId;
+  }
 
   const [leases, total] = await Promise.all([
     Lease.find(filter)
@@ -69,7 +75,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const scope = await getTenantScope(request);
+  const scope = await getTenantScope(request, "lease:manage");
   if (scope instanceof NextResponse) return scope;
 
   await connectToDatabase();
@@ -79,6 +85,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Property not found" }, { status: 404 });
   }
   if (scope.role === "owner" && property.ownerId !== scope.userId) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (scope.role === "admin" && !scope.assignedPropertyIds?.includes(parsed.data.propertyId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -100,10 +109,39 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Tenant already has an active lease" }, { status: 409 });
   }
 
+  // Every lease names a unit, and the tenant must already occupy it (no
+  // occupancy changes here — allocateUnit owns those).
+  const unitId = parsed.data.unitId;
+  const unit = await Unit.findById(unitId).select("status tenantId ownerId propertyId").lean();
+  if (!unit) {
+    return NextResponse.json({ error: "Unit not found" }, { status: 404 });
+  }
+  if (unit.propertyId !== parsed.data.propertyId) {
+    return NextResponse.json(
+      { error: "Unit does not belong to the specified property" },
+      { status: 400 },
+    );
+  }
+  if (
+    scope.role === "admin" &&
+    !scope.propertyScopeIds?.includes(parsed.data.propertyId) &&
+    !scope.assignedUnitIds?.includes(String(unit._id))
+  ) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!tenantMatchesScope(tenant, scope)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const occupantUserId = tenant.userId || "";
+  if (unit.status !== "occupied" || !unit.tenantId.includes(occupantUserId)) {
+    return NextResponse.json({ error: "Tenant does not occupy this unit" }, { status: 409 });
+  }
+
   const lease = await Lease.create({
     tenantId: parsed.data.tenantId,
     propertyId: parsed.data.propertyId,
     ownerId: property.ownerId,
+    unitId,
     rentAmount: parsed.data.rentAmount,
     frequency: parsed.data.frequency,
     startDate: parsed.data.startDate,

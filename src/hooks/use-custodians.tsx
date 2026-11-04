@@ -5,24 +5,37 @@ import { useCallback, useEffect, useState } from "react";
 export interface CustodianRow {
   id: string;
   name: string;
-  email: string;
+  email?: string;
   phone: string;
   managedByOwnerId: string;
+  privileges: string[];
 }
 
-export function useCustodians() {
+export function useCustodians(ownerId?: string, forPropertyAssignment = false, enabled = true) {
   const [custodians, setCustodians] = useState<CustodianRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
+    if (!enabled) {
+      setCustodians([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
     let cancelled = false;
     void reload;
     const fetchCustodians = async () => {
       setLoading(true);
       try {
-        const res = await fetch("/api/v1/custodians");
+        const params = new URLSearchParams();
+        if (ownerId) params.set("ownerId", ownerId);
+        if (forPropertyAssignment) params.set("forPropertyAssignment", "true");
+        const queryString = params.toString();
+        const query = queryString ? `?${queryString}` : "";
+        const res = await fetch(`/api/v1/custodians${query}`);
         const json = await res.json();
         if (cancelled) return;
         if (res.ok) {
@@ -41,7 +54,7 @@ export function useCustodians() {
     return () => {
       cancelled = true;
     };
-  }, [reload]);
+  }, [enabled, forPropertyAssignment, ownerId, reload]);
 
   const refetch = useCallback(() => setReload((n) => n + 1), []);
 
@@ -49,17 +62,24 @@ export function useCustodians() {
 }
 
 export interface CustodianInviteInput {
-  email: string;
+  email?: string;
   name?: string;
   phone?: string;
   ownerId?: string;
+}
+
+export interface CustodianInviteResult {
+  member: CustodianRow;
+  linked?: boolean;
+  /** One-time password for a phone-only account. */
+  temporaryPassword?: string;
 }
 
 export function useCustodianMutations() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const inviteCustodian = async (input: CustodianInviteInput): Promise<CustodianRow> => {
+  const inviteCustodian = async (input: CustodianInviteInput): Promise<CustodianInviteResult> => {
     setPending(true);
     setError(null);
     try {
@@ -71,6 +91,34 @@ export function useCustodianMutations() {
       const json = await res.json();
       if (!res.ok) {
         const message = json.error || "Failed to invite custodian";
+        setError(message);
+        throw new Error(message);
+      }
+      return {
+        member: json.data as CustodianRow,
+        linked: json.linked === true,
+        temporaryPassword: typeof json.password === "string" ? json.password : undefined,
+      };
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const updateCustodianPrivileges = async (
+    id: string,
+    privileges: string[],
+  ): Promise<CustodianRow> => {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/v1/custodians/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ privileges }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        const message = json.error || "Failed to update custodian privileges";
         setError(message);
         throw new Error(message);
       }
@@ -96,5 +144,11 @@ export function useCustodianMutations() {
     }
   };
 
-  return { inviteCustodian, revokeCustodian, pending, error };
+  return {
+    inviteCustodian,
+    updateCustodianPrivileges,
+    revokeCustodian,
+    pending,
+    error,
+  };
 }

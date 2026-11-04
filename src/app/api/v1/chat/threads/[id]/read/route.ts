@@ -13,6 +13,7 @@ function isParticipant(thread: ThreadRow, actor: DashboardActor): boolean {
   if (actor.role === "system-admin") return true;
   if (actor.role === "tenant") return actor.tenantIds.includes(thread.tenantId);
   if (actor.role === "owner") return thread.ownerId === actor.userId;
+  if (actor.role === "custodian") return thread.ownerId === actor.managedByOwnerId;
   return thread.agentUserId === actor.userId; // caretaker
 }
 
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   if (authError) return authError;
 
   await connectToDatabase();
-  const actor = await resolveDashboardActor(request);
+  const actor = await resolveDashboardActor(request, "chat:read-own");
   if (actor instanceof NextResponse) return actor;
 
   const thread = await ChatThread.findById(id).lean();

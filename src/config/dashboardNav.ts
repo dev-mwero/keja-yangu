@@ -1,18 +1,19 @@
 import {
-  AlertTriangle,
   ArrowLeftRight,
+  Bell,
   Building2,
   Calculator,
   CreditCard,
   DoorOpen,
   FileBarChart,
   FileText,
+  Heart,
   Home,
   type LucideIcon,
-  Megaphone,
   MessagesSquare,
   Search,
   Settings,
+  Shield,
   Tags,
   Trash2,
   UserCog,
@@ -26,7 +27,7 @@ export interface DashNavItem {
   icon: LucideIcon;
 }
 
-type Role = "tenant" | "caretaker" | "custodian" | "owner" | "system-admin";
+type Role = "tenant" | "caretaker" | "custodian" | "owner" | "admin" | "broker" | "system-admin";
 
 interface Section {
   slug: string;
@@ -42,16 +43,22 @@ const baseSections = [
   { slug: "/applications", label: "Applications", icon: FileText },
   { slug: "/move-requests", label: "Move Requests", icon: ArrowLeftRight },
   { slug: "/team", label: "Team", icon: UserCog },
+  { slug: "/brokers", label: "Brokers", icon: Shield },
   { slug: "/tasks", label: "Tasks & Maintenance", icon: Wrench },
   { slug: "/accounting", label: "Accounting", icon: Calculator },
   { slug: "/reports", label: "Reports", icon: FileBarChart },
   { slug: "/communications", label: "Communications", icon: MessagesSquare },
   { slug: "/documents", label: "Tenant Documents", icon: FileText },
+  { slug: "/notifications", label: "Notifications", icon: Bell },
   { slug: "/settings", label: "Settings", icon: Settings },
 ] satisfies readonly Section[];
 
 const caretakerSections = baseSections.filter(
-  (s) => s.slug !== "/tenants" && s.slug !== "/team" && s.slug !== "/applications",
+  (s) =>
+    s.slug !== "/tenants" &&
+    s.slug !== "/team" &&
+    s.slug !== "/applications" &&
+    s.slug !== "/brokers",
 );
 const custodianSections = baseSections.filter((s) =>
   [
@@ -63,11 +70,23 @@ const custodianSections = baseSections.filter((s) =>
     "/move-requests",
     "/team",
     "/accounting",
+    "/communications",
+    "/notifications",
+    "/settings",
   ].includes(s.slug),
 );
 const systemAdminSections = baseSections.filter((s) =>
-  ["", "/portfolio", "/tenants", "/accounting"].includes(s.slug),
+  ["", "/portfolio", "/tenants", "/notifications", "/accounting"].includes(s.slug),
 );
+
+const brokerSections = [
+  { slug: "", label: "Overview", icon: Home },
+  { slug: "/listings", label: "Market Listings", icon: Building2 },
+  { slug: "/authorizations", label: "Authorizations", icon: UserCog },
+  { slug: "/prospects", label: "Prospects", icon: Users },
+  { slug: "#commissions", label: "Commissions", icon: Calculator },
+  { slug: "/profile", label: "Broker Profile", icon: Settings },
+] satisfies readonly Section[];
 
 export const buildDashboardNav = (role: Exclude<Role, "tenant">): DashNavItem[] => {
   const base = `/dashboard/${role}`;
@@ -75,6 +94,7 @@ export const buildDashboardNav = (role: Exclude<Role, "tenant">): DashNavItem[] 
   if (role === "caretaker") sectionsToUse = caretakerSections;
   if (role === "custodian") sectionsToUse = custodianSections;
   if (role === "system-admin") sectionsToUse = systemAdminSections;
+  if (role === "broker") sectionsToUse = brokerSections;
   return sectionsToUse.map((s) => ({
     to: `${base}${s.slug}`,
     label: s.label,
@@ -82,9 +102,18 @@ export const buildDashboardNav = (role: Exclude<Role, "tenant">): DashNavItem[] 
   }));
 };
 
+export const adminNav: DashNavItem[] = [
+  ...buildDashboardNav("admin"),
+  {
+    to: "/dashboard/admin/commissions",
+    label: "Commissions",
+    icon: Calculator,
+  },
+];
 export const ownerNav = buildDashboardNav("owner");
 export const caretakerNav = buildDashboardNav("caretaker");
 export const custodianNav = buildDashboardNav("custodian");
+export const brokerNav = buildDashboardNav("broker");
 
 export const caretakerNavWithTenants: DashNavItem[] = [
   ...caretakerNav,
@@ -100,6 +129,11 @@ export const systemAdminNav: DashNavItem[] = [
     icon: Tags,
   },
   { to: "/dashboard/system-admin/recycle-bin", label: "Recycle Bin", icon: Trash2 },
+  {
+    to: "/dashboard/system-admin/commissions",
+    label: "Commissions",
+    icon: Calculator,
+  },
 ];
 
 interface TenantSection {
@@ -111,16 +145,14 @@ interface TenantSection {
 
 const tenantSections: TenantSection[] = [
   { slug: "", label: "Overview", icon: Home },
-  { slug: "/browse", label: "Browse homes", icon: Search, external: "/properties" },
-  { slug: "/units", label: "Vacant units", icon: DoorOpen },
-  { slug: "/applications", label: "Applications", icon: FileText },
-  { slug: "/move-requests", label: "Move Requests", icon: ArrowLeftRight },
+  { slug: "/browse", label: "Browse", icon: Search, external: "/properties" },
+  { slug: "/favourites", label: "Favourites", icon: Heart },
+  { slug: "/home", label: "My Home", icon: DoorOpen },
+  { slug: "/requests", label: "Requests", icon: ArrowLeftRight },
   { slug: "/payments", label: "Payments", icon: CreditCard },
-  { slug: "/complaints", label: "Complaints", icon: AlertTriangle },
-  { slug: "/chat", label: "Chat", icon: MessagesSquare },
-  { slug: "/announcements", label: "Announcements", icon: Megaphone },
-  { slug: "/reports", label: "Reports", icon: FileBarChart },
+  { slug: "/messages", label: "Messages", icon: MessagesSquare },
   { slug: "/documents", label: "Documents", icon: FileText },
+  { slug: "/notifications", label: "Notifications", icon: Bell },
   { slug: "/settings", label: "Settings", icon: Settings },
 ];
 

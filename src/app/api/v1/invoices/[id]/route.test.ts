@@ -10,10 +10,15 @@ vi.mock("@/lib/mongoose", () => ({
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Invoice", () => ({ Invoice: getModelStubs().invoice }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
+vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
+vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
 
 import { DELETE, GET, PATCH } from "@/app/api/v1/invoices/[id]/route";
 
-const { user, property, invoice: invoiceStub } = getModelStubs();
+const { user, property, invoice: invoiceStub, managementAssignment } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
@@ -108,6 +113,30 @@ describe("GET /api/v1/invoices/[id]", () => {
     invoiceStub.findById.mockReturnValue(buildQuery(draftInvoice()));
     const res = await GET(
       buildRequest(`/api/v1/invoices/${INVOICE_ID}`, { token: signToken(CARETAKER_ID) }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("200 for an in-scope admin (assigned property)", async () => {
+    const SCOPED_ADMIN_ID = makeObjectId("scoped-admin");
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: SCOPED_ADMIN_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["invoice:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    invoiceStub.findById.mockReturnValue(buildQuery(draftInvoice()));
+    const res = await GET(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}`, { token: signToken(SCOPED_ADMIN_ID) }),
       withParams(INVOICE_ID),
     );
     expect(res.status).toBe(200);

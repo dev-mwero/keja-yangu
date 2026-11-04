@@ -142,6 +142,7 @@ describe("PATCH /api/v1/tenants/[id]", () => {
   it("ownerId in the payload is stripped and never persisted", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     tenantStub.findById.mockReturnValue(buildQuery(inScopeTenant()));
+    tenantStub.findOne.mockReturnValue(buildQuery(null));
     const updated = { ...inScopeTenant(), phone: "+254700000000" };
     tenantStub.findOneAndUpdate.mockReturnValue(buildQuery(updated));
 
@@ -326,5 +327,62 @@ describe("DELETE /api/v1/tenants/[id]", () => {
     );
     expect(res.status).toBe(404);
     expect(tenantStub.softDeleteById).not.toHaveBeenCalled();
+  });
+
+  it("normalises a local phone when updating a tenant", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    tenantStub.findById.mockReturnValue(buildQuery(inScopeTenant()));
+    tenantStub.findOne.mockReturnValue(buildQuery(null));
+    const updated = { ...inScopeTenant(), phone: "+254712345678" };
+    tenantStub.findOneAndUpdate.mockReturnValue(buildQuery(updated));
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/tenants/${TENANT_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { phone: "0712 345 678" },
+      }),
+      withParams(TENANT_ID),
+    );
+    expect(res.status).toBe(200);
+    const updateData = tenantStub.findOneAndUpdate.mock.calls[0][1] as { phone?: string };
+    expect(updateData.phone).toBe("+254712345678");
+  });
+
+  it("rejects clearing both email and phone", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    tenantStub.findById.mockReturnValue(buildQuery(inScopeTenant()));
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/tenants/${TENANT_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { email: "", phone: "" },
+      }),
+      withParams(TENANT_ID),
+    );
+    expect(res.status).toBe(400);
+    expect(tenantStub.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it("allows clearing email while keeping a phone", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    tenantStub.findById.mockReturnValue(
+      buildQuery(makeTenant({ _id: TENANT_ID, ownerId: OWNER_ID, phone: "+254700000000" })),
+    );
+    tenantStub.findOne.mockReturnValue(buildQuery(null));
+    tenantStub.findOneAndUpdate.mockReturnValue(buildQuery({ ...inScopeTenant(), email: "" }));
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/tenants/${TENANT_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { email: "" },
+      }),
+      withParams(TENANT_ID),
+    );
+    expect(res.status).toBe(200);
+    const updateData = tenantStub.findOneAndUpdate.mock.calls[0][1] as { email?: string };
+    expect(updateData.email).toBe("");
   });
 });

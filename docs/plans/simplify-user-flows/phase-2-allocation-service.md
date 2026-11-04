@@ -1,7 +1,7 @@
 # Phase 2 — Single allocation service
 
 Part of [Simplify user flows](./README.md).
-Status: spec ready · Depends on: **D2** · Risk: **medium** (concurrency)
+Status: **shipped** (`400d5ba`) · Depends on: **D2** · Risk: **medium** (concurrency)
 
 > **Goal:** exactly one code path owns occupancy and lease state. Today four
 > writers each do a partial job, and two of them (`PATCH /units`, `POST /leases`)

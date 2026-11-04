@@ -6,6 +6,7 @@ const stubs: Record<
   | "tenant"
   | "lease"
   | "invoice"
+  | "lead"
   | "notification"
   | "payment"
   | "complaint"
@@ -18,7 +19,26 @@ const stubs: Record<
   | "moverrequest"
   | "application"
   | "ownerpaymentconfig"
-  | "unitpreference",
+  | "paymentSplit"
+  | "propertyFavorite"
+  | "propertyView"
+  | "unitFavorite"
+  | "serviceFeeItem"
+  | "unitServiceFeeOverride"
+  | "managementAssignment"
+  | "auditEvent"
+  | "block"
+  | "propertyClaim"
+  | "billingAccount"
+  | "unitBillingAssignment"
+  | "listing"
+  | "listingPublisher"
+  | "brokerProfile"
+  | "brokerAuthorization"
+  | "commissionAgreement"
+  | "attribution"
+  | "commissionAccrual"
+  | "commissionPayout",
   ModelStub
 > = {
   user: createModelStub(),
@@ -26,6 +46,7 @@ const stubs: Record<
   tenant: createModelStub(),
   lease: createModelStub(),
   invoice: createModelStub(),
+  lead: createModelStub(),
   notification: createModelStub(),
   payment: createModelStub(),
   complaint: createModelStub(),
@@ -38,7 +59,26 @@ const stubs: Record<
   moverrequest: createModelStub(),
   application: createModelStub(),
   ownerpaymentconfig: createModelStub(),
-  unitpreference: createModelStub(),
+  paymentSplit: createModelStub(),
+  propertyFavorite: createModelStub(),
+  propertyView: createModelStub(),
+  unitFavorite: createModelStub(),
+  serviceFeeItem: createModelStub(),
+  unitServiceFeeOverride: createModelStub(),
+  managementAssignment: createModelStub(),
+  auditEvent: createModelStub(),
+  block: createModelStub(),
+  propertyClaim: createModelStub(),
+  billingAccount: createModelStub(),
+  unitBillingAssignment: createModelStub(),
+  listing: createModelStub(),
+  listingPublisher: createModelStub(),
+  brokerProfile: createModelStub(),
+  brokerAuthorization: createModelStub(),
+  commissionAgreement: createModelStub(),
+  attribution: createModelStub(),
+  commissionAccrual: createModelStub(),
+  commissionPayout: createModelStub(),
 };
 
 /**

@@ -7,21 +7,28 @@ import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-m
 vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("@/lib/audit", () => ({
+  writeAuditEvent: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/lib/notifications", () => ({
   notifyInvoicePaid: vi.fn().mockResolvedValue(true),
 }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Invoice", () => ({ Invoice: getModelStubs().invoice }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 
 import { POST } from "@/app/api/v1/invoices/[id]/mark-paid/route";
 import { notifyInvoicePaid } from "@/lib/notifications";
 
-const { user, property, invoice: invoiceStub } = getModelStubs();
+const { user, property, invoice: invoiceStub, managementAssignment } = getModelStubs();
 const notifyInvoicePaidMock = vi.mocked(notifyInvoicePaid);
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
+const ADMIN_ID = makeObjectId("admin");
 const PROPERTY_ID = makeObjectId("p1");
 const OTHER_PROPERTY_ID = makeObjectId("p2");
 const INVOICE_ID = makeObjectId("invoice");
@@ -199,7 +206,11 @@ describe("POST /api/v1/invoices/[id]/mark-paid", () => {
       unknown,
       Record<string, unknown>,
     ];
-    expect(filter).toEqual({ _id: INVOICE_ID, status: { $in: ["pending", "draft"] } });
+    expect(filter).toEqual({
+      _id: INVOICE_ID,
+      status: { $in: ["pending", "draft"] },
+      amountPaid: 0,
+    });
     expect(updateData.status).toBe("paid");
     expect(updateData.amountPaid).toBe(25000);
     expect(updateData.paidAt).toBeInstanceOf(Date);
@@ -240,9 +251,80 @@ describe("POST /api/v1/invoices/[id]/mark-paid", () => {
     expect(res.status).toBe(200);
     const updateData = invoiceStub.findOneAndUpdate.mock.calls[0][1] as Record<string, unknown>;
     expect(updateData.amountPaid).toBe(12000);
+    expect(updateData.status).toBe("pending");
     expect(updateData.paidAt).toEqual(new Date("2026-09-15T10:00:00.000Z"));
     expect(updateData.paymentReference).toBe("REF123");
     expect(updateData.paymentDescription).toBe("September rent");
+  });
+
+  it("keeps a partially paid invoice pending and skips the paid notification", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    invoiceStub.findById.mockReturnValue(buildQuery(pendingInvoice()));
+    invoiceStub.findOneAndUpdate.mockReturnValue(
+      buildQuery({ ...pendingInvoice(), status: "pending", amountPaid: 5000 }),
+    );
+
+    const res = await POST(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}/mark-paid`, {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { method: "Cash", amount: 5000 },
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(200);
+    const updateData = invoiceStub.findOneAndUpdate.mock.calls[0][1] as Record<string, unknown>;
+    expect(updateData.status).toBe("pending");
+    expect(updateData.amountPaid).toBe(5000);
+    expect(notifyInvoicePaidMock).not.toHaveBeenCalled();
+  });
+
+  it("accumulates onto an existing partial balance and settles when complete", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    invoiceStub.findById.mockReturnValue(buildQuery({ ...pendingInvoice(), amountPaid: 5000 }));
+    invoiceStub.findOneAndUpdate.mockReturnValue(
+      buildQuery({ ...pendingInvoice(), status: "paid", amountPaid: 25000 }),
+    );
+
+    const res = await POST(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}/mark-paid`, {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { method: "Cash", amount: 20000 },
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(200);
+    const [filter, updateData] = invoiceStub.findOneAndUpdate.mock.calls[0] as [
+      unknown,
+      Record<string, unknown>,
+    ];
+    expect(filter).toEqual({
+      _id: INVOICE_ID,
+      status: { $in: ["pending", "draft"] },
+      amountPaid: 5000,
+    });
+    expect(updateData.status).toBe("paid");
+    expect(updateData.amountPaid).toBe(25000);
+    expect(notifyInvoicePaidMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("400 when the amount exceeds the outstanding balance", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    invoiceStub.findById.mockReturnValue(buildQuery(pendingInvoice()));
+
+    const res = await POST(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}/mark-paid`, {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { method: "Cash", amount: 30000 },
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(400);
+    const body = await json(res);
+    expect(body.error).toBe("Amount exceeds the outstanding balance");
+    expect(invoiceStub.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
   it("rejects a future paidAt with 400", async () => {
@@ -334,6 +416,68 @@ describe("POST /api/v1/invoices/[id]/mark-paid", () => {
       buildRequest(`/api/v1/invoices/${INVOICE_ID}/mark-paid`, {
         method: "POST",
         token: signToken(CARETAKER_ID),
+        body: {},
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(403);
+    const body = await json(res);
+    expect(body.error).toBe("Forbidden");
+    expect(invoiceStub.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it("an in-scope admin marks an invoice paid on their assigned property", async () => {
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: ADMIN_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: ADMIN_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["invoice:mark-paid"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    invoiceStub.findById.mockReturnValue(buildQuery(pendingInvoice()));
+    invoiceStub.findOneAndUpdate.mockReturnValue(
+      buildQuery({ ...pendingInvoice(), status: "paid" }),
+    );
+    const res = await POST(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}/mark-paid`, {
+        method: "POST",
+        token: signToken(ADMIN_ID, { role: "admin" }),
+        body: {},
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("403 when an admin marks an invoice outside their assignment scope", async () => {
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: ADMIN_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: ADMIN_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: OTHER_PROPERTY_ID,
+          permissions: ["invoice:mark-paid"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    invoiceStub.findById.mockReturnValue(buildQuery(pendingInvoice())); // invoice on PROPERTY_ID
+    const res = await POST(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}/mark-paid`, {
+        method: "POST",
+        token: signToken(ADMIN_ID, { role: "admin" }),
         body: {},
       }),
       withParams(INVOICE_ID),

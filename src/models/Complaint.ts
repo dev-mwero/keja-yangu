@@ -15,6 +15,7 @@ export interface IComplaint {
   tenantId: string;
   propertyId: string;
   ownerId: string;
+  unitId: string;
   subject: string;
   category: ComplaintCategory;
   message: string;
@@ -30,6 +31,7 @@ const complaintSchema = new Schema<IComplaint>(
     tenantId: { type: String, required: true },
     propertyId: { type: String, required: true },
     ownerId: { type: String, required: true },
+    unitId: { type: String, default: "" },
     subject: { type: String, required: true, maxlength: 200 },
     category: { type: String, enum: [...COMPLAINT_CATEGORIES], required: true },
     message: { type: String, required: true },
@@ -47,6 +49,7 @@ const complaintSchema = new Schema<IComplaint>(
 complaintSchema.index({ tenantId: 1, createdAt: -1 });
 complaintSchema.index({ propertyId: 1, status: 1 });
 complaintSchema.index({ ownerId: 1, createdAt: -1 });
+complaintSchema.index({ unitId: 1, createdAt: -1 });
 
 export type ComplaintDocument = InferSchemaType<IComplaint>;
 

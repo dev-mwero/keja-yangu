@@ -1,7 +1,7 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildRequest, signToken, withParams } from "@/test/utils/api-request";
-import { makeObjectId, makeUser } from "@/test/utils/factories";
+import { makeObjectId, makeUnit, makeUser } from "@/test/utils/factories";
 import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-mocks";
 
 vi.mock("@/lib/mongoose", () => ({
@@ -10,16 +10,26 @@ vi.mock("@/lib/mongoose", () => ({
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Application", () => ({ Application: getModelStubs().application }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
+vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
+vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
+vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
+vi.mock("@/lib/attributions", () => ({
+  confirmAttributionForLease: vi.fn().mockResolvedValue(null),
+}));
 
 import { DELETE, PATCH } from "@/app/api/v1/applications/[id]/route";
 
-const { user, application, tenant } = getModelStubs();
+const { user, application, tenant, unit, lease, property } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CUSTODIAN_ID = makeObjectId("custodian");
+const CARETAKER_ID = makeObjectId("caretaker");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
 const TENANT_ID = makeObjectId("tenant");
+const TENANT_DOC_ID = makeObjectId("tenant-doc");
 const PROP_ID = makeObjectId("prop");
+const OTHER_PROP_ID = makeObjectId("other-prop");
+const UNIT_ID = makeObjectId("unit");
 const APP_ID = makeObjectId("app");
 
 function appDoc(overrides: Record<string, unknown> = {}) {
@@ -92,6 +102,61 @@ describe("PATCH /api/v1/applications/[id]", () => {
       withParams(APP_ID),
     );
     expect(res.status).toBe(400);
+  });
+
+  it("403 when a caretaker decides an application outside their assigned properties", async () => {
+    user.findById.mockReturnValue(
+      buildQuery(
+        makeUser({
+          _id: CARETAKER_ID,
+          role: "caretaker",
+          managedByOwnerId: OWNER_ID,
+          privileges: ["manage_tenants"] as never,
+        }),
+      ),
+    );
+    application.findById.mockResolvedValue(appDoc());
+    property.findOne.mockReturnValue(buildQuery(null));
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/applications/${APP_ID}`, {
+        method: "PATCH",
+        token: signToken(CARETAKER_ID),
+        body: { status: "rejected" },
+      }),
+      withParams(APP_ID),
+    );
+    expect(res.status).toBe(403);
+    expect(property.findOne).toHaveBeenCalledWith({
+      _id: PROP_ID,
+      ownerId: OWNER_ID,
+      caretakerIds: CARETAKER_ID,
+    });
+  });
+
+  it("allows a caretaker to decide an application in an assigned property", async () => {
+    user.findById.mockReturnValue(
+      buildQuery(
+        makeUser({
+          _id: CARETAKER_ID,
+          role: "caretaker",
+          managedByOwnerId: OWNER_ID,
+          privileges: ["manage_tenants"] as never,
+        }),
+      ),
+    );
+    application.findById.mockResolvedValue(appDoc());
+    property.findOne.mockReturnValue(buildQuery({ _id: PROP_ID }));
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/applications/${APP_ID}`, {
+        method: "PATCH",
+        token: signToken(CARETAKER_ID),
+        body: { status: "rejected" },
+      }),
+      withParams(APP_ID),
+    );
+    expect(res.status).toBe(200);
   });
 
   it("403 when a custodian decides a foreign owner's application", async () => {
@@ -188,6 +253,147 @@ describe("PATCH /api/v1/applications/[id]", () => {
     expect(res.status).toBe(200);
     expect(tenant.create).not.toHaveBeenCalled();
     expect(tenant.updateOne).not.toHaveBeenCalled();
+  });
+
+  it("allocates the requested unit on approval", async () => {
+    authOwner();
+    const doc = appDoc({ unitId: UNIT_ID });
+    application.findById.mockResolvedValue(doc);
+
+    const tenantDoc = {
+      _id: TENANT_DOC_ID,
+      email: "amina@keja.co",
+      userId: TENANT_ID,
+      propertyId: PROP_ID,
+      ownerId: OWNER_ID,
+      status: "pending",
+    };
+    const unitDoc = makeUnit({ _id: UNIT_ID, propertyId: PROP_ID, status: "available" });
+    const claimed = { ...unitDoc, status: "occupied", tenantId: TENANT_ID };
+
+    tenant.findOne.mockReturnValue(buildQuery(null));
+    tenant.create.mockResolvedValue({ _id: TENANT_DOC_ID });
+    tenant.findById.mockReturnValue(buildQuery(tenantDoc));
+    unit.findById.mockReturnValue(buildQuery(unitDoc));
+    unit.findOneAndUpdate.mockReturnValue(buildQuery(claimed));
+    unit.updateMany.mockResolvedValue({ modifiedCount: 0 });
+    tenant.updateOne.mockResolvedValue({ modifiedCount: 1 });
+    lease.findOne.mockReturnValue(buildQuery(null));
+    property.findById.mockReturnValue(buildQuery({ price: 45000 }));
+    lease.create.mockResolvedValue({ _id: makeObjectId("lease"), unitId: UNIT_ID });
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/applications/${APP_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { status: "approved" },
+      }),
+      withParams(APP_ID),
+    );
+
+    expect(res.status).toBe(200);
+    expect(doc.status).toBe("approved");
+    expect(doc.save).toHaveBeenCalled();
+    expect(unit.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: UNIT_ID, status: "available", deletedAt: null },
+      { $addToSet: { tenantId: TENANT_ID }, $set: { status: "occupied" } },
+      { new: true },
+    );
+    expect(lease.create).toHaveBeenCalledWith(
+      expect.objectContaining({ unitId: UNIT_ID, status: "active" }),
+    );
+  });
+
+  it("keeps the application pending when the unit is taken", async () => {
+    authOwner();
+    const doc = appDoc({ unitId: UNIT_ID });
+    application.findById.mockResolvedValue(doc);
+
+    const tenantDoc = {
+      _id: TENANT_DOC_ID,
+      email: "amina@keja.co",
+      userId: TENANT_ID,
+      propertyId: PROP_ID,
+      ownerId: OWNER_ID,
+      status: "pending",
+    };
+    const unitDoc = makeUnit({ _id: UNIT_ID, propertyId: PROP_ID, status: "occupied" });
+
+    tenant.findOne.mockReturnValue(buildQuery(null));
+    tenant.create.mockResolvedValue({ _id: TENANT_DOC_ID });
+    tenant.findById.mockReturnValue(buildQuery(tenantDoc));
+    unit.findById.mockReturnValue(buildQuery(unitDoc));
+    unit.findOneAndUpdate.mockReturnValue(buildQuery(null));
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/applications/${APP_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { status: "approved" },
+      }),
+      withParams(APP_ID),
+    );
+
+    expect(res.status).toBe(409);
+    expect(doc.status).toBe("pending");
+    expect(doc.save).not.toHaveBeenCalled();
+    expect(lease.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a unit belonging to another property", async () => {
+    authOwner();
+    const doc = appDoc({ unitId: UNIT_ID });
+    application.findById.mockResolvedValue(doc);
+
+    const tenantDoc = {
+      _id: TENANT_DOC_ID,
+      email: "amina@keja.co",
+      userId: TENANT_ID,
+      propertyId: PROP_ID,
+      ownerId: OWNER_ID,
+      status: "pending",
+    };
+    const unitDoc = makeUnit({ _id: UNIT_ID, propertyId: OTHER_PROP_ID, status: "available" });
+
+    tenant.findOne.mockReturnValue(buildQuery(null));
+    tenant.create.mockResolvedValue({ _id: TENANT_DOC_ID });
+    tenant.findById.mockReturnValue(buildQuery(tenantDoc));
+    unit.findById.mockReturnValue(buildQuery(unitDoc));
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/applications/${APP_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { status: "approved" },
+      }),
+      withParams(APP_ID),
+    );
+
+    expect(res.status).toBe(422);
+    expect(doc.status).toBe("pending");
+    expect(doc.save).not.toHaveBeenCalled();
+  });
+
+  it("is idempotent when re-approving an already approved application", async () => {
+    authOwner();
+    const doc = appDoc({ unitId: UNIT_ID, status: "approved" });
+    application.findById.mockResolvedValue(doc);
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/applications/${APP_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { status: "approved" },
+      }),
+      withParams(APP_ID),
+    );
+
+    expect(res.status).toBe(200);
+    expect(tenant.create).not.toHaveBeenCalled();
+    expect(tenant.updateOne).not.toHaveBeenCalled();
+    expect(unit.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(lease.create).not.toHaveBeenCalled();
+    expect(doc.save).toHaveBeenCalled();
   });
 });
 

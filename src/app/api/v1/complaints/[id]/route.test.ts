@@ -10,10 +10,15 @@ vi.mock("@/lib/mongoose", () => ({
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Complaint", () => ({ Complaint: getModelStubs().complaint }));
+vi.mock("@/lib/notifications", () => ({
+  notifyComplaintStatusChange: vi.fn().mockResolvedValue(true),
+}));
 
 import { PATCH } from "@/app/api/v1/complaints/[id]/route";
+import { notifyComplaintStatusChange } from "@/lib/notifications";
 
 const { user, property, complaint } = getModelStubs();
+const notifyComplaintStatusChangeMock = vi.mocked(notifyComplaintStatusChange);
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
@@ -51,6 +56,7 @@ async function json(res: Response) {
 describe("PATCH /api/v1/complaints/[id]", () => {
   beforeEach(() => {
     resetModelStubs();
+    notifyComplaintStatusChangeMock.mockReset().mockResolvedValue(true);
   });
 
   it("400 for an invalid complaint id", async () => {
@@ -63,6 +69,7 @@ describe("PATCH /api/v1/complaints/[id]", () => {
       withParams(INVALID_ID),
     );
     expect(res.status).toBe(400);
+    expect(notifyComplaintStatusChangeMock).not.toHaveBeenCalled();
   });
 
   it("401 when unauthenticated", async () => {
@@ -72,6 +79,7 @@ describe("PATCH /api/v1/complaints/[id]", () => {
       withParams(COMPLAINT_ID),
     );
     expect(res.status).toBe(401);
+    expect(notifyComplaintStatusChangeMock).not.toHaveBeenCalled();
   });
 
   it("404 when the complaint is missing or foreign", async () => {
@@ -86,6 +94,7 @@ describe("PATCH /api/v1/complaints/[id]", () => {
       withParams(COMPLAINT_ID),
     );
     expect(res.status).toBe(404);
+    expect(notifyComplaintStatusChangeMock).not.toHaveBeenCalled();
   });
 
   it("403 for a foreign owner updating another owner's complaint", async () => {
@@ -102,6 +111,7 @@ describe("PATCH /api/v1/complaints/[id]", () => {
     );
     expect(res.status).toBe(403);
     expect(complaint.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(notifyComplaintStatusChangeMock).not.toHaveBeenCalled();
   });
 
   it("400 for an invalid payload", async () => {
@@ -116,6 +126,7 @@ describe("PATCH /api/v1/complaints/[id]", () => {
       withParams(COMPLAINT_ID),
     );
     expect(res.status).toBe(400);
+    expect(notifyComplaintStatusChangeMock).not.toHaveBeenCalled();
   });
 
   it("owner updates a complaint status with audit stamps", async () => {
@@ -139,6 +150,8 @@ describe("PATCH /api/v1/complaints/[id]", () => {
     expect(updateData.resolution).toBe("Fixed the tap.");
     expect(updateData.updatedById).toBe(OWNER_ID);
     expect(updateData.updatedByRole).toBe("owner");
+    expect(notifyComplaintStatusChangeMock).toHaveBeenCalledTimes(1);
+    expect(notifyComplaintStatusChangeMock).toHaveBeenCalledWith(updated);
   });
 
   it("re-scopes the atomic update with the permission-checked complaint fields", async () => {
@@ -197,6 +210,7 @@ describe("PATCH /api/v1/complaints/[id]", () => {
     expect(updateData.updatedBy).toBeUndefined();
     expect(updateData.updatedById).toBe(CARETAKER_ID);
     expect(updateData.updatedByRole).toBe("caretaker");
+    expect(notifyComplaintStatusChangeMock).toHaveBeenCalledTimes(1);
   });
 
   it("403 when a caretaker lacks manage_complaints", async () => {
@@ -230,5 +244,6 @@ describe("PATCH /api/v1/complaints/[id]", () => {
     const body = await json(res);
     expect(body.error).toBe("Forbidden");
     expect(complaint.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(notifyComplaintStatusChangeMock).not.toHaveBeenCalled();
   });
 });

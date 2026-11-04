@@ -15,7 +15,7 @@ vi.mock("@/models/Tenant", () => ({
     "name email phone propertyId ownerId status joinedAt notes createdAt updatedAt",
 }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
-vi.mock("@/models/UnitPreference", () => ({ UnitPreference: getModelStubs().unitpreference }));
+vi.mock("@/models/MoveRequest", () => ({ MoveRequest: getModelStubs().moverrequest }));
 vi.mock("@/lib/email", () => ({
   sendInviteEmail: vi.fn(),
 }));
@@ -23,7 +23,13 @@ vi.mock("@/lib/email", () => ({
 import { GET, POST } from "@/app/api/v1/tenants/route";
 import { sendInviteEmail } from "@/lib/email";
 
-const { user, property, tenant: tenantStub } = getModelStubs();
+const {
+  user,
+  property,
+  tenant: tenantStub,
+  unit: unitStub,
+  moverrequest: moveRequestStub,
+} = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
@@ -84,6 +90,8 @@ describe("GET /api/v1/tenants", () => {
     const chain = buildQuery(rows);
     tenantStub.find.mockReturnValue(chain);
     tenantStub.countDocuments.mockResolvedValue(1);
+    moveRequestStub.find.mockReturnValue(buildQuery([]));
+    unitStub.find.mockReturnValue(buildQuery([]));
 
     const res = await GET(buildRequest("/api/v1/tenants", { token: signToken(OWNER_ID) }));
     expect(res.status).toBe(200);
@@ -94,6 +102,31 @@ describe("GET /api/v1/tenants", () => {
     );
     const body = await json(res);
     expect((body.data as Array<{ ownerId: string }>)[0].ownerId).toBe(OWNER_ID);
+  });
+
+  it("attaches requestedUnit from a pending move-in request", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    const userId = makeObjectId("u1");
+    const rows = [makeTenant({ _id: TENANT_ID, ownerId: OWNER_ID, userId })];
+    tenantStub.find.mockReturnValue(buildQuery(rows));
+    tenantStub.countDocuments.mockResolvedValue(1);
+    const unitId = makeObjectId("unit-a");
+    moveRequestStub.find.mockReturnValue(
+      buildQuery([{ tenantId: TENANT_ID, type: "move-in", status: "pending", unitId }]),
+    );
+    unitStub.find.mockReturnValue(
+      buildQuery([{ _id: unitId, name: "3A", blockName: "Block A", tenantId: "" }]),
+    );
+
+    const res = await GET(buildRequest("/api/v1/tenants", { token: signToken(OWNER_ID) }));
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    const row = (body.data as Array<{ requestedUnit?: { _id: string; name: string } }>)[0];
+    expect(row.requestedUnit).toMatchObject({
+      _id: unitId,
+      name: "3A",
+      blockName: "Block A",
+    });
   });
 
   it("403 when an owner requests a foreign ownerId filter", async () => {
@@ -399,11 +432,7 @@ describe("POST /api/v1/tenants", () => {
       }),
     );
     expect(res.status).toBe(201);
-    expect(user.findOne).toHaveBeenCalledWith({
-      email: tenantInput.email,
-      isActive: true,
-      isVerified: true,
-    });
+    expect(user.findOne).toHaveBeenCalledWith({ email: tenantInput.email });
     expect(tenantStub.create).toHaveBeenCalledWith(
       expect.objectContaining({ userId: existingUserId }),
     );
@@ -436,6 +465,250 @@ describe("POST /api/v1/tenants", () => {
     );
     expect(res.status).toBe(201);
     expect(tenantStub.create).toHaveBeenCalledWith(expect.objectContaining({ userId: "" }));
-    expect(sendInviteEmail).toHaveBeenCalledWith(tenantInput.email, tenantInput.name, "tenant");
+    expect(sendInviteEmail).toHaveBeenCalledWith(
+      tenantInput.email,
+      tenantInput.name,
+      "tenant",
+      expect.any(String),
+    );
+  });
+
+  it("creates a phone-only tenant with an active verified user bound immediately", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    property.findById.mockReturnValue(buildQuery(ownedProperty()));
+    tenantStub.findOne.mockReturnValue(buildQuery(null));
+    user.findOne.mockReturnValue(buildQuery(null));
+    const phoneUser = {
+      _id: makeObjectId("user"),
+      name: "Amina Phone",
+      email: undefined,
+      phone: "+254712345678",
+      role: "tenant",
+      isActive: true,
+      isVerified: true,
+    };
+    user.create.mockResolvedValue(phoneUser);
+    const createdTenant = makeTenant({
+      _id: TENANT_ID,
+      propertyId: PROPERTY_ID,
+      ownerId: OWNER_ID,
+      status: "active",
+      joinedAt: expect.any(Date),
+      userId: String(makeObjectId("user")),
+    });
+    tenantStub.create.mockResolvedValue(createdTenant);
+    tenantStub.findById.mockReturnValue(buildQuery(createdTenant));
+
+    const res = await POST(
+      buildRequest("/api/v1/tenants", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        headers: { "x-forwarded-for": "203.0.113.81" },
+        body: { name: "Amina Phone", phone: "+254712345678", propertyId: PROPERTY_ID },
+      }),
+    );
+    expect(res.status).toBe(201);
+    const body = await json(res);
+    expect(body.created).toBe(true);
+    expect(body.password).toBeDefined();
+    expect(user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phone: "+254712345678",
+        role: "tenant",
+        isActive: true,
+        isVerified: true,
+        email: undefined,
+      }),
+    );
+    // Tenant row bound immediately (no verify-email step needed)
+    expect(tenantStub.create).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: phoneUser._id }),
+    );
+    expect(sendInviteEmail).not.toHaveBeenCalled();
+  });
+
+  it("accepts both email and phone and stores a normalised phone", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    property.findById.mockReturnValue(buildQuery(ownedProperty()));
+    tenantStub.findOne.mockReturnValue(buildQuery(null));
+    user.findOne.mockReturnValue(buildQuery(null));
+    const created = makeTenant({ _id: TENANT_ID, status: "pending" });
+    tenantStub.create.mockResolvedValue(created);
+    tenantStub.findById.mockReturnValue(buildQuery(created));
+    vi.mocked(sendInviteEmail).mockResolvedValue(true);
+
+    const res = await POST(
+      buildRequest("/api/v1/tenants", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        headers: { "x-forwarded-for": "203.0.113.84" },
+        body: { ...tenantInput, phone: "0712 345 678" },
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect(tenantStub.findOne).toHaveBeenCalledWith({
+      propertyId: PROPERTY_ID,
+      $or: [{ email: tenantInput.email }, { phone: "+254712345678" }],
+    });
+    expect(tenantStub.create).toHaveBeenCalledWith(
+      expect.objectContaining({ email: tenantInput.email, phone: "+254712345678" }),
+    );
+    expect(sendInviteEmail).toHaveBeenCalled();
+  });
+
+  it("400 when a supplied phone is invalid", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    property.findById.mockReturnValue(buildQuery(ownedProperty()));
+
+    const res = await POST(
+      buildRequest("/api/v1/tenants", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { name: "Amina Phone", phone: "not-a-phone", propertyId: PROPERTY_ID },
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(tenantStub.create).not.toHaveBeenCalled();
+  });
+
+  it("409 when the contact belongs to an account with a different role", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    property.findById.mockReturnValue(buildQuery(ownedProperty()));
+    tenantStub.findOne.mockReturnValue(buildQuery(null));
+    user.findOne.mockReturnValue(
+      buildQuery({ _id: makeObjectId("owner-account"), role: "owner", isActive: true }),
+    );
+
+    const res = await POST(
+      buildRequest("/api/v1/tenants", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: tenantInput,
+      }),
+    );
+    expect(res.status).toBe(409);
+    expect(tenantStub.create).not.toHaveBeenCalled();
+  });
+
+  it("409 when another tenant on the property already uses the phone", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    property.findById.mockReturnValue(buildQuery(ownedProperty()));
+    tenantStub.findOne.mockReturnValue(buildQuery({ _id: makeObjectId("existing") }));
+    user.findOne.mockReturnValue(buildQuery(null));
+
+    const res = await POST(
+      buildRequest("/api/v1/tenants", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { name: "Amina Phone", phone: "0712345678", propertyId: PROPERTY_ID },
+      }),
+    );
+    expect(res.status).toBe(409);
+    expect(tenantStub.findOne).toHaveBeenCalledWith({
+      propertyId: PROPERTY_ID,
+      phone: "+254712345678",
+    });
+  });
+
+  it("normalises a local phone before creating a phone-only account", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    property.findById.mockReturnValue(buildQuery(ownedProperty()));
+    tenantStub.findOne.mockReturnValue(buildQuery(null));
+    user.findOne.mockReturnValue(buildQuery(null));
+    const phoneUser = {
+      _id: makeObjectId("user"),
+      name: "Amina Phone",
+      phone: "+254712345678",
+      role: "tenant",
+      isActive: true,
+      isVerified: true,
+    };
+    user.create.mockResolvedValue(phoneUser);
+    const createdTenant = makeTenant({ _id: TENANT_ID, status: "active" });
+    tenantStub.create.mockResolvedValue(createdTenant);
+    tenantStub.findById.mockReturnValue(buildQuery(createdTenant));
+
+    const res = await POST(
+      buildRequest("/api/v1/tenants", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { name: "Amina Phone", phone: "0712 345 678", propertyId: PROPERTY_ID },
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect(user.create).toHaveBeenCalledWith(
+      expect.objectContaining({ phone: "+254712345678", isActive: true, isVerified: true }),
+    );
+  });
+
+  it("links an existing phone-only tenant instead of creating another account", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    property.findById.mockReturnValue(buildQuery(ownedProperty()));
+    tenantStub.findOne.mockReturnValue(buildQuery(null));
+    const existingUserId = makeObjectId("phone-user");
+    user.findOne.mockReturnValue(
+      buildQuery({
+        _id: existingUserId,
+        phone: "+254712345678",
+        role: "tenant",
+        isActive: true,
+        isVerified: true,
+      }),
+    );
+    const created = makeTenant({ _id: TENANT_ID, status: "active" });
+    tenantStub.create.mockResolvedValue(created);
+    tenantStub.findById.mockReturnValue(buildQuery(created));
+
+    const res = await POST(
+      buildRequest("/api/v1/tenants", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { name: "Amina Phone", phone: "+254712345678", propertyId: PROPERTY_ID },
+      }),
+    );
+    expect(res.status).toBe(201);
+    const body = await json(res);
+    expect(body.password).toBeUndefined();
+    expect(user.create).not.toHaveBeenCalled();
+    expect(tenantStub.create).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: existingUserId }),
+    );
+  });
+
+  it("refreshes and resends a pending email invite instead of duplicating the user", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    property.findById.mockReturnValue(buildQuery(ownedProperty()));
+    tenantStub.findOne.mockReturnValue(buildQuery(null));
+    user.findOne.mockReturnValue(
+      buildQuery({
+        _id: makeObjectId("pending-user"),
+        email: tenantInput.email,
+        role: "tenant",
+        isActive: false,
+        isVerified: false,
+      }),
+    );
+    const created = makeTenant({ _id: TENANT_ID, status: "pending" });
+    tenantStub.create.mockResolvedValue(created);
+    tenantStub.findById.mockReturnValue(buildQuery(created));
+    vi.mocked(sendInviteEmail).mockResolvedValue(true);
+
+    const res = await POST(
+      buildRequest("/api/v1/tenants", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: tenantInput,
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect(user.create).not.toHaveBeenCalled();
+    expect(user.updateOne).toHaveBeenCalled();
+    expect(sendInviteEmail).toHaveBeenCalledWith(
+      tenantInput.email,
+      tenantInput.name,
+      "tenant",
+      expect.any(String),
+    );
+    expect(tenantStub.create).toHaveBeenCalledWith(expect.objectContaining({ userId: "" }));
   });
 });

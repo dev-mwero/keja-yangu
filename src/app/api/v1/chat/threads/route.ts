@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
   if (authError) return authError;
 
   await connectToDatabase();
-  const actor = await resolveDashboardActor(request);
+  const actor = await resolveDashboardActor(request, "chat:read-own");
   if (actor instanceof NextResponse) return actor;
 
   const filter: Record<string, unknown> = {};
@@ -43,6 +43,21 @@ export async function GET(request: NextRequest) {
     filter.ownerId = actor.userId;
   } else if (actor.role === "caretaker") {
     filter.agentUserId = actor.userId;
+  } else if (actor.role === "custodian") {
+    // Owner-delegate: every thread in the managed owner's portfolio.
+    filter.ownerId = actor.managedByOwnerId;
+  } else if (actor.role === "admin") {
+    const scopes: Record<string, unknown>[] = [];
+    if (actor.propertyScopeIds.length > 0) {
+      scopes.push({ propertyId: { $in: actor.propertyScopeIds } });
+    }
+    if (actor.assignedTenantIds.length > 0) {
+      scopes.push({ tenantId: { $in: actor.assignedTenantIds } });
+    }
+    if (scopes.length === 0) {
+      return NextResponse.json(buildPaginationResult([], 0, page, limit));
+    }
+    filter.$or = scopes;
   }
 
   const [threads, total] = await Promise.all([
@@ -82,7 +97,7 @@ export async function GET(request: NextRequest) {
       propertyTitle: titles.get(thread.propertyId) ?? "",
       unread,
     };
-    data.push(serializeThread(thread, enrichment));
+    data.push(serializeThread(thread, enrichment, actor.role));
   }
 
   return NextResponse.json(buildPaginationResult(data, total, page, limit));
@@ -108,7 +123,7 @@ export async function POST(request: NextRequest) {
   }
 
   await connectToDatabase();
-  const actor = await resolveDashboardActor(request);
+  const actor = await resolveDashboardActor(request, "chat:send");
   if (actor instanceof NextResponse) return actor;
   if (actor.role !== "tenant") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -229,10 +244,14 @@ async function buildThreadResponse(
   };
   if (readAt) unreadFilter.createdAt = { $gt: readAt };
   const unread = await ChatMessage.countDocuments(unreadFilter);
-  return serializeThread(thread, {
-    agentName: agentUser?.name ?? "Property team",
-    tenantName: tenantRow?.name ?? "Tenant",
-    propertyTitle: titles.get(propertyId) ?? "",
-    unread,
-  });
+  return serializeThread(
+    thread,
+    {
+      agentName: agentUser?.name ?? "Property team",
+      tenantName: tenantRow?.name ?? "Tenant",
+      propertyTitle: titles.get(propertyId) ?? "",
+      unread,
+    },
+    actor.role,
+  );
 }

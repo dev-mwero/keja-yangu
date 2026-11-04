@@ -1,9 +1,15 @@
 import { isValidObjectId } from "mongoose";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { propertyTitleMap, readJsonBody, resolveDashboardActor } from "@/app/api/v1/_helpers";
+import {
+  propertyTitleMap,
+  readJsonBody,
+  resolveDashboardActor,
+  unitNameMap,
+} from "@/app/api/v1/_helpers";
 import { serializeComplaint } from "@/lib/complaints";
 import { connectToDatabase } from "@/lib/mongoose";
+import { notifyComplaintStatusChange } from "@/lib/notifications";
 import { requirePermission } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { complaintUpdate } from "@/lib/schemas";
@@ -30,7 +36,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   const authError = await requirePermission(request, "complaint:manage", { resource: complaint });
   if (authError) return authError;
 
-  const actor = await resolveDashboardActor(request);
+  const actor = await resolveDashboardActor(request, "complaint:manage");
   if (actor instanceof NextResponse) return actor;
 
   if (actor.role === "caretaker" && !actor.assignedPropertyIds.includes(complaint.propertyId)) {
@@ -72,11 +78,17 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   if (!updated) {
     return NextResponse.json({ error: "Complaint not found" }, { status: 404 });
   }
-  const titles = await propertyTitleMap([updated.propertyId]);
+  if (parsed.data.status !== undefined && parsed.data.status !== complaint.status) {
+    await notifyComplaintStatusChange(updated);
+  }
+  const [titles, unitNames] = await Promise.all([
+    propertyTitleMap([updated.propertyId]),
+    unitNameMap([updated.unitId]),
+  ]);
 
   console.info(
     `[complaints] update-status actor=${actor.userId} role=${actor.role} complaint=${id}`,
   );
 
-  return NextResponse.json({ data: serializeComplaint(updated, titles) });
+  return NextResponse.json({ data: serializeComplaint(updated, titles, unitNames) });
 }

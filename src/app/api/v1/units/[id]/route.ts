@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongoose";
 import { asSoftDeleteModel } from "@/lib/mongoose-soft-delete";
+import { notifyUnitAvailable } from "@/lib/notifications";
 import { authenticate, requirePermission } from "@/lib/permissions";
 import { unitUpdateInput } from "@/lib/schemas/unit";
 import { Unit } from "@/models/Unit";
@@ -30,12 +31,17 @@ export async function GET(request: NextRequest, ctx: RouteContext) {
   }
 
   const authError = await requirePermission(request, "unit:read", {
-    resource: { ownerId: unit.ownerId },
+    resource: {
+      ownerId: unit.ownerId,
+      propertyId: unit.propertyId,
+      blockId: unit.blockId,
+      unitId: String(unit._id),
+    },
   });
   if (authError) return authError;
 
   // Tenants may only read the unit they occupy.
-  if (auth.role === "tenant" && unit.tenantId !== auth.userId) {
+  if (auth.role === "tenant" && !(unit.tenantId as unknown as string[]).includes(auth.userId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -52,7 +58,12 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
   }
 
   const authError = await requirePermission(request, "unit:manage", {
-    resource: { ownerId: unit.ownerId },
+    resource: {
+      ownerId: unit.ownerId,
+      propertyId: unit.propertyId,
+      blockId: unit.blockId,
+      unitId: String(unit._id),
+    },
   });
   if (authError) return authError;
 
@@ -65,6 +76,7 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
     );
   }
 
+  const previousStatus = unit.status;
   const updates = parsed.data;
   if (updates.name && updates.name !== unit.name) {
     const clash = await Unit.findOne({
@@ -82,18 +94,41 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
     }
     unit.name = updates.name;
   }
-  if (updates.status !== undefined) unit.status = updates.status;
+  if (updates.status !== undefined) {
+    const requestedStatus = updates.status;
+    if (requestedStatus === "occupied") {
+      return NextResponse.json(
+        { error: "Use tenant assignment to change occupancy" },
+        { status: 409 },
+      );
+    }
+    if (unit.status === "occupied" && requestedStatus !== "maintenance") {
+      return NextResponse.json(
+        { error: "Use tenant assignment to change occupancy" },
+        { status: 409 },
+      );
+    }
+    unit.status = requestedStatus;
+    if (previousStatus !== requestedStatus) unit.statusChangedAt = new Date();
+  }
+  if (updates.purpose !== undefined) unit.purpose = updates.purpose;
   if (updates.rent !== undefined) unit.rent = updates.rent;
+  if (updates.serviceCharge !== undefined) unit.serviceCharge = updates.serviceCharge;
+  if (updates.rentIncludesServiceCharge !== undefined)
+    unit.rentIncludesServiceCharge = updates.rentIncludesServiceCharge;
+  if (updates.rentSharePercent !== undefined) unit.rentSharePercent = updates.rentSharePercent;
+  if (updates.serviceChargeSharePercent !== undefined)
+    unit.serviceChargeSharePercent = updates.serviceChargeSharePercent;
   if (updates.beds !== undefined) unit.beds = updates.beds;
   if (updates.baths !== undefined) unit.baths = updates.baths;
   if (updates.area !== undefined) unit.area = updates.area;
-  if (updates.tenantId !== undefined) {
-    unit.tenantId = updates.tenantId;
-    if (updates.tenantId && updates.status === undefined) unit.status = "occupied";
-    if (!updates.tenantId && updates.status === undefined) unit.status = "available";
-  }
 
   await unit.save();
+
+  if (previousStatus !== "available" && unit.status === "available") {
+    await notifyUnitAvailable(unit);
+  }
+
   return NextResponse.json({ data: unit.toObject() });
 }
 
@@ -107,11 +142,16 @@ export async function DELETE(request: NextRequest, ctx: RouteContext) {
   }
 
   const authError = await requirePermission(request, "unit:manage", {
-    resource: { ownerId: unit.ownerId },
+    resource: {
+      ownerId: unit.ownerId,
+      propertyId: unit.propertyId,
+      blockId: unit.blockId,
+      unitId: String(unit._id),
+    },
   });
   if (authError) return authError;
 
-  if (unit.status === "occupied" || unit.tenantId) {
+  if (unit.status === "occupied" || (unit.tenantId as unknown as string[]).length > 0) {
     return NextResponse.json(
       { error: "Cannot delete an occupied unit. Move the tenant out first." },
       { status: 409 },

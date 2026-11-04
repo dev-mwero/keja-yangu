@@ -11,12 +11,25 @@ import { softDeletePlugin } from "@/lib/mongoose-soft-delete";
 export type { InvoiceMethod, InvoiceStatus };
 export { INVOICE_METHODS, INVOICE_STATUSES };
 
+export interface InvoiceServiceFeeItem {
+  itemId: string;
+  label: string;
+  amount: number;
+}
+
 export interface IInvoice {
   invoiceNumber: string;
   tenantId: string;
   propertyId: string;
   leaseId: string;
+  unitId?: string;
   ownerId: string;
+  billingAccountId?: string;
+  billingAdminId?: string;
+  billingSnapshot?: {
+    legalEntityName?: string;
+    invoicePrefix?: string;
+  };
   period: string;
   amountDue: number;
   amountPaid: number;
@@ -30,6 +43,13 @@ export interface IInvoice {
   paymentDescription?: string;
   paidBy?: string;
   paidByRole?: string;
+  // Breakdown of amountDue into rent (→ owner) and service charge (→ caretaker).
+  // Populated at generation time from the unit's service-charge configuration.
+  rentAmount: number;
+  serviceChargeAmount: number;
+  rentIncludesServiceCharge: boolean;
+  // Staff-only itemized snapshot. Tenant serialization omits this field.
+  serviceFeeItems: InvoiceServiceFeeItem[];
   deletedAt?: Date | null;
 }
 
@@ -39,7 +59,20 @@ const invoiceSchema = new Schema<IInvoice>(
     tenantId: { type: String, required: true },
     propertyId: { type: String, required: true },
     leaseId: { type: String, default: "" },
+    unitId: { type: String, default: "" },
     ownerId: { type: String, required: true },
+    billingAccountId: { type: String, default: "" },
+    billingAdminId: { type: String, default: "" },
+    billingSnapshot: {
+      type: new Schema(
+        {
+          legalEntityName: { type: String, default: "" },
+          invoicePrefix: { type: String, default: "" },
+        },
+        { _id: false },
+      ),
+      default: () => ({}),
+    },
     period: { type: String, required: true, match: PERIOD_REGEX },
     amountDue: { type: Number, required: true, min: 0 },
     amountPaid: { type: Number, default: 0 },
@@ -53,6 +86,22 @@ const invoiceSchema = new Schema<IInvoice>(
     paymentDescription: { type: String, trim: true, default: "" },
     paidBy: { type: String },
     paidByRole: { type: String },
+    rentAmount: { type: Number, required: true, min: 0, default: 0 },
+    serviceChargeAmount: { type: Number, required: true, min: 0, default: 0 },
+    rentIncludesServiceCharge: { type: Boolean, default: false },
+    serviceFeeItems: {
+      type: [
+        new Schema<InvoiceServiceFeeItem>(
+          {
+            itemId: { type: String, required: true },
+            label: { type: String, required: true },
+            amount: { type: Number, required: true, min: 0 },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
+    },
     deletedAt: { type: Date, default: null },
   },
   {
@@ -61,6 +110,7 @@ const invoiceSchema = new Schema<IInvoice>(
 );
 
 invoiceSchema.index({ ownerId: 1, period: 1 });
+invoiceSchema.index({ billingAccountId: 1, period: 1 });
 invoiceSchema.index({ tenantId: 1 });
 // Invoice numbers are unique among live invoices only.
 invoiceSchema.index(

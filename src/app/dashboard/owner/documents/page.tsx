@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { DashboardShell } from "@/components/DashboardShell";
 import { SearchInput } from "@/components/SearchInput";
+import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,10 +33,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ownerNav as nav } from "@/config/dashboardNav";
-import { type DashboardDocument, type DocumentCategory, documentsStore } from "@/data/dashboard";
-import { useLocalStore } from "@/hooks/use-local-store";
+import { useDocumentMutations, useDocuments } from "@/hooks/use-documents";
+import { useProperties } from "@/hooks/use-properties";
+import { DOCUMENT_CATEGORIES, type DocumentCategory } from "@/lib/domain-enums";
 import { formatDate } from "@/lib/format";
 import { matchesQuery } from "@/lib/search";
+import type { DashboardDocument } from "@/types/communications";
 
 const categoryClass: Record<DocumentCategory, string> = {
   lease: "bg-primary/15 text-primary",
@@ -46,13 +49,14 @@ const categoryClass: Record<DocumentCategory, string> = {
   policy: "bg-secondary/15 text-secondary",
 };
 
-const categories: DocumentCategory[] = ["lease", "invoice", "notice", "policy"];
-
 const OwnerDocumentsPage = () => {
-  const { items, addItem } = useLocalStore<DashboardDocument>(documentsStore);
+  const { items, loading, error, refetch } = useDocuments();
+  const { createDocument, pending } = useDocumentMutations();
+  const { properties } = useProperties();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [category, setCategory] = useState<DocumentCategory>("lease");
+  const [propertyId, setPropertyId] = useState("");
   const [query, setQuery] = useState("");
 
   const sorted = [...items]
@@ -75,24 +79,35 @@ const OwnerDocumentsPage = () => {
     toast.success("Document downloaded");
   };
 
-  const submit = () => {
+  const submit = async () => {
     if (!name.trim()) {
       toast.error("Document name is required");
       return;
     }
-    addItem({
-      id: `doc-${Date.now()}`,
-      name: name.trim(),
-      category,
-      scope: "landlord",
-      uploadedBy: "You",
-      uploadedAt: new Date().toISOString(),
-      size: "—",
-    });
-    toast.success("Document added", { description: `${name.trim()} saved to the document vault.` });
-    setName("");
-    setOpen(false);
+    try {
+      await createDocument({
+        name: name.trim(),
+        category,
+        scope: propertyId ? "property" : "landlord",
+        propertyId,
+      });
+      toast.success("Document added", { description: `${name.trim()} saved to the vault.` });
+      setName("");
+      setPropertyId("");
+      setOpen(false);
+      refetch();
+    } catch (err) {
+      toast.error("Could not add document", {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
   };
+
+  const thisMonth = items.filter((doc) => {
+    const date = new Date(doc.uploadedAt);
+    const now = new Date();
+    return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+  }).length;
 
   return (
     <DashboardShell
@@ -101,6 +116,17 @@ const OwnerDocumentsPage = () => {
       title="Documents"
       subtitle="Lease templates, policies and shared records for the portfolio."
     >
+      <div className="mb-6 grid gap-4 md:grid-cols-3">
+        <StatCard label="Total documents" value={loading ? "…" : items.length} icon={FileStack} />
+        <StatCard
+          label="Categories in use"
+          value={loading ? "…" : new Set(items.map((d) => d.category)).size}
+          icon={FileText}
+          hint={`${DOCUMENT_CATEGORIES.length} available`}
+        />
+        <StatCard label="Added this month" value={loading ? "…" : thisMonth} icon={Plus} />
+      </div>
+
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="font-display text-xl font-semibold">Document vault</h2>
@@ -121,7 +147,15 @@ const OwnerDocumentsPage = () => {
       </div>
 
       <div className="mt-6">
-        {sorted.length === 0 ? (
+        {loading ? (
+          <div className="rounded-2xl border border-dashed border-border bg-card/50 p-10 text-center text-muted-foreground">
+            Loading documents…
+          </div>
+        ) : error ? (
+          <div className="rounded-2xl border border-dashed border-destructive/40 bg-card/50 p-10 text-center text-destructive">
+            {error}
+          </div>
+        ) : sorted.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border bg-card/50 p-10 text-center">
             <FileStack className="mx-auto h-8 w-8 text-muted-foreground" />
             <h3 className="mt-3 font-display text-xl">No documents yet</h3>
@@ -145,7 +179,7 @@ const OwnerDocumentsPage = () => {
               </TableHeader>
               <TableBody>
                 {sorted.map((doc) => (
-                  <TableRow key={doc.id}>
+                  <TableRow key={doc._id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -214,9 +248,28 @@ const OwnerDocumentsPage = () => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map((c) => (
+                  {DOCUMENT_CATEGORIES.map((c) => (
                     <SelectItem key={c} value={c}>
                       {c.slice(0, 1).toUpperCase() + c.slice(1)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <div className="text-sm font-medium text-muted-foreground">Property</div>
+              <Select
+                value={propertyId || "portfolio"}
+                onValueChange={(v) => setPropertyId(v === "portfolio" ? "" : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="portfolio">Portfolio-wide</SelectItem>
+                  {properties.map((property) => (
+                    <SelectItem key={property._id} value={property._id}>
+                      {property.title}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -227,8 +280,8 @@ const OwnerDocumentsPage = () => {
             <Button variant="outline" className="rounded-full" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button className="rounded-full" onClick={submit}>
-              Add document
+            <Button className="rounded-full" disabled={pending} onClick={() => void submit()}>
+              {pending ? "Adding…" : "Add document"}
             </Button>
           </DialogFooter>
         </DialogContent>

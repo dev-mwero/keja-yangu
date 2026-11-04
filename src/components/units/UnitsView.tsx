@@ -1,11 +1,24 @@
 "use client";
 
-import { DoorOpen, Loader2, Pencil, Trash2 } from "lucide-react";
+import {
+  CheckCircle2,
+  Clock,
+  DoorOpen,
+  ExternalLink,
+  Globe,
+  Loader2,
+  Pencil,
+  Trash2,
+  UserMinus,
+  UserPlus,
+  Wrench,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { DashboardShell } from "@/components/DashboardShell";
 import { SearchInput } from "@/components/SearchInput";
+import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,9 +48,15 @@ import {
 } from "@/components/ui/table";
 import type { DashNavItem } from "@/config/dashboardNav";
 import { useProperties } from "@/hooks/use-properties";
+import { usePropertyTenants, useTenantMutations } from "@/hooks/use-tenants";
 import { type Unit, type UnitStatus, useUnitMutations, useUnits } from "@/hooks/use-units";
-import { UNIT_STATUSES } from "@/lib/domain-enums";
-import { effectiveRent } from "@/lib/schemas/structure";
+import {
+  DEFAULT_PROPERTY_PURPOSE,
+  PROPERTY_PURPOSES,
+  type PropertyPurpose,
+  UNIT_STATUSES,
+} from "@/lib/domain-enums";
+import { effectivePurpose, effectiveRent } from "@/lib/schemas/structure";
 import { matchesQuery } from "@/lib/search";
 
 interface Props {
@@ -53,14 +72,34 @@ const STATUS_VARIANT: Record<UnitStatus, "default" | "secondary" | "outline"> = 
 };
 
 export function UnitsView({ nav, roleName, canManage = true }: Props) {
-  const { units, loading, refetch } = useUnits(undefined, { fetchAll: true });
-  const { properties } = useProperties();
-  const { updateUnit, deleteUnit, pending } = useUnitMutations();
   const [statusFilter, setStatusFilter] = useState<"all" | UnitStatus>("all");
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<Unit | null>(null);
+  const [assigningUnit, setAssigningUnit] = useState<Unit | null>(null);
+  const [vacatingUnit, setVacatingUnit] = useState<Unit | null>(null);
+  const [selectedTenantId, setSelectedTenantId] = useState("");
 
-  const [form, setForm] = useState({ name: "", status: "available" as UnitStatus, rent: "" });
+  const { units, loading, refetch } = useUnits(undefined, { fetchAll: true });
+  const { properties } = useProperties();
+  const { updateUnit, deleteUnit, pending } = useUnitMutations();
+  const { unassignedTenants, loading: tenantsLoading } = usePropertyTenants(
+    assigningUnit?.propertyId,
+    { enabled: assigningUnit !== null },
+  );
+  const { assignUnit, vacateUnit, pending: assignPending } = useTenantMutations();
+
+  const [listingUnit, setListingUnit] = useState<Unit | null>(null);
+  const [unitListing, setUnitListing] = useState<any | null>(null);
+  const [listingLoading, setListingLoading] = useState(false);
+  const [listingHeadline, setListingHeadline] = useState("");
+  const [listingRent, setListingRent] = useState("");
+
+  const [form, setForm] = useState({
+    name: "",
+    status: "available" as UnitStatus,
+    purpose: "inherit" as PropertyPurpose | "inherit",
+    rent: "",
+  });
 
   const propertyById = useMemo(
     () => Object.fromEntries(properties.map((p) => [p._id, p])),
@@ -73,11 +112,19 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
       matchesQuery(query, u.name, propertyById[u.propertyId]?.title, u.blockName, u.floorLabel),
   );
 
+  const statusCounts = {
+    all: units.length,
+    occupied: units.filter((u) => u.status === "occupied").length,
+    available: units.filter((u) => u.status === "available").length,
+    maintenance: units.filter((u) => u.status === "maintenance").length,
+  };
+
   const openEdit = (unit: Unit) => {
     setEditing(unit);
     setForm({
       name: unit.name,
       status: unit.status,
+      purpose: unit.purpose ?? "inherit",
       rent: unit.rent === null || unit.rent === undefined ? "" : String(unit.rent),
     });
   };
@@ -88,6 +135,7 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
       await updateUnit(editing._id, {
         name: form.name.trim() || editing.name,
         status: form.status,
+        purpose: form.purpose === "inherit" ? null : form.purpose,
         rent: form.rent === "" ? null : Number(form.rent),
       });
       toast.success("Unit updated");
@@ -112,9 +160,127 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
     }
   };
 
+  const assign = async () => {
+    if (!assigningUnit || !selectedTenantId) return;
+    try {
+      await assignUnit(selectedTenantId, assigningUnit._id);
+      toast.success("Tenant assigned", {
+        description: `${assigningUnit.name} is now assigned.`,
+      });
+      setAssigningUnit(null);
+      setSelectedTenantId("");
+      refetch();
+    } catch (err) {
+      toast.error("Could not assign tenant", {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
+  };
+
+  const vacate = async () => {
+    const occupantId = vacatingUnit?.tenantId[0];
+    if (!occupantId) return;
+    try {
+      await vacateUnit(occupantId);
+      toast.success("Tenant unassigned", {
+        description: `${vacatingUnit.name} is now vacant.`,
+      });
+      setVacatingUnit(null);
+      refetch();
+    } catch (err) {
+      toast.error("Could not unassign tenant", {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
+  };
+
   const baseRent = (unit: Unit): number => {
     const property = propertyById[unit.propertyId];
     return effectiveRent(unit.rent, null, null, property?.price ?? 0);
+  };
+
+  const unitPurpose = (unit: Unit): PropertyPurpose => {
+    const property = propertyById[unit.propertyId];
+    const block = property?.blocks?.find((candidate) => candidate._id === unit.blockId);
+    const floor = block?.floors.find((candidate) => candidate._id === unit.floorId);
+    return effectivePurpose(
+      unit.purpose,
+      floor?.purpose,
+      block?.purpose,
+      property?.purpose ?? DEFAULT_PROPERTY_PURPOSE,
+    );
+  };
+
+  const openListingModal = async (unit: Unit) => {
+    setListingUnit(unit);
+    setListingLoading(true);
+    const prop = propertyById[unit.propertyId];
+    setListingHeadline(`${prop?.title || "Property"} - Unit ${unit.name}`);
+    setListingRent(String(baseRent(unit)));
+    try {
+      const res = await fetch(`/api/v1/listings?unitId=${unit._id}`);
+      if (res.ok) {
+        const json = await res.json();
+        setUnitListing(json.data?.[0] || null);
+      } else {
+        setUnitListing(null);
+      }
+    } catch {
+      setUnitListing(null);
+    } finally {
+      setListingLoading(false);
+    }
+  };
+
+  const createListingDraft = async () => {
+    if (!listingUnit) return;
+    try {
+      const rent = Number(listingRent);
+      if (!rent || rent <= 0) {
+        toast.error("Please provide a valid asking rent");
+        return;
+      }
+      const res = await fetch("/api/v1/listings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          propertyId: listingUnit.propertyId,
+          blockId: listingUnit.blockId,
+          unitId: listingUnit._id,
+          headline: listingHeadline.trim(),
+          askingRent: rent,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to create listing");
+      }
+      const data = await res.json();
+      setUnitListing(data.listing);
+      toast.success("Draft listing created");
+    } catch (err: any) {
+      toast.error(err.message || "Could not create listing");
+    }
+  };
+
+  const updateListingAction = async (action: "publish" | "pause" | "withdraw") => {
+    if (!unitListing) return;
+    try {
+      const res = await fetch(`/api/v1/listings/${unitListing._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.details?.join?.(", ") || err.error || `Failed to ${action} listing`);
+      }
+      const data = await res.json();
+      setUnitListing(data.listing);
+      toast.success(`Listing updated to ${data.listing.state}`);
+    } catch (err: any) {
+      toast.error(err.message || `Could not ${action} listing`);
+    }
   };
 
   return (
@@ -124,6 +290,21 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
       title="Units"
       subtitle="Every unit across your blocks and floors."
     >
+      <div className="mb-6 grid gap-4 md:grid-cols-4">
+        <StatCard label="Total units" value={loading ? "…" : statusCounts.all} icon={DoorOpen} />
+        <StatCard
+          label="Occupied"
+          value={loading ? "…" : statusCounts.occupied}
+          icon={CheckCircle2}
+        />
+        <StatCard label="Vacant" value={loading ? "…" : statusCounts.available} icon={Clock} />
+        <StatCard
+          label="Maintenance"
+          value={loading ? "…" : statusCounts.maintenance}
+          icon={Wrench}
+        />
+      </div>
+
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Select
@@ -182,7 +363,15 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
             ) : (
               filtered.map((unit) => (
                 <TableRow key={unit._id}>
-                  <TableCell className="font-medium">{unit.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <div>{unit.name}</div>
+                    <Badge
+                      variant="outline"
+                      className="mt-1 text-[10px] font-normal capitalize text-muted-foreground"
+                    >
+                      {unitPurpose(unit)}
+                    </Badge>
+                  </TableCell>
                   <TableCell className="text-muted-foreground">
                     {propertyById[unit.propertyId]?.title ?? "—"}
                   </TableCell>
@@ -198,7 +387,44 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
                   </TableCell>
                   {canManage && (
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(unit)}>
+                      {unit.status === "available" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Assign tenant to ${unit.name}`}
+                          onClick={() => {
+                            setSelectedTenantId("");
+                            setAssigningUnit(unit);
+                          }}
+                        >
+                          <UserPlus className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {unit.tenantId.length > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Unassign tenant from ${unit.name}`}
+                          onClick={() => setVacatingUnit(unit)}
+                        >
+                          <UserMinus className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Marketplace listing for ${unit.name}`}
+                        title="Marketplace Listing"
+                        onClick={() => openListingModal(unit)}
+                      >
+                        <Globe className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Edit ${unit.name}`}
+                        onClick={() => openEdit(unit)}
+                      >
                         <Pencil className="h-4 w-4" />
                       </Button>
                       <Button
@@ -244,6 +470,30 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
               />
             </div>
             <div className="space-y-2">
+              <Label>Purpose</Label>
+              <Select
+                value={form.purpose}
+                onValueChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    purpose: value as PropertyPurpose | "inherit",
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Inherit" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="inherit">Inherit</SelectItem>
+                  {PROPERTY_PURPOSES.map((purpose) => (
+                    <SelectItem key={purpose} value={purpose} className="capitalize">
+                      {purpose}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
               <Label>Status</Label>
               <Select
                 value={form.status}
@@ -271,6 +521,235 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
               Save
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={assigningUnit !== null}
+        onOpenChange={(o) => {
+          if (!o && !assignPending) {
+            setAssigningUnit(null);
+            setSelectedTenantId("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Assign tenant{assigningUnit ? ` to ${assigningUnit.name}` : ""}
+            </DialogTitle>
+            <DialogDescription>
+              Move an unassigned active tenant at this property into this vacant unit.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Tenant</Label>
+            {tenantsLoading ? (
+              <p className="text-sm text-muted-foreground">Loading tenants…</p>
+            ) : unassignedTenants.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No unassigned active tenants at this property. Add a tenant first.
+              </p>
+            ) : (
+              <Select value={selectedTenantId} onValueChange={setSelectedTenantId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a tenant" />
+                </SelectTrigger>
+                <SelectContent>
+                  {unassignedTenants.map((t) => (
+                    <SelectItem key={t._id} value={t._id}>
+                      {t.name} · {t.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setAssigningUnit(null);
+                setSelectedTenantId("");
+              }}
+              disabled={assignPending}
+            >
+              Cancel
+            </Button>
+            <Button onClick={assign} disabled={!selectedTenantId || assignPending}>
+              {assignPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Assign tenant
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={vacatingUnit !== null}
+        onOpenChange={(o) => {
+          if (!o && !assignPending) setVacatingUnit(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Unassign tenant{vacatingUnit ? ` from ${vacatingUnit.name}` : ""}?
+            </DialogTitle>
+            <DialogDescription>
+              This frees the unit. The tenant keeps their account but no longer occupies this unit.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setVacatingUnit(null)}
+              disabled={assignPending}
+            >
+              Cancel
+            </Button>
+            <Button onClick={vacate} disabled={assignPending}>
+              {assignPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Unassign tenant
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={listingUnit !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setListingUnit(null);
+            setUnitListing(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Marketplace Listing — Unit {listingUnit?.name}</DialogTitle>
+            <DialogDescription>
+              Manage public marketplace offer and canonical listing state.
+            </DialogDescription>
+          </DialogHeader>
+
+          {listingLoading ? (
+            <div className="py-8 text-center text-muted-foreground">
+              <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" />
+              <p className="mt-2 text-xs">Loading listing status...</p>
+            </div>
+          ) : unitListing ? (
+            <div className="space-y-4 py-2">
+              <div className="rounded-xl border border-border bg-muted/40 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Status</p>
+                    <Badge
+                      className="mt-1 capitalize"
+                      variant={
+                        unitListing.state === "active"
+                          ? "default"
+                          : unitListing.state === "let"
+                            ? "secondary"
+                            : "outline"
+                      }
+                    >
+                      {unitListing.state}
+                    </Badge>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground">Asking Rent</p>
+                    <p className="font-semibold text-foreground">
+                      KES {Number(unitListing.askingRent).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 border-t border-border pt-3">
+                  <p className="text-xs text-muted-foreground">Headline</p>
+                  <p className="text-sm font-medium text-foreground">{unitListing.headline}</p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 pt-2">
+                {unitListing.state === "draft" && (
+                  <Button size="sm" onClick={() => updateListingAction("publish")}>
+                    Publish Listing
+                  </Button>
+                )}
+
+                {unitListing.state === "active" && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => updateListingAction("pause")}
+                    >
+                      Pause Listing
+                    </Button>
+                    <Button size="sm" variant="secondary" asChild>
+                      <a
+                        href={`/marketplace/${unitListing._id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        View Live
+                      </a>
+                    </Button>
+                  </>
+                )}
+
+                {unitListing.state === "paused" && (
+                  <Button size="sm" onClick={() => updateListingAction("publish")}>
+                    Resume Listing
+                  </Button>
+                )}
+
+                {unitListing.state !== "withdrawn" && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-destructive hover:bg-destructive/10"
+                    onClick={() => updateListingAction("withdraw")}
+                  >
+                    Withdraw
+                  </Button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4 py-2">
+              <p className="text-sm text-muted-foreground">
+                No active or draft listing exists for this unit. Create a draft offer below:
+              </p>
+
+              <div className="space-y-1">
+                <Label htmlFor="listing-headline">Headline</Label>
+                <Input
+                  id="listing-headline"
+                  value={listingHeadline}
+                  onChange={(e) => setListingHeadline(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="listing-rent">Asking Rent (KES)</Label>
+                <Input
+                  id="listing-rent"
+                  type="number"
+                  value={listingRent}
+                  onChange={(e) => setListingRent(e.target.value)}
+                />
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button variant="outline" onClick={() => setListingUnit(null)}>
+                  Cancel
+                </Button>
+                <Button onClick={createListingDraft}>Create Draft Listing</Button>
+              </DialogFooter>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </DashboardShell>

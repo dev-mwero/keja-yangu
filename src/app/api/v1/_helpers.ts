@@ -1,9 +1,10 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongoose";
-import { authenticate, type Role } from "@/lib/permissions";
+import { type Action, authenticate, getAdminAssignmentScope, type Role } from "@/lib/permissions";
 import { Property } from "@/models/Property";
 import { Tenant } from "@/models/Tenant";
+import { Unit } from "@/models/Unit";
 import { User } from "@/models/User";
 
 export interface InvoiceActor {
@@ -11,10 +12,15 @@ export interface InvoiceActor {
   userId: string;
   managedByOwnerId: string;
   assignedPropertyIds: string[];
+  propertyScopeIds: string[];
+  assignedBlockIds: string[];
+  assignedUnitIds: string[];
+  assignedTenantIds: string[];
 }
 
 export async function resolveInvoiceActor(
   request: NextRequest,
+  action?: Action,
 ): Promise<InvoiceActor | NextResponse> {
   const auth = authenticate(request);
   if (!auth) {
@@ -30,6 +36,11 @@ export async function resolveInvoiceActor(
   const userId = String(user._id);
   const managedByOwnerId = user.managedByOwnerId ?? "";
   let assignedPropertyIds: string[] = [];
+  let propertyScopeIds: string[] = [];
+  let assignedBlockIds: string[] = [];
+  let assignedUnitIds: string[] = [];
+  let assignedTenantIds: string[] = [];
+
   if (user.role === "caretaker" && managedByOwnerId) {
     const properties = await Property.find({ caretakerIds: userId, ownerId: managedByOwnerId })
       .select("_id")
@@ -37,7 +48,25 @@ export async function resolveInvoiceActor(
     assignedPropertyIds = properties.map((p) => String(p._id));
   }
 
-  return { role: user.role, userId, managedByOwnerId, assignedPropertyIds };
+  if (user.role === "admin" && action) {
+    const scope = await getAdminAssignmentScope(userId, action);
+    assignedPropertyIds = scope.assignedPropertyIds;
+    propertyScopeIds = scope.propertyScopeIds;
+    assignedBlockIds = scope.assignedBlockIds;
+    assignedUnitIds = scope.assignedUnitIds;
+    assignedTenantIds = scope.assignedTenantIds;
+  }
+
+  return {
+    role: user.role,
+    userId,
+    managedByOwnerId,
+    assignedPropertyIds,
+    propertyScopeIds,
+    assignedBlockIds,
+    assignedUnitIds,
+    assignedTenantIds,
+  };
 }
 
 export async function resolveTenantActor(request: NextRequest): Promise<string | NextResponse> {
@@ -61,6 +90,10 @@ export interface DashboardActor {
   tenantIds: string[];
   tenantPropertyIds: string[];
   tenantOwnerIds: string[];
+  propertyScopeIds: string[];
+  assignedBlockIds: string[];
+  assignedUnitIds: string[];
+  assignedTenantIds: string[];
 }
 
 /**
@@ -71,6 +104,7 @@ export interface DashboardActor {
  */
 export async function resolveDashboardActor(
   request: NextRequest,
+  action?: Action,
 ): Promise<DashboardActor | NextResponse> {
   const auth = authenticate(request);
   if (!auth) {
@@ -89,12 +123,27 @@ export async function resolveDashboardActor(
   let tenantIds: string[] = [];
   let tenantPropertyIds: string[] = [];
   let tenantOwnerIds: string[] = [];
+  let propertyScopeIds: string[] = [];
+  let assignedBlockIds: string[] = [];
+  let assignedUnitIds: string[] = [];
+  let assignedTenantIds: string[] = [];
 
   if (user.role === "caretaker" && managedByOwnerId) {
     const properties = await Property.find({ caretakerIds: userId, ownerId: managedByOwnerId })
       .select("_id")
       .lean();
     assignedPropertyIds = properties.map((p) => String(p._id));
+  }
+
+  if (user.role === "admin" && action) {
+    const scope = await getAdminAssignmentScope(userId, action);
+    assignedPropertyIds = scope.assignedPropertyIds;
+    propertyScopeIds = scope.propertyScopeIds;
+    assignedBlockIds = scope.assignedBlockIds;
+    assignedUnitIds = scope.assignedUnitIds;
+    assignedTenantIds = scope.assignedTenantIds;
+    tenantIds = scope.assignedTenantIds;
+    tenantPropertyIds = scope.propertyScopeIds;
   }
 
   // One Tenant query supplies the bound row ids, property ids and owner ids
@@ -114,6 +163,10 @@ export async function resolveDashboardActor(
     tenantIds,
     tenantPropertyIds,
     tenantOwnerIds,
+    propertyScopeIds,
+    assignedBlockIds,
+    assignedUnitIds,
+    assignedTenantIds,
   };
 }
 
@@ -129,6 +182,20 @@ export async function propertyTitleMap(propertyIds: string[]): Promise<Map<strin
     .select("_id title")
     .lean();
   return new Map(properties.map((p) => [String(p._id), p.title]));
+}
+
+/**
+ * Resolves unit ids to their display names with a single `$in` query. Missing
+ * ids are simply absent from the returned map.
+ */
+export async function unitNameMap(unitIds: string[]): Promise<Map<string, string>> {
+  const uniqueIds = [...new Set(unitIds.filter(Boolean))];
+  if (uniqueIds.length === 0) return new Map();
+  await connectToDatabase();
+  const units = await Unit.find({ _id: { $in: uniqueIds } })
+    .select("_id name")
+    .lean();
+  return new Map(units.map((u) => [String(u._id), u.name]));
 }
 
 export async function resolveTenantIds(userId: string): Promise<string[]> {
@@ -152,4 +219,15 @@ export function isDuplicateKeyError(error: unknown): boolean {
     "code" in error &&
     (error as { code?: unknown }).code === 11000
   );
+}
+
+/**
+ * True when a duplicate-key failure is the invoice-number backstop (as opposed
+ * to the lease+period uniqueness rule). Missing `keyPattern` (stubbed errors)
+ * is treated as a number collision so callers can safely retry.
+ */
+export function isInvoiceNumberCollision(error: unknown): boolean {
+  if (!isDuplicateKeyError(error)) return false;
+  const keyPattern = (error as { keyPattern?: Record<string, unknown> }).keyPattern;
+  return !keyPattern || "invoiceNumber" in keyPattern;
 }

@@ -10,10 +10,18 @@ vi.mock("@/lib/mongoose", () => ({
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Application", () => ({ Application: getModelStubs().application }));
+vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
+vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
+vi.mock("@/lib/attributions", () => ({
+  bindApplicationAttribution: vi.fn().mockResolvedValue(null),
+}));
 
 import { GET, POST } from "@/app/api/v1/applications/route";
 
-const { user, property, application } = getModelStubs();
+const { user, property, application, unit, managementAssignment } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CUSTODIAN_ID = makeObjectId("custodian");
@@ -24,6 +32,10 @@ const PROP_ID = makeObjectId("prop");
 function listResult(docs: unknown[]) {
   application.find.mockReturnValue(buildQuery(docs));
   application.countDocuments.mockResolvedValue(docs.length);
+}
+
+function availablePropertyDoc() {
+  return { _id: PROP_ID, ownerId: OWNER_ID, published: true, status: "available" };
 }
 
 describe("GET /api/v1/applications", () => {
@@ -81,6 +93,31 @@ describe("GET /api/v1/applications", () => {
     });
   });
 
+  it("scopes an admin to applications on assigned properties or units", async () => {
+    const ADMIN_ID = makeObjectId("admin");
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: ADMIN_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          permissions: ["application:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    listResult([]);
+
+    const res = await GET(buildRequest("/api/v1/applications", { token: signToken(ADMIN_ID) }));
+    expect(res.status).toBe(200);
+    expect(application.find).toHaveBeenCalledWith({
+      $or: [{ propertyId: { $in: [PROP_ID] } }],
+    });
+  });
+
   it("enriches results with property titles", async () => {
     user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
     listResult([
@@ -100,6 +137,31 @@ describe("GET /api/v1/applications", () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.data[0]).toMatchObject({ propertyTitle: "Sunset Villa" });
+  });
+
+  it("enriches results with the requested unit name", async () => {
+    const UNIT_ID = makeObjectId("unit");
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    listResult([
+      {
+        _id: makeObjectId("app"),
+        propertyId: PROP_ID,
+        unitId: UNIT_ID,
+        ownerId: OWNER_ID,
+        applicantUserId: TENANT_ID,
+        applicantName: "Amina",
+        applicantEmail: "amina@keja.co",
+        status: "pending",
+      },
+    ]);
+    property.find.mockReturnValue(buildQuery([{ _id: PROP_ID, title: "Sunset Villa" }]));
+    unit.find.mockReturnValue(buildQuery([{ _id: UNIT_ID, name: "3A" }]));
+
+    const res = await GET(buildRequest("/api/v1/applications", { token: signToken(OWNER_ID) }));
+    expect(res.status).toBe(200);
+    expect(unit.find).toHaveBeenCalledWith({ _id: { $in: [UNIT_ID] } });
+    const json = await res.json();
+    expect(json.data[0]).toMatchObject({ propertyTitle: "Sunset Villa", unitName: "3A" });
   });
 });
 
@@ -158,7 +220,7 @@ describe("POST /api/v1/applications", () => {
 
   it("409 when a pending application already exists", async () => {
     user.findById.mockReturnValue(buildQuery(makeUser({ _id: TENANT_ID, role: "tenant" })));
-    property.findById.mockReturnValue(buildQuery({ _id: PROP_ID, ownerId: OWNER_ID }));
+    property.findById.mockReturnValue(buildQuery(availablePropertyDoc()));
     application.findOne.mockReturnValue(buildQuery({ _id: makeObjectId("app") }));
 
     const res = await POST(
@@ -174,7 +236,7 @@ describe("POST /api/v1/applications", () => {
 
   it("201 creates an application for a tenant with the resolved owner", async () => {
     user.findById.mockReturnValue(buildQuery(makeUser({ _id: TENANT_ID, role: "tenant" })));
-    property.findById.mockReturnValue(buildQuery({ _id: PROP_ID, ownerId: OWNER_ID }));
+    property.findById.mockReturnValue(buildQuery(availablePropertyDoc()));
     application.findOne.mockReturnValue(buildQuery(null));
     application.create.mockResolvedValue({ _id: makeObjectId("app") });
 
@@ -201,5 +263,109 @@ describe("POST /api/v1/applications", () => {
         status: "pending",
       }),
     );
+  });
+
+  it("409 when the property is not accepting applications", async () => {
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: TENANT_ID, role: "tenant" })));
+    property.findById.mockReturnValue(
+      buildQuery({ _id: PROP_ID, ownerId: OWNER_ID, published: false, status: "available" }),
+    );
+
+    const res = await POST(
+      buildRequest("/api/v1/applications", {
+        method: "POST",
+        token: signToken(TENANT_ID),
+        body: { propertyId: PROP_ID, name: "Amina", email: "amina@keja.co" },
+      }),
+    );
+    expect(res.status).toBe(409);
+    expect(application.create).not.toHaveBeenCalled();
+  });
+
+  it("201 stores the requested unitId", async () => {
+    const UNIT_ID = makeObjectId("unit");
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: TENANT_ID, role: "tenant" })));
+    property.findById.mockReturnValue(buildQuery(availablePropertyDoc()));
+    application.findOne.mockReturnValue(buildQuery(null));
+    unit.findById.mockReturnValue(
+      buildQuery({ _id: UNIT_ID, propertyId: PROP_ID, status: "available" }),
+    );
+    application.create.mockResolvedValue({ _id: makeObjectId("app"), unitId: UNIT_ID });
+
+    const res = await POST(
+      buildRequest("/api/v1/applications", {
+        method: "POST",
+        token: signToken(TENANT_ID),
+        body: {
+          propertyId: PROP_ID,
+          unitId: UNIT_ID,
+          name: "Amina",
+          email: "amina@keja.co",
+        },
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect(unit.findById).toHaveBeenCalledWith(UNIT_ID);
+    expect(application.create).toHaveBeenCalledWith(
+      expect.objectContaining({ propertyId: PROP_ID, unitId: UNIT_ID }),
+    );
+  });
+
+  it("404 when the requested unit does not exist", async () => {
+    const UNIT_ID = makeObjectId("unit");
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: TENANT_ID, role: "tenant" })));
+    property.findById.mockReturnValue(buildQuery(availablePropertyDoc()));
+    application.findOne.mockReturnValue(buildQuery(null));
+    unit.findById.mockReturnValue(buildQuery(null));
+
+    const res = await POST(
+      buildRequest("/api/v1/applications", {
+        method: "POST",
+        token: signToken(TENANT_ID),
+        body: { propertyId: PROP_ID, unitId: UNIT_ID, name: "Amina", email: "amina@keja.co" },
+      }),
+    );
+    expect(res.status).toBe(404);
+    expect(application.create).not.toHaveBeenCalled();
+  });
+
+  it("400 when the unit belongs to another property", async () => {
+    const UNIT_ID = makeObjectId("unit");
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: TENANT_ID, role: "tenant" })));
+    property.findById.mockReturnValue(buildQuery(availablePropertyDoc()));
+    application.findOne.mockReturnValue(buildQuery(null));
+    unit.findById.mockReturnValue(
+      buildQuery({ _id: UNIT_ID, propertyId: makeObjectId("other"), status: "available" }),
+    );
+
+    const res = await POST(
+      buildRequest("/api/v1/applications", {
+        method: "POST",
+        token: signToken(TENANT_ID),
+        body: { propertyId: PROP_ID, unitId: UNIT_ID, name: "Amina", email: "amina@keja.co" },
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(application.create).not.toHaveBeenCalled();
+  });
+
+  it("409 when the requested unit is no longer available", async () => {
+    const UNIT_ID = makeObjectId("unit");
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: TENANT_ID, role: "tenant" })));
+    property.findById.mockReturnValue(buildQuery(availablePropertyDoc()));
+    application.findOne.mockReturnValue(buildQuery(null));
+    unit.findById.mockReturnValue(
+      buildQuery({ _id: UNIT_ID, propertyId: PROP_ID, status: "occupied" }),
+    );
+
+    const res = await POST(
+      buildRequest("/api/v1/applications", {
+        method: "POST",
+        token: signToken(TENANT_ID),
+        body: { propertyId: PROP_ID, unitId: UNIT_ID, name: "Amina", email: "amina@keja.co" },
+      }),
+    );
+    expect(res.status).toBe(409);
+    expect(application.create).not.toHaveBeenCalled();
   });
 });

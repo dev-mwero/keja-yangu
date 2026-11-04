@@ -1,11 +1,13 @@
 "use client";
 
-import { DoorOpen, Loader2, Plus, Users } from "lucide-react";
+import { CheckCircle2, Clock, Copy, DoorOpen, Loader2, Plus, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { CountryCodeSelect } from "@/components/account/CountryCodeSelect";
 import { DashboardShell } from "@/components/DashboardShell";
 import { SearchInput } from "@/components/SearchInput";
+import { StatCard } from "@/components/StatCard";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -48,12 +50,15 @@ import type { DashNavItem } from "@/config/dashboardNav";
 import { useProperties } from "@/hooks/use-properties";
 import {
   type Tenant,
+  type TenantInput,
   type TenantStatus,
+  type TenantType,
   useTenantMutations,
   useTenants,
 } from "@/hooks/use-tenants";
 import { useUnits } from "@/hooks/use-units";
 import { formatDate } from "@/lib/format";
+import { DEFAULT_COUNTRY, formatPhone, isValidE164, parsePhone, toE164 } from "@/lib/phone";
 import { matchesQuery } from "@/lib/search";
 
 type StatusFilter = "all" | TenantStatus;
@@ -63,6 +68,7 @@ interface TenantFormState {
   email: string;
   phone: string;
   propertyId: string;
+  type: TenantType;
   status: TenantStatus;
   notes: string;
 }
@@ -72,6 +78,7 @@ const emptyForm: TenantFormState = {
   email: "",
   phone: "",
   propertyId: "",
+  type: "residential",
   status: "pending",
   notes: "",
 };
@@ -112,8 +119,11 @@ export const TenantsManager = ({
   const [formErrors, setFormErrors] = useState<{
     name?: string;
     email?: string;
+    phone?: string;
     propertyId?: string;
   }>({});
+  const [dial, setDial] = useState(DEFAULT_COUNTRY.dial);
+  const [credentials, setCredentials] = useState<{ phone: string; password: string } | null>(null);
   const [deleting, setDeleting] = useState<Tenant | null>(null);
   const [assigning, setAssigning] = useState<Tenant | null>(null);
   const [assignUnitId, setAssignUnitId] = useState("");
@@ -160,17 +170,21 @@ export const TenantsManager = ({
   const openCreate = () => {
     setEditing(null);
     setForm({ ...emptyForm, status: "pending" });
+    setDial(DEFAULT_COUNTRY.dial);
     setFormErrors({});
     setDialogOpen(true);
   };
 
   const openEdit = (tenant: Tenant) => {
+    const phone = parsePhone(tenant.phone ?? "");
     setEditing(tenant);
+    setDial(phone?.country.dial ?? DEFAULT_COUNTRY.dial);
     setForm({
       name: tenant.name,
-      email: tenant.email,
-      phone: tenant.phone ?? "",
+      email: tenant.email ?? "",
+      phone: phone?.national ?? "",
       propertyId: tenant.propertyId ?? "",
+      type: tenant.type ?? "residential",
       status: tenant.status,
       notes: tenant.notes ?? "",
     });
@@ -179,12 +193,18 @@ export const TenantsManager = ({
   };
 
   const validate = (): boolean => {
-    const next: { name?: string; email?: string; propertyId?: string } = {};
+    const next: { name?: string; email?: string; phone?: string; propertyId?: string } = {};
+    const email = form.email.trim();
+    const nationalPhone = form.phone.trim();
+    const phone = nationalPhone ? toE164(dial, nationalPhone) : "";
     if (!form.name.trim()) next.name = "Name is required";
-    if (!form.email.trim()) {
-      next.email = "Email is required";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+    if (!email && !phone) {
+      next.email = "Provide an email or phone";
+    } else if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       next.email = "Enter a valid email";
+    }
+    if (nationalPhone && !isValidE164(phone)) {
+      next.phone = "Enter a valid phone number";
     }
     if (!form.propertyId) next.propertyId = "Select a property";
     setFormErrors(next);
@@ -193,25 +213,33 @@ export const TenantsManager = ({
 
   const handleSubmit = async () => {
     if (!validate()) return;
-    const input = {
+    const email = form.email.trim().toLowerCase() || undefined;
+    const phone = form.phone.trim() ? toE164(dial, form.phone) : undefined;
+    const input: TenantInput = {
       name: form.name.trim(),
-      email: form.email.trim().toLowerCase(),
-      phone: form.phone.trim() || undefined,
+      email,
+      phone,
       propertyId: form.propertyId,
+      type: form.type,
       notes: form.notes.trim() || undefined,
     };
     try {
       if (editing) {
         await updateTenant(editing._id, {
           ...input,
+          email: email ?? "",
+          phone: phone ?? "",
           ...(canSetStatus ? { status: form.status } : {}),
         });
         toast.success("Tenant updated", { description: `${input.name} was saved.` });
       } else {
-        await createTenant({
+        const result = await createTenant({
           ...input,
           ...(canSetStatus ? { status: form.status } : {}),
         });
+        if (result?.temporaryPassword) {
+          setCredentials({ phone: phone ?? "", password: result.temporaryPassword });
+        }
         toast.success("Tenant added", { description: `${input.name} was added.` });
       }
       setDialogOpen(false);
@@ -281,6 +309,18 @@ export const TenantsManager = ({
       title="Tenants"
       subtitle="Manage the tenants across your properties."
     >
+      <div className="mb-6 grid gap-4 md:grid-cols-4">
+        <StatCard label="Total tenants" value={loading ? "…" : counts.all} icon={Users} />
+        <StatCard label="Active" value={loading ? "…" : counts.active} icon={CheckCircle2} />
+        <StatCard label="Pending" value={loading ? "…" : counts.pending} icon={Clock} />
+        <StatCard
+          label="Without a unit"
+          value={loading ? "…" : tenants.filter((t) => !t.unit).length}
+          icon={DoorOpen}
+          hint="Not assigned yet"
+        />
+      </div>
+
       <div className="flex flex-wrap items-center justify-between gap-4">
         <Tabs value={tab} onValueChange={(v) => setTab(v as StatusFilter)}>
           <TabsList>
@@ -354,8 +394,20 @@ export const TenantsManager = ({
                     properties.find((p) => p._id === t.propertyId)?.title ?? t.propertyId;
                   return (
                     <TableRow key={t._id}>
-                      <TableCell className="font-medium">{t.name}</TableCell>
-                      <TableCell className="text-muted-foreground">{t.email}</TableCell>
+                      <TableCell className="font-medium">
+                        <div>{t.name}</div>
+                        <div className="mt-0.5">
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] font-normal capitalize px-1.5 py-0 text-muted-foreground"
+                          >
+                            {t.type ?? "residential"}
+                          </Badge>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {t.email ?? t.phone ?? "—"}
+                      </TableCell>
                       <TableCell className="text-muted-foreground">{propertyTitle}</TableCell>
                       <TableCell className="text-muted-foreground">
                         {t.unit ? `${t.unit.name} · ${t.unit.blockName}` : "—"}
@@ -441,48 +493,80 @@ export const TenantsManager = ({
               />
               {formErrors.name && <p className="text-xs text-destructive">{formErrors.name}</p>}
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="tenant-email">Email</Label>
-                <Input
-                  id="tenant-email"
-                  type="email"
-                  placeholder="you@keja.co"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                />
-                {formErrors.email && <p className="text-xs text-destructive">{formErrors.email}</p>}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="tenant-phone">Phone</Label>
-                <Input
-                  id="tenant-phone"
-                  placeholder="+254 7xx xxx xxx"
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                />
+            <div className="space-y-2">
+              <Label>Email or phone</Label>
+              <p className="text-xs text-muted-foreground">
+                Provide at least one. A phone-only tenant gets a temporary password you can share.
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Input
+                    aria-label="Email"
+                    type="email"
+                    placeholder="you@keja.co"
+                    value={form.email}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  />
+                  {formErrors.email && (
+                    <p className="text-xs text-destructive">{formErrors.email}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <CountryCodeSelect value={dial} onChange={setDial} />
+                    <Input
+                      aria-label="Phone"
+                      id="tenant-phone"
+                      inputMode="tel"
+                      placeholder="712 345 678"
+                      value={form.phone}
+                      onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    />
+                  </div>
+                  {formErrors.phone && (
+                    <p className="text-xs text-destructive">{formErrors.phone}</p>
+                  )}
+                </div>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Property</Label>
-              <Select
-                value={form.propertyId}
-                onValueChange={(v) => setForm({ ...form, propertyId: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select property" />
-                </SelectTrigger>
-                <SelectContent>
-                  {propertyOptions.map((p) => (
-                    <SelectItem key={p._id} value={p._id}>
-                      {p.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {formErrors.propertyId && (
-                <p className="text-xs text-destructive">{formErrors.propertyId}</p>
-              )}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Property</Label>
+                <Select
+                  value={form.propertyId}
+                  onValueChange={(v) => setForm({ ...form, propertyId: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select property" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {propertyOptions.map((p) => (
+                      <SelectItem key={p._id} value={p._id}>
+                        {p.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {formErrors.propertyId && (
+                  <p className="text-xs text-destructive">{formErrors.propertyId}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label>Tenant Type</Label>
+                <Select
+                  value={form.type}
+                  onValueChange={(v) => setForm({ ...form, type: v as TenantType })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="residential">Residential</SelectItem>
+                    <SelectItem value="commercial">Commercial</SelectItem>
+                    <SelectItem value="owning">Owning</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             {canSetStatus && (
               <div className="space-y-2">
@@ -525,6 +609,49 @@ export const TenantsManager = ({
             <Button className="rounded-full" disabled={pending} onClick={handleSubmit}>
               {pending && <Loader2 className="h-4 w-4 animate-spin" />}
               {editing ? "Save changes" : "Add tenant"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={credentials !== null}
+        onOpenChange={(next) => {
+          if (!next) setCredentials(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Temporary password</DialogTitle>
+            <DialogDescription>
+              Share these sign-in details with the tenant once. The password cannot be shown again.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 rounded-xl border border-border bg-muted/40 p-4 text-sm">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Phone</p>
+              <p className="font-medium">{formatPhone(credentials?.phone ?? "")}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Password</p>
+              <p className="break-all font-mono">{credentials?.password}</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              className="rounded-full"
+              onClick={() => {
+                if (!credentials) return;
+                void navigator.clipboard?.writeText(credentials.password);
+                toast.success("Password copied");
+              }}
+            >
+              <Copy className="h-4 w-4" />
+              Copy password
+            </Button>
+            <Button className="rounded-full" onClick={() => setCredentials(null)}>
+              Done
             </Button>
           </DialogFooter>
         </DialogContent>

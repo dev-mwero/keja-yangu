@@ -12,10 +12,18 @@ vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 vi.mock("@/models/MoveRequest", () => ({ MoveRequest: getModelStubs().moverrequest }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
+vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
+vi.mock("@/lib/notifications", () => ({
+  notifyMoveRequestCreated: vi.fn().mockResolvedValue(true),
+}));
 
 import { GET, POST } from "@/app/api/v1/move-requests/route";
+import { notifyMoveRequestCreated } from "@/lib/notifications";
 
-const { user, property, tenant, unit, moverrequest } = getModelStubs();
+const { user, property, tenant, unit, moverrequest, managementAssignment } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CUSTODIAN_ID = makeObjectId("custodian");
@@ -88,6 +96,31 @@ describe("GET /api/v1/move-requests", () => {
     });
   });
 
+  it("scopes an admin to move-requests on assigned properties or units", async () => {
+    const ADMIN_ID = makeObjectId("admin");
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: ADMIN_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          permissions: ["move-request:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    listResult([]);
+
+    const res = await GET(buildRequest("/api/v1/move-requests", { token: signToken(ADMIN_ID) }));
+    expect(res.status).toBe(200);
+    expect(moverrequest.find).toHaveBeenCalledWith({
+      $or: [{ propertyId: { $in: [PROP_ID] } }],
+    });
+  });
+
   it("enriches results with property titles and requester names", async () => {
     user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
     const mr = {
@@ -139,8 +172,11 @@ describe("GET /api/v1/move-requests", () => {
 });
 
 describe("POST /api/v1/move-requests", () => {
+  const notifyMoveRequestCreatedMock = vi.mocked(notifyMoveRequestCreated);
+
   beforeEach(() => {
     resetModelStubs();
+    notifyMoveRequestCreatedMock.mockReset().mockResolvedValue(true);
   });
 
   it("401 when unauthenticated", async () => {
@@ -204,6 +240,7 @@ describe("POST /api/v1/move-requests", () => {
         status: "pending",
       }),
     );
+    expect(notifyMoveRequestCreatedMock).toHaveBeenCalledTimes(1);
   });
 
   it("lets a tenant file by email match and heals the tenancy link", async () => {
@@ -236,6 +273,7 @@ describe("POST /api/v1/move-requests", () => {
     expect(moverrequest.create).toHaveBeenCalledWith(
       expect.objectContaining({ tenantId: TENANT_DOC_ID, ownerId: OWNER_ID }),
     );
+    expect(notifyMoveRequestCreatedMock).toHaveBeenCalledTimes(1);
   });
 
   it("lets an owner file against their own property", async () => {
@@ -258,6 +296,7 @@ describe("POST /api/v1/move-requests", () => {
         requestedByRole: "owner",
       }),
     );
+    expect(notifyMoveRequestCreatedMock).toHaveBeenCalledTimes(1);
   });
 
   it("403 when an owner files against a foreign property", async () => {
@@ -272,6 +311,7 @@ describe("POST /api/v1/move-requests", () => {
       }),
     );
     expect(res.status).toBe(403);
+    expect(notifyMoveRequestCreatedMock).not.toHaveBeenCalled();
   });
 
   it("lets a custodian file against their managing owner's property", async () => {
@@ -289,5 +329,6 @@ describe("POST /api/v1/move-requests", () => {
       }),
     );
     expect(res.status).toBe(201);
+    expect(notifyMoveRequestCreatedMock).toHaveBeenCalledTimes(1);
   });
 });

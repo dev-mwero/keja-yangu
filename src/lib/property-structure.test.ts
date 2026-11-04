@@ -45,7 +45,7 @@ function unitsFor(
         name: `${prefix}${letter}`,
         letter,
         status: isOccupied ? "occupied" : "available",
-        tenantId: isOccupied ? "tenant-1" : "",
+        tenantId: isOccupied ? ["tenant-1"] : [],
       });
     }
   });

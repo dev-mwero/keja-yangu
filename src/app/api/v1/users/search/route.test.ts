@@ -103,11 +103,7 @@ describe("GET /api/v1/users/search", () => {
       isActive: true,
       hasVerifiedEmail: true,
     });
-    expect(user.findOne).toHaveBeenCalledWith(
-      expect.objectContaining({
-        email: expect.objectContaining({ $regex: expect.any(RegExp) }),
-      }),
-    );
+    expect(user.findOne).toHaveBeenCalledWith({ email: "found@keja.co" });
   });
 
   it("returns an empty array when nothing matches", async () => {
@@ -118,5 +114,106 @@ describe("GET /api/v1/users/search", () => {
     );
     expect(res.status).toBe(200);
     expect((await json(res)).data).toEqual([]);
+    expect(user.findOne).toHaveBeenCalledWith({ phone: "+254712345678" });
+  });
+
+  it("allows a custodian to check an existing caretaker for their owner", async () => {
+    const custodian = makeUser({
+      _id: makeObjectId("custodian"),
+      role: "custodian",
+      managedByOwnerId: OWNER_ID,
+    });
+    const found = makeUser({
+      _id: makeObjectId("found-caretaker"),
+      name: "Existing Caretaker",
+      email: "care@keja.co",
+      role: "caretaker",
+      managedByOwnerId: OWNER_ID,
+      isActive: true,
+      isVerified: true,
+    });
+    user.findById.mockReturnValue(buildQuery(custodian));
+    user.findOne.mockReturnValue(buildQuery(found));
+
+    const res = await GET(
+      buildRequest("/api/v1/users/search", {
+        token: signToken(custodian._id),
+        query: { email: found.email ?? "", role: "caretaker" },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect((await json(res)).data).toEqual([
+      expect.objectContaining({
+        id: found._id,
+        role: "caretaker",
+        canLink: true,
+      }),
+    ]);
+  });
+
+  it("marks a matching account as not linkable when its role differs", async () => {
+    const found = makeUser({
+      _id: makeObjectId("found-tenant"),
+      email: "tenant@keja.co",
+      role: "tenant",
+    });
+    user.findOne.mockReturnValue(buildQuery(found));
+
+    const res = await GET(
+      buildRequest("/api/v1/users/search", {
+        token: signToken(OWNER_ID),
+        query: { email: "tenant@keja.co", role: "caretaker" },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect((await json(res)).data).toEqual([
+      expect.objectContaining({
+        role: "tenant",
+        canLink: false,
+        linkReason: "This contact is already registered to a different role.",
+      }),
+    ]);
+  });
+
+  it("returns a conflict if email and phone belong to different accounts", async () => {
+    const emailUser = makeUser({ _id: makeObjectId("email-user"), email: "a@keja.co" });
+    const phoneUser = makeUser({ _id: makeObjectId("phone-user"), phone: "+254712345678" });
+    user.findOne
+      .mockReturnValueOnce(buildQuery(emailUser))
+      .mockReturnValueOnce(buildQuery(phoneUser));
+
+    const res = await GET(
+      buildRequest("/api/v1/users/search", {
+        token: signToken(OWNER_ID),
+        query: { email: "a@keja.co", phone: "+254712345678", role: "caretaker" },
+      }),
+    );
+
+    expect(res.status).toBe(409);
+    expect((await json(res)).error).toBe("Email and phone belong to different accounts");
+  });
+
+  it("forbids a custodian from searching outside their owner's portfolio", async () => {
+    const custodian = makeUser({
+      _id: makeObjectId("custodian"),
+      role: "custodian",
+      managedByOwnerId: OWNER_ID,
+    });
+    user.findById.mockReturnValue(buildQuery(custodian));
+
+    const res = await GET(
+      buildRequest("/api/v1/users/search", {
+        token: signToken(custodian._id),
+        query: {
+          email: "care@keja.co",
+          ownerId: makeObjectId("other-owner"),
+          role: "caretaker",
+        },
+      }),
+    );
+
+    expect(res.status).toBe(403);
   });
 });

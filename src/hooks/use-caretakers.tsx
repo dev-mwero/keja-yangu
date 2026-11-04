@@ -5,25 +5,53 @@ import { useCallback, useEffect, useState } from "react";
 export interface CaretakerRow {
   id: string;
   name: string;
-  email: string;
+  email?: string;
+  phone?: string;
   managedByOwnerId: string;
   privileges: string[];
   propertyCount: number;
 }
 
-export function useCaretakers() {
+export interface CaretakerInviteInput {
+  email?: string;
+  name?: string;
+  phone?: string;
+  ownerId?: string;
+  privileges?: string[];
+}
+
+export interface CaretakerInviteResult {
+  member: CaretakerRow;
+  linked?: boolean;
+  /** One-time password for a phone-only account. */
+  temporaryPassword?: string;
+}
+
+export function useCaretakers(ownerId?: string, enabled = true, forPropertyAssignment = false) {
   const [caretakers, setCaretakers] = useState<CaretakerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
+    if (!enabled) {
+      setCaretakers([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
     let cancelled = false;
     void reload;
     const fetchCaretakers = async () => {
       setLoading(true);
       try {
-        const res = await fetch("/api/v1/caretakers");
+        const params = new URLSearchParams();
+        if (ownerId) params.set("ownerId", ownerId);
+        if (forPropertyAssignment) params.set("forPropertyAssignment", "true");
+        const queryString = params.toString();
+        const query = queryString ? `?${queryString}` : "";
+        const res = await fetch(`/api/v1/caretakers${query}`);
         const json = await res.json();
         if (cancelled) return;
         if (res.ok) {
@@ -42,11 +70,43 @@ export function useCaretakers() {
     return () => {
       cancelled = true;
     };
-  }, [reload]);
+  }, [enabled, forPropertyAssignment, ownerId, reload]);
 
   const refetch = useCallback(() => setReload((n) => n + 1), []);
 
   return { caretakers, loading, error, refetch };
+}
+
+export function useCaretakerMutations() {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const inviteCaretaker = async (input: CaretakerInviteInput): Promise<CaretakerInviteResult> => {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/v1/caretakers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        const message = json.error || "Failed to invite caretaker";
+        setError(message);
+        throw new Error(message);
+      }
+      return {
+        member: json.data as CaretakerRow,
+        linked: json.linked === true,
+        temporaryPassword: typeof json.password === "string" ? json.password : undefined,
+      };
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return { inviteCaretaker, pending, error };
 }
 
 export function useUpdateCaretakerPrivileges() {

@@ -1,0 +1,54 @@
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
+import { connectToDatabase } from "@/lib/mongoose";
+import { buildPaginationResult, parsePagination } from "@/lib/pagination";
+import { authenticate, getAdminAssignmentScope } from "@/lib/permissions";
+import { Attribution } from "@/models/Attribution";
+import { User } from "@/models/User";
+
+export async function GET(request: NextRequest) {
+  const auth = authenticate(request);
+  if (!auth) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  await connectToDatabase();
+  const user = await User.findById(auth.userId).select("role isActive").lean();
+  if (!user?.isActive) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (user.role !== "admin" && user.role !== "system-admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { page, limit } = parsePagination({
+    page: request.nextUrl.searchParams.get("page") ?? undefined,
+    limit: request.nextUrl.searchParams.get("limit") ?? undefined,
+  });
+  const skip = (page - 1) * limit;
+
+  const filter: Record<string, unknown> = {};
+  const status = request.nextUrl.searchParams.get("status");
+  if (status) filter.status = status;
+
+  const brokerUserId = request.nextUrl.searchParams.get("brokerUserId");
+  if (brokerUserId) filter.brokerUserId = brokerUserId;
+
+  const propertyId = request.nextUrl.searchParams.get("propertyId");
+  if (propertyId) filter.propertyId = propertyId;
+
+  if (user.role === "admin") {
+    const scope = await getAdminAssignmentScope(String(user._id), "application:manage");
+    if (scope.propertyScopeIds.length === 0) {
+      return NextResponse.json(buildPaginationResult([], 0, page, limit));
+    }
+    filter.propertyId = { $in: scope.propertyScopeIds };
+  }
+
+  const [items, total] = await Promise.all([
+    Attribution.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+    Attribution.countDocuments(filter),
+  ]);
+
+  return NextResponse.json(buildPaginationResult(items, total, page, limit));
+}

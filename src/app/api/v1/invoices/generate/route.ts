@@ -1,6 +1,12 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { isDuplicateKeyError, readJsonBody, resolveInvoiceActor } from "@/app/api/v1/_helpers";
+import {
+  isDuplicateKeyError,
+  isInvoiceNumberCollision,
+  readJsonBody,
+  resolveInvoiceActor,
+} from "@/app/api/v1/_helpers";
+import { billingFieldsFromAccount, loadBillingAccountLookup } from "@/lib/billing-accounts";
 import { generateForPeriod } from "@/lib/invoice-generation";
 import { nextInvoiceNumber } from "@/lib/invoice-numbering";
 import { currentPeriod } from "@/lib/invoicing";
@@ -9,8 +15,10 @@ import { DAY_IN_MS, notifyLeaseExpiry } from "@/lib/notifications";
 import { requirePermission } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { invoiceGenerateInput } from "@/lib/schemas";
+import { loadServiceFeesForUnits, type UnitServiceFee } from "@/lib/service-fees";
 import { Invoice } from "@/models/Invoice";
 import { Lease } from "@/models/Lease";
+import { Tenant } from "@/models/Tenant";
 
 export async function POST(request: NextRequest) {
   const limit = await rateLimit(request, { windowMs: 60_000, limit: 20 });
@@ -33,7 +41,7 @@ export async function POST(request: NextRequest) {
 
   await connectToDatabase();
 
-  const actor = await resolveInvoiceActor(request);
+  const actor = await resolveInvoiceActor(request, "invoice:generate");
   if (actor instanceof NextResponse) return actor;
 
   const now = new Date();
@@ -57,12 +65,35 @@ export async function POST(request: NextRequest) {
     filter.propertyId = { $in: actor.assignedPropertyIds };
     filter.ownerId = actor.managedByOwnerId;
   }
+  if (actor.role === "admin") {
+    const scopes: Record<string, unknown>[] = [];
+    if (actor.propertyScopeIds.length > 0) {
+      scopes.push({ propertyId: { $in: actor.propertyScopeIds } });
+    }
+    if (actor.assignedUnitIds.length > 0) {
+      scopes.push({ unitId: { $in: actor.assignedUnitIds } });
+    }
+    if (scopes.length === 0) {
+      return NextResponse.json({ data: { generatedCount: 0, invoices: [] } }, { status: 201 });
+    }
+    filter.$or = scopes;
+  }
 
   const leases = await Lease.find(filter).lean();
   const leaseIds = leases.map((lease) => String(lease._id));
   const existing = await Invoice.find({ leaseId: { $in: leaseIds }, period })
     .select("leaseId")
     .lean();
+
+  // Batch-resolve each lease's itemized service fee so generated invoices
+  // carry the rent / service-fee snapshot without an N+1 query per lease.
+  const unitIds = [...new Set(leases.map((l) => l.unitId).filter(Boolean))] as string[];
+  const serviceFeeByUnitId = await loadServiceFeesForUnits(unitIds);
+  const unitChargeByLeaseId = new Map<string, UnitServiceFee>();
+  for (const lease of leases) {
+    const fee = lease.unitId ? serviceFeeByUnitId.get(String(lease.unitId)) : undefined;
+    if (fee) unitChargeByLeaseId.set(String(lease._id), fee);
+  }
 
   // Lazy lease-expiry seam: notify owners, their caretakers and the tenant
   // when a lease ends within the next 30 days. Dedupe keeps repeat generations
@@ -88,19 +119,69 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const { toCreate, skipped } = generateForPeriod({ leases, existing, period, now });
+  const tenantIds = [...new Set(leases.map((lease) => String(lease.tenantId)))];
+  const tenants =
+    tenantIds.length > 0
+      ? await Tenant.find({ _id: { $in: tenantIds } })
+          .select("_id type")
+          .lean()
+      : [];
+  const tenantTypeById = new Map<string, "residential" | "commercial" | "owning">();
+  for (const tenant of tenants as Array<{
+    _id: unknown;
+    type?: "residential" | "commercial" | "owning";
+  }>) {
+    tenantTypeById.set(String(tenant._id), tenant.type ?? "residential");
+  }
+  const leasesWithTenantType = leases.map((lease) => ({
+    ...lease,
+    tenantType: tenantTypeById.get(String(lease.tenantId)) ?? "residential",
+  }));
+
+  const { toCreate, skipped } = generateForPeriod({
+    leases: leasesWithTenantType,
+    existing,
+    period,
+    now,
+    unitChargeByLeaseId,
+  });
+
+  const billingLookup = await loadBillingAccountLookup({
+    unitIds,
+    billingAccountIds: leases.map((lease) => lease.billingAccountId),
+    ownerIds: leases.map((lease) => lease.ownerId),
+  });
 
   let created = 0;
   let skippedCount = skipped.length;
   for (const draft of toCreate) {
-    draft.invoiceNumber = await nextInvoiceNumber(draft.ownerId, period);
-    try {
-      await Invoice.create(draft);
-      created += 1;
-    } catch (error) {
-      if (!isDuplicateKeyError(error)) throw error;
-      skippedCount += 1;
+    const account =
+      (draft.billingAccountId
+        ? billingLookup.byAccountId.get(draft.billingAccountId)
+        : undefined) ??
+      billingLookup.byUnitId.get(draft.unitId ?? "") ??
+      billingLookup.byOwnerId.get(draft.ownerId);
+    const billingFields = billingFieldsFromAccount(account);
+    if (billingFields) Object.assign(draft, billingFields);
+
+    // The unique invoiceNumber index is the backstop for a lost counter race:
+    // reserve again and retry, but treat any other duplicate as a skip.
+    let persisted = false;
+    for (let attempt = 0; attempt < 3 && !persisted; attempt += 1) {
+      draft.invoiceNumber = await nextInvoiceNumber(draft.ownerId, period, {
+        billingAccountId: draft.billingAccountId,
+      });
+      try {
+        await Invoice.create(draft);
+        persisted = true;
+        created += 1;
+      } catch (error) {
+        if (isInvoiceNumberCollision(error)) continue;
+        if (!isDuplicateKeyError(error)) throw error;
+        break;
+      }
     }
+    if (!persisted) skippedCount += 1;
   }
 
   console.info(

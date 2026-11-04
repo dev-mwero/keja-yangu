@@ -13,10 +13,13 @@ vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/PropertyDocument", () => ({
   PropertyDocument: getModelStubs().propertydocument,
 }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 
-import { GET } from "@/app/api/v1/documents/route";
+import { GET, POST } from "@/app/api/v1/documents/route";
 
-const { user, property, tenant, propertydocument } = getModelStubs();
+const { user, property, tenant, propertydocument, managementAssignment } = getModelStubs();
 
 const USER_ID = makeObjectId("user");
 const OWNER_ID = makeObjectId("owner");
@@ -108,6 +111,48 @@ describe("GET /api/v1/documents", () => {
     expect(propertydocument.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
   });
 
+  it("scopes an admin to property documents on assigned properties", async () => {
+    const ADMIN_ID = makeObjectId("document-admin");
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: ADMIN_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["document:read-own"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    propertydocument.find.mockReturnValue(buildQuery([]).sort({ createdAt: -1 }).skip(0).limit(20));
+    propertydocument.countDocuments.mockResolvedValue(0);
+    property.find.mockReturnValue(buildQuery([]));
+
+    const res = await GET(buildRequest("/api/v1/documents", { token: signToken(ADMIN_ID) }));
+
+    expect(res.status).toBe(200);
+    expect(propertydocument.find).toHaveBeenCalledWith({
+      $or: [{ scope: "property", propertyId: { $in: [PROPERTY_ID] } }],
+    });
+  });
+
+  it("custodian scopes to the managed owner's records", async () => {
+    const CUSTODIAN_ID = makeObjectId("document-custodian");
+    user.findById.mockReturnValue(
+      buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian", managedByOwnerId: OWNER_ID })),
+    );
+    propertydocument.find.mockReturnValue(buildQuery([]).sort({ createdAt: -1 }).skip(0).limit(20));
+    propertydocument.countDocuments.mockResolvedValue(0);
+    property.find.mockReturnValue(buildQuery([]));
+
+    const res = await GET(buildRequest("/api/v1/documents", { token: signToken(CUSTODIAN_ID) }));
+    expect(res.status).toBe(200);
+    expect(propertydocument.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
+  });
+
   it("caretaker scopes to the managed owner's assigned properties", async () => {
     const CARETAKER_ID = makeObjectId("document-caretaker");
     user.findById.mockReturnValue(
@@ -134,5 +179,138 @@ describe("GET /api/v1/documents", () => {
     const body = await json(res);
     expect(body.data).toEqual([]);
     expect(propertydocument.find).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/v1/documents", () => {
+  beforeEach(() => {
+    resetModelStubs();
+  });
+
+  it("401 when unauthenticated", async () => {
+    const res = await POST(buildRequest("/api/v1/documents", { method: "POST", body: {} }));
+    expect(res.status).toBe(401);
+  });
+
+  it("403 when a tenant creates a document", async () => {
+    user.findById.mockReturnValue(buildQuery(tenantUser()));
+    tenant.find.mockReturnValue(buildQuery([]));
+
+    const res = await POST(
+      buildRequest("/api/v1/documents", {
+        method: "POST",
+        token: signToken(USER_ID),
+        body: { name: "Lease", category: "lease" },
+      }),
+    );
+    expect(res.status).toBe(403);
+    expect(propertydocument.create).not.toHaveBeenCalled();
+  });
+
+  it("400 for an invalid payload", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerUser()));
+
+    const res = await POST(
+      buildRequest("/api/v1/documents", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { name: "", category: "lease" },
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(propertydocument.create).not.toHaveBeenCalled();
+  });
+
+  it("400 when a tenant-scope document omits the tenant", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerUser()));
+
+    const res = await POST(
+      buildRequest("/api/v1/documents", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { name: "Lease", category: "lease", scope: "tenant" },
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(propertydocument.create).not.toHaveBeenCalled();
+  });
+
+  it("owner creates a portfolio-wide document stamped to their account", async () => {
+    user.findById
+      .mockReturnValueOnce(buildQuery(ownerUser()))
+      .mockReturnValueOnce(buildQuery(ownerUser()))
+      .mockReturnValueOnce(buildQuery({ _id: OWNER_ID, name: "Test Owner" }));
+    const created = makeDocument({
+      _id: DOC_ID,
+      ownerId: OWNER_ID,
+      propertyId: "",
+      tenantId: "",
+      scope: "landlord",
+      name: "2026 lease template",
+      category: "lease",
+      uploadedById: OWNER_ID,
+      uploadedByName: "Test Owner",
+      sizeLabel: "—",
+    });
+    propertydocument.create.mockResolvedValue(created);
+    propertydocument.findById.mockReturnValue(buildQuery(created));
+    property.find.mockReturnValue(buildQuery([]));
+
+    const res = await POST(
+      buildRequest("/api/v1/documents", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { name: "2026 lease template", category: "lease" },
+      }),
+    );
+
+    expect(res.status).toBe(201);
+    expect(propertydocument.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "2026 lease template",
+        ownerId: OWNER_ID,
+        scope: "landlord",
+        propertyId: "",
+        uploadedById: OWNER_ID,
+        uploadedByName: "Test Owner",
+      }),
+    );
+    const body = await json(res);
+    expect((body.data as { _id?: string })._id).toBe(DOC_ID);
+  });
+
+  it("404 when the owner targets a property that does not exist", async () => {
+    user.findById
+      .mockReturnValueOnce(buildQuery(ownerUser()))
+      .mockReturnValueOnce(buildQuery(ownerUser()));
+    property.findById.mockReturnValue(buildQuery(null));
+
+    const res = await POST(
+      buildRequest("/api/v1/documents", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { name: "Lease", category: "lease", scope: "property", propertyId: PROPERTY_ID },
+      }),
+    );
+    expect(res.status).toBe(404);
+    await expect(json(res)).resolves.toEqual({ error: "Property not found" });
+    expect(propertydocument.create).not.toHaveBeenCalled();
+  });
+
+  it("403 when the owner targets another owner's property", async () => {
+    user.findById
+      .mockReturnValueOnce(buildQuery(ownerUser()))
+      .mockReturnValueOnce(buildQuery(ownerUser()));
+    property.findById.mockReturnValue(buildQuery({ _id: PROPERTY_ID, ownerId: USER_ID }));
+
+    const res = await POST(
+      buildRequest("/api/v1/documents", {
+        method: "POST",
+        token: signToken(OWNER_ID),
+        body: { name: "Lease", category: "lease", scope: "property", propertyId: PROPERTY_ID },
+      }),
+    );
+    expect(res.status).toBe(403);
+    expect(propertydocument.create).not.toHaveBeenCalled();
   });
 });

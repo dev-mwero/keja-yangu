@@ -1,11 +1,15 @@
 import { computeDueDate, periodRange } from "@/lib/invoicing";
+import type { ServiceFeeBreakdownItem, UnitServiceFee } from "@/lib/service-fees";
 
 export interface InvoiceLease {
   _id?: string | { toString(): string };
   id?: string;
   tenantId: string;
+  tenantType?: "residential" | "commercial" | "owning";
   propertyId: string;
   ownerId: string;
+  unitId?: string;
+  billingAccountId?: string;
   rentAmount: number;
   frequency: string;
   startDate: Date;
@@ -19,16 +23,27 @@ export interface InvoiceDraft {
   tenantId: string;
   propertyId: string;
   leaseId: string;
+  unitId?: string;
   ownerId: string;
+  billingAccountId?: string;
+  billingAdminId?: string;
+  billingSnapshot?: {
+    legalEntityName?: string;
+    invoicePrefix?: string;
+  };
   period: string;
   amountDue: number;
   amountPaid: number;
   status: "pending";
   dueDate: Date;
   issuedAt: Date;
+  rentAmount: number;
+  serviceChargeAmount: number;
+  rentIncludesServiceCharge: boolean;
+  serviceFeeItems: ServiceFeeBreakdownItem[];
 }
 
-export type SkipReason = "already-generated" | "non-monthly" | "ended" | "future";
+export type SkipReason = "already-generated" | "non-monthly" | "ended" | "future" | "owning-tenant";
 
 export interface SkippedLease {
   leaseId: string;
@@ -44,20 +59,66 @@ export interface GenerateResult {
  * Builds the draft doc for one lease-month. `invoiceNumber` is left as `""` —
  * numbering needs the atomic counter, so the route assigns it afterwards via
  * `nextInvoiceNumber`.
+ *
+ * When `serviceFee` is supplied, `amountDue` and the rent/service-fee
+ * breakdown reflect the unit's configuration:
+ *  - legacy inclusive rent: `amountDue = rentAmount` (the collected total) and
+ *    the service fee is the agreed share of that total.
+ *  - separate billing: `amountDue = rentAmount + serviceFee.total`.
+ * Without `serviceFee`, `amountDue = rentAmount` and the service fee is 0.
  */
-export function buildInvoiceForLease(lease: InvoiceLease, period: string, now: Date): InvoiceDraft {
+export function buildInvoiceForLease(
+  lease: InvoiceLease,
+  period: string,
+  now: Date,
+  serviceFee: UnitServiceFee | null = null,
+): InvoiceDraft {
+  const rentAmount = lease.rentAmount;
+  let amountDue: number;
+  let rentAmountField: number;
+  let serviceChargeAmountField: number;
+  let rentIncludesServiceCharge = false;
+  let serviceFeeItems: ServiceFeeBreakdownItem[] = [];
+
+  if (serviceFee) {
+    rentIncludesServiceCharge = serviceFee.rentIncludesServiceCharge;
+    if (rentIncludesServiceCharge) {
+      // Legacy inclusive rent: preserve the collected total and split it by
+      // the agreed percentages until the lease is renewed.
+      amountDue = rentAmount;
+      rentAmountField = Math.round(rentAmount * (serviceFee.rentSharePercent / 100));
+      serviceChargeAmountField = rentAmount - rentAmountField;
+    } else {
+      // Modern billing: rent and itemized service fee are separate lines.
+      serviceChargeAmountField = serviceFee.total;
+      amountDue = rentAmount + serviceChargeAmountField;
+      rentAmountField = rentAmount;
+      serviceFeeItems = serviceFee.breakdown;
+    }
+  } else {
+    amountDue = rentAmount;
+    rentAmountField = rentAmount;
+    serviceChargeAmountField = 0;
+  }
+
   return {
     invoiceNumber: "",
     tenantId: lease.tenantId,
     propertyId: lease.propertyId,
     leaseId: leaseIdOf(lease),
+    unitId: lease.unitId ?? "",
     ownerId: lease.ownerId,
+    billingAccountId: lease.billingAccountId ?? "",
     period,
-    amountDue: lease.rentAmount,
+    amountDue,
     amountPaid: 0,
     status: "pending",
     dueDate: computeDueDate(period),
     issuedAt: now,
+    rentAmount: rentAmountField,
+    serviceChargeAmount: serviceChargeAmountField,
+    rentIncludesServiceCharge,
+    serviceFeeItems,
   };
 }
 
@@ -76,14 +137,21 @@ export function generateForPeriod(input: {
   existing: Array<{ leaseId: string }>;
   period: string;
   now: Date;
+  // Optional per-lease service-fee breakdown, keyed by lease id.
+  unitChargeByLeaseId?: Map<string, UnitServiceFee>;
 }): GenerateResult {
   const { start: periodStart, end: periodEnd } = periodRange(input.period);
   const existingIds = new Set(input.existing.map((invoice) => invoice.leaseId));
   const toCreate: InvoiceDraft[] = [];
   const skipped: SkippedLease[] = [];
+  const unitChargeByLeaseId = input.unitChargeByLeaseId ?? new Map();
 
   for (const lease of input.leases) {
     const leaseId = leaseIdOf(lease);
+    if (lease.tenantType === "owning") {
+      skipped.push({ leaseId, reason: "owning-tenant" });
+      continue;
+    }
     if (existingIds.has(leaseId)) {
       skipped.push({ leaseId, reason: "already-generated" });
       continue;
@@ -103,7 +171,14 @@ export function generateForPeriod(input: {
       skipped.push({ leaseId, reason: "future" });
       continue;
     }
-    toCreate.push(buildInvoiceForLease(lease, input.period, input.now));
+    toCreate.push(
+      buildInvoiceForLease(
+        lease,
+        input.period,
+        input.now,
+        unitChargeByLeaseId.get(leaseId) ?? null,
+      ),
+    );
   }
 
   return { toCreate, skipped };

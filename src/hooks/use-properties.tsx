@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-
+import type { PropertyPurpose } from "@/lib/domain-enums";
 import type { PropertyStatus, PropertyType } from "@/lib/property-types";
 
-export type { PropertyStatus };
+export type { PropertyPurpose, PropertyStatus };
 
 export interface PropertyFloor {
   _id: string;
@@ -12,6 +12,7 @@ export interface PropertyFloor {
   label: string;
   unitsPerFloor: number;
   rentOverride: number | null;
+  purpose?: PropertyPurpose | null;
 }
 
 export interface PropertyBlock {
@@ -19,6 +20,7 @@ export interface PropertyBlock {
   name: string;
   order: number;
   rentOverride: number | null;
+  purpose?: PropertyPurpose | null;
   floors: PropertyFloor[];
 }
 
@@ -28,6 +30,7 @@ export interface FloorInputPayload {
   level: number;
   label?: string;
   rentOverride?: number | null;
+  purpose?: PropertyPurpose | null;
   unitsPerFloor: number;
   unitNames?: string[];
 }
@@ -37,6 +40,7 @@ export interface BlockInputPayload {
   id?: string;
   name: string;
   rentOverride?: number | null;
+  purpose?: PropertyPurpose | null;
   floors: FloorInputPayload[];
 }
 
@@ -50,11 +54,13 @@ export function toBlockPayloads(property: Pick<Property, "blocks">): BlockInputP
     id: block._id,
     name: block.name,
     rentOverride: block.rentOverride,
+    purpose: block.purpose,
     floors: block.floors.map((floor) => ({
       id: floor._id,
       level: floor.level,
       label: floor.label,
       rentOverride: floor.rentOverride,
+      purpose: floor.purpose,
       unitsPerFloor: floor.unitsPerFloor,
     })),
   }));
@@ -70,8 +76,11 @@ export interface Property {
   images: string[];
   amenities: string[];
   status: PropertyStatus;
+  dateCompleted?: string | null;
+  purpose?: PropertyPurpose;
   ownerId: string;
   caretakerIds: string[];
+  custodianIds?: string[];
   beds: number;
   baths: number;
   area: number;
@@ -88,10 +97,13 @@ export interface PropertyInput {
   images?: string[];
   amenities?: string[];
   status?: PropertyStatus;
+  dateCompleted?: string | null;
+  purpose?: PropertyPurpose;
   beds?: number;
   baths?: number;
   area?: number;
   caretakerIds?: string[];
+  custodianIds?: string[];
   targetOwnerId?: string;
   published?: boolean;
   blocks?: BlockInputPayload[];
@@ -154,6 +166,77 @@ export function useProperties(filters?: PropertyFilters) {
   const refetch = useCallback(() => setReload((n) => n + 1), []);
 
   return { properties, loading, error, refetch };
+}
+
+export interface PropertyUnit {
+  _id: string;
+  name: string;
+  letter?: string;
+  floorLevel: number;
+  floorLabel?: string;
+  blockName: string;
+  rent: number | null;
+  beds: number;
+  baths: number;
+  area: number;
+  status: string;
+}
+
+export interface PropertyDetail extends Property {
+  units: PropertyUnit[];
+}
+
+/**
+ * Fetches a single property together with its vacant units for the public
+ * property page. Unit details are loaded separately when a user expands the
+ * unit list; the initial property response stays compact.
+ */
+export function useProperty(id?: string) {
+  const [property, setProperty] = useState<PropertyDetail | null>(null);
+  const [loading, setLoading] = useState(Boolean(id));
+  const [error, setError] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
+
+  useEffect(() => {
+    if (!id) {
+      setProperty(null);
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    void reload;
+    const fetchProperty = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/v1/properties/${id}?includeUnits=0`);
+        const json = await res.json();
+        if (cancelled) return;
+        if (res.ok) {
+          setProperty(json.data as PropertyDetail);
+          setError(null);
+        } else {
+          setProperty(null);
+          setError(json.error || "Failed to fetch property");
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setProperty(null);
+          setError(err instanceof Error ? err.message : "Network error");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetchProperty();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, reload]);
+
+  const refetch = useCallback(() => setReload((n) => n + 1), []);
+  const units = property?.units ?? [];
+
+  return { property, units, loading, error, refetch };
 }
 
 export function usePropertyMutations() {

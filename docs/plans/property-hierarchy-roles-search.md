@@ -1,6 +1,7 @@
 # Keja Yangu — Property types, block/floor/unit hierarchy, roles & dashboard search
 
-Status: **Proposed — pending senior (Tier 2) ratification before build.**
+Status: **SUPERSEDED IN PART** — property types, the block/floor/unit hierarchy,
+and the custodian role/dashboard all shipped piecemeal (see §10 reconciliation).
 Owner: Orchestrix (workflow governor).
 
 > Planning note: the four Tier 1 agents (@code-analyst, @performance-engineer,
@@ -234,3 +235,28 @@ Build routing: hierarchy/wizard/RBAC/search are cross-cutting → `@developer-pr
 5. Custodian count per owner: many custodians allowed, owner-scoped (no per-property restriction for v1).
 6. Search scope: properties, units, tenants, leases, invoices, staff (role-scoped).
 7. Legacy/unit-less properties: allowed to remain unit-less (no forced backfill).
+
+## 11. Status reconciliation (verified against shipped code)
+
+**Shipped (superseded):**
+- Property types: `apartment | villa | bungalow` enum is the single source of truth
+  (`src/lib/property-types.ts`); `Property.type` defaults to `apartment`
+  (`src/models/Property.ts`).
+- Block/floor/unit hierarchy: `Property.blocks[].floors[]` (embedded subdocs with
+  `level`/`label`) plus the separate `Unit` collection, all CRUD and reconciliation
+  routes, and the structure editor wizard — shipped.
+- Custodian role: `custodian` in `User.role` enum, owner-scoped via `managedByOwnerId`,
+  `/api/v1/custodians` + privileges, `/dashboard/custodian/*` tree and nav — shipped.
+- Custodian adopts pre-created inactive accounts via the verify-email flow
+  (`POST /api/auth {action:"verify-email"}`) — shipped.
+
+**Still outstanding (the only live residuals):**
+- Amenities remain a free-text `string[]` (`Property.ts`) with **no predefined
+  pickable list** / `AmenityPicker` (plan §4.4).
+- **No dashboard search bar** — `DashboardShell`/`DashboardNav` contain no search
+  (plan §4.6, §6/F).
+
+**Deferred (intentionally, not regressions):**
+- `ChatThread.unitId` — intentionally deferred from `simplify-user-flows` Phase 6.
+- Tenant index change `{propertyId, email}` → `{unitId, email}` (§4.2) — depends on
+  unit-backed tenancies being universally adopted.

@@ -13,6 +13,8 @@ export { APPLICATION_STATUSES };
 const applicationSchema = new Schema(
   {
     propertyId: { type: String, required: true },
+    // The specific unit the applicant asked for; empty = property-level request.
+    unitId: { type: String, default: "" },
     ownerId: { type: String, required: true },
     applicantUserId: { type: String, required: true },
     applicantName: { type: String, required: true, trim: true },
@@ -29,6 +31,7 @@ const applicationSchema = new Schema(
 
 applicationSchema.index({ ownerId: 1, status: 1 });
 applicationSchema.index({ propertyId: 1, status: 1 });
+applicationSchema.index({ propertyId: 1, unitId: 1, status: 1 });
 applicationSchema.index({ applicantUserId: 1, status: 1 });
 // At most one live pending application per applicant per property.
 applicationSchema.index(

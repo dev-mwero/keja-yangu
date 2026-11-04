@@ -1,8 +1,9 @@
 "use client";
 
-import { Loader2, RotateCcw, Trash2 } from "lucide-react";
+import { Archive, Loader2, RotateCcw, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { StatCard } from "@/components/StatCard";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -58,7 +59,7 @@ export const RecycleBinManager = () => {
   const [page, setPage] = useState(1);
   const [purgeTarget, setPurgeTarget] = useState<RecycleBinRecord | null>(null);
 
-  const { counts, refetch: refetchCounts } = useRecycleBinCounts();
+  const { counts, loading: countsLoading, refetch: refetchCounts } = useRecycleBinCounts();
   const { records, pagination, loading, error, refetch } = useRecycleBinRecords(activeType, page);
   const { restore, purge, pendingId } = useRecycleBinMutations();
 
@@ -103,6 +104,25 @@ export const RecycleBinManager = () => {
 
   return (
     <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard
+          label="Total deleted"
+          value={countsLoading ? "…" : Object.values(counts).reduce((sum, n) => sum + n, 0)}
+          icon={Archive}
+        />
+        <StatCard
+          label="Properties"
+          value={countsLoading ? "…" : (counts.property ?? 0)}
+          icon={Trash2}
+        />
+        <StatCard label="Units" value={countsLoading ? "…" : (counts.unit ?? 0)} icon={Trash2} />
+        <StatCard
+          label="Tenants"
+          value={countsLoading ? "…" : (counts.tenant ?? 0)}
+          icon={Trash2}
+        />
+      </div>
+
       <Tabs value={activeType} onValueChange={(value) => switchType(value as RecycleBinType)}>
         <TabsList className="flex h-auto flex-wrap gap-1 bg-muted p-1">
           {RECYCLE_BIN_TYPES.map((type) => {

@@ -7,6 +7,8 @@ export interface Application {
   id: string;
   propertyId: string;
   propertyTitle?: string;
+  unitId?: string;
+  unitName?: string;
   applicantUserId: string;
   applicantName: string;
   applicantEmail: string;
@@ -22,6 +24,8 @@ export interface ApplicationDoc {
   _id: string;
   propertyId: string;
   propertyTitle?: string;
+  unitId?: string;
+  unitName?: string;
   applicantUserId: string;
   applicantName: string;
   applicantEmail: string;
@@ -37,6 +41,8 @@ export function toApplication(doc: ApplicationDoc): Application {
     id: doc._id,
     propertyId: doc.propertyId,
     propertyTitle: doc.propertyTitle,
+    unitId: doc.unitId,
+    unitName: doc.unitName,
     applicantUserId: doc.applicantUserId,
     applicantName: doc.applicantName,
     applicantEmail: doc.applicantEmail,

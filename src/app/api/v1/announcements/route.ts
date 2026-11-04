@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { propertyTitleMap, readJsonBody, resolveDashboardActor } from "@/app/api/v1/_helpers";
 import { serializeAnnouncement } from "@/lib/announcements";
 import { connectToDatabase } from "@/lib/mongoose";
+import { notifyAnnouncement, resolveAnnouncementRecipients } from "@/lib/notifications";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
 import { requirePermission } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
@@ -22,9 +23,12 @@ export async function GET(request: NextRequest) {
   if (authError) return authError;
 
   await connectToDatabase();
-  const actor = await resolveDashboardActor(request);
+  const actor = await resolveDashboardActor(request, "announcement:read");
   if (actor instanceof NextResponse) return actor;
 
+  // Staff see internal-safe audiences ("all", "staff") plus anything they
+  // authored, so a "tenants only" note never vanishes from its author's list.
+  const staffAudience = [{ audience: { $in: ["all", "staff"] } }, { authorId: actor.userId }];
   const filter: Record<string, unknown> = {};
   if (actor.role === "tenant") {
     if (actor.tenantPropertyIds.length === 0) {
@@ -40,9 +44,24 @@ export async function GET(request: NextRequest) {
     filter.audience = { $in: ["all", "tenants"] };
   } else if (actor.role === "owner") {
     filter.ownerId = actor.userId;
+    filter.$or = staffAudience;
   } else if (actor.role === "caretaker") {
     filter.ownerId = actor.managedByOwnerId;
-    filter.propertyId = { $in: actor.assignedPropertyIds };
+    // Assigned properties plus the owner's portfolio-wide postings.
+    filter.$and = [
+      { $or: [{ propertyId: { $in: actor.assignedPropertyIds } }, { propertyId: "" }] },
+      { $or: staffAudience },
+    ];
+  } else if (actor.role === "custodian") {
+    // Owner-delegate: the whole portfolio of the owner they manage.
+    filter.ownerId = actor.managedByOwnerId;
+    filter.$or = staffAudience;
+  } else if (actor.role === "admin") {
+    if (actor.propertyScopeIds.length === 0) {
+      return NextResponse.json(buildPaginationResult([], 0, page, limit));
+    }
+    filter.propertyId = { $in: actor.propertyScopeIds };
+    filter.$or = staffAudience;
   }
 
   const [announcements, total] = await Promise.all([
@@ -70,11 +89,12 @@ export async function POST(request: NextRequest) {
   const originError = checkSameOrigin(request);
   if (originError) return originError;
 
-  // Caretakers create announcements for the owner they manage: permission
-  // resolves the ownerId from the actor and checks the manage_announcements
-  // privilege against it (owners and system-admins pass without a resource).
+  // Caretakers and custodians publish for the owner they manage: the
+  // permission check resolves the ownerId from the actor for caretakers
+  // (owners and system-admins pass without a resource), and the create below
+  // stamps `ownerId` with that managing owner.
   await connectToDatabase();
-  const actor = await resolveDashboardActor(request);
+  const actor = await resolveDashboardActor(request, "announcement:manage");
   if (actor instanceof NextResponse) return actor;
 
   const authError = await requirePermission(
@@ -94,15 +114,21 @@ export async function POST(request: NextRequest) {
   }
 
   const propertyId = parsed.data.propertyId ?? "";
+  // The portfolio the post belongs to: the actor's own for owners/admins, the
+  // managing owner's for caretakers/custodians (a delegation).
+  const portfolioOwnerId =
+    actor.role === "caretaker" || actor.role === "custodian"
+      ? actor.managedByOwnerId
+      : actor.userId;
   if (actor.role === "caretaker" && propertyId && !actor.assignedPropertyIds.includes(propertyId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (propertyId && actor.role === "owner") {
+  if (propertyId && (actor.role === "owner" || actor.role === "custodian")) {
     const property = await Property.findById(propertyId).select("ownerId").lean();
     if (!property) {
       return NextResponse.json({ error: "Property not found" }, { status: 404 });
     }
-    if (property.ownerId !== actor.userId) {
+    if (property.ownerId !== portfolioOwnerId) {
       return NextResponse.json(
         { error: "You do not have access to this property" },
         { status: 403 },
@@ -116,7 +142,7 @@ export async function POST(request: NextRequest) {
     body: parsed.data.body,
     authorId: actor.userId,
     authorName: author?.name ?? "",
-    ownerId: actor.role === "caretaker" ? actor.managedByOwnerId : actor.userId,
+    ownerId: portfolioOwnerId,
     propertyId,
     pinned: parsed.data.pinned,
     audience: parsed.data.audience,
@@ -127,6 +153,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Announcement not found" }, { status: 404 });
   }
   const titles = await propertyTitleMap([created.propertyId]);
+
+  const recipients = await resolveAnnouncementRecipients(created);
+  await notifyAnnouncement(created, recipients);
 
   console.info(
     `[announcements] create actor=${actor.userId} role=${actor.role} announcement=${String(announcement._id)}`,

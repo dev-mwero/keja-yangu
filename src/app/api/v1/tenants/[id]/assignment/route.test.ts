@@ -48,7 +48,7 @@ function unitDoc(overrides: Record<string, unknown> = {}) {
     propertyId: PROPERTY_ID,
     ownerId: OWNER_ID,
     status: "available",
-    tenantId: "",
+    tenantId: [],
     ...overrides,
   });
 }
@@ -106,7 +106,7 @@ describe("POST /api/v1/tenants/[id]/assignment", () => {
     tenantStub.findById.mockReturnValue(buildQuery(tenantDoc()));
     unitStub.findById.mockReturnValue(buildQuery(unitDoc()));
     unitStub.findOneAndUpdate.mockReturnValue(
-      buildQuery(unitDoc({ status: "occupied", tenantId: OCCUPANT_USER_ID })),
+      buildQuery(unitDoc({ status: "occupied", tenantId: [OCCUPANT_USER_ID] })),
     );
     tenantStub.updateOne.mockResolvedValue({ modifiedCount: 1 });
     lease.findOne.mockReturnValue(buildQuery(null));
@@ -120,7 +120,7 @@ describe("POST /api/v1/tenants/[id]/assignment", () => {
     expect(body.data?.unit).toMatchObject({ _id: UNIT_ID, name: "3A" });
     expect(unitStub.findOneAndUpdate).toHaveBeenCalledWith(
       { _id: UNIT_ID, status: "available", deletedAt: null },
-      { $set: { tenantId: OCCUPANT_USER_ID, status: "occupied" } },
+      { $addToSet: { tenantId: OCCUPANT_USER_ID }, $set: { status: "occupied" } },
       { new: true },
     );
     expect(lease.create).toHaveBeenCalledWith(
@@ -167,11 +167,12 @@ describe("DELETE /api/v1/tenants/[id]/assignment", () => {
   it("vacates the tenant's unit and ends the lease", async () => {
     tenantStub.findById.mockReturnValue(buildQuery(tenantDoc()));
     const occupied = {
-      ...unitDoc({ status: "occupied", tenantId: OCCUPANT_USER_ID }),
-      save: vi.fn().mockResolvedValue(undefined),
+      ...unitDoc({ status: "occupied", tenantId: [OCCUPANT_USER_ID] }),
     };
     unitStub.findOne.mockResolvedValue(occupied);
+    unitStub.updateOne.mockResolvedValue({ modifiedCount: 1 });
     lease.updateMany.mockResolvedValue({ modifiedCount: 1 });
+    tenantStub.findById.mockReturnValue(buildQuery(tenantDoc()));
 
     const res = await DELETE(
       buildRequest(`/api/v1/tenants/${TENANT_ID}/assignment`, {
@@ -182,9 +183,7 @@ describe("DELETE /api/v1/tenants/[id]/assignment", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(occupied.status).toBe("available");
-    expect(occupied.tenantId).toBe("");
-    expect(occupied.save).toHaveBeenCalled();
+    expect(unitStub.updateOne).toHaveBeenCalled();
     expect(lease.updateMany).toHaveBeenCalledWith(
       { tenantId: TENANT_ID, status: "active" },
       expect.objectContaining({ $set: expect.objectContaining({ status: "ended" }) }),

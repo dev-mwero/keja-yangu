@@ -22,6 +22,10 @@ interface ReceiptDialogProps {
 export const ReceiptDialog = ({ open, onOpenChange, invoice }: ReceiptDialogProps) => {
   const { user } = useAuth();
 
+  const serviceFeeAmount = invoice?.serviceChargeAmount ?? 0;
+  const rentAmount =
+    invoice?.rentAmount ?? Math.max(0, (invoice?.amountDue ?? 0) - serviceFeeAmount);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -42,6 +46,18 @@ export const ReceiptDialog = ({ open, onOpenChange, invoice }: ReceiptDialogProp
               <span className="text-muted-foreground">Tenant</span>
               <span className="font-medium">{user?.name ?? invoice.tenantId}</span>
             </div>
+            {serviceFeeAmount > 0 && (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Rent</span>
+                  <span className="font-medium">{formatKES(rentAmount)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Service fee</span>
+                  <span className="font-medium">{formatKES(serviceFeeAmount)}</span>
+                </div>
+              </>
+            )}
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Invoice amount</span>
               <span className="font-medium">{formatKES(invoice.amountDue)}</span>
@@ -60,6 +76,18 @@ export const ReceiptDialog = ({ open, onOpenChange, invoice }: ReceiptDialogProp
               <span className="text-muted-foreground">Method</span>
               <span>{invoice.method ?? "—"}</span>
             </div>
+            {invoice.paymentReference && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Reference</span>
+                <span className="font-medium">{invoice.paymentReference}</span>
+              </div>
+            )}
+            {invoice.paymentDescription && (
+              <div className="flex items-start justify-between gap-6">
+                <span className="text-muted-foreground">Description</span>
+                <span className="text-right">{invoice.paymentDescription}</span>
+              </div>
+            )}
             {invoice.notes && (
               <div className="flex items-start justify-between gap-6">
                 <span className="text-muted-foreground">Notes</span>

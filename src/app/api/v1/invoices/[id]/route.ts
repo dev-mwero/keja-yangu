@@ -11,7 +11,7 @@ import { invoiceUpdate } from "@/lib/schemas";
 import { Invoice } from "@/models/Invoice";
 
 function invoiceInScope(
-  doc: { ownerId: string; propertyId: string },
+  doc: { ownerId: string; propertyId: string; unitId?: string; tenantId?: string },
   actor: InvoiceActor,
 ): boolean {
   if (actor.role === "system-admin") return true;
@@ -21,6 +21,12 @@ function invoiceInScope(
     return (
       doc.ownerId === actor.managedByOwnerId && actor.assignedPropertyIds.includes(doc.propertyId)
     );
+  }
+  if (actor.role === "admin") {
+    const propMatch = actor.propertyScopeIds.includes(doc.propertyId);
+    const unitMatch = doc.unitId && actor.assignedUnitIds.includes(doc.unitId);
+    const tenantMatch = doc.tenantId && actor.assignedTenantIds.includes(doc.tenantId);
+    return Boolean(propMatch || unitMatch || tenantMatch);
   }
   return false;
 }
@@ -36,7 +42,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
   await connectToDatabase();
 
-  const actor = await resolveInvoiceActor(request);
+  const actor = await resolveInvoiceActor(request, "invoice:read");
   if (actor instanceof NextResponse) return actor;
 
   const invoice = await Invoice.findById(id).lean();
@@ -44,7 +50,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ data: serializeInvoice(invoice, new Date()) });
+  return NextResponse.json({
+    data: serializeInvoice(invoice, new Date(), { includeServiceFeeItems: true }),
+  });
 }
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -95,7 +103,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ data: serializeInvoice(updated, new Date()) });
+  return NextResponse.json({
+    data: serializeInvoice(updated, new Date(), { includeServiceFeeItems: true }),
+  });
 }
 
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {

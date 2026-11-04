@@ -9,16 +9,24 @@ vi.mock("@/lib/mongoose", () => ({
 }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
+vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
+vi.mock("@/lib/notifications", () => ({
+  notifyUnitAvailable: vi.fn().mockResolvedValue(true),
+}));
 
 import { DELETE, GET, PATCH } from "@/app/api/v1/units/[id]/route";
+import { notifyUnitAvailable } from "@/lib/notifications";
 
-const { user, unit } = getModelStubs();
+const { user, unit, property } = getModelStubs();
+const notifyUnitAvailableMock = vi.mocked(notifyUnitAvailable);
 
 const OWNER_ID = makeObjectId("owner");
 const CUSTODIAN_ID = makeObjectId("custodian");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
 const TENANT_ID = makeObjectId("tenant");
+const CARETAKER_ID = makeObjectId("caretaker");
 const UNIT_ID = makeObjectId("unit");
+const UNIT_PROPERTY_ID = makeObjectId("unit-property");
 
 function unitDoc(overrides = {}) {
   return makeUnit({ _id: UNIT_ID, ownerId: OWNER_ID, ...overrides });
@@ -91,11 +99,77 @@ describe("GET /api/v1/units/[id]", () => {
     );
     expect(res.status).toBe(403);
   });
+
+  it("403 when a caretaker reads a unit outside their assigned properties", async () => {
+    user.findById.mockReturnValue(
+      buildQuery(
+        makeUser({
+          _id: CARETAKER_ID,
+          role: "caretaker",
+          managedByOwnerId: OWNER_ID,
+        }),
+      ),
+    );
+    unit.findById.mockReturnValue(buildQuery(unitDoc({ propertyId: UNIT_PROPERTY_ID })));
+    property.findOne.mockReturnValue(buildQuery(null));
+
+    const res = await GET(
+      buildRequest(`/api/v1/units/${UNIT_ID}`, { token: signToken(CARETAKER_ID) }),
+      withParams(UNIT_ID),
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it("allows a caretaker to read a unit in an assigned property", async () => {
+    user.findById.mockReturnValue(
+      buildQuery(
+        makeUser({
+          _id: CARETAKER_ID,
+          role: "caretaker",
+          managedByOwnerId: OWNER_ID,
+        }),
+      ),
+    );
+    unit.findById.mockReturnValue(buildQuery(unitDoc({ propertyId: UNIT_PROPERTY_ID })));
+    property.findOne.mockReturnValue(buildQuery({ _id: UNIT_PROPERTY_ID }));
+
+    const res = await GET(
+      buildRequest(`/api/v1/units/${UNIT_ID}`, { token: signToken(CARETAKER_ID) }),
+      withParams(UNIT_ID),
+    );
+    expect(res.status).toBe(200);
+  });
 });
 
 describe("PATCH /api/v1/units/[id]", () => {
   beforeEach(() => {
     resetModelStubs();
+    notifyUnitAvailableMock.mockClear();
+  });
+
+  it("403 when a caretaker edits a unit outside their assigned properties", async () => {
+    user.findById.mockReturnValue(
+      buildQuery(
+        makeUser({
+          _id: CARETAKER_ID,
+          role: "caretaker",
+          managedByOwnerId: OWNER_ID,
+          privileges: ["manage_units"],
+        }),
+      ),
+    );
+    unit.findById.mockResolvedValue(unitDoc({ propertyId: UNIT_PROPERTY_ID }));
+    property.findOne.mockReturnValue(buildQuery(null));
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/units/${UNIT_ID}`, {
+        method: "PATCH",
+        token: signToken(CARETAKER_ID),
+        body: { status: "maintenance" },
+      }),
+      withParams(UNIT_ID),
+    );
+    expect(res.status).toBe(403);
   });
 
   it("owner updates unit status and rent", async () => {
@@ -114,6 +188,24 @@ describe("PATCH /api/v1/units/[id]", () => {
     expect(res.status).toBe(200);
     expect(doc.status).toBe("maintenance");
     expect(doc.rent).toBe(30000);
+    expect(doc.save).toHaveBeenCalled();
+  });
+
+  it("owner updates unit purpose override", async () => {
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    const doc = persistedUnit();
+    unit.findById.mockResolvedValue(doc);
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/units/${UNIT_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { purpose: "commercial" },
+      }),
+      withParams(UNIT_ID),
+    );
+    expect(res.status).toBe(200);
+    expect(doc.purpose).toBe("commercial");
     expect(doc.save).toHaveBeenCalled();
   });
 
@@ -152,6 +244,120 @@ describe("PATCH /api/v1/units/[id]", () => {
       withParams(UNIT_ID),
     );
     expect(res.status).toBe(403);
+  });
+
+  it("rejects setting tenantId directly (occupancy changes via allocation)", async () => {
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    const doc = persistedUnit();
+    unit.findById.mockResolvedValue(doc);
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/units/${UNIT_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { tenantId: TENANT_ID },
+      }),
+      withParams(UNIT_ID),
+    );
+    expect(res.status).toBe(400);
+    expect(doc.save).not.toHaveBeenCalled();
+  });
+
+  it("rejects setting status occupied directly", async () => {
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    const doc = persistedUnit();
+    unit.findById.mockResolvedValue(doc);
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/units/${UNIT_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { status: "occupied" },
+      }),
+      withParams(UNIT_ID),
+    );
+    expect(res.status).toBe(409);
+    expect(doc.save).not.toHaveBeenCalled();
+  });
+
+  it("rejects flipping an occupied unit to available directly", async () => {
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    const doc = persistedUnit({ status: "occupied", tenantId: TENANT_ID });
+    unit.findById.mockResolvedValue(doc);
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/units/${UNIT_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { status: "available" },
+      }),
+      withParams(UNIT_ID),
+    );
+    expect(res.status).toBe(409);
+    expect(doc.save).not.toHaveBeenCalled();
+  });
+
+  it("notifies favourites when a unit transitions to available", async () => {
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    const doc = persistedUnit({ status: "maintenance" });
+    unit.findById.mockResolvedValue(doc);
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/units/${UNIT_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { status: "available" },
+      }),
+      withParams(UNIT_ID),
+    );
+
+    expect(res.status).toBe(200);
+    expect(doc.statusChangedAt).toBeInstanceOf(Date);
+    expect(notifyUnitAvailableMock).toHaveBeenCalledWith(doc);
+  });
+
+  it("does not notify when the status is already available", async () => {
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    const doc = persistedUnit({ status: "available" });
+    unit.findById.mockResolvedValue(doc);
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/units/${UNIT_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { status: "available" },
+      }),
+      withParams(UNIT_ID),
+    );
+
+    expect(res.status).toBe(200);
+    expect(notifyUnitAvailableMock).not.toHaveBeenCalled();
+  });
+
+  it("owner updates unit service-charge configuration", async () => {
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    const doc = persistedUnit();
+    unit.findById.mockResolvedValue(doc);
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/units/${UNIT_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: {
+          serviceCharge: 5000,
+          rentIncludesServiceCharge: true,
+          rentSharePercent: 80,
+          serviceChargeSharePercent: 20,
+        },
+      }),
+      withParams(UNIT_ID),
+    );
+    expect(res.status).toBe(200);
+    expect(doc.serviceCharge).toBe(5000);
+    expect(doc.rentIncludesServiceCharge).toBe(true);
+    expect(doc.rentSharePercent).toBe(80);
+    expect(doc.serviceChargeSharePercent).toBe(20);
+    expect(doc.save).toHaveBeenCalled();
   });
 });
 

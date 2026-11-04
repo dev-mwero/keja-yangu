@@ -49,6 +49,63 @@ describe("RecordPaymentDialog", () => {
     expect(screen.getByLabelText(/Notes/i)).toBeInTheDocument();
   });
 
+  it("defaults the amount to the outstanding balance", () => {
+    render(
+      <RecordPaymentDialog
+        open
+        onOpenChange={() => {}}
+        invoice={makeInvoice({ amountDue: 15000, amountPaid: 5000 })}
+        pending={false}
+        onSubmit={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText(/Amount/i)).toHaveValue(10000);
+  });
+
+  it("disables submit when the amount exceeds the outstanding balance", async () => {
+    const user = userEvent.setup();
+    render(
+      <RecordPaymentDialog
+        open
+        onOpenChange={() => {}}
+        invoice={makeInvoice({ amountDue: 15000, amountPaid: 5000 })}
+        pending={false}
+        onSubmit={vi.fn()}
+      />,
+    );
+    // Cash avoids the reference requirement so only the amount guard applies.
+    await user.click(screen.getByRole("combobox"));
+    await user.click(await screen.findByRole("option", { name: "Cash" }));
+
+    const amountInput = screen.getByLabelText(/Amount/i);
+    await user.clear(amountInput);
+    await user.type(amountInput, "20000");
+    expect(screen.getByRole("button", { name: /Record payment/i })).toBeDisabled();
+
+    await user.clear(amountInput);
+    await user.type(amountInput, "10000");
+    expect(screen.getByRole("button", { name: /Record payment/i })).toBeEnabled();
+  });
+
+  it("requires a reference for a cheque payment", async () => {
+    const user = userEvent.setup();
+    render(
+      <RecordPaymentDialog
+        open
+        onOpenChange={() => {}}
+        invoice={makeInvoice()}
+        pending={false}
+        onSubmit={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("combobox"));
+    await user.click(await screen.findByRole("option", { name: "Cheque" }));
+    expect(screen.getByText(/transaction reference/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Record payment/i })).toBeDisabled();
+    await user.type(screen.getByLabelText(/Reference/i), "CHQ-001");
+    expect(screen.getByRole("button", { name: /Record payment/i })).toBeEnabled();
+  });
+
   it("shows the reference hint for M-Pesa and hides it for Cash", async () => {
     const user = userEvent.setup();
     render(

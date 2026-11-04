@@ -1,6 +1,6 @@
 "use client";
 
-import { DoorOpen, Loader2, Pencil, Trash2 } from "lucide-react";
+import { DoorOpen, Loader2, Pencil, Trash2, UserMinus, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -32,10 +32,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { PropertyBlock } from "@/hooks/use-properties";
+import { usePropertyTenants, useTenantMutations } from "@/hooks/use-tenants";
 import { type Unit, type UnitStatus, useUnitMutations, useUnits } from "@/hooks/use-units";
-import { UNIT_STATUSES } from "@/lib/domain-enums";
+import {
+  DEFAULT_PROPERTY_PURPOSE,
+  PROPERTY_PURPOSES,
+  type PropertyPurpose,
+  UNIT_STATUSES,
+} from "@/lib/domain-enums";
 import { formatKES } from "@/lib/format";
-import { effectiveRent } from "@/lib/schemas/structure";
+import { effectivePurpose, effectiveRent } from "@/lib/schemas/structure";
 
 interface Props {
   propertyId: string;
@@ -43,6 +49,8 @@ interface Props {
   blocks: PropertyBlock[];
   /** Property-level monthly rent — the fallback effective rent. */
   baseRent: number;
+  /** Property-level purpose — the fallback effective purpose. */
+  propertyPurpose?: PropertyPurpose;
   /** Change this to force the list to refetch (e.g. after a structure save). */
   refreshKey?: number;
   canManage?: boolean;
@@ -59,6 +67,7 @@ const STATUS_VARIANT: Record<UnitStatus, "default" | "secondary" | "outline"> = 
 interface EditForm {
   name: string;
   status: UnitStatus;
+  purpose: string;
   rent: string;
   beds: string;
   baths: string;
@@ -81,16 +90,23 @@ export function PropertyUnitsTable({
   propertyId,
   blocks,
   baseRent,
+  propertyPurpose = DEFAULT_PROPERTY_PURPOSE,
   refreshKey = 0,
   canManage = true,
   onChanged,
 }: Props) {
   const { units, loading, error, refetch } = useUnits({ propertyId }, { fetchAll: true });
   const { updateUnit, deleteUnit, pending } = useUnitMutations();
+  const { unassignedTenants, loading: tenantsLoading } = usePropertyTenants(propertyId);
+  const { assignUnit, pending: assignPending, vacateUnit } = useTenantMutations();
   const [editing, setEditing] = useState<Unit | null>(null);
+  const [assigningUnit, setAssigningUnit] = useState<Unit | null>(null);
+  const [vacatingUnit, setVacatingUnit] = useState<Unit | null>(null);
+  const [selectedTenantId, setSelectedTenantId] = useState("");
   const [form, setForm] = useState<EditForm>({
     name: "",
     status: "available",
+    purpose: "inherit",
     rent: "",
     beds: "",
     baths: "",
@@ -126,11 +142,18 @@ export function PropertyUnitsTable({
     );
   };
 
+  const effectivePurposeFor = (unit: Unit): PropertyPurpose => {
+    const block = blockById.get(unit.blockId);
+    const floor = block?.floors.find((f) => f._id === unit.floorId);
+    return effectivePurpose(unit.purpose, floor?.purpose, block?.purpose, propertyPurpose);
+  };
+
   const openEdit = (unit: Unit) => {
     setEditing(unit);
     setForm({
       name: unit.name,
       status: unit.status,
+      purpose: unit.purpose ?? "inherit",
       rent: asField(unit.rent),
       beds: asField(unit.beds),
       baths: asField(unit.baths),
@@ -144,6 +167,7 @@ export function PropertyUnitsTable({
       await updateUnit(editing._id, {
         name: form.name.trim() || editing.name,
         status: form.status,
+        purpose: form.purpose === "inherit" ? null : (form.purpose as PropertyPurpose),
         rent: form.rent === "" ? null : Number(form.rent),
         beds: asNumberOrUndefined(form.beds),
         baths: asNumberOrUndefined(form.baths),
@@ -168,6 +192,42 @@ export function PropertyUnitsTable({
       onChanged?.();
     } catch (err) {
       toast.error("Could not delete unit", {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
+  };
+
+  const assign = async () => {
+    if (!assigningUnit || !selectedTenantId) return;
+    try {
+      await assignUnit(selectedTenantId, assigningUnit._id);
+      toast.success("Tenant assigned", {
+        description: `${assigningUnit.name} is now assigned.`,
+      });
+      setAssigningUnit(null);
+      setSelectedTenantId("");
+      refetch();
+      onChanged?.();
+    } catch (err) {
+      toast.error("Could not assign tenant", {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
+  };
+
+  const vacate = async () => {
+    const occupantId = vacatingUnit?.tenantId[0];
+    if (!occupantId) return;
+    try {
+      await vacateUnit(occupantId);
+      toast.success("Tenant unassigned", {
+        description: `${vacatingUnit.name} is now vacant.`,
+      });
+      setVacatingUnit(null);
+      refetch();
+      onChanged?.();
+    } catch (err) {
+      toast.error("Could not unassign tenant", {
         description: err instanceof Error ? err.message : undefined,
       });
     }
@@ -215,7 +275,17 @@ export function PropertyUnitsTable({
             ) : (
               units.map((unit) => (
                 <TableRow key={unit._id}>
-                  <TableCell className="font-medium">{unit.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <div>{unit.name}</div>
+                    <div className="mt-0.5">
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] font-normal capitalize px-1 py-0 text-muted-foreground"
+                      >
+                        {effectivePurposeFor(unit)}
+                      </Badge>
+                    </div>
+                  </TableCell>
                   <TableCell className="text-muted-foreground">{unit.blockName}</TableCell>
                   <TableCell className="text-muted-foreground">
                     {unit.floorLabel || (unit.floorLevel === 0 ? "Ground" : unit.floorLevel)}
@@ -230,6 +300,29 @@ export function PropertyUnitsTable({
                   <TableCell>{formatKES(effectiveFor(unit))}</TableCell>
                   {canManage && (
                     <TableCell className="text-right">
+                      {unit.status === "available" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Assign tenant to ${unit.name}`}
+                          onClick={() => {
+                            setSelectedTenantId("");
+                            setAssigningUnit(unit);
+                          }}
+                        >
+                          <UserPlus className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {unit.tenantId.length > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Unassign tenant from ${unit.name}`}
+                          onClick={() => setVacatingUnit(unit)}
+                        >
+                          <UserMinus className="h-4 w-4" />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
@@ -316,6 +409,25 @@ export function PropertyUnitsTable({
               />
             </div>
             <div className="space-y-2">
+              <Label>Purpose</Label>
+              <Select
+                value={form.purpose}
+                onValueChange={(v) => setForm((f) => ({ ...f, purpose: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Inherit" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="inherit">Inherit</SelectItem>
+                  {PROPERTY_PURPOSES.map((p) => (
+                    <SelectItem key={p} value={p} className="capitalize">
+                      {p}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
               <Label>Status</Label>
               <Select
                 value={form.status}
@@ -341,6 +453,96 @@ export function PropertyUnitsTable({
             <Button onClick={saveEdit} disabled={pending}>
               {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={assigningUnit !== null}
+        onOpenChange={(o) => {
+          if (!o && !assignPending) {
+            setAssigningUnit(null);
+            setSelectedTenantId("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Assign tenant{assigningUnit ? ` to ${assigningUnit.name}` : ""}
+            </DialogTitle>
+            <DialogDescription>
+              Move an unassigned active tenant at this property into this vacant unit.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Tenant</Label>
+            {tenantsLoading ? (
+              <p className="text-sm text-muted-foreground">Loading tenants…</p>
+            ) : unassignedTenants.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No unassigned active tenants at this property. Add a tenant first.
+              </p>
+            ) : (
+              <Select value={selectedTenantId} onValueChange={setSelectedTenantId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a tenant" />
+                </SelectTrigger>
+                <SelectContent>
+                  {unassignedTenants.map((t) => (
+                    <SelectItem key={t._id} value={t._id}>
+                      {t.name} · {t.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setAssigningUnit(null);
+                setSelectedTenantId("");
+              }}
+              disabled={assignPending}
+            >
+              Cancel
+            </Button>
+            <Button onClick={assign} disabled={!selectedTenantId || assignPending}>
+              {assignPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Assign tenant
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={vacatingUnit !== null}
+        onOpenChange={(o) => {
+          if (!o && !assignPending) setVacatingUnit(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Unassign tenant{vacatingUnit ? ` from ${vacatingUnit.name}` : ""}?
+            </DialogTitle>
+            <DialogDescription>
+              This frees the unit. The tenant keeps their account but no longer occupies this unit.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setVacatingUnit(null)}
+              disabled={assignPending}
+            >
+              Cancel
+            </Button>
+            <Button onClick={vacate} disabled={assignPending}>
+              {assignPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Unassign tenant
             </Button>
           </DialogFooter>
         </DialogContent>

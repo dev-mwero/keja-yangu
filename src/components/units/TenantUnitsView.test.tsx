@@ -9,18 +9,12 @@ const UNIT_ID = "unit-1";
 const mocks = vi.hoisted(() => {
   const units: unknown[] = [];
   const moveRequests: Array<Record<string, unknown>> = [];
-  const preferences: Array<Record<string, unknown>> = [];
   const tenancy: { value: Record<string, unknown> | null } = { value: null };
-  const preferUnit = vi.fn();
-  const clearPreference = vi.fn();
   const create = vi.fn();
   return {
     units,
     moveRequests,
-    preferences,
     tenancy,
-    preferUnit,
-    clearPreference,
     create,
     useMyTenancy: () => ({
       tenancy: tenancy.value,
@@ -29,13 +23,6 @@ const mocks = vi.hoisted(() => {
       refetch: vi.fn(),
     }),
     useUnits: () => ({ units, loading: false, error: null, refetch: vi.fn() }),
-    useUnitPreferences: () => ({
-      preferences,
-      loading: false,
-      error: null,
-      refetch: vi.fn(),
-    }),
-    useUnitPreferenceMutations: () => ({ preferUnit, clearPreference, pending: false }),
     useMoveRequests: () => ({
       moveRequests,
       loading: false,
@@ -61,10 +48,6 @@ vi.mock("@/components/DashboardShell", async () => {
 });
 vi.mock("@/hooks/use-my-tenancy", () => ({ useMyTenancy: mocks.useMyTenancy }));
 vi.mock("@/hooks/use-units", () => ({ useUnits: mocks.useUnits }));
-vi.mock("@/hooks/use-unit-preferences", () => ({
-  useUnitPreferences: mocks.useUnitPreferences,
-  useUnitPreferenceMutations: mocks.useUnitPreferenceMutations,
-}));
 vi.mock("@/hooks/use-move-requests", () => ({
   useMoveRequests: mocks.useMoveRequests,
   useMoveRequestMutations: mocks.useMoveRequestMutations,
@@ -86,9 +69,6 @@ describe("TenantUnitsView", () => {
   beforeEach(() => {
     mocks.units.length = 0;
     mocks.moveRequests.length = 0;
-    mocks.preferences.length = 0;
-    mocks.preferUnit.mockReset();
-    mocks.clearPreference.mockReset();
     mocks.create.mockReset();
     withTenancy();
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
@@ -100,7 +80,6 @@ describe("TenantUnitsView", () => {
 
     expect(screen.getByText("3A")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /request this unit/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /prefer/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /track requests/i })).toBeInTheDocument();
   });
 
@@ -130,16 +109,6 @@ describe("TenantUnitsView", () => {
 
     expect(screen.getByText("Requested")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /request this unit/i })).toBeDisabled();
-  });
-
-  it("prefers a unit", async () => {
-    mocks.units.push(makeUnit({ _id: UNIT_ID, name: "3A", blockName: "D" }));
-    mocks.preferUnit.mockResolvedValue({});
-    render(<TenantUnitsView />);
-
-    await userEvent.click(screen.getByRole("button", { name: /prefer/i }));
-
-    expect(mocks.preferUnit).toHaveBeenCalledWith(UNIT_ID);
   });
 
   it("prompts to apply when there is no tenancy on record", () => {

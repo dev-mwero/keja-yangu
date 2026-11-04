@@ -23,6 +23,7 @@ import {
 } from "@/components/property/PropertyStructureEditor";
 import { PropertyUnitsTable } from "@/components/property/PropertyUnitsTable";
 import { StatCard } from "@/components/StatCard";
+import { ServiceFeesManager } from "@/components/service-fees/ServiceFeesManager";
 import { Button } from "@/components/ui/button";
 import type { DashNavItem } from "@/config/dashboardNav";
 import {
@@ -253,6 +254,10 @@ export function PropertyStructureView({ propertyId, nav, roleName, backHref }: P
           </section>
 
           <section className="space-y-3">
+            <ServiceFeesManager propertyId={propertyId} />
+          </section>
+
+          <section className="space-y-3">
             <div>
               <h2 className="font-display text-lg">Units</h2>
               <p className="text-xs text-muted-foreground">
@@ -263,6 +268,7 @@ export function PropertyStructureView({ propertyId, nav, roleName, backHref }: P
               propertyId={propertyId}
               blocks={property?.blocks ?? []}
               baseRent={property?.price ?? 0}
+              propertyPurpose={property?.purpose}
               refreshKey={unitsRefreshKey}
               onChanged={loadCounts}
             />

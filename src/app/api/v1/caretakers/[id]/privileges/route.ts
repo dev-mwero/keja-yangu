@@ -3,7 +3,12 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { connectToDatabase } from "@/lib/mongoose";
-import { authenticate, CARETAKER_PRIVILEGES, type CaretakerPrivilege } from "@/lib/permissions";
+import {
+  authenticate,
+  CARETAKER_PRIVILEGES,
+  type CaretakerPrivilege,
+  isPrivilegedCustodian,
+} from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { User } from "@/models/User";
 
@@ -33,7 +38,8 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
   if (!actor?.isActive) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (actor.role !== "owner" && actor.role !== "system-admin") {
+  const privilegedCustodian = isPrivilegedCustodian(actor);
+  if (actor.role !== "owner" && actor.role !== "system-admin" && !privilegedCustodian) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -61,13 +67,18 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
       return NextResponse.json({ error: "Caretaker is bound to another owner" }, { status: 409 });
     }
     update.managedByOwnerId = ownerId;
+  } else if (actor.role === "custodian") {
+    const ownerId = actor.managedByOwnerId ?? "";
+    if (!ownerId || target.managedByOwnerId !== ownerId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   const updated = await User.findOneAndUpdate({ _id: id }, update, {
     new: true,
     runValidators: true,
   })
-    .select("name email managedByOwnerId privileges")
+    .select("name email phone managedByOwnerId privileges")
     .lean();
   if (!updated) {
     return NextResponse.json({ error: "Caretaker not found" }, { status: 404 });
@@ -78,6 +89,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
       id: String(updated._id),
       name: updated.name,
       email: updated.email,
+      phone: updated.phone ?? "",
       managedByOwnerId: updated.managedByOwnerId ?? "",
       privileges: updated.privileges ?? [],
     },

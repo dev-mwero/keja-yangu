@@ -3,18 +3,11 @@
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { AuthGuard } from "@/components/AuthGuard";
-
-const roleMap: Record<string, string[]> = {
-  "/dashboard/owner": ["owner", "system-admin"],
-  "/dashboard/custodian": ["custodian", "owner", "system-admin"],
-  "/dashboard/tenant": ["tenant"],
-  "/dashboard/caretaker": ["caretaker", "system-admin"],
-  "/dashboard/system-admin": ["system-admin"],
-};
+import { getDashboardAllowedRoles } from "@/lib/role-routes";
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const allowedRoles = roleMap[pathname];
+  const allowedRoles = getDashboardAllowedRoles(pathname);
 
   return <AuthGuard allowedRoles={allowedRoles}>{children}</AuthGuard>;
 }

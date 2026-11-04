@@ -1,12 +1,15 @@
 import { type InferSchemaType, model, models, Schema } from "mongoose";
 import { softDeletePlugin } from "@/lib/mongoose-soft-delete";
 
+export type TenantType = "residential" | "commercial" | "owning";
+
 export interface ITenant {
   name: string;
-  email: string;
+  email?: string;
   phone?: string;
   propertyId: string;
   ownerId: string;
+  type: TenantType;
   status: "active" | "pending" | "rejected";
   userId?: string;
   joinedAt?: Date;
@@ -17,10 +20,16 @@ export interface ITenant {
 const tenantSchema = new Schema<ITenant>(
   {
     name: { type: String, required: true, trim: true },
-    email: { type: String, required: true, trim: true, lowercase: true },
+    email: { type: String, required: false, trim: true, lowercase: true },
     phone: { type: String },
     propertyId: { type: String, required: true },
     ownerId: { type: String, required: true },
+    type: {
+      type: String,
+      enum: ["residential", "commercial", "owning"],
+      default: "residential",
+      required: true,
+    },
     status: {
       type: String,
       enum: ["active", "pending", "rejected"],
@@ -36,11 +45,16 @@ const tenantSchema = new Schema<ITenant>(
   },
 );
 
-// One live tenant per email per property; soft-deleted rows are excluded so the
-// email can be reused after deletion.
+// One live tenant per contact per property. Empty/missing contacts are excluded
+// from the partial indexes so phone-only tenants are allowed; soft-deleted rows
+// are excluded so a contact can be reused after deletion.
 tenantSchema.index(
   { propertyId: 1, email: 1 },
-  { unique: true, partialFilterExpression: { deletedAt: null } },
+  { unique: true, partialFilterExpression: { deletedAt: null, email: { $gt: "" } } },
+);
+tenantSchema.index(
+  { propertyId: 1, phone: 1 },
+  { unique: true, partialFilterExpression: { deletedAt: null, phone: { $gt: "" } } },
 );
 tenantSchema.index({ userId: 1 });
 softDeletePlugin(tenantSchema);
@@ -48,6 +62,6 @@ softDeletePlugin(tenantSchema);
 export type TenantDocument = InferSchemaType<ITenant>;
 
 export const TENANT_SAFE_FIELDS =
-  "name email phone propertyId ownerId status joinedAt notes createdAt updatedAt";
+  "name email phone type propertyId ownerId status joinedAt notes createdAt updatedAt";
 
 export const Tenant = models.Tenant || model<ITenant>("Tenant", tenantSchema);

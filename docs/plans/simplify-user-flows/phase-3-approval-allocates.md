@@ -1,7 +1,7 @@
 # Phase 3 — Approval allocates the unit
 
 Part of [Simplify user flows](./README.md).
-Status: spec ready · Depends on: **D1, D2** · Risk: medium
+Status: **shipped** (`ddc21e1`) · Depends on: **D1, D2** · Risk: medium
 
 > **Goal:** make *"accepted ⇒ moved in"* literally true. Today approving an
 > application admits the applicant as a tenant but does **not** put them in a unit;

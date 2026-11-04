@@ -21,6 +21,11 @@ export const profileUpdate = z.object({
       "Enter a valid ID number",
     )
     .optional(),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .max(128, "Password is too long")
+    .optional(),
 });
 
 export type ProfileUpdate = z.infer<typeof profileUpdate>;

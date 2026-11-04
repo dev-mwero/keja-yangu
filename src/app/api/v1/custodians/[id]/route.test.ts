@@ -26,11 +26,16 @@ function custodianDoc(overrides: Record<string, unknown> = {}) {
     role: "custodian",
     managedByOwnerId: OWNER_ID,
     isActive: true,
+    privileges: [],
     save: vi.fn<() => Promise<unknown>>(),
     ...overrides,
   };
   doc.save.mockResolvedValue(doc);
   return doc;
+}
+
+async function json(res: Response) {
+  return (await res.json()) as Record<string, unknown>;
 }
 
 function authOwner(id = OWNER_ID) {
@@ -85,6 +90,29 @@ describe("PATCH /api/v1/custodians/[id]", () => {
     expect(res.status).toBe(403);
   });
 
+  it("403 for a privileged custodian trying to edit a peer", async () => {
+    user.findById.mockReturnValue(
+      buildQuery(
+        makeUser({
+          _id: CUSTODIAN_ID,
+          role: "custodian",
+          managedByOwnerId: OWNER_ID,
+          privileges: ["assign_privileges"],
+        }),
+      ),
+    );
+    const res = await PATCH(
+      buildRequest(`/api/v1/custodians/${CUSTODIAN_ID}`, {
+        method: "PATCH",
+        token: signToken(CUSTODIAN_ID),
+        body: { privileges: [] },
+      }),
+      withParams(CUSTODIAN_ID),
+    );
+    expect(res.status).toBe(403);
+    expect(user.findOne).not.toHaveBeenCalled();
+  });
+
   it("owner updates the custodian profile", async () => {
     authOwner();
     const doc = custodianDoc();
@@ -126,5 +154,117 @@ describe("DELETE /api/v1/custodians/[id]", () => {
     expect(doc.managedByOwnerId).toBe("");
     expect(doc.isActive).toBe(false);
     expect(doc.save).toHaveBeenCalled();
+  });
+
+  it("owner grants assign_privileges to a custodian", async () => {
+    authOwner();
+    const doc = custodianDoc();
+    user.findOne.mockResolvedValue(doc);
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/custodians/${CUSTODIAN_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { privileges: ["assign_privileges"] },
+      }),
+      withParams(CUSTODIAN_ID),
+    );
+    expect(res.status).toBe(200);
+    expect(doc.privileges).toEqual(["assign_privileges"]);
+    expect(doc.save).toHaveBeenCalled();
+    const body = await json(res);
+    expect((body.data as { privileges?: string[] }).privileges).toEqual(["assign_privileges"]);
+  });
+
+  it("400 for an unknown custodian privilege token", async () => {
+    authOwner();
+    user.findOne.mockResolvedValue(custodianDoc());
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/custodians/${CUSTODIAN_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { privileges: ["manage_tenants"] },
+      }),
+      withParams(CUSTODIAN_ID),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("404 when the target is not a custodian (e.g. the owner)", async () => {
+    authOwner();
+    user.findOne.mockResolvedValue(null);
+
+    const res = await DELETE(
+      buildRequest(`/api/v1/custodians/${OWNER_ID}`, {
+        method: "DELETE",
+        token: signToken(OWNER_ID),
+      }),
+      withParams(OWNER_ID),
+    );
+    expect(res.status).toBe(404);
+    expect(user.findOne).toHaveBeenCalledWith({ _id: OWNER_ID, role: "custodian" });
+  });
+
+  it("403 when a custodian tries to revoke a peer custodian", async () => {
+    user.findById.mockReturnValue(
+      buildQuery(
+        makeUser({
+          _id: CUSTODIAN_ID,
+          role: "custodian",
+          managedByOwnerId: OWNER_ID,
+          privileges: ["assign_privileges"],
+        }),
+      ),
+    );
+
+    const res = await DELETE(
+      buildRequest(`/api/v1/custodians/${CUSTODIAN_ID}`, {
+        method: "DELETE",
+        token: signToken(CUSTODIAN_ID),
+      }),
+      withParams(CUSTODIAN_ID),
+    );
+    expect(res.status).toBe(403);
+    expect(user.findOne).not.toHaveBeenCalled();
+  });
+
+  it("403 when a custodian tries to deactivate the owner", async () => {
+    user.findById.mockReturnValue(
+      buildQuery(
+        makeUser({
+          _id: CUSTODIAN_ID,
+          role: "custodian",
+          managedByOwnerId: OWNER_ID,
+          privileges: ["assign_privileges"],
+        }),
+      ),
+    );
+
+    const res = await DELETE(
+      buildRequest(`/api/v1/custodians/${OWNER_ID}`, {
+        method: "DELETE",
+        token: signToken(CUSTODIAN_ID),
+      }),
+      withParams(OWNER_ID),
+    );
+    expect(res.status).toBe(403);
+    expect(user.findOne).not.toHaveBeenCalled();
+  });
+
+  it("403 when a caretaker tries to deactivate the owner", async () => {
+    user.findById.mockReturnValue(
+      buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "caretaker", managedByOwnerId: OWNER_ID })),
+    );
+
+    const res = await DELETE(
+      buildRequest(`/api/v1/custodians/${OWNER_ID}`, {
+        method: "DELETE",
+        token: signToken(CUSTODIAN_ID),
+      }),
+      withParams(OWNER_ID),
+    );
+    expect(res.status).toBe(403);
+    expect(user.findOne).not.toHaveBeenCalled();
   });
 });

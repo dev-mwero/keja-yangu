@@ -4,11 +4,18 @@ import type { ReactNode } from "react";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { toast } from "sonner";
 
-export type Role = "tenant" | "caretaker" | "custodian" | "owner" | "system-admin";
+export type Role =
+  | "tenant"
+  | "caretaker"
+  | "custodian"
+  | "owner"
+  | "admin"
+  | "broker"
+  | "system-admin";
 
 export interface KejaUser {
   id: string;
-  email: string;
+  email?: string;
   name?: string;
   role: Role;
   privileges?: string[];
@@ -26,13 +33,14 @@ export interface ProfilePatch {
   phone?: string;
   whatsapp?: string;
   nationalId?: string;
+  password?: string;
 }
 
 interface AuthContextValue {
   user: KejaUser | null;
   loading: boolean;
   refreshFailed: boolean;
-  signIn: (email: string, password: string) => Promise<KejaUser>;
+  signIn: (identifier: string, password: string) => Promise<KejaUser>;
   signUp: (
     name: string,
     email: string,
@@ -76,12 +84,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     refresh();
   }, [refresh]);
 
-  const signIn = async (email: string, password: string): Promise<KejaUser> => {
+  const signIn = async (identifier: string, password: string): Promise<KejaUser> => {
     try {
       const res = await fetch("/api/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "signin", email, password }),
+        body: JSON.stringify({ action: "signin", identifier, password }),
       });
       if (!res.ok) {
         const data = await res.json();

@@ -1,11 +1,12 @@
 "use client";
 
-import { FileText } from "lucide-react";
+import { CheckCircle2, Clock, FileText, XCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { DashboardShell } from "@/components/DashboardShell";
 import { SearchInput } from "@/components/SearchInput";
+import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,10 +52,23 @@ export function ApplicationsView({ nav, roleName, canDecide = true }: Props) {
   const { applications, loading, refetch } = useApplications(
     statusFilter === "all" ? undefined : { status: statusFilter },
   );
+  // Unfiltered fetch so the stat cards reflect every status, not just the current filter.
+  const { applications: allApplications, loading: allLoading } = useApplications();
   const { decide, pending } = useApplicationMutations();
 
+  const statusCount = (status: ApplicationStatus) =>
+    allApplications.filter((a) => a.status === status).length;
+
   const visible = applications.filter((a) =>
-    matchesQuery(query, a.propertyTitle, a.applicantName, a.applicantEmail, a.message, a.status),
+    matchesQuery(
+      query,
+      a.propertyTitle,
+      a.unitName,
+      a.applicantName,
+      a.applicantEmail,
+      a.message,
+      a.status,
+    ),
   );
 
   const act = async (id: string, status: ApplicationStatus) => {
@@ -76,6 +90,29 @@ export function ApplicationsView({ nav, roleName, canDecide = true }: Props) {
       title="Applications"
       subtitle="Review tenancy applications and approve or reject them."
     >
+      <div className="mb-6 grid gap-4 md:grid-cols-4">
+        <StatCard
+          label="Total applications"
+          value={allLoading ? "…" : allApplications.length}
+          icon={FileText}
+        />
+        <StatCard
+          label="Pending review"
+          value={allLoading ? "…" : statusCount("pending")}
+          icon={Clock}
+        />
+        <StatCard
+          label="Approved"
+          value={allLoading ? "…" : statusCount("approved")}
+          icon={CheckCircle2}
+        />
+        <StatCard
+          label="Rejected"
+          value={allLoading ? "…" : statusCount("rejected")}
+          icon={XCircle}
+        />
+      </div>
+
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Select
           value={statusFilter}
@@ -106,6 +143,7 @@ export function ApplicationsView({ nav, roleName, canDecide = true }: Props) {
           <TableHeader>
             <TableRow>
               <TableHead>Property</TableHead>
+              <TableHead>Unit</TableHead>
               <TableHead>Applicant</TableHead>
               <TableHead>Contact</TableHead>
               <TableHead>Message</TableHead>
@@ -117,13 +155,13 @@ export function ApplicationsView({ nav, roleName, canDecide = true }: Props) {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                   Loading applications…
                 </TableCell>
               </TableRow>
             ) : visible.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                   <FileText className="mx-auto mb-2 h-6 w-6 opacity-50" />
                   No applications.
                 </TableCell>
@@ -132,6 +170,7 @@ export function ApplicationsView({ nav, roleName, canDecide = true }: Props) {
               visible.map((a) => (
                 <TableRow key={a.id}>
                   <TableCell className="font-medium">{a.propertyTitle || "—"}</TableCell>
+                  <TableCell className="text-muted-foreground">{a.unitName || "—"}</TableCell>
                   <TableCell className="text-muted-foreground">{a.applicantName}</TableCell>
                   <TableCell className="text-muted-foreground">{a.applicantEmail}</TableCell>
                   <TableCell className="max-w-xs truncate text-muted-foreground">
@@ -154,9 +193,14 @@ export function ApplicationsView({ nav, roleName, canDecide = true }: Props) {
                           <Button
                             size="sm"
                             disabled={pending}
+                            title={
+                              a.unitId
+                                ? "Approve the application and move the applicant into the requested unit."
+                                : "Choose a unit before approving so the applicant is moved in."
+                            }
                             onClick={() => act(a.id, "approved")}
                           >
-                            Approve
+                            {a.unitId ? "Approve & move in" : "Admit"}
                           </Button>
                           <Button
                             size="sm"

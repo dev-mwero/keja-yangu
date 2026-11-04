@@ -7,15 +7,18 @@ import { sendInviteEmail } from "@/lib/email";
 import { connectToDatabase } from "@/lib/mongoose";
 import { authenticate } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
+import { createPhoneOnlyAccount, resolveUserByContact } from "@/lib/user-identity";
 import { User } from "@/models/User";
 
-const custodianInviteSchema = z.object({
-  email: z.string().trim().toLowerCase().email(),
-  name: z.string().trim().min(1).optional(),
-  phone: z.string().optional(),
-  // Only meaningful for system-admin invites (bind to a specific owner).
-  ownerId: z.string().trim().optional(),
-});
+const custodianInviteSchema = z
+  .object({
+    email: z.string().trim().toLowerCase().email().optional(),
+    name: z.string().trim().min(1).optional(),
+    phone: z.string().optional(),
+    // Only meaningful for system-admin invites (bind to a specific owner).
+    ownerId: z.string().trim().optional(),
+  })
+  .refine((data) => data.email || data.phone, "Email or phone is required");
 
 export async function GET(request: NextRequest) {
   const auth = authenticate(request);
@@ -28,15 +31,30 @@ export async function GET(request: NextRequest) {
   if (!user?.isActive) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (user.role !== "owner" && user.role !== "system-admin") {
+  const forPropertyAssignment =
+    request.nextUrl.searchParams.get("forPropertyAssignment") === "true";
+  if (
+    user.role !== "owner" &&
+    user.role !== "system-admin" &&
+    !(user.role === "custodian" && forPropertyAssignment)
+  ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const ownerId = request.nextUrl.searchParams.get("ownerId");
-  const filter: Record<string, unknown> = { role: "custodian" };
+  const filter: Record<string, unknown> = {
+    role: "custodian",
+    ...(forPropertyAssignment ? { isActive: { $ne: false }, isVerified: { $ne: false } } : {}),
+  };
 
   if (user.role === "system-admin") {
     if (ownerId) filter.managedByOwnerId = ownerId;
+  } else if (user.role === "custodian") {
+    const managedByOwnerId = user.managedByOwnerId ?? "";
+    if (!managedByOwnerId || (ownerId && ownerId !== managedByOwnerId)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    filter.managedByOwnerId = managedByOwnerId;
   } else {
     if (ownerId && ownerId !== String(user._id)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -45,16 +63,21 @@ export async function GET(request: NextRequest) {
   }
 
   const custodians = await User.find(filter)
-    .select("name email phone managedByOwnerId")
+    .select(
+      forPropertyAssignment
+        ? "name managedByOwnerId"
+        : "name email phone managedByOwnerId privileges",
+    )
     .sort({ name: 1 })
     .lean();
 
   const data = custodians.map((c) => ({
     id: String(c._id),
     name: c.name,
-    email: c.email,
-    phone: c.phone ?? "",
-    managedByOwnerId: c.managedByOwnerId ?? "",
+    email: forPropertyAssignment ? undefined : c.email,
+    phone: forPropertyAssignment ? "" : (c.phone ?? ""),
+    managedByOwnerId: forPropertyAssignment ? "" : (c.managedByOwnerId ?? ""),
+    privileges: forPropertyAssignment ? [] : (c.privileges ?? []),
   }));
 
   return NextResponse.json({ data });
@@ -110,54 +133,140 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const email = parsed.data.email;
-  const existing = await User.findOne({ email }).lean();
+  const identity = await resolveUserByContact({
+    email: parsed.data.email,
+    phone: parsed.data.phone,
+  });
+  if (!identity.ok) {
+    return NextResponse.json(
+      { error: identity.message },
+      { status: identity.kind === "identity-conflict" ? 409 : 400 },
+    );
+  }
+
+  const { email, phone, user: existing } = identity;
+  const displayName = parsed.data.name ?? existing?.name ?? email ?? phone;
+
   if (existing) {
     if (existing.role !== "custodian") {
       return NextResponse.json(
-        { error: "Email is already registered to a non-custodian account" },
+        { error: "Contact is already registered to a non-custodian account" },
         { status: 409 },
       );
     }
-    if (existing.isActive) {
+
+    const active = existing.isActive !== false && existing.isVerified !== false;
+    if (active) {
       const boundOwner = existing.managedByOwnerId ?? "";
       if (boundOwner !== "" && boundOwner !== boundOwnerId) {
         return NextResponse.json({ error: "Custodian is bound to another owner" }, { status: 409 });
       }
+      const update = {
+        managedByOwnerId: boundOwnerId,
+        ...(parsed.data.name ? { name: parsed.data.name } : {}),
+        ...(phone && existing.phone !== phone ? { phone } : {}),
+      };
+      await User.updateOne({ _id: existing._id }, { $set: update });
+      return NextResponse.json({
+        linked: true,
+        data: {
+          id: String(existing._id),
+          name: update.name ?? existing.name,
+          email: existing.email ?? email,
+          phone: update.phone ?? existing.phone ?? phone,
+          managedByOwnerId: boundOwnerId,
+          privileges: existing.privileges ?? [],
+        },
+      });
     }
-    existing.managedByOwnerId = boundOwnerId;
-    existing.isActive = true;
-    if (parsed.data.name && existing.name !== parsed.data.name) existing.name = parsed.data.name;
-    if (parsed.data.phone && existing.phone !== parsed.data.phone)
-      existing.phone = parsed.data.phone;
-    await existing.save();
-    return NextResponse.json({
-      linked: true,
-      data: {
-        id: String(existing._id),
-        name: existing.name,
-        email: existing.email,
-        phone: existing.phone ?? "",
-        managedByOwnerId: existing.managedByOwnerId,
+
+    if (!email) {
+      return NextResponse.json(
+        { error: "This phone belongs to an inactive account" },
+        { status: 409 },
+      );
+    }
+
+    const verificationToken = crypto.randomUUID();
+    const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await User.updateOne(
+      { _id: existing._id },
+      {
+        $set: {
+          email,
+          name: displayName,
+          phone,
+          managedByOwnerId: boundOwnerId,
+          verificationToken,
+          verificationTokenExpiry,
+        },
       },
+    );
+    await sendInviteEmail(email, displayName, "custodian", verificationToken);
+
+    return NextResponse.json(
+      {
+        invited: true,
+        data: {
+          id: String(existing._id),
+          name: displayName,
+          email,
+          phone,
+          managedByOwnerId: boundOwnerId,
+          privileges: existing.privileges ?? [],
+        },
+      },
+      { status: 201 },
+    );
+  }
+
+  // Phone-only path: create an active, verified custodian that signs in with
+  // phone + password. Credentials are returned so the admin can share them
+  // out-of-band (no SMS/WhatsApp yet).
+  if (!email) {
+    const { user: created, password } = await createPhoneOnlyAccount({
+      role: "custodian",
+      name: displayName,
+      phone,
+      managedByOwnerId: boundOwnerId,
     });
+
+    return NextResponse.json(
+      {
+        created: true,
+        password,
+        data: {
+          id: String(created._id),
+          name: created.name,
+          email: created.email,
+          phone: created.phone,
+          managedByOwnerId: created.managedByOwnerId,
+          privileges: created.privileges ?? [],
+        },
+      },
+      { status: 201 },
+    );
   }
 
   const randomPassword = crypto.randomBytes(24).toString("base64url").slice(0, 32);
   const passwordHash = await bcrypt.hash(randomPassword, 12);
+  const verificationToken = crypto.randomUUID();
+  const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
   const created = await User.create({
     email,
-    name: parsed.data.name ?? email,
-    phone: parsed.data.phone ?? "",
+    name: displayName,
+    phone,
     passwordHash,
     role: "custodian",
     managedByOwnerId: boundOwnerId,
     isActive: false,
     isVerified: false,
+    verificationToken,
+    verificationTokenExpiry,
   });
 
-  await sendInviteEmail(email, created.name, "custodian");
+  await sendInviteEmail(email, created.name, "custodian", verificationToken);
 
   return NextResponse.json(
     {
@@ -168,6 +277,7 @@ export async function POST(request: NextRequest) {
         email: created.email,
         phone: created.phone ?? "",
         managedByOwnerId: created.managedByOwnerId,
+        privileges: created.privileges ?? [],
       },
     },
     { status: 201 },

@@ -134,8 +134,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   );
 
   const amountMinor = toMinorUnits(invoice.amountDue - invoice.amountPaid);
-  const token = buildMpesaCallbackToken(invoice.ownerId);
-  const callbackUrl = `${appUrl()}/api/v1/payments/mpesa/callback/${invoice.ownerId}/${token}`;
+  // Prefer the billing account as the callback payee so in-flight reconciliation
+  // can resolve the payment without relying on the legacy owner field.
+  const payeeId = invoice.billingAccountId || invoice.ownerId;
+  const token = buildMpesaCallbackToken(payeeId);
+  const callbackUrl = `${appUrl()}/api/v1/payments/mpesa/callback/${payeeId}/${token}`;
 
   let stk: StkPushResult;
   try {
@@ -161,7 +164,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       providerReference: stk.checkoutRequestId,
       invoiceId: id,
       tenantId: invoice.tenantId,
+      unitId: invoice.unitId ?? "",
       ownerId: invoice.ownerId,
+      billingAccountId: invoice.billingAccountId ?? "",
       propertyId: invoice.propertyId,
       amountMinor,
       currency: "KES",

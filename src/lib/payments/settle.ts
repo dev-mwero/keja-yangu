@@ -1,8 +1,17 @@
+import { accrueCommissionForSettledInvoice } from "@/lib/commission";
 import { notifyInvoicePaid } from "@/lib/notifications";
+import {
+  computeInvoicePaymentSplit,
+  computePaymentSplit,
+  type PaymentSplitResult,
+} from "@/lib/payment-split";
 import type { PaymentProviderName } from "@/lib/payments/provider";
 import { mapChannelToMethod, PROVIDER_LABELS, toMinorUnits } from "@/lib/payments/provider";
 import { Invoice } from "@/models/Invoice";
+import { Lease } from "@/models/Lease";
 import { Payment } from "@/models/Payment";
+import { PaymentSplit } from "@/models/PaymentSplit";
+import { Unit } from "@/models/Unit";
 
 export type PaymentSettlementSource = "webhook" | "verify";
 
@@ -36,6 +45,13 @@ interface InvoiceLike {
   amountDue: number;
   amountPaid: number;
   tenantId: string;
+  leaseId: string;
+  propertyId: string;
+  ownerId: string;
+  period: string;
+  rentAmount?: number;
+  serviceChargeAmount?: number;
+  rentIncludesServiceCharge?: boolean;
   notes?: string;
 }
 
@@ -54,12 +70,21 @@ async function flipPaymentToSuccess(
   payment: PaymentLike,
   paidAt: Date,
   source: PaymentSettlementSource,
+  invoice?: InvoiceLike,
 ): Promise<void> {
   try {
-    await Payment.updateOne(
-      { _id: payment._id },
-      { $set: { status: "success", paidAt: payment.paidAt ?? paidAt, lastEvent: source } },
-    );
+    const setFields: Record<string, unknown> = {
+      status: "success",
+      paidAt: payment.paidAt ?? paidAt,
+      lastEvent: source,
+    };
+    if (invoice && (invoice as { billingAccountId?: string }).billingAccountId) {
+      setFields.billingAccountId = (invoice as { billingAccountId?: string }).billingAccountId;
+    }
+    if (invoice && (invoice as { unitId?: string }).unitId) {
+      setFields.unitId = (invoice as { unitId?: string }).unitId;
+    }
+    await Payment.updateOne({ _id: payment._id }, { $set: setFields });
   } catch (error) {
     console.warn(`[payments] ledger flip failed reference=${String(payment._id)}`, error);
   }
@@ -98,6 +123,58 @@ async function recordMismatch(
 }
 
 /**
+ * Best-effort record of how a settled payment divides between rent (→ owner)
+ * and service charge (→ caretaker). Never throws: a failure here must not
+ * block or overturn a successful settlement.
+ */
+async function recordPaymentSplit(
+  payment: PaymentLike,
+  invoice: InvoiceLike,
+  amountMinor: number,
+): Promise<void> {
+  try {
+    if (!invoice.leaseId) return; // manual invoices have no unit → no split
+    const lease = await Lease.findById(invoice.leaseId).select("unitId").lean();
+    if (!lease?.unitId) return;
+
+    // Modern invoices carry an immutable rent/service-fee snapshot. Fall back
+    // to the unit's legacy inclusive percentages only for older documents.
+    let split: PaymentSplitResult;
+    if (typeof invoice.rentAmount === "number" && typeof invoice.serviceChargeAmount === "number") {
+      split = computeInvoicePaymentSplit(invoice, amountMinor);
+    } else {
+      const unit = await Unit.findById(lease.unitId).lean();
+      if (!unit) return;
+      split = computePaymentSplit(
+        {
+          rentIncludesServiceCharge: !!unit.rentIncludesServiceCharge,
+          rentSharePercent: unit.rentSharePercent ?? 0,
+          serviceChargeSharePercent: unit.serviceChargeSharePercent ?? 0,
+        },
+        amountMinor,
+      );
+    }
+
+    await PaymentSplit.create({
+      paymentId: String(payment._id),
+      invoiceId: String(invoice._id),
+      unitId: String(lease.unitId),
+      propertyId: invoice.propertyId,
+      ownerId: invoice.ownerId,
+      billingAccountId: (invoice as { billingAccountId?: string }).billingAccountId ?? "",
+      period: invoice.period,
+      rentMinor: split.rentMinor,
+      serviceChargeMinor: split.serviceChargeMinor,
+    });
+  } catch (error) {
+    console.warn(
+      `[payments] payment-split record failed payment=${String(payment._id)} invoice=${String(invoice._id)}`,
+      error,
+    );
+  }
+}
+
+/**
  * The single settlement setter shared by the webhook and the verify fallback.
  *
  * The initiation-created `Payment` row (keyed by `{provider, providerReference}`)
@@ -131,7 +208,7 @@ export async function applyProviderPayment(
   // Replay fast-path: the invoice was already settled (by us or a concurrent
   // writer); catch the ledger row up to success without re-notifying.
   if (invoice.status === "paid") {
-    await flipPaymentToSuccess(payment, paidAt, input.source);
+    await flipPaymentToSuccess(payment, paidAt, input.source, invoice);
     return { outcome: "already-settled" };
   }
 
@@ -172,17 +249,30 @@ export async function applyProviderPayment(
     const current = await Invoice.findById(invoice._id).lean();
     if (!current) return { outcome: "invoice-missing" };
     if (current.status === "void") return { outcome: "invoice-voided" };
-    await flipPaymentToSuccess(payment, paidAt, input.source);
+    await flipPaymentToSuccess(payment, paidAt, input.source, invoice);
     return { outcome: "already-settled" };
   }
 
-  await flipPaymentToSuccess(payment, paidAt, input.source);
+  await flipPaymentToSuccess(payment, paidAt, input.source, invoice);
 
   try {
     await notifyInvoicePaid(updated);
   } catch (error) {
     console.warn(
       `[payments] notify failed reference=${input.providerReference} invoice=${String(invoice._id)}`,
+      error,
+    );
+  }
+
+  // Record how the settled payment divides between rent and service charge.
+  await recordPaymentSplit(payment, invoice, input.amountMinor);
+
+  // Shadow commission accrual — must never block or overturn settlement.
+  try {
+    await accrueCommissionForSettledInvoice(updated);
+  } catch (error) {
+    console.warn(
+      `[commission] accrual failed reference=${input.providerReference} invoice=${String(invoice._id)}`,
       error,
     );
   }

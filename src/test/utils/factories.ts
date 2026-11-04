@@ -1,4 +1,5 @@
-import type { CaretakerPrivilege, Role } from "@/lib/permissions";
+import type { PropertyPurpose } from "@/lib/domain-enums";
+import type { Privilege, Role } from "@/lib/permissions";
 
 const HEX_CHARS = "abcdef0123456789";
 
@@ -20,13 +21,14 @@ export function makeObjectId(token: string): string {
 export interface TestUser {
   _id: string;
   name: string;
-  email: string;
+  email?: string;
   role: Role;
   isActive: boolean;
-  privileges: CaretakerPrivilege[];
+  privileges: Privilege[];
   managedByOwnerId: string;
   passwordHash?: string;
   isVerified?: boolean;
+  phone?: string;
 }
 
 export interface TestProperty {
@@ -40,8 +42,11 @@ export interface TestProperty {
   amenities: string[];
   status: "available" | "occupied" | "maintenance";
   published: boolean;
+  dateCompleted?: Date | string | null;
+  purpose?: PropertyPurpose;
   ownerId: string;
   caretakerIds: string[];
+  custodianIds: string[];
   createdById: string;
   beds: number;
   baths: number;
@@ -51,7 +56,7 @@ export interface TestProperty {
 export interface TestTenant {
   _id: string;
   name: string;
-  email: string;
+  email?: string;
   phone?: string;
   propertyId: string;
   ownerId: string;
@@ -88,6 +93,7 @@ export function makeProperty(overrides: Partial<TestProperty> = {}): TestPropert
     published: true,
     ownerId: makeObjectId("user"),
     caretakerIds: [],
+    custodianIds: [],
     createdById: makeObjectId("user"),
     beds: 2,
     baths: 1,
@@ -108,11 +114,18 @@ export interface TestUnit {
   name: string;
   letter: string;
   status: "available" | "occupied" | "maintenance";
+  statusChangedAt?: Date | null;
+  purpose?: PropertyPurpose | null;
   rent: number | null;
+  serviceCharge: number;
+  rentIncludesServiceCharge: boolean;
+  rentSharePercent: number;
+  serviceChargeSharePercent: number;
   beds: number;
   baths: number;
   area: number;
-  tenantId: string;
+  /** Array of occupant user ids. Empty = vacant. */
+  tenantId: string[];
 }
 
 export function makeUnit(overrides: Partial<TestUnit> = {}): TestUnit {
@@ -128,11 +141,16 @@ export function makeUnit(overrides: Partial<TestUnit> = {}): TestUnit {
     name: "3A",
     letter: "A",
     status: "available",
+    statusChangedAt: null,
     rent: null,
+    serviceCharge: 0,
+    rentIncludesServiceCharge: false,
+    rentSharePercent: 100,
+    serviceChargeSharePercent: 0,
     beds: 2,
     baths: 1,
     area: 60,
-    tenantId: "",
+    tenantId: [],
     ...overrides,
   };
 }
@@ -145,6 +163,41 @@ export function makeTenant(overrides: Partial<TestTenant> = {}): TestTenant {
     propertyId: makeObjectId("prop"),
     ownerId: makeObjectId("user"),
     status: "active",
+    ...overrides,
+  };
+}
+
+export interface TestLead {
+  _id: string;
+  name: string;
+  phone: string;
+  email: string;
+  propertyId: string;
+  unitId: string;
+  ownerId: string;
+  status: "new" | "contacted" | "approved" | "rejected" | "converted";
+  source: string;
+  notes: string;
+  createdBy: string;
+  convertedAt: Date | null;
+  convertedTenantId: string;
+}
+
+export function makeLead(overrides: Partial<TestLead> = {}): TestLead {
+  return {
+    _id: makeObjectId("lead"),
+    name: "John Doe",
+    phone: "+254712345678",
+    email: "john@example.com",
+    propertyId: makeObjectId("prop"),
+    unitId: "",
+    ownerId: makeObjectId("user"),
+    status: "new",
+    source: "walk-in",
+    notes: "",
+    createdBy: makeObjectId("user"),
+    convertedAt: null,
+    convertedTenantId: "",
     ...overrides,
   };
 }
@@ -190,6 +243,10 @@ export interface TestInvoice {
   status: "draft" | "pending" | "paid" | "void";
   dueDate: Date;
   issuedAt: Date;
+  rentAmount?: number;
+  serviceChargeAmount?: number;
+  rentIncludesServiceCharge?: boolean;
+  serviceFeeItems?: Array<{ itemId: string; label: string; amount: number }>;
   method?: string;
   notes?: string;
   paidAt?: Date;
@@ -211,6 +268,10 @@ export function makeInvoice(overrides: Partial<TestInvoice> = {}): TestInvoice {
     status: "pending",
     dueDate: new Date("2026-10-05T00:00:00.000Z"),
     issuedAt: new Date("2026-09-01T00:00:00.000Z"),
+    rentAmount: 25000,
+    serviceChargeAmount: 0,
+    rentIncludesServiceCharge: false,
+    serviceFeeItems: [],
     ...overrides,
   };
 }
@@ -302,6 +363,7 @@ export interface TestComplaint {
   tenantId: string;
   propertyId: string;
   ownerId: string;
+  unitId: string;
   subject: string;
   category: "Maintenance" | "Noise" | "Billing" | "Security" | "Neighbours" | "Other";
   message: string;
@@ -320,6 +382,7 @@ export function makeComplaint(overrides: Partial<TestComplaint> = {}): TestCompl
     tenantId: makeObjectId("tenant"),
     propertyId: makeObjectId("prop"),
     ownerId: makeObjectId("user"),
+    unitId: "",
     subject: "Loose bathroom tap",
     category: "Maintenance",
     message: "The bathroom tap is leaking.",
@@ -368,7 +431,7 @@ export interface TestChatMessage {
   _id: string;
   threadId: string;
   senderUserId: string;
-  senderRole: "tenant" | "owner" | "caretaker";
+  senderRole: "tenant" | "owner" | "caretaker" | "custodian";
   text: string;
   createdAt?: Date;
   updatedAt?: Date;

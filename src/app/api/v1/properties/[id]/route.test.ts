@@ -18,6 +18,7 @@ const { user, property, tenant, unit } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
+const CUSTODIAN_ID = makeObjectId("custodian");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
 const PROPERTY_ID = makeObjectId("p1");
 const INVALID_ID = "not-a-valid-objectid";
@@ -61,6 +62,7 @@ async function json(res: Response) {
 describe("GET /api/v1/properties/[id]", () => {
   beforeEach(() => {
     resetModelStubs();
+    unit.find.mockReturnValue(buildQuery([]));
   });
 
   it("400 for an invalid id", async () => {
@@ -114,9 +116,25 @@ describe("GET /api/v1/properties/[id]", () => {
       withParams(PROPERTY_ID),
     );
     expect(res.status).toBe(200);
-    expect(chain.select).toHaveBeenCalledWith("-ownerId -caretakerIds -createdById -__v");
+    expect(chain.select).toHaveBeenCalledWith(
+      "-ownerId -caretakerIds -custodianIds -createdById -__v",
+    );
     const body = await json(res);
     expect((body.data as { status?: string }).status).toBe("available");
+  });
+
+  it("omits unit details when the compact property view is requested", async () => {
+    property.findOne.mockReturnValue(buildQuery(makeProperty({ _id: PROPERTY_ID })));
+
+    const res = await GET(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}`, { query: { includeUnits: "0" } }),
+      withParams(PROPERTY_ID),
+    );
+    const body = await json(res);
+
+    expect(res.status).toBe(200);
+    expect(unit.find).not.toHaveBeenCalled();
+    expect((body.data as { units?: unknown[] }).units).toEqual([]);
   });
 
   it("200 with the full doc for an authenticated owner on their own property", async () => {
@@ -130,6 +148,26 @@ describe("GET /api/v1/properties/[id]", () => {
     expect(property.findOne).toHaveBeenCalledWith(expect.objectContaining({ ownerId: OWNER_ID }));
     const body = await json(res);
     expect((body.data as { ownerId?: string }).ownerId).toBe(OWNER_ID);
+  });
+
+  it("lets a custodian read any property in their owner's portfolio", async () => {
+    const custodian = makeUser({
+      _id: CUSTODIAN_ID,
+      role: "custodian",
+      managedByOwnerId: OWNER_ID,
+    });
+    user.findById.mockReturnValue(buildQuery(custodian));
+    property.findOne.mockReturnValue(buildQuery(ownProperty()));
+
+    const res = await GET(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {
+        token: signToken(CUSTODIAN_ID),
+      }),
+      withParams(PROPERTY_ID),
+    );
+
+    expect(res.status).toBe(200);
+    expect(property.findOne).toHaveBeenCalledWith({ _id: PROPERTY_ID, ownerId: OWNER_ID });
   });
 
   it("404 for an authenticated user with no scope on a non-available foreign property", async () => {
@@ -158,7 +196,9 @@ describe("GET /api/v1/properties/[id]", () => {
       withParams(PROPERTY_ID),
     );
     expect(res.status).toBe(200);
-    expect(chain.select).toHaveBeenCalledWith("-ownerId -caretakerIds -createdById -__v");
+    expect(chain.select).toHaveBeenCalledWith(
+      "-ownerId -caretakerIds -custodianIds -createdById -__v",
+    );
     const body = await json(res);
     expect((body.data as { status?: string }).status).toBe("available");
   });
@@ -186,6 +226,117 @@ describe("GET /api/v1/properties/[id]", () => {
       expect.objectContaining({ caretakerIds: CARETAKER_ID }),
     );
   });
+
+  it("embeds only available units under a safe projection for anonymous", async () => {
+    property.findOne.mockReturnValue(
+      buildQuery(makeProperty({ _id: PROPERTY_ID, status: "available" })),
+    );
+    unit.find.mockReturnValue(
+      buildQuery([
+        { _id: makeObjectId("u1"), name: "3A", status: "available", tenantId: "leak" },
+        { _id: makeObjectId("u2"), name: "3B", status: "available", tenantId: "" },
+      ]),
+    );
+
+    const res = await GET(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}`),
+      withParams(PROPERTY_ID),
+    );
+    expect(res.status).toBe(200);
+    expect(unit.find).toHaveBeenCalledWith({
+      propertyId: PROPERTY_ID,
+      status: "available",
+      deletedAt: null,
+    });
+    const unitChain = unit.find.mock.results[0].value as { select: ReturnType<typeof vi.fn> };
+    const projection = unitChain.select.mock.calls[0][0] as string;
+    expect(projection).not.toContain("tenantId");
+    expect(projection).not.toContain("ownerId");
+
+    const body = await json(res);
+    const data = body.data as { units?: Array<{ name?: string }> };
+    expect(data.units?.map((u) => u.name)).toEqual(["3A", "3B"]);
+  });
+
+  it("embeds no occupied units", async () => {
+    property.findOne.mockReturnValue(
+      buildQuery(makeProperty({ _id: PROPERTY_ID, status: "available" })),
+    );
+    unit.find.mockReturnValue(buildQuery([]));
+
+    const res = await GET(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}`),
+      withParams(PROPERTY_ID),
+    );
+    expect(res.status).toBe(200);
+    expect(unit.find).toHaveBeenCalledWith({
+      propertyId: PROPERTY_ID,
+      status: "available",
+      deletedAt: null,
+    });
+  });
+
+  it("ignores includeUnits=all for anonymous callers and only embeds available units", async () => {
+    property.findOne.mockReturnValue(
+      buildQuery(makeProperty({ _id: PROPERTY_ID, status: "available" })),
+    );
+    unit.find.mockReturnValue(buildQuery([]));
+
+    const res = await GET(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {
+        query: { includeUnits: "all" },
+      }),
+      withParams(PROPERTY_ID),
+    );
+    expect(res.status).toBe(200);
+    expect(unit.find).toHaveBeenCalledWith({
+      propertyId: PROPERTY_ID,
+      status: "available",
+      deletedAt: null,
+    });
+  });
+
+  it("ignores includeUnits=all for authenticated non-managers", async () => {
+    const tenantActor = makeUser({ _id: makeObjectId("tenant"), role: "tenant" });
+    user.findById.mockReturnValue(buildQuery(tenantActor));
+    property.findOne.mockReturnValue(
+      buildQuery(makeProperty({ _id: PROPERTY_ID, status: "available" })),
+    );
+    unit.find.mockReturnValue(buildQuery([]));
+
+    const res = await GET(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {
+        token: signToken(tenantActor._id),
+        query: { includeUnits: "all" },
+      }),
+      withParams(PROPERTY_ID),
+    );
+    expect(res.status).toBe(200);
+    expect(unit.find).toHaveBeenCalledWith({
+      propertyId: PROPERTY_ID,
+      status: "available",
+      deletedAt: null,
+    });
+  });
+
+  it("can include every unit status for a scoped manager", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    property.findOne.mockReturnValue(buildQuery(ownProperty()));
+    unit.find.mockReturnValue(buildQuery([]));
+
+    const res = await GET(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {
+        token: signToken(OWNER_ID),
+        query: { includeUnits: "all" },
+      }),
+      withParams(PROPERTY_ID),
+    );
+    expect(res.status).toBe(200);
+    expect(unit.find).toHaveBeenCalledWith({
+      propertyId: PROPERTY_ID,
+      deletedAt: null,
+    });
+  });
 });
 
 describe("PATCH /api/v1/properties/[id]", () => {
@@ -212,6 +363,7 @@ describe("PATCH /api/v1/properties/[id]", () => {
 
   it("owner can edit own property but identity fields cannot be mutated", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    user.find.mockReturnValue(buildQuery([{ _id: CARETAKER_ID }]));
     property.findById.mockReturnValue(buildQuery(ownProperty()));
     const updated = { ...ownProperty(), title: "Renamed" };
     property.findOneAndUpdate.mockReturnValue(buildQuery(updated));
@@ -243,6 +395,7 @@ describe("PATCH /api/v1/properties/[id]", () => {
 
   it("owner can update caretakerIds (full-control role)", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    user.find.mockReturnValue(buildQuery([{ _id: CARETAKER_ID }]));
     property.findById.mockReturnValue(buildQuery(ownProperty()));
     property.findOneAndUpdate.mockReturnValue(buildQuery(ownProperty()));
 
@@ -257,6 +410,160 @@ describe("PATCH /api/v1/properties/[id]", () => {
     expect(res.status).toBe(200);
     const updateData = property.findOneAndUpdate.mock.calls[0][1] as { caretakerIds?: string[] };
     expect(updateData.caretakerIds).toEqual([CARETAKER_ID]);
+  });
+
+  it("owner can assign a custodian to their property", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    user.find.mockReturnValue(buildQuery([{ _id: CUSTODIAN_ID }]));
+    property.findById.mockReturnValue(buildQuery(ownProperty()));
+    property.findOneAndUpdate.mockReturnValue(
+      buildQuery({ ...ownProperty(), custodianIds: [CUSTODIAN_ID] }),
+    );
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { custodianIds: [CUSTODIAN_ID] },
+      }),
+      withParams(PROPERTY_ID),
+    );
+
+    expect(res.status).toBe(200);
+    expect(user.find).toHaveBeenCalledWith({
+      _id: { $in: [CUSTODIAN_ID] },
+      role: "custodian",
+      managedByOwnerId: OWNER_ID,
+    });
+    expect(property.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: PROPERTY_ID },
+      { custodianIds: [CUSTODIAN_ID] },
+      expect.objectContaining({ new: true, runValidators: true }),
+    );
+  });
+
+  it("rejects assigning a custodian bound to another owner", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    user.find.mockReturnValue(buildQuery([]));
+    property.findById.mockReturnValue(buildQuery(ownProperty()));
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { custodianIds: [CUSTODIAN_ID] },
+      }),
+      withParams(PROPERTY_ID),
+    );
+
+    expect(res.status).toBe(400);
+    expect(property.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it("preserves a previously assigned staff member who is now inactive", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    user.find.mockReturnValue(
+      buildQuery([
+        {
+          _id: CARETAKER_ID,
+          isActive: false,
+          isVerified: false,
+        },
+      ]),
+    );
+    property.findById.mockReturnValue(buildQuery(ownProperty()));
+    property.findOneAndUpdate.mockReturnValue(buildQuery(ownProperty()));
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { caretakerIds: [CARETAKER_ID] },
+      }),
+      withParams(PROPERTY_ID),
+    );
+
+    expect(res.status).toBe(200);
+  });
+
+  it("does not allow assigning an inactive staff account", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    user.find.mockReturnValue(
+      buildQuery([
+        {
+          _id: CUSTODIAN_ID,
+          isActive: false,
+          isVerified: false,
+        },
+      ]),
+    );
+    property.findById.mockReturnValue(buildQuery(ownProperty()));
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { custodianIds: [CUSTODIAN_ID] },
+      }),
+      withParams(PROPERTY_ID),
+    );
+
+    expect(res.status).toBe(400);
+    expect(property.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it("custodians can assign staff within their owner's portfolio", async () => {
+    const custodian = makeUser({
+      _id: CUSTODIAN_ID,
+      role: "custodian",
+      managedByOwnerId: OWNER_ID,
+    });
+    user.findById.mockReturnValue(buildQuery(custodian));
+    user.find.mockReturnValue(buildQuery([{ _id: CARETAKER_ID }]));
+    property.findById.mockReturnValue(buildQuery(ownProperty()));
+    property.findOneAndUpdate.mockReturnValue(
+      buildQuery({ ...ownProperty(), caretakerIds: [CARETAKER_ID] }),
+    );
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {
+        method: "PATCH",
+        token: signToken(CUSTODIAN_ID),
+        body: { caretakerIds: [CARETAKER_ID] },
+      }),
+      withParams(PROPERTY_ID),
+    );
+
+    expect(res.status).toBe(200);
+    expect(user.find).toHaveBeenCalledWith({
+      _id: { $in: [CARETAKER_ID] },
+      role: "caretaker",
+      managedByOwnerId: OWNER_ID,
+    });
+  });
+
+  it("owner can update purpose and dateCompleted", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    property.findById.mockReturnValue(buildQuery(ownProperty()));
+    const updated = {
+      ...ownProperty(),
+      purpose: "commercial",
+      dateCompleted: new Date("2025-01-01"),
+    };
+    property.findOneAndUpdate.mockReturnValue(buildQuery(updated));
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {
+        method: "PATCH",
+        token: signToken(OWNER_ID),
+        body: { purpose: "commercial", dateCompleted: "2025-01-01" },
+      }),
+      withParams(PROPERTY_ID),
+    );
+    expect(res.status).toBe(200);
+    const updateData = property.findOneAndUpdate.mock.calls[0][1] as Record<string, unknown>;
+    expect(updateData.purpose).toBe("commercial");
+    expect(updateData.dateCompleted).toEqual(new Date("2025-01-01"));
   });
 
   it("403 for owner editing a foreign property", async () => {
@@ -275,12 +582,9 @@ describe("PATCH /api/v1/properties/[id]", () => {
     expect(res.status).toBe(403);
   });
 
-  it("caretaker C2 can edit an in-scope property but caretakerIds are stripped", async () => {
+  it("caretaker C2 cannot assign staff when editing an in-scope property", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerDoc(["edit_property"])));
     property.findById.mockReturnValue(buildQuery(managedProperty()));
-    const updated = { ...managedProperty(), title: "Caretaker edit" };
-    property.findOneAndUpdate.mockReturnValue(buildQuery(updated));
-
     const res = await PATCH(
       buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {
         method: "PATCH",
@@ -289,13 +593,8 @@ describe("PATCH /api/v1/properties/[id]", () => {
       }),
       withParams(PROPERTY_ID),
     );
-    expect(res.status).toBe(200);
-    const updateData = property.findOneAndUpdate.mock.calls[0][1] as {
-      title?: string;
-      caretakerIds?: string[];
-    };
-    expect(updateData.title).toBe("Caretaker edit");
-    expect(updateData.caretakerIds).toBeUndefined();
+    expect(res.status).toBe(403);
+    expect(property.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
   it("403 for caretaker C2 on a foreign-owner property", async () => {

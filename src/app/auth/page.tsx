@@ -14,11 +14,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { type Role, useAuth } from "@/hooks/use-auth";
+import { useAuth } from "@/hooks/use-auth";
 import { DEFAULT_COUNTRY, isValidE164, normalizeNationalId, toE164 } from "@/lib/phone";
+import { roleRoute } from "@/lib/role-routes";
 
 const signInSchema = z.object({
-  email: z.string().email("Enter a valid email"),
+  identifier: z.string().min(1, "Enter email or phone"),
   password: z.string().min(6, "At least 6 characters"),
 });
 
@@ -39,14 +40,6 @@ const isInvitedRole = (value: string | null): value is (typeof INVITED_ROLES)[nu
 type SignInValues = z.infer<typeof signInSchema>;
 type SignUpValues = z.infer<typeof signUpSchema>;
 
-const roleRoute: Record<Role, string> = {
-  tenant: "/dashboard/tenant",
-  caretaker: "/dashboard/caretaker",
-  custodian: "/dashboard/custodian",
-  owner: "/dashboard/owner",
-  "system-admin": "/dashboard/system-admin",
-};
-
 const AuthForm = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -64,7 +57,7 @@ const AuthForm = () => {
 
   const signInForm = useForm<SignInValues>({
     resolver: zodResolver(signInSchema),
-    defaultValues: { email: "", password: "" },
+    defaultValues: { identifier: "", password: "" },
   });
 
   const signUpForm = useForm<SignUpValues>({
@@ -82,7 +75,7 @@ const AuthForm = () => {
   const onSignIn = async (values: SignInValues) => {
     setSubmitting(true);
     try {
-      const signedInUser = await signIn(values.email, values.password);
+      const signedInUser = await signIn(values.identifier, values.password);
       router.push(roleRoute[signedInUser.role]);
     } catch {
       // Error handled by toast in hook
@@ -186,16 +179,16 @@ const AuthForm = () => {
           <TabsContent value="signin" className="mt-6">
             <form onSubmit={signInForm.handleSubmit(onSignIn)} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="si-email">Email</Label>
+                <Label htmlFor="si-email">Email or phone</Label>
                 <Input
                   id="si-email"
-                  type="email"
-                  placeholder="you@keja.co"
-                  {...signInForm.register("email")}
+                  type="text"
+                  placeholder="you@keja.co or +254712345678"
+                  {...signInForm.register("identifier")}
                 />
-                {signInForm.formState.errors.email && (
+                {signInForm.formState.errors.identifier && (
                   <p className="text-xs text-destructive">
-                    {signInForm.formState.errors.email.message}
+                    {signInForm.formState.errors.identifier.message}
                   </p>
                 )}
               </div>

@@ -12,7 +12,7 @@ const SystemAdminCaretakersPage = () => {
       title="Caretakers"
       subtitle="Configure privileges for every caretaker on the platform."
     >
-      <CaretakerPrivilegesTable />
+      <CaretakerPrivilegesTable canAssign />
     </DashboardShell>
   );
 };

@@ -26,11 +26,13 @@ interface RouteContext {
  * properties, custodian → managing owner, system-admin → all).
  */
 async function loadScopedTenant(request: NextRequest, id: string) {
-  const scope = await getTenantScope(request);
+  const scope = await getTenantScope(request, "unit:manage");
   if (scope instanceof NextResponse) return scope;
 
   await connectToDatabase();
-  const tenant = (await Tenant.findById(id).lean()) as TenantRef | null;
+  const tenant =
+    ((await Tenant.findById(id).lean()) as TenantRef | null) ??
+    ((await Tenant.findOne({ userId: id }).lean()) as TenantRef | null);
   if (!tenant || !tenantMatchesScope(tenant, scope)) {
     return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
   }
@@ -56,7 +58,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const { tenant } = scoped;
 
   const authError = await requirePermission(request, "unit:manage", {
-    resource: { ownerId: tenant.ownerId },
+    resource: { ownerId: tenant.ownerId, propertyId: tenant.propertyId },
   });
   if (authError) return authError;
 
@@ -100,7 +102,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   const { tenant } = scoped;
 
   const authError = await requirePermission(request, "unit:manage", {
-    resource: { ownerId: tenant.ownerId },
+    resource: { ownerId: tenant.ownerId, propertyId: tenant.propertyId },
   });
   if (authError) return authError;
 
