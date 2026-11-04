@@ -8,10 +8,10 @@ step in this runbook mutates production data.
 Run against the production replica (or a read-only connection):
 
 ```bash
-npx tsx scripts/phase9-readiness.ts
-npx tsx scripts/reconcile-attributions.ts
-npx tsx scripts/reconcile-commissions.ts
-npx tsx scripts/backfill-commissions.ts   # dry-run; no --apply in the soak
+npm run audit:phase9
+npm run reconcile:attributions
+npm run reconcile:commissions
+npm run backfill:commissions   # dry-run; no --apply in the soak
 ```
 
 Expected steady state:
