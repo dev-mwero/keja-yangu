@@ -286,6 +286,28 @@ describe("resolveBillingAccountForUnit", () => {
     );
   });
 
+  it("falls back to the active assignment when the unit pointer is stale", async () => {
+    unitStub.findById.mockReturnValue(buildChain({ billingAccountId: "ba-stale", ownerId: "o-1" }));
+
+    const assignmentChain = {
+      select: vi.fn(),
+      lean: vi.fn(() => Promise.resolve({ billingAccountId: "ba-2" })),
+    };
+    assignmentChain.select.mockReturnValue(assignmentChain);
+    unitBillingAssignmentStub.findOne.mockReturnValue(assignmentChain);
+    unitStub.updateOne.mockResolvedValue({});
+
+    const account = { _id: "ba-2" };
+    billingAccountStub.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(account);
+
+    const result = await resolveBillingAccountForUnit("u-1");
+    expect(result).toBe(account);
+    expect(unitStub.updateOne).toHaveBeenCalledWith(
+      { _id: "u-1" },
+      { $set: { billingAccountId: "ba-2" } },
+    );
+  });
+
   it("falls back to active UnitBillingAssignment when unit pointer is empty", async () => {
     unitStub.findById.mockReturnValue(buildChain({ billingAccountId: "", ownerId: "o-1" }));
 

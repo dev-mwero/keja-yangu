@@ -1,6 +1,11 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { writeAuditEvent } from "@/lib/audit";
+import {
+  assignBillingAccountToUnit,
+  getOrCreateBillingAccountForOwner,
+  resolveBillingAccountForUnit,
+} from "@/lib/billing-accounts";
 import { transitionListingState, validateListingPublish } from "@/lib/listings";
 import { connectToDatabase } from "@/lib/mongoose";
 import { authenticate } from "@/lib/permissions";
@@ -117,12 +122,41 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         return NextResponse.json({ error: "Unit not found" }, { status: 404 });
       }
 
-      const activeLeaseCount = await Lease.countDocuments({
-        unitId: listing.unitId,
-        status: "active",
-      });
+      const [activeLeaseCount, resolvedAccount] = await Promise.all([
+        Lease.countDocuments({
+          unitId: listing.unitId,
+          status: "active",
+        }),
+        resolveBillingAccountForUnit(listing.unitId),
+      ]);
 
-      const validation = validateListingPublish(unit, listing, {
+      // A publishable unit needs an active billing account. Provision one for
+      // the unit owner on first publish instead of failing with a dead end for
+      // properties created before billing backfill ran.
+      let billingAccountId = resolvedAccount
+        ? String((resolvedAccount as { _id?: unknown })._id ?? "")
+        : "";
+      if (!billingAccountId) {
+        const ownerId =
+          (unit.ownerId as string | undefined) ||
+          ((await Property.findById(listing.propertyId).select("ownerId").lean())?.ownerId as
+            | string
+            | undefined);
+        if (ownerId) {
+          const created = await getOrCreateBillingAccountForOwner(ownerId);
+          billingAccountId = String((created as { _id?: unknown })._id ?? "");
+          if (billingAccountId) {
+            await assignBillingAccountToUnit(
+              listing.unitId,
+              billingAccountId,
+              userId,
+              "Auto-provisioned when publishing listing",
+            );
+          }
+        }
+      }
+
+      const validation = validateListingPublish({ ...unit, billingAccountId }, listing, {
         activeLeaseCount,
       });
 

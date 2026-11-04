@@ -4,6 +4,16 @@ import { buildRequest, signToken } from "@/test/utils/api-request";
 import { makeObjectId, makeUser } from "@/test/utils/factories";
 import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-mocks";
 
+const {
+  resolveBillingAccountForUnitMock,
+  getOrCreateBillingAccountForOwnerMock,
+  assignBillingAccountToUnitMock,
+} = vi.hoisted(() => ({
+  resolveBillingAccountForUnitMock: vi.fn(),
+  getOrCreateBillingAccountForOwnerMock: vi.fn(),
+  assignBillingAccountToUnitMock: vi.fn(),
+}));
+
 vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
@@ -20,6 +30,11 @@ vi.mock("@/models/ListingPublisher", () => ({
 }));
 vi.mock("@/models/AuditEvent", () => ({
   AuditEvent: getModelStubs().auditEvent,
+}));
+vi.mock("@/lib/billing-accounts", () => ({
+  resolveBillingAccountForUnit: resolveBillingAccountForUnitMock,
+  getOrCreateBillingAccountForOwner: getOrCreateBillingAccountForOwnerMock,
+  assignBillingAccountToUnit: assignBillingAccountToUnitMock,
 }));
 
 import { DELETE, GET, PATCH } from "@/app/api/v1/listings/[id]/route";
@@ -38,6 +53,11 @@ async function json(res: Response) {
 describe("/api/v1/listings/[id]", () => {
   beforeEach(() => {
     resetModelStubs();
+    resolveBillingAccountForUnitMock.mockReset();
+    resolveBillingAccountForUnitMock.mockResolvedValue(null);
+    getOrCreateBillingAccountForOwnerMock.mockReset();
+    assignBillingAccountToUnitMock.mockReset();
+    property.findById.mockReturnValue(buildQuery({ ownerId: "" }));
   });
 
   describe("GET", () => {
@@ -123,6 +143,64 @@ describe("/api/v1/listings/[id]", () => {
       expect(body.details).toContain("Unit must have a resolved billing account before publishing");
     });
 
+    it("auto-provisions a billing account on publish when the unit owner has none", async () => {
+      user.findById.mockReturnValue(buildQuery(makeUser({ _id: ADMIN_ID, role: "admin" })));
+      listing.findOne.mockReturnValue(
+        buildQuery({
+          _id: LISTING_ID,
+          propertyId: PROPERTY_ID,
+          unitId: UNIT_ID,
+          state: "draft",
+          askingRent: 20000,
+          version: 1,
+        }),
+      );
+      property.findOne.mockReturnValue(buildQuery({ _id: PROPERTY_ID, ownerId: ADMIN_ID }));
+      unit.findById.mockReturnValue(
+        buildQuery({
+          _id: UNIT_ID,
+          ownerId: ADMIN_ID,
+          status: "available",
+          billingAccountId: "",
+          tenantId: [],
+        }),
+      );
+      getOrCreateBillingAccountForOwnerMock.mockResolvedValue({ _id: "ba-auto" });
+      assignBillingAccountToUnitMock.mockResolvedValue(undefined);
+      lease.countDocuments.mockResolvedValue(0);
+      listing.findById.mockReturnValue(
+        buildQuery({
+          _id: LISTING_ID,
+          propertyId: PROPERTY_ID,
+          unitId: UNIT_ID,
+          state: "draft",
+          askingRent: 20000,
+          version: 1,
+        }),
+      );
+      listing.findOneAndUpdate.mockReturnValue(
+        buildQuery({ _id: LISTING_ID, state: "active", version: 2 }),
+      );
+
+      const res = await PATCH(
+        buildRequest(`/api/v1/listings/${LISTING_ID}`, {
+          method: "PATCH",
+          token: signToken(ADMIN_ID),
+          body: { action: "publish" },
+        }),
+        { params: Promise.resolve({ id: String(LISTING_ID) }) },
+      );
+
+      expect(res.status).toBe(200);
+      expect(getOrCreateBillingAccountForOwnerMock).toHaveBeenCalledWith(ADMIN_ID);
+      expect(assignBillingAccountToUnitMock).toHaveBeenCalledWith(
+        UNIT_ID,
+        "ba-auto",
+        ADMIN_ID,
+        "Auto-provisioned when publishing listing",
+      );
+    });
+
     it("publishes listing successfully when vacant and billing account resolved", async () => {
       user.findById.mockReturnValue(buildQuery(makeUser({ _id: ADMIN_ID, role: "admin" })));
       listing.findOne.mockReturnValue(
@@ -140,10 +218,11 @@ describe("/api/v1/listings/[id]", () => {
         buildQuery({
           _id: UNIT_ID,
           status: "available",
-          billingAccountId: "ba-123",
+          billingAccountId: "",
           tenantId: [],
         }),
       );
+      resolveBillingAccountForUnitMock.mockResolvedValue({ _id: "ba-123" });
       lease.countDocuments.mockResolvedValue(0);
 
       listing.findById.mockReturnValue(
@@ -174,6 +253,7 @@ describe("/api/v1/listings/[id]", () => {
       );
 
       expect(res.status).toBe(200);
+      expect(resolveBillingAccountForUnitMock).toHaveBeenCalledWith(UNIT_ID);
       const body = await json(res);
       expect(body.listing.state).toBe("active");
     });

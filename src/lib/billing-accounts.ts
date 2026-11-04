@@ -278,30 +278,39 @@ export async function resolveBillingAccountForUnit(
   const unit = await Unit.findById(unitId).select("billingAccountId ownerId").lean();
   if (!unit) return null;
 
-  let billingAccountId = unit.billingAccountId;
-
-  if (!billingAccountId) {
-    const activeAssignment = await UnitBillingAssignment.findOne({
-      unitId,
-      status: "active",
-    })
-      .select("billingAccountId")
-      .lean();
-
-    if (activeAssignment?.billingAccountId) {
-      billingAccountId = activeAssignment.billingAccountId;
-      // Sync back denormalised pointer
-      await Unit.updateOne({ _id: unitId }, { $set: { billingAccountId } }).catch(() => undefined);
-    }
-  }
-
-  if (billingAccountId) {
+  if (unit.billingAccountId) {
     const account = await BillingAccount.findOne({
-      _id: billingAccountId,
+      _id: unit.billingAccountId,
       status: "active",
       deletedAt: null,
     });
     if (account) return account;
+  }
+
+  // No pointer, or the pointer is stale: try the active unit assignment.
+  const activeAssignment = await UnitBillingAssignment.findOne({
+    unitId,
+    status: "active",
+  })
+    .select("billingAccountId")
+    .lean();
+
+  if (activeAssignment?.billingAccountId) {
+    const account = await BillingAccount.findOne({
+      _id: activeAssignment.billingAccountId,
+      status: "active",
+      deletedAt: null,
+    });
+    if (account) {
+      if (activeAssignment.billingAccountId !== unit.billingAccountId) {
+        // Sync back denormalised pointer
+        await Unit.updateOne(
+          { _id: unitId },
+          { $set: { billingAccountId: activeAssignment.billingAccountId } },
+        ).catch(() => undefined);
+      }
+      return account;
+    }
   }
 
   // Fallback: lookup billing account by legacy unit ownerId
