@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongoose";
 import { notifyMoveRequestCreated } from "@/lib/notifications";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
-import { authenticate } from "@/lib/permissions";
+import { authenticate, getAdminAssignmentScope } from "@/lib/permissions";
 import { moveRequestCreateInput } from "@/lib/schemas/move-request";
 import { MoveRequest } from "@/models/MoveRequest";
 import { Property } from "@/models/Property";
@@ -44,6 +44,19 @@ export async function GET(request: NextRequest) {
       .lean();
     filter.ownerId = user.managedByOwnerId;
     filter.propertyId = { $in: assigned.map((p) => String(p._id)) };
+  } else if (role === "admin") {
+    const scope = await getAdminAssignmentScope(String(user._id), "move-request:manage");
+    const scopes: Record<string, unknown>[] = [];
+    if (scope.propertyScopeIds.length > 0) {
+      scopes.push({ propertyId: { $in: scope.propertyScopeIds } });
+    }
+    if (scope.assignedUnitIds.length > 0) {
+      scopes.push({ unitId: { $in: scope.assignedUnitIds } });
+    }
+    if (scopes.length === 0) {
+      return NextResponse.json(buildPaginationResult([], 0, page, limit));
+    }
+    filter.$or = scopes;
   } else if (role !== "system-admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

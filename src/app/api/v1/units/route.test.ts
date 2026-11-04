@@ -11,10 +11,13 @@ vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 
 import { GET } from "@/app/api/v1/units/route";
 
-const { user, property, unit, tenant } = getModelStubs();
+const { user, property, unit, tenant, managementAssignment } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CUSTODIAN_ID = makeObjectId("custodian");
@@ -51,6 +54,44 @@ describe("GET /api/v1/units", () => {
     expect(body.data).toHaveLength(1);
   });
 
+  it("scopes an admin to property, block, and unit assignments", async () => {
+    const ADMIN_ID = makeObjectId("admin");
+    const propertyId = makeObjectId("assigned-property");
+    const blockId = makeObjectId("assigned-block");
+    const unitId = makeObjectId("assigned-unit");
+    const activeAssignment = (scopeType: string, ids: Record<string, string>) => ({
+      accessRole: "admin",
+      scopeType,
+      propertyId: ids.propertyId,
+      blockId: ids.blockId ?? "",
+      unitId: ids.unitId ?? "",
+      permissions: ["unit:read"],
+      status: "active",
+      startsAt: new Date("2026-01-01T00:00:00.000Z"),
+      endsAt: null,
+    });
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: ADMIN_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment("property", { propertyId }),
+        activeAssignment("block", { propertyId, blockId }),
+        activeAssignment("unit", { propertyId, blockId, unitId }),
+      ]),
+    );
+    listResult([]);
+
+    const res = await GET(buildRequest("/api/v1/units", { token: signToken(ADMIN_ID) }));
+
+    expect(res.status).toBe(200);
+    expect(unit.find).toHaveBeenCalledWith({
+      $or: [
+        { propertyId: { $in: [propertyId] } },
+        { blockId: { $in: [blockId] } },
+        { _id: { $in: [unitId] } },
+      ],
+    });
+  });
+
   it("scopes a custodian to the managing owner's units", async () => {
     user.findById.mockReturnValue(
       buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian", managedByOwnerId: OWNER_ID })),
@@ -81,6 +122,25 @@ describe("GET /api/v1/units", () => {
     const res = await GET(buildRequest("/api/v1/units", { token: signToken(CARETAKER_ID) }));
     expect(res.status).toBe(200);
     expect(unit.find).toHaveBeenCalledWith({ ownerId: OWNER_ID, propertyId: { $in: [p1] } });
+  });
+
+  it("403 when a caretaker requests units for an unassigned property", async () => {
+    const assignedPropertyId = makeObjectId("assigned-property");
+    const otherPropertyId = makeObjectId("other-property");
+    user.findById.mockReturnValue(
+      buildQuery(makeUser({ _id: CARETAKER_ID, role: "caretaker", managedByOwnerId: OWNER_ID })),
+    );
+    property.find.mockReturnValue(buildQuery([{ _id: assignedPropertyId }]));
+    listResult([]);
+
+    const res = await GET(
+      buildRequest(`/api/v1/units?propertyId=${otherPropertyId}`, {
+        token: signToken(CARETAKER_ID),
+      }),
+    );
+
+    expect(res.status).toBe(403);
+    expect(unit.find).not.toHaveBeenCalled();
   });
 
   it("scopes a tenant to units at their tenancy's property", async () => {

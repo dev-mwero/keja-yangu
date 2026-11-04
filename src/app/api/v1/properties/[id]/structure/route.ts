@@ -6,6 +6,7 @@ import { asSoftDeleteModel } from "@/lib/mongoose-soft-delete";
 import { requirePermission } from "@/lib/permissions";
 import { type ExistingUnit, planStructureUpdate, StructureError } from "@/lib/property-structure";
 import { structureUpdateInput } from "@/lib/schemas/structure";
+import { Block } from "@/models/Block";
 import { Property } from "@/models/Property";
 import { Unit } from "@/models/Unit";
 
@@ -106,6 +107,35 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 
   if (plan.unitCreates.length > 0) {
     await Unit.insertMany(plan.unitCreates);
+  }
+
+  // Phase 2: sync standalone Block collection with plan.blocks
+  const activeEmbeddedIds = plan.blocks.map((b) => String(b._id));
+  await Block.updateMany(
+    { propertyId: id, legacyEmbeddedId: { $nin: activeEmbeddedIds }, deletedAt: null },
+    { $set: { deletedAt: new Date() } },
+  );
+
+  if (plan.blocks.length > 0) {
+    await Block.bulkWrite(
+      plan.blocks.map((b) => ({
+        updateOne: {
+          filter: { propertyId: id, legacyEmbeddedId: String(b._id) },
+          update: {
+            $set: {
+              propertyId: id,
+              name: b.name,
+              order: b.order,
+              rentOverride: b.rentOverride ?? null,
+              purpose: b.purpose ?? null,
+              legacyEmbeddedId: String(b._id),
+              deletedAt: null,
+            },
+          },
+          upsert: true,
+        },
+      })),
+    );
   }
 
   const updated = await Property.findByIdAndUpdate(

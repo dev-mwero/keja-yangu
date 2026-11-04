@@ -18,10 +18,16 @@ vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/ChatThread", () => ({ ChatThread: getModelStubs().chatthread }));
 vi.mock("@/models/ChatMessage", () => ({ ChatMessage: getModelStubs().chatmessage }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
+vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
+vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
 
 import { GET, POST } from "@/app/api/v1/chat/threads/route";
 
-const { user, property, tenant, chatthread, chatmessage } = getModelStubs();
+const { user, property, tenant, chatthread, chatmessage, managementAssignment, unit, lease } =
+  getModelStubs();
 
 const USER_ID = makeObjectId("user");
 const OWNER_ID = makeObjectId("owner");
@@ -167,6 +173,44 @@ describe("GET /api/v1/chat/threads", () => {
     const res = await GET(buildRequest("/api/v1/chat/threads", { token: signToken(CUSTODIAN_ID) }));
     expect(res.status).toBe(200);
     expect(chatthread.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
+  });
+
+  it("scopes a unit-only admin to threads for tenants on the assigned unit", async () => {
+    const ADMIN_ID = makeObjectId("unit-admin");
+    const UNIT_ID = makeObjectId("assigned-unit");
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: ADMIN_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "unit",
+          propertyId: PROPERTY_ID,
+          blockId: makeObjectId("assigned-block"),
+          unitId: UNIT_ID,
+          permissions: ["chat:read-own"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    unit.find.mockReturnValue(buildQuery([{ _id: UNIT_ID }]));
+    lease.find.mockReturnValue(buildQuery([{ tenantId: TENANT_ID }]));
+    chatthread.find.mockReturnValue(buildQuery([]).sort({ lastMessageAt: -1 }).skip(0).limit(20));
+    chatthread.countDocuments.mockResolvedValue(0);
+    user.find.mockReturnValue(buildQuery([]));
+    tenant.find.mockReturnValue(buildQuery([]));
+    property.find.mockReturnValue(buildQuery([]));
+
+    const res = await GET(buildRequest("/api/v1/chat/threads", { token: signToken(ADMIN_ID) }));
+
+    expect(res.status).toBe(200);
+    expect(chatthread.find).toHaveBeenCalledWith({
+      $or: [{ tenantId: { $in: [TENANT_ID] } }],
+    });
+    expect(unit.find).toHaveBeenCalledWith({
+      $or: [{ _id: UNIT_ID, propertyId: PROPERTY_ID }],
+    });
   });
 
   it("tenant with no bound rows gets an empty page", async () => {

@@ -33,7 +33,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   if (authError) return authError;
 
   await connectToDatabase();
-  const actor = await resolveDashboardActor(request);
+  const actor = await resolveDashboardActor(request, "chat:read-own");
   if (actor instanceof NextResponse) return actor;
 
   const thread = await ChatThread.findById(id).lean();

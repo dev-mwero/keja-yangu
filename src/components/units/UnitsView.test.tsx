@@ -9,15 +9,17 @@ const mocks = vi.hoisted(() => {
   const unassignedTenants: Array<Record<string, unknown>> = [];
   const assignUnit = vi.fn();
   const vacateUnit = vi.fn();
+  const updateUnit = vi.fn();
   return {
     units,
     properties,
     unassignedTenants,
     assignUnit,
     vacateUnit,
+    updateUnit,
     useUnits: () => ({ units, loading: false, error: null, refetch: vi.fn() }),
     useUnitMutations: () => ({
-      updateUnit: vi.fn(),
+      updateUnit,
       deleteUnit: vi.fn(),
       pending: false,
     }),
@@ -64,6 +66,8 @@ const unitA = {
   blockName: "Block A",
   floorLabel: "Ground",
   floorLevel: 0,
+  blockId: "block-1",
+  floorId: "floor-1",
   rent: 10000,
   status: "available",
   tenantId: [] as string[],
@@ -88,6 +92,7 @@ describe("UnitsView search", () => {
     mocks.unassignedTenants.length = 0;
     mocks.assignUnit.mockReset();
     mocks.vacateUnit.mockReset();
+    mocks.updateUnit.mockReset();
   });
 
   it("filters units by the search box", async () => {
@@ -116,6 +121,7 @@ describe("UnitsView assignment", () => {
     mocks.unassignedTenants.length = 0;
     mocks.assignUnit.mockReset();
     mocks.vacateUnit.mockReset();
+    mocks.updateUnit.mockReset();
     mocks.assignUnit.mockResolvedValue(undefined);
     mocks.vacateUnit.mockResolvedValue(undefined);
   });
@@ -125,7 +131,18 @@ describe("UnitsView assignment", () => {
       unitA as unknown as Record<string, unknown>,
       unitB as unknown as Record<string, unknown>,
     );
-    mocks.properties.push({ _id: "prop-1", title: "Sunset Villa" });
+    mocks.properties.push({
+      _id: "prop-1",
+      title: "Sunset Villa",
+      purpose: "commercial",
+      blocks: [
+        {
+          _id: "block-1",
+          purpose: "residential",
+          floors: [{ _id: "floor-1", purpose: "storage" }],
+        },
+      ],
+    });
     mocks.properties.push({ _id: "prop-2", title: "River Court" });
   };
 
@@ -152,6 +169,31 @@ describe("UnitsView assignment", () => {
     expect(
       screen.queryByRole("button", { name: "Unassign tenant from B2" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("shows inherited purpose and saves a unit purpose override", async () => {
+    seedUnits();
+    mocks.updateUnit.mockResolvedValue(undefined);
+
+    const user = userEvent.setup();
+    render(<UnitsView nav={[]} roleName="Owner" />);
+
+    expect(screen.getByText("storage")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Edit A1" }));
+
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getAllByRole("combobox")[0]);
+    await user.click(await screen.findByRole("option", { name: "commercial" }));
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(mocks.updateUnit).toHaveBeenCalledWith("u1", {
+        name: "A1",
+        status: "available",
+        purpose: "commercial",
+        rent: 10000,
+      }),
+    );
   });
 
   it("assigns an unassigned tenant to an available unit", async () => {

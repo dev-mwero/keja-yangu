@@ -22,7 +22,14 @@ export interface IInvoice {
   tenantId: string;
   propertyId: string;
   leaseId: string;
+  unitId?: string;
   ownerId: string;
+  billingAccountId?: string;
+  billingAdminId?: string;
+  billingSnapshot?: {
+    legalEntityName?: string;
+    invoicePrefix?: string;
+  };
   period: string;
   amountDue: number;
   amountPaid: number;
@@ -52,7 +59,20 @@ const invoiceSchema = new Schema<IInvoice>(
     tenantId: { type: String, required: true },
     propertyId: { type: String, required: true },
     leaseId: { type: String, default: "" },
+    unitId: { type: String, default: "" },
     ownerId: { type: String, required: true },
+    billingAccountId: { type: String, default: "" },
+    billingAdminId: { type: String, default: "" },
+    billingSnapshot: {
+      type: new Schema(
+        {
+          legalEntityName: { type: String, default: "" },
+          invoicePrefix: { type: String, default: "" },
+        },
+        { _id: false },
+      ),
+      default: () => ({}),
+    },
     period: { type: String, required: true, match: PERIOD_REGEX },
     amountDue: { type: Number, required: true, min: 0 },
     amountPaid: { type: Number, default: 0 },
@@ -90,6 +110,7 @@ const invoiceSchema = new Schema<IInvoice>(
 );
 
 invoiceSchema.index({ ownerId: 1, period: 1 });
+invoiceSchema.index({ billingAccountId: 1, period: 1 });
 invoiceSchema.index({ tenantId: 1 });
 // Invoice numbers are unique among live invoices only.
 invoiceSchema.index(

@@ -11,6 +11,7 @@ export type ServiceFeeAppliesTo = (typeof SERVICE_FEE_APPLIES_TO)[number];
 const serviceFeeItemSchema = new Schema(
   {
     ownerId: { type: String, required: true },
+    billingAccountId: { type: String, default: "" },
     propertyId: { type: String, required: true },
     label: { type: String, required: true, trim: true },
     amount: { type: Number, required: true, min: 0, default: 0 },

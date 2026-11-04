@@ -26,7 +26,7 @@ interface RouteContext {
  * properties, custodian → managing owner, system-admin → all).
  */
 async function loadScopedTenant(request: NextRequest, id: string) {
-  const scope = await getTenantScope(request);
+  const scope = await getTenantScope(request, "unit:manage");
   if (scope instanceof NextResponse) return scope;
 
   await connectToDatabase();
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const { tenant } = scoped;
 
   const authError = await requirePermission(request, "unit:manage", {
-    resource: { ownerId: tenant.ownerId },
+    resource: { ownerId: tenant.ownerId, propertyId: tenant.propertyId },
   });
   if (authError) return authError;
 
@@ -102,7 +102,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   const { tenant } = scoped;
 
   const authError = await requirePermission(request, "unit:manage", {
-    resource: { ownerId: tenant.ownerId },
+    resource: { ownerId: tenant.ownerId, propertyId: tenant.propertyId },
   });
   if (authError) return authError;
 

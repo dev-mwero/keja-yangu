@@ -11,13 +11,18 @@ import { ThemeToggle } from "./ThemeToggle";
 
 const publicLinks = [
   { href: "/", label: "Home" },
+  { href: "/marketplace", label: "Marketplace" },
   { href: "/properties", label: "Properties" },
 ];
 
 const dashboardLinks: Record<string, { href: string; label: string }> = {
   tenant: { href: "/dashboard/tenant", label: "Dashboard" },
   caretaker: { href: "/dashboard/caretaker", label: "Dashboard" },
-  owner: { href: "/dashboard/owner", label: "Dashboard" },
+  custodian: { href: "/dashboard/custodian", label: "Dashboard" },
+  owner: { href: "/dashboard/admin", label: "Dashboard" },
+  admin: { href: "/dashboard/admin", label: "Dashboard" },
+  broker: { href: "/dashboard/broker", label: "Dashboard" },
+  "system-admin": { href: "/dashboard/system-admin", label: "Dashboard" },
 };
 
 export const SiteHeader = () => {

@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   if (authError) return authError;
 
   await connectToDatabase();
-  const actor = await resolveDashboardActor(request);
+  const actor = await resolveDashboardActor(request, "announcement:read");
   if (actor instanceof NextResponse) return actor;
 
   // Staff see internal-safe audiences ("all", "staff") plus anything they
@@ -55,6 +55,12 @@ export async function GET(request: NextRequest) {
   } else if (actor.role === "custodian") {
     // Owner-delegate: the whole portfolio of the owner they manage.
     filter.ownerId = actor.managedByOwnerId;
+    filter.$or = staffAudience;
+  } else if (actor.role === "admin") {
+    if (actor.propertyScopeIds.length === 0) {
+      return NextResponse.json(buildPaginationResult([], 0, page, limit));
+    }
+    filter.propertyId = { $in: actor.propertyScopeIds };
     filter.$or = staffAudience;
   }
 
@@ -88,7 +94,7 @@ export async function POST(request: NextRequest) {
   // (owners and system-admins pass without a resource), and the create below
   // stamps `ownerId` with that managing owner.
   await connectToDatabase();
-  const actor = await resolveDashboardActor(request);
+  const actor = await resolveDashboardActor(request, "announcement:manage");
   if (actor instanceof NextResponse) return actor;
 
   const authError = await requirePermission(

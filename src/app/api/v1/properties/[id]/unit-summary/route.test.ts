@@ -1,7 +1,7 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildRequest, withParams } from "@/test/utils/api-request";
-import { makeObjectId, makeProperty } from "@/test/utils/factories";
+import { buildRequest, signToken, withParams } from "@/test/utils/api-request";
+import { makeObjectId, makeProperty, makeUser } from "@/test/utils/factories";
 import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-mocks";
 
 vi.mock("@/lib/mongoose", () => ({
@@ -13,8 +13,10 @@ vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 
 import { GET } from "@/app/api/v1/properties/[id]/unit-summary/route";
 
-const { property, unit } = getModelStubs();
+const { user, property, unit } = getModelStubs();
 const PROPERTY_ID = makeObjectId("summary-property");
+const OWNER_ID = makeObjectId("summary-owner");
+const CARETAKER_ID = makeObjectId("summary-caretaker");
 
 describe("GET /api/v1/properties/[id]/unit-summary", () => {
   beforeEach(() => {
@@ -83,5 +85,67 @@ describe("GET /api/v1/properties/[id]/unit-summary", () => {
         { name: "B", total: 2, available: 1, occupied: 1 },
       ],
     });
+  });
+
+  it("403 when a caretaker is not assigned to the property", async () => {
+    user.findById.mockReturnValue(
+      buildQuery(
+        makeUser({
+          _id: CARETAKER_ID,
+          role: "caretaker",
+          managedByOwnerId: OWNER_ID,
+        }),
+      ),
+    );
+    property.findOne.mockReturnValue(
+      buildQuery(
+        makeProperty({
+          _id: PROPERTY_ID,
+          ownerId: OWNER_ID,
+          caretakerIds: [makeObjectId("other-caretaker")],
+        }),
+      ),
+    );
+
+    const response = await GET(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}/unit-summary`, {
+        token: signToken(CARETAKER_ID, { role: "caretaker" }),
+      }),
+      withParams(PROPERTY_ID),
+    );
+
+    expect(response.status).toBe(403);
+    expect(unit.find).not.toHaveBeenCalled();
+  });
+
+  it("allows a caretaker assigned to the property", async () => {
+    user.findById.mockReturnValue(
+      buildQuery(
+        makeUser({
+          _id: CARETAKER_ID,
+          role: "caretaker",
+          managedByOwnerId: OWNER_ID,
+        }),
+      ),
+    );
+    property.findOne.mockReturnValue(
+      buildQuery(
+        makeProperty({
+          _id: PROPERTY_ID,
+          ownerId: OWNER_ID,
+          caretakerIds: [CARETAKER_ID],
+        }),
+      ),
+    );
+    unit.find.mockReturnValue(buildQuery([]));
+
+    const response = await GET(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}/unit-summary`, {
+        token: signToken(CARETAKER_ID, { role: "caretaker" }),
+      }),
+      withParams(PROPERTY_ID),
+    );
+
+    expect(response.status).toBe(200);
   });
 });

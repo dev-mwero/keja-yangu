@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
   if (authError) return authError;
 
   await connectToDatabase();
-  const actor = await resolveDashboardActor(request);
+  const actor = await resolveDashboardActor(request, "chat:read-own");
   if (actor instanceof NextResponse) return actor;
   if (actor.role !== "tenant") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

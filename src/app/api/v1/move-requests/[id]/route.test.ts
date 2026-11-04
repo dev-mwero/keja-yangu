@@ -17,6 +17,9 @@ vi.mock("@/lib/notifications", () => ({
   notifyMoveRequestDecided: vi.fn().mockResolvedValue(true),
   notifyUnitAvailable: vi.fn().mockResolvedValue(true),
 }));
+vi.mock("@/lib/attributions", () => ({
+  confirmAttributionForLease: vi.fn().mockResolvedValue(null),
+}));
 
 import { PATCH } from "@/app/api/v1/move-requests/[id]/route";
 import { notifyMoveRequestDecided } from "@/lib/notifications";
@@ -26,6 +29,7 @@ const notifyMoveRequestDecidedMock = vi.mocked(notifyMoveRequestDecided);
 
 const OWNER_ID = makeObjectId("owner");
 const CUSTODIAN_ID = makeObjectId("custodian");
+const CARETAKER_ID = makeObjectId("caretaker");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
 const TENANT_ID = makeObjectId("tenant");
 const TENANT_DOC_ID = makeObjectId("tenantdoc");
@@ -115,6 +119,62 @@ describe("PATCH /api/v1/move-requests/[id]", () => {
     );
     expect(res.status).toBe(403);
     expect(notifyMoveRequestDecidedMock).not.toHaveBeenCalled();
+  });
+
+  it("403 when a caretaker decides a request outside their assigned properties", async () => {
+    user.findById.mockReturnValue(
+      buildQuery(
+        makeUser({
+          _id: CARETAKER_ID,
+          role: "caretaker",
+          managedByOwnerId: OWNER_ID,
+          privileges: ["process_move_requests"] as never,
+        }),
+      ),
+    );
+    moverrequest.findById.mockResolvedValue(moveRequest());
+    property.findOne.mockReturnValue(buildQuery(null));
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/move-requests/${MR_ID}`, {
+        method: "PATCH",
+        token: signToken(CARETAKER_ID),
+        body: { status: "rejected" },
+      }),
+      withParams(MR_ID),
+    );
+    expect(res.status).toBe(403);
+    expect(property.findOne).toHaveBeenCalledWith({
+      _id: PROP_ID,
+      ownerId: OWNER_ID,
+      caretakerIds: CARETAKER_ID,
+    });
+    expect(notifyMoveRequestDecidedMock).not.toHaveBeenCalled();
+  });
+
+  it("allows a caretaker to decide a request in an assigned property", async () => {
+    user.findById.mockReturnValue(
+      buildQuery(
+        makeUser({
+          _id: CARETAKER_ID,
+          role: "caretaker",
+          managedByOwnerId: OWNER_ID,
+          privileges: ["process_move_requests"] as never,
+        }),
+      ),
+    );
+    moverrequest.findById.mockResolvedValue(moveRequest());
+    property.findOne.mockReturnValue(buildQuery({ _id: PROP_ID }));
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/move-requests/${MR_ID}`, {
+        method: "PATCH",
+        token: signToken(CARETAKER_ID),
+        body: { status: "rejected" },
+      }),
+      withParams(MR_ID),
+    );
+    expect(res.status).toBe(200);
   });
 
   it("approving a move-out frees the unit and ends the active lease", async () => {

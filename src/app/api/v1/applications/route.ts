@@ -1,8 +1,9 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { bindApplicationAttribution } from "@/lib/attributions";
 import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
-import { authenticate } from "@/lib/permissions";
+import { authenticate, getAdminAssignmentScope } from "@/lib/permissions";
 import { applicationCreateInput } from "@/lib/schemas/application";
 import { Application } from "@/models/Application";
 import { Property } from "@/models/Property";
@@ -42,6 +43,19 @@ export async function GET(request: NextRequest) {
       .lean();
     filter.ownerId = user.managedByOwnerId;
     filter.propertyId = { $in: assigned.map((p) => String(p._id)) };
+  } else if (role === "admin") {
+    const scope = await getAdminAssignmentScope(String(user._id), "application:manage");
+    const scopes: Record<string, unknown>[] = [];
+    if (scope.propertyScopeIds.length > 0) {
+      scopes.push({ propertyId: { $in: scope.propertyScopeIds } });
+    }
+    if (scope.assignedUnitIds.length > 0) {
+      scopes.push({ unitId: { $in: scope.assignedUnitIds } });
+    }
+    if (scopes.length === 0) {
+      return NextResponse.json(buildPaginationResult([], 0, page, limit));
+    }
+    filter.$or = scopes;
   } else if (role !== "system-admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -149,6 +163,25 @@ export async function POST(request: NextRequest) {
     message: parsed.data.message ?? "",
     status: "pending",
   });
+
+  // Lock the sourcing attribution before responding. Non-fatal: a failed
+  // attribution lookup must not discard an otherwise valid application.
+  if (unitId) {
+    const { shareCode, touchToken, listingId } = parsed.data;
+    try {
+      await bindApplicationAttribution({
+        applicationId: String(created._id),
+        shareCode: shareCode || undefined,
+        touchToken: touchToken || undefined,
+        unitId,
+        propertyId: parsed.data.propertyId,
+        listingId: listingId || undefined,
+        actorUserId: auth.userId,
+      });
+    } catch {
+      // Non-fatal attribution bookkeeping
+    }
+  }
 
   return NextResponse.json({ data: created }, { status: 201 });
 }

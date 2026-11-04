@@ -18,6 +18,9 @@ vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 vi.mock("@/models/Complaint", () => ({ Complaint: getModelStubs().complaint }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 vi.mock("@/lib/notifications", () => ({
   notifyComplaintCreated: vi.fn().mockResolvedValue(true),
 }));
@@ -25,7 +28,7 @@ vi.mock("@/lib/notifications", () => ({
 import { GET, POST } from "@/app/api/v1/complaints/route";
 import { notifyComplaintCreated } from "@/lib/notifications";
 
-const { user, property, tenant, unit, complaint } = getModelStubs();
+const { user, property, tenant, unit, complaint, managementAssignment } = getModelStubs();
 
 const USER_ID = makeObjectId("user");
 const OWNER_ID = makeObjectId("owner");
@@ -113,6 +116,34 @@ describe("GET /api/v1/complaints", () => {
     const res = await GET(buildRequest("/api/v1/complaints", { token: signToken(OWNER_ID) }));
     expect(res.status).toBe(200);
     expect(complaint.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
+  });
+
+  it("scopes an admin to property-assigned complaints", async () => {
+    const ADMIN_ID = makeObjectId("complaint-admin");
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: ADMIN_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["complaint:read-own"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    complaint.find.mockReturnValue(buildQuery([]).sort({ createdAt: -1 }).skip(0).limit(20));
+    complaint.countDocuments.mockResolvedValue(0);
+    property.find.mockReturnValue(buildQuery([]));
+
+    const res = await GET(buildRequest("/api/v1/complaints", { token: signToken(ADMIN_ID) }));
+
+    expect(res.status).toBe(200);
+    expect(complaint.find).toHaveBeenCalledWith({
+      $or: [{ propertyId: { $in: [PROPERTY_ID] } }],
+    });
   });
 
   it("caretaker scopes to managed owner + assigned properties", async () => {

@@ -36,7 +36,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   const authError = await requirePermission(request, "complaint:manage", { resource: complaint });
   if (authError) return authError;
 
-  const actor = await resolveDashboardActor(request);
+  const actor = await resolveDashboardActor(request, "complaint:manage");
   if (actor instanceof NextResponse) return actor;
 
   if (actor.role === "caretaker" && !actor.assignedPropertyIds.includes(complaint.propertyId)) {

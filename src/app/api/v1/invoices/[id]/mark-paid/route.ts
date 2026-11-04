@@ -2,6 +2,7 @@ import { isValidObjectId } from "mongoose";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { readJsonBody, resolveInvoiceActor } from "@/app/api/v1/_helpers";
+import { accrueCommissionForSettledInvoice } from "@/lib/commission";
 import { canMarkPaid, resolveManualPayment, serializeInvoice } from "@/lib/invoicing";
 import { connectToDatabase } from "@/lib/mongoose";
 import { notifyInvoicePaid } from "@/lib/notifications";
@@ -31,10 +32,18 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   const authError = await requirePermission(request, "invoice:mark-paid", { resource: invoice });
   if (authError) return authError;
 
-  const actor = await resolveInvoiceActor(request);
+  const actor = await resolveInvoiceActor(request, "invoice:mark-paid");
   if (actor instanceof NextResponse) return actor;
 
   if (actor.role === "caretaker" && !actor.assignedPropertyIds.includes(invoice.propertyId)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  if (
+    actor.role === "admin" &&
+    !actor.propertyScopeIds.includes(invoice.propertyId) &&
+    !(invoice.unitId && actor.assignedUnitIds.includes(invoice.unitId))
+  ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -113,6 +122,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
   if (updated.status === "paid") {
     await notifyInvoicePaid(updated);
+    try {
+      await accrueCommissionForSettledInvoice(updated);
+    } catch (error) {
+      console.warn(`[commission] accrual failed invoice=${id}`, error);
+    }
   }
 
   return NextResponse.json({ data: serializeInvoice(updated, now) });

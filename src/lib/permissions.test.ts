@@ -26,8 +26,20 @@ vi.mock("@/models/Property", async () => {
   const { getModelStubs: get } = await import("@/test/utils/model-mocks");
   return { Property: get().property };
 });
+vi.mock("@/models/ManagementAssignment", async () => {
+  const { getModelStubs: get } = await import("@/test/utils/model-mocks");
+  return { ManagementAssignment: get().managementAssignment };
+});
+vi.mock("@/models/Unit", async () => {
+  const { getModelStubs: get } = await import("@/test/utils/model-mocks");
+  return { Unit: get().unit };
+});
+vi.mock("@/models/Lease", async () => {
+  const { getModelStubs: get } = await import("@/test/utils/model-mocks");
+  return { Lease: get().lease };
+});
 
-const { user, property } = getModelStubs();
+const { user, property, managementAssignment, unit, lease } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
@@ -63,7 +75,9 @@ function custodianUser(overrides: Partial<TestUser> = {}) {
 
 async function guard(
   action: Action,
-  opts: { resource?: { ownerId?: string; caretakerIds?: string[] } } | undefined,
+  opts:
+    | { resource?: { ownerId?: string; caretakerIds?: string[]; propertyId?: string } }
+    | undefined,
   mocker: TestUser,
 ) {
   user.findById.mockReturnValue(buildQuery(mocker));
@@ -280,6 +294,33 @@ describe("requirePermission — caretaker", () => {
     expect((await guard("unit:manage", undefined, mocker))?.status).toBe(403);
     const noUnits = caretakerUser(["edit_property"]);
     expect((await guard("unit:manage", { resource: inScope }, noUnits))?.status).toBe(403);
+
+    const notAssigned = { ownerId: OTHER_OWNER_ID, caretakerIds: [] };
+    expect((await guard("unit:manage", { resource: notAssigned }, mocker))?.status).toBe(403);
+
+    const propertyId = makeObjectId("scoped-property");
+    property.findOne.mockReturnValue(buildQuery({ _id: propertyId }));
+    expect(
+      await guard("unit:manage", { resource: { ownerId: OTHER_OWNER_ID, propertyId } }, mocker),
+    ).toBeNull();
+    expect(property.findOne).toHaveBeenCalledWith({
+      _id: propertyId,
+      ownerId: OTHER_OWNER_ID,
+      caretakerIds: CARETAKER_ID,
+    });
+  });
+
+  it("unit:read requires an assigned property in the managing owner's scope", async () => {
+    const mocker = caretakerUser([]);
+    const assigned = { ownerId: OTHER_OWNER_ID, caretakerIds: [CARETAKER_ID] };
+    expect(await guard("unit:read", { resource: assigned }, mocker)).toBeNull();
+
+    const notAssigned = { ownerId: OTHER_OWNER_ID, caretakerIds: [] };
+    expect((await guard("unit:read", { resource: notAssigned }, mocker))?.status).toBe(403);
+
+    const foreign = { ownerId: OWNER_ID, caretakerIds: [CARETAKER_ID] };
+    expect((await guard("unit:read", { resource: foreign }, mocker))?.status).toBe(403);
+    expect((await guard("unit:read", undefined, mocker))?.status).toBe(403);
   });
 
   it("C6 — process_move_requests permits move-request:manage only in scope", async () => {
@@ -290,6 +331,24 @@ describe("requirePermission — caretaker", () => {
     expect((await guard("move-request:manage", { resource: foreign }, mocker))?.status).toBe(403);
     const noPriv = caretakerUser(["manage_units"]);
     expect((await guard("move-request:manage", { resource: inScope }, noPriv))?.status).toBe(403);
+
+    const notAssigned = { ownerId: OTHER_OWNER_ID, caretakerIds: [] };
+    expect((await guard("move-request:manage", { resource: notAssigned }, mocker))?.status).toBe(
+      403,
+    );
+  });
+
+  it("C7 — application:manage requires an assigned property", async () => {
+    const mocker = caretakerUser(["manage_tenants"]);
+    const assigned = { ownerId: OTHER_OWNER_ID, caretakerIds: [CARETAKER_ID] };
+    const notAssigned = { ownerId: OTHER_OWNER_ID, caretakerIds: [] };
+    expect(await guard("application:manage", { resource: assigned }, mocker)).toBeNull();
+    expect((await guard("application:manage", { resource: notAssigned }, mocker))?.status).toBe(
+      403,
+    );
+    expect(
+      (await guard("application:manage", { resource: assigned }, caretakerUser([])))?.status,
+    ).toBe(403);
   });
 
   it("C7 — caretakers cannot manage custodians", async () => {
@@ -339,6 +398,77 @@ describe("getTenantScope", () => {
     expect(res.filter).toEqual({ ownerId: OWNER_ID });
     expect(res.userId).toBe(OWNER_ID);
     expect(res.role).toBe("owner");
+  });
+
+  it("scopes an admin to property assignments rather than its own user id", async () => {
+    const adminId = makeObjectId("assigned-admin");
+    const assignedPropertyId = makeObjectId("admin-property");
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: adminId, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: assignedPropertyId,
+          permissions: ["property:read", "tenant:manage", "lease:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+
+    const res = await getTenantScope(
+      buildRequest("/api/v1/tenants", { token: signToken(adminId) }),
+    );
+
+    expect(res instanceof Response).toBe(false);
+    if (res instanceof Response) return;
+    expect(res.filter).toEqual({ propertyId: { $in: [assignedPropertyId] } });
+    expect(res.leaseFilter).toEqual({ propertyId: { $in: [assignedPropertyId] } });
+  });
+
+  it("scopes an admin's unit assignment to tenants on that unit", async () => {
+    const adminId = makeObjectId("unit-admin");
+    const propertyId = makeObjectId("unit-property");
+    const blockId = makeObjectId("unit-block");
+    const unitId = makeObjectId("unit-scope");
+    const tenantId = makeObjectId("unit-tenant");
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: adminId, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "unit",
+          propertyId,
+          blockId,
+          unitId,
+          permissions: ["tenant:manage", "lease:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    unit.find.mockReturnValue(buildQuery([{ _id: unitId, propertyId }]));
+    lease.find.mockReturnValue(buildQuery([{ tenantId }]));
+
+    const res = await getTenantScope(
+      buildRequest("/api/v1/tenants", { token: signToken(adminId) }),
+      "tenant:manage",
+    );
+
+    expect(res instanceof Response).toBe(false);
+    if (res instanceof Response) return;
+    expect(res.filter).toEqual({ _id: { $in: [tenantId] } });
+    expect(res.leaseFilter).toEqual({ unitId: { $in: [unitId] } });
+    expect(unit.find).toHaveBeenCalledWith({
+      $or: [{ _id: unitId, propertyId }],
+    });
+    expect(lease.find).toHaveBeenCalledWith({
+      unitId: { $in: [unitId] },
+      status: "active",
+    });
   });
 
   it("system-admin scope has an empty filter", async () => {

@@ -79,7 +79,7 @@ export interface MaintenanceTask {
   priority: TaskPriority;
   status: TaskStatus;
   assignedTo?: string;
-  createdBy: "caretaker" | "owner";
+  createdBy: "caretaker" | "owner" | "admin";
   dueDate: string;
   createdAt: string;
   completedAt?: string;

@@ -6,6 +6,7 @@ export interface ILease {
   propertyId: string;
   ownerId: string;
   unitId: string;
+  billingAccountId?: string;
   rentAmount: number;
   frequency: "monthly";
   startDate: Date;
@@ -23,6 +24,8 @@ const leaseSchema = new Schema<ILease>(
     // The unit this lease bills for. Authoritative occupancy pointer (D2-A);
     // `Unit.tenantId`/`status` are a cache written only by `lib/allocation.ts`.
     unitId: { type: String, default: "" },
+    // Billing account responsible for issuing rent invoices for this lease.
+    billingAccountId: { type: String, default: "" },
     rentAmount: { type: Number, required: true, min: 0 },
     frequency: { type: String, enum: ["monthly"], default: "monthly" },
     startDate: { type: Date, required: true },

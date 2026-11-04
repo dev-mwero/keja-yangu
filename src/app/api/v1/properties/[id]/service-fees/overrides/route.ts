@@ -1,10 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { readJsonBody } from "@/app/api/v1/_helpers";
-import {
-  loadManagedProperty,
-  validatePropertyUnitIds,
-} from "@/app/api/v1/_service-fees";
+import { loadManagedProperty, validatePropertyUnitIds } from "@/app/api/v1/_service-fees";
 import { unitServiceFeeOverrideInput } from "@/lib/schemas";
 import { ServiceFeeItem } from "@/models/ServiceFeeItem";
 import { UnitServiceFeeOverride } from "@/models/UnitServiceFeeOverride";
@@ -64,8 +61,6 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     );
   }
 
-  const saved = await UnitServiceFeeOverride.find({ unitId })
-    .sort({ itemId: 1 })
-    .lean();
+  const saved = await UnitServiceFeeOverride.find({ unitId }).sort({ itemId: 1 }).lean();
   return NextResponse.json({ data: saved });
 }

@@ -1,15 +1,21 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { isDuplicateKeyError, readJsonBody, resolveInvoiceActor } from "@/app/api/v1/_helpers";
+import {
+  isDuplicateKeyError,
+  isInvoiceNumberCollision,
+  readJsonBody,
+  resolveInvoiceActor,
+} from "@/app/api/v1/_helpers";
+import { billingFieldsFromAccount, loadBillingAccountLookup } from "@/lib/billing-accounts";
 import { generateForPeriod } from "@/lib/invoice-generation";
 import { nextInvoiceNumber } from "@/lib/invoice-numbering";
 import { currentPeriod } from "@/lib/invoicing";
 import { connectToDatabase } from "@/lib/mongoose";
 import { DAY_IN_MS, notifyLeaseExpiry } from "@/lib/notifications";
 import { requirePermission } from "@/lib/permissions";
-import { loadServiceFeesForUnits, type UnitServiceFee } from "@/lib/service-fees";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { invoiceGenerateInput } from "@/lib/schemas";
+import { loadServiceFeesForUnits, type UnitServiceFee } from "@/lib/service-fees";
 import { Invoice } from "@/models/Invoice";
 import { Lease } from "@/models/Lease";
 import { Tenant } from "@/models/Tenant";
@@ -35,7 +41,7 @@ export async function POST(request: NextRequest) {
 
   await connectToDatabase();
 
-  const actor = await resolveInvoiceActor(request);
+  const actor = await resolveInvoiceActor(request, "invoice:generate");
   if (actor instanceof NextResponse) return actor;
 
   const now = new Date();
@@ -58,6 +64,19 @@ export async function POST(request: NextRequest) {
   if (actor.role === "caretaker") {
     filter.propertyId = { $in: actor.assignedPropertyIds };
     filter.ownerId = actor.managedByOwnerId;
+  }
+  if (actor.role === "admin") {
+    const scopes: Record<string, unknown>[] = [];
+    if (actor.propertyScopeIds.length > 0) {
+      scopes.push({ propertyId: { $in: actor.propertyScopeIds } });
+    }
+    if (actor.assignedUnitIds.length > 0) {
+      scopes.push({ unitId: { $in: actor.assignedUnitIds } });
+    }
+    if (scopes.length === 0) {
+      return NextResponse.json({ data: { generatedCount: 0, invoices: [] } }, { status: 201 });
+    }
+    filter.$or = scopes;
   }
 
   const leases = await Lease.find(filter).lean();
@@ -127,17 +146,42 @@ export async function POST(request: NextRequest) {
     unitChargeByLeaseId,
   });
 
+  const billingLookup = await loadBillingAccountLookup({
+    unitIds,
+    billingAccountIds: leases.map((lease) => lease.billingAccountId),
+    ownerIds: leases.map((lease) => lease.ownerId),
+  });
+
   let created = 0;
   let skippedCount = skipped.length;
   for (const draft of toCreate) {
-    draft.invoiceNumber = await nextInvoiceNumber(draft.ownerId, period);
-    try {
-      await Invoice.create(draft);
-      created += 1;
-    } catch (error) {
-      if (!isDuplicateKeyError(error)) throw error;
-      skippedCount += 1;
+    const account =
+      (draft.billingAccountId
+        ? billingLookup.byAccountId.get(draft.billingAccountId)
+        : undefined) ??
+      billingLookup.byUnitId.get(draft.unitId ?? "") ??
+      billingLookup.byOwnerId.get(draft.ownerId);
+    const billingFields = billingFieldsFromAccount(account);
+    if (billingFields) Object.assign(draft, billingFields);
+
+    // The unique invoiceNumber index is the backstop for a lost counter race:
+    // reserve again and retry, but treat any other duplicate as a skip.
+    let persisted = false;
+    for (let attempt = 0; attempt < 3 && !persisted; attempt += 1) {
+      draft.invoiceNumber = await nextInvoiceNumber(draft.ownerId, period, {
+        billingAccountId: draft.billingAccountId,
+      });
+      try {
+        await Invoice.create(draft);
+        persisted = true;
+        created += 1;
+      } catch (error) {
+        if (isInvoiceNumberCollision(error)) continue;
+        if (!isDuplicateKeyError(error)) throw error;
+        break;
+      }
     }
+    if (!persisted) skippedCount += 1;
   }
 
   console.info(

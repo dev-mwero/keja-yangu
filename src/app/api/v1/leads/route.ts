@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
-import { authenticate, requirePermission } from "@/lib/permissions";
+import { authenticate, getAdminAssignmentScope, requirePermission } from "@/lib/permissions";
 import { leadInput } from "@/lib/schemas";
 import { Lead } from "@/models/Lead";
 import { User } from "@/models/User";
@@ -42,6 +42,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     filter.ownerId = user.managedByOwnerId;
+  } else if (user.role === "admin") {
+    const scope = await getAdminAssignmentScope(authUser.userId, "lead:read");
+    const scopes: Record<string, unknown>[] = [];
+    if (scope.propertyScopeIds.length > 0) {
+      scopes.push({ propertyId: { $in: scope.propertyScopeIds } });
+    }
+    if (scope.assignedUnitIds.length > 0) {
+      scopes.push({ unitId: { $in: scope.assignedUnitIds } });
+    }
+    if (scopes.length === 0) {
+      return NextResponse.json(buildPaginationResult([], 0, page, limit));
+    }
+    filter.$or = scopes;
   } else if (user.role === "system-admin") {
     // no filter — sees every portfolio's leads
   } else {
@@ -96,6 +109,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     ownerId = user.managedByOwnerId;
+  } else if (user.role === "admin") {
+    ownerId = authUser.userId;
+    if (parsed.data.propertyId || parsed.data.unitId) {
+      const scope = await getAdminAssignmentScope(authUser.userId, "lead:manage");
+      const coversProperty =
+        parsed.data.propertyId && scope.propertyScopeIds.includes(parsed.data.propertyId);
+      const coversUnit = parsed.data.unitId && scope.assignedUnitIds.includes(parsed.data.unitId);
+      if (!coversProperty && !coversUnit) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    }
   } else {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

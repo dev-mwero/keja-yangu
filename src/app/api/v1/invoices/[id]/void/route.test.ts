@@ -7,16 +7,23 @@ import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-m
 vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("@/lib/audit", () => ({
+  writeAuditEvent: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Invoice", () => ({ Invoice: getModelStubs().invoice }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 
 import { POST } from "@/app/api/v1/invoices/[id]/void/route";
 
-const { user, property, invoice: invoiceStub } = getModelStubs();
+const { user, property, invoice: invoiceStub, managementAssignment } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
+const ADMIN_ID = makeObjectId("admin");
 const PROPERTY_ID = makeObjectId("p1");
 const OTHER_PROPERTY_ID = makeObjectId("p2");
 const INVOICE_ID = makeObjectId("invoice");
@@ -211,6 +218,66 @@ describe("POST /api/v1/invoices/[id]/void", () => {
       buildRequest(`/api/v1/invoices/${INVOICE_ID}/void`, {
         method: "POST",
         token: signToken(CARETAKER_ID),
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(403);
+    const body = await json(res);
+    expect(body.error).toBe("Forbidden");
+    expect(invoiceStub.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it("an in-scope admin voids an invoice on their assigned property", async () => {
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: ADMIN_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: ADMIN_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["invoice:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    invoiceStub.findById.mockReturnValue(buildQuery(pendingInvoice()));
+    invoiceStub.findOneAndUpdate.mockReturnValue(
+      buildQuery({ ...pendingInvoice(), status: "void" }),
+    );
+    const res = await POST(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}/void`, {
+        method: "POST",
+        token: signToken(ADMIN_ID, { role: "admin" }),
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("403 when an admin voids an invoice outside their assignment scope", async () => {
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: ADMIN_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: ADMIN_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: OTHER_PROPERTY_ID,
+          permissions: ["invoice:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    invoiceStub.findById.mockReturnValue(buildQuery(pendingInvoice())); // invoice on PROPERTY_ID
+    const res = await POST(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}/void`, {
+        method: "POST",
+        token: signToken(ADMIN_ID, { role: "admin" }),
       }),
       withParams(INVOICE_ID),
     );

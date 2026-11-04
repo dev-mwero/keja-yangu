@@ -24,7 +24,21 @@ const stubs: Record<
   | "propertyView"
   | "unitFavorite"
   | "serviceFeeItem"
-  | "unitServiceFeeOverride",
+  | "unitServiceFeeOverride"
+  | "managementAssignment"
+  | "auditEvent"
+  | "block"
+  | "propertyClaim"
+  | "billingAccount"
+  | "unitBillingAssignment"
+  | "listing"
+  | "listingPublisher"
+  | "brokerProfile"
+  | "brokerAuthorization"
+  | "commissionAgreement"
+  | "attribution"
+  | "commissionAccrual"
+  | "commissionPayout",
   ModelStub
 > = {
   user: createModelStub(),
@@ -51,6 +65,20 @@ const stubs: Record<
   unitFavorite: createModelStub(),
   serviceFeeItem: createModelStub(),
   unitServiceFeeOverride: createModelStub(),
+  managementAssignment: createModelStub(),
+  auditEvent: createModelStub(),
+  block: createModelStub(),
+  propertyClaim: createModelStub(),
+  billingAccount: createModelStub(),
+  unitBillingAssignment: createModelStub(),
+  listing: createModelStub(),
+  listingPublisher: createModelStub(),
+  brokerProfile: createModelStub(),
+  brokerAuthorization: createModelStub(),
+  commissionAgreement: createModelStub(),
+  attribution: createModelStub(),
+  commissionAccrual: createModelStub(),
+  commissionPayout: createModelStub(),
 };
 
 /**

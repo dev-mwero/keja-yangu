@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  adminNav,
+  brokerNav,
   caretakerNav,
   custodianNav,
   ownerNav,
@@ -52,6 +54,18 @@ describe("tenant navigation", () => {
   });
 });
 
+describe("admin navigation", () => {
+  it("provides full admin dashboard sections pointing to /dashboard/admin", () => {
+    expect(adminNav.some((item) => item.to === "/dashboard/admin")).toBe(true);
+    expect(adminNav.some((item) => item.to === "/dashboard/admin/portfolio")).toBe(true);
+    expect(adminNav.some((item) => item.to === "/dashboard/admin/units")).toBe(true);
+    expect(adminNav.some((item) => item.to === "/dashboard/admin/tenants")).toBe(true);
+    expect(adminNav.some((item) => item.to === "/dashboard/admin/accounting")).toBe(true);
+    expect(adminNav.some((item) => item.to === "/dashboard/admin/team")).toBe(true);
+    expect(adminNav.some((item) => item.to === "/dashboard/admin/brokers")).toBe(true);
+  });
+});
+
 describe("manager navigation is unaffected", () => {
   it("keeps the full owner sections", () => {
     expect(ownerNav.some((item) => item.to === "/dashboard/owner/applications")).toBe(true);
@@ -70,5 +84,18 @@ describe("custodian navigation", () => {
     expect(custodianNav.some((item) => item.to === "/dashboard/custodian/communications")).toBe(
       true,
     );
+  });
+});
+
+describe("broker navigation", () => {
+  it("includes broker specific sections pointing to /dashboard/broker", () => {
+    expect(brokerNav.map((item) => item.to)).toEqual([
+      "/dashboard/broker",
+      "/dashboard/broker/listings",
+      "/dashboard/broker/authorizations",
+      "/dashboard/broker/prospects",
+      "/dashboard/broker#commissions",
+      "/dashboard/broker/profile",
+    ]);
   });
 });

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { getRoleRoute } from "@/lib/role-routes";
 
 export const AuthGuard = ({
   children,
@@ -15,16 +16,24 @@ export const AuthGuard = ({
   const { user, loading } = useAuth();
   const router = useRouter();
 
+  const isAllowed = Boolean(
+    user &&
+      allowedRoles &&
+      (allowedRoles.includes(user.role) ||
+        (user.role === "admin" && allowedRoles.includes("owner")) ||
+        (user.role === "owner" && allowedRoles.includes("admin"))),
+  );
+
   useEffect(() => {
     if (loading) return;
     if (!user) {
       router.push("/auth");
       return;
     }
-    if (allowedRoles && !allowedRoles.includes(user.role)) {
-      router.push(`/dashboard/${user.role}`);
+    if (!isAllowed) {
+      router.push(getRoleRoute(user.role));
     }
-  }, [user, loading, router, allowedRoles]);
+  }, [user, loading, router, isAllowed]);
 
   if (loading) {
     return (
@@ -34,8 +43,7 @@ export const AuthGuard = ({
     );
   }
 
-  if (!user) return null;
-  if (allowedRoles && !allowedRoles.includes(user.role)) return null;
+  if (!user || !isAllowed) return null;
 
   return <>{children}</>;
 };

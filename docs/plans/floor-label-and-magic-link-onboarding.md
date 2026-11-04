@@ -85,16 +85,17 @@ Author: inline (agent tier unavailable) · Date: 2026-10-21
 | Plan | Status | Residual |
 |---|---|---|
 | `simplify-user-flows/*` | shipped (Phase 6 `32bc470`) | `ChatThread.unitId` intentionally deferred — stays deferred; not in scope. |
-| `blocks-floors-units-management.md` | Part A done | **Part B "client vacant-unit browse + prefer" is now obsolete**: `UnitPreference`, `unit:prefer`, `use-unit-preferences` and `PUT /units/[id]/prefer` were **retired in Phase 6**. The plan doc still says TODO — needs a status correction, not code. |
+| `blocks-floors-units-management.md` | Part A done; Part B withdrawn | `UnitPreference`, `unit:prefer`, `use-unit-preferences` and `PUT /units/[id]/prefer` were retired in simplify-user-flows Phase 6. The plan already records Part B as withdrawn; no follow-up remains. |
 | `assign-unit-in-manage-structure.md` | shipped (`15649d2`) | none. |
-| `property-hierarchy-roles-search.md` | **Proposed — pending Tier 2** | never built; the hierarchy + property types it describes already shipped piecemeal (property-types, block/floor structure). Needs status reconciliation only. |
+| `property-hierarchy-roles-search.md` | **SUPERSEDED IN PART** | The plan already records the shipped property types, hierarchy and custodian role, with amenities picker and dashboard search as its two remaining gaps. |
 | `soft-delete.md` | Stages 1–3 implemented | none outstanding. |
 | `account-contact-identity.md` | built | 3 "out of scope" follow-ups: capturing contact at signup (already done), national-ID field encryption (now done — `encryptField` is used), legacy phone backfill (data task, not code). |
 
-**Conclusion:** there is **no unbuilt code** hiding in the previous plans — the
-only residuals are (a) obsolete Part B, (b) two doc status lines, (c) a
-genuinely *new* need surfaced by this request: **invitees (custodians
-especially) can't complete onboarding today**. That is Phase 3 below.
+**Conclusion:** there is **no unbuilt code** hiding in the previous plans.
+`ChatThread.unitId` remains intentionally deferred, legacy phone normalization
+is a data task, and the hierarchy plan tracks amenities and dashboard search as
+separate residuals. The documentation status corrections are complete. The
+new invite-onboarding gap identified here is addressed by Phase 3.
 
 ---
 
@@ -300,22 +301,16 @@ widening to `custodian` for safety if any invitee ever reaches the signup form.
 
 **Goal:** make the plan docs match reality; no code.
 
-- [ ] T4.1 `blocks-floors-units-management.md`: mark **Part B (§4) as
-      WITHDRAWN**, noting `UnitPreference` was retired in
-      `simplify-user-flows` Phase 6 — the client browse/prefer flow is superseded
-      by the prospect-picks-a-unit flow (Phase 1 of that programme).
-- [ ] T4.2 `property-hierarchy-roles-search.md`: change status from
-      "pending ratification" to **SUPERSEDED IN PART** — property types
-      (`type: "apartment"`, already default in `src/models/Property.ts:33`),
-      the block/floor/unit hierarchy (`Property.blocks[].floors[]` + `Unit`) all
-      shipped separately. **Verified remaining gap:** amenities are a free-text
-      `[String]` (`Property.ts:38`) with **no predefined pickable list** and
-      there is **no dashboard search bar** (`dashboardNav`/`DashboardShell`
-      contain no search). Record those two as the only live residuals.
-- [ ] T4.3 `account-contact-identity.md` §"Out of scope": tick off the two now
-      done (signup capture, national-ID encryption) and leave the phone-backfill
-      note as a data task.
-- [ ] T4.4 Commit: `docs(plans): reconcile pending items with shipped code`.
+- [x] T4.1 Verified `blocks-floors-units-management.md` records Part B (§4) as
+  WITHDRAWN; `UnitPreference` was retired in `simplify-user-flows` Phase 6,
+  which supersedes the client browse/prefer flow.
+- [x] T4.2 Verified `property-hierarchy-roles-search.md` records
+  SUPERSEDED IN PART: property types, the block/floor/unit hierarchy and
+  custodian role shipped separately. Its only live residuals are a
+  predefined amenities picker and dashboard search.
+- [x] T4.3 Verified `account-contact-identity.md` marks signup capture and
+  national-ID encryption done; legacy phone backfill remains a data task.
+- [x] T4.4 Commit the reconciled plan docs with the dashboard purpose override.
 
 ---
 

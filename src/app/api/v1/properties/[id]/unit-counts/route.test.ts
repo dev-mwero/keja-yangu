@@ -18,6 +18,7 @@ const { user, property, unit } = getModelStubs();
 const OWNER_ID = makeObjectId("owner");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
 const TENANT_ID = makeObjectId("tenant");
+const CARETAKER_ID = makeObjectId("caretaker");
 const PROPERTY_ID = makeObjectId("p1");
 const INVALID_ID = "not-a-valid-objectid";
 
@@ -125,5 +126,67 @@ describe("GET /api/v1/properties/[id]/unit-counts", () => {
       propertyId: PROPERTY_ID,
       status: "maintenance",
     });
+  });
+
+  it("403 when a caretaker is not assigned to the property", async () => {
+    property.findById.mockReturnValue(
+      buildQuery(
+        makeProperty({
+          _id: PROPERTY_ID,
+          ownerId: OWNER_ID,
+          caretakerIds: [makeObjectId("other-caretaker")],
+        }),
+      ),
+    );
+    user.findById.mockReturnValue(
+      buildQuery(
+        makeUser({
+          _id: CARETAKER_ID,
+          role: "caretaker",
+          managedByOwnerId: OWNER_ID,
+        }),
+      ),
+    );
+
+    const res = await GET(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}/unit-counts`, {
+        token: signToken(CARETAKER_ID, { role: "caretaker" }),
+      }),
+      withParams(PROPERTY_ID),
+    );
+
+    expect(res.status).toBe(403);
+    expect(unit.countDocuments).not.toHaveBeenCalled();
+  });
+
+  it("allows a caretaker assigned to the property", async () => {
+    property.findById.mockReturnValue(
+      buildQuery(
+        makeProperty({
+          _id: PROPERTY_ID,
+          ownerId: OWNER_ID,
+          caretakerIds: [CARETAKER_ID],
+        }),
+      ),
+    );
+    user.findById.mockReturnValue(
+      buildQuery(
+        makeUser({
+          _id: CARETAKER_ID,
+          role: "caretaker",
+          managedByOwnerId: OWNER_ID,
+        }),
+      ),
+    );
+    unit.countDocuments.mockResolvedValue(0);
+
+    const res = await GET(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}/unit-counts`, {
+        token: signToken(CARETAKER_ID, { role: "caretaker" }),
+      }),
+      withParams(PROPERTY_ID),
+    );
+
+    expect(res.status).toBe(200);
   });
 });

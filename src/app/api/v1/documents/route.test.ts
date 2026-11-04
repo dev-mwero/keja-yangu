@@ -13,10 +13,13 @@ vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/PropertyDocument", () => ({
   PropertyDocument: getModelStubs().propertydocument,
 }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 
 import { GET, POST } from "@/app/api/v1/documents/route";
 
-const { user, property, tenant, propertydocument } = getModelStubs();
+const { user, property, tenant, propertydocument, managementAssignment } = getModelStubs();
 
 const USER_ID = makeObjectId("user");
 const OWNER_ID = makeObjectId("owner");
@@ -104,6 +107,48 @@ describe("GET /api/v1/documents", () => {
     property.find.mockReturnValue(buildQuery([]));
 
     const res = await GET(buildRequest("/api/v1/documents", { token: signToken(OWNER_ID) }));
+    expect(res.status).toBe(200);
+    expect(propertydocument.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
+  });
+
+  it("scopes an admin to property documents on assigned properties", async () => {
+    const ADMIN_ID = makeObjectId("document-admin");
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: ADMIN_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["document:read-own"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    propertydocument.find.mockReturnValue(buildQuery([]).sort({ createdAt: -1 }).skip(0).limit(20));
+    propertydocument.countDocuments.mockResolvedValue(0);
+    property.find.mockReturnValue(buildQuery([]));
+
+    const res = await GET(buildRequest("/api/v1/documents", { token: signToken(ADMIN_ID) }));
+
+    expect(res.status).toBe(200);
+    expect(propertydocument.find).toHaveBeenCalledWith({
+      $or: [{ scope: "property", propertyId: { $in: [PROPERTY_ID] } }],
+    });
+  });
+
+  it("custodian scopes to the managed owner's records", async () => {
+    const CUSTODIAN_ID = makeObjectId("document-custodian");
+    user.findById.mockReturnValue(
+      buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian", managedByOwnerId: OWNER_ID })),
+    );
+    propertydocument.find.mockReturnValue(buildQuery([]).sort({ createdAt: -1 }).skip(0).limit(20));
+    propertydocument.countDocuments.mockResolvedValue(0);
+    property.find.mockReturnValue(buildQuery([]));
+
+    const res = await GET(buildRequest("/api/v1/documents", { token: signToken(CUSTODIAN_ID) }));
     expect(res.status).toBe(200);
     expect(propertydocument.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
   });

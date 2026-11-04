@@ -1,5 +1,9 @@
 import { type InferSchemaType, model, models, Schema } from "mongoose";
-import { DEFAULT_PROPERTY_PURPOSE, PROPERTY_PURPOSES } from "@/lib/domain-enums";
+import {
+  DEFAULT_PROPERTY_PURPOSE,
+  PROPERTY_LIFECYCLE_STATES,
+  PROPERTY_PURPOSES,
+} from "@/lib/domain-enums";
 import { softDeletePlugin } from "@/lib/mongoose-soft-delete";
 
 const floorSchema = new Schema(
@@ -63,6 +67,18 @@ const propertySchema = new Schema(
     blocks: { type: [blockSchema], default: [] },
     // Set when the property is soft-deleted (hidden from reads, restorable).
     deletedAt: { type: Date, default: null },
+    // Phase 2: property identity and lifecycle fields.
+    // Lifecycle state for the physical property record.
+    lifecycleState: {
+      type: String,
+      enum: [...PROPERTY_LIFECYCLE_STATES],
+      default: "active",
+    },
+    // Set to the winning property's id when this record is merged/deduped.
+    canonicalId: { type: String, default: "" },
+    // Deterministic hash of normalised title + location used for soft duplicate
+    // detection. Computed on create/update by `src/lib/property-identity.ts`.
+    identityHash: { type: String, default: "" },
   },
   {
     timestamps: true,
@@ -70,6 +86,7 @@ const propertySchema = new Schema(
 );
 
 propertySchema.index({ status: 1, published: 1 });
+propertySchema.index({ identityHash: 1 }, { sparse: true });
 softDeletePlugin(propertySchema);
 
 export type PropertyDocument = InferSchemaType<typeof propertySchema>;

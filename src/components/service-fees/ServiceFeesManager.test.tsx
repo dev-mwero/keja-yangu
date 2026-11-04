@@ -64,7 +64,8 @@ describe("ServiceFeesManager", () => {
           String(url) === "/api/v1/properties/prop-1/service-fees" && init?.method === "POST",
       );
       expect(create).toBeDefined();
-      expect(JSON.parse((create?.[1] as RequestInit).body as string)).toMatchObject({
+      const createInit = (create as [string, RequestInit])[1];
+      expect(JSON.parse(createInit.body as string)).toMatchObject({
         label: "Water",
         amount: 500,
         appliesTo: "selected",

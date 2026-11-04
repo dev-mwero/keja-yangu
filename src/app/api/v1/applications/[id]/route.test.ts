@@ -13,6 +13,9 @@ vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
+vi.mock("@/lib/attributions", () => ({
+  confirmAttributionForLease: vi.fn().mockResolvedValue(null),
+}));
 
 import { DELETE, PATCH } from "@/app/api/v1/applications/[id]/route";
 
@@ -20,6 +23,7 @@ const { user, application, tenant, unit, lease, property } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CUSTODIAN_ID = makeObjectId("custodian");
+const CARETAKER_ID = makeObjectId("caretaker");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
 const TENANT_ID = makeObjectId("tenant");
 const TENANT_DOC_ID = makeObjectId("tenant-doc");
@@ -98,6 +102,61 @@ describe("PATCH /api/v1/applications/[id]", () => {
       withParams(APP_ID),
     );
     expect(res.status).toBe(400);
+  });
+
+  it("403 when a caretaker decides an application outside their assigned properties", async () => {
+    user.findById.mockReturnValue(
+      buildQuery(
+        makeUser({
+          _id: CARETAKER_ID,
+          role: "caretaker",
+          managedByOwnerId: OWNER_ID,
+          privileges: ["manage_tenants"] as never,
+        }),
+      ),
+    );
+    application.findById.mockResolvedValue(appDoc());
+    property.findOne.mockReturnValue(buildQuery(null));
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/applications/${APP_ID}`, {
+        method: "PATCH",
+        token: signToken(CARETAKER_ID),
+        body: { status: "rejected" },
+      }),
+      withParams(APP_ID),
+    );
+    expect(res.status).toBe(403);
+    expect(property.findOne).toHaveBeenCalledWith({
+      _id: PROP_ID,
+      ownerId: OWNER_ID,
+      caretakerIds: CARETAKER_ID,
+    });
+  });
+
+  it("allows a caretaker to decide an application in an assigned property", async () => {
+    user.findById.mockReturnValue(
+      buildQuery(
+        makeUser({
+          _id: CARETAKER_ID,
+          role: "caretaker",
+          managedByOwnerId: OWNER_ID,
+          privileges: ["manage_tenants"] as never,
+        }),
+      ),
+    );
+    application.findById.mockResolvedValue(appDoc());
+    property.findOne.mockReturnValue(buildQuery({ _id: PROP_ID }));
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/applications/${APP_ID}`, {
+        method: "PATCH",
+        token: signToken(CARETAKER_ID),
+        body: { status: "rejected" },
+      }),
+      withParams(APP_ID),
+    );
+    expect(res.status).toBe(200);
   });
 
   it("403 when a custodian decides a foreign owner's application", async () => {

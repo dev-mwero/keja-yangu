@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
 
   await connectToDatabase();
 
-  const actor = await resolveInvoiceActor(request);
+  const actor = await resolveInvoiceActor(request, "invoice:read");
   if (actor instanceof NextResponse) return actor;
 
   // ---- Resolve the caller's scope -----------------------------------------
@@ -67,6 +67,9 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
       ownerScope = actor.managedByOwnerId;
+      assignedPropertyIds = actor.assignedPropertyIds;
+      break;
+    case "admin":
       assignedPropertyIds = actor.assignedPropertyIds;
       break;
     case "system-admin":

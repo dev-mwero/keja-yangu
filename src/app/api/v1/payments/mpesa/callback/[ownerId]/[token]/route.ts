@@ -4,6 +4,7 @@ import { connectToDatabase } from "@/lib/mongoose";
 import { parseStkCallback, verifyMpesaCallbackToken } from "@/lib/payments/mpesa";
 import { applyProviderPayment } from "@/lib/payments/settle";
 import { mpesaCallbackParams } from "@/lib/schemas";
+import { BillingAccount } from "@/models/BillingAccount";
 import { Payment } from "@/models/Payment";
 
 export const runtime = "nodejs";
@@ -60,11 +61,33 @@ export async function POST(
 
   await connectToDatabase();
 
-  const payment = await Payment.findOne({
-    provider: "mpesa",
+  // The path key is either a legacy owner id or a billing account id (new
+  // callbacks). Try the direct match first, then resolve an account's legacy
+  // owner for callbacks initiated before the switch.
+  const paymentMatch = {
+    provider: "mpesa" as const,
     providerReference: callback.checkoutRequestId,
-    ownerId,
+  };
+  let payment = await Payment.findOne({
+    ...paymentMatch,
+    $or: [{ ownerId }, { billingAccountId: ownerId }],
   }).lean();
+  if (!payment) {
+    const account = await BillingAccount.findOne({
+      $or: [{ _id: ownerId }, { legacyOwnerId: ownerId }],
+      status: "active",
+      deletedAt: null,
+    }).lean();
+    if (account) {
+      const ownerIds = [account.ownerAdminId, account.legacyOwnerId].filter((id): id is string =>
+        Boolean(id),
+      );
+      payment = await Payment.findOne({
+        ...paymentMatch,
+        $or: [{ ownerId: { $in: ownerIds } }, { billingAccountId: String(account._id) }],
+      }).lean();
+    }
+  }
   if (!payment) {
     console.warn(`[payments] mpesa callback unknown checkout=${callback.checkoutRequestId}`);
     return NextResponse.json({ received: true });

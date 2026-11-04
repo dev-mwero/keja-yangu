@@ -54,3 +54,106 @@ export const DEFAULT_PROPERTY_PURPOSE: PropertyPurpose = "residential";
 
 export const LEAD_STATUSES = ["new", "contacted", "approved", "rejected", "converted"] as const;
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
+
+export const ASSIGNMENT_ACCESS_ROLES = ["admin", "custodian", "caretaker"] as const;
+export type AssignmentAccessRole = (typeof ASSIGNMENT_ACCESS_ROLES)[number];
+
+export const ASSIGNMENT_SCOPE_TYPES = ["property", "block", "unit"] as const;
+export type AssignmentScopeType = (typeof ASSIGNMENT_SCOPE_TYPES)[number];
+
+export const ASSIGNMENT_STATUSES = [
+  "pending",
+  "active",
+  "suspended",
+  "revoked",
+  "expired",
+] as const;
+export type AssignmentStatus = (typeof ASSIGNMENT_STATUSES)[number];
+
+export const ASSIGNMENT_SOURCES = ["invitation", "claim", "migration", "system"] as const;
+export type AssignmentSource = (typeof ASSIGNMENT_SOURCES)[number];
+
+export const OWNERSHIP_HOLDER_TYPES = ["user", "external"] as const;
+export type OwnershipHolderType = (typeof OWNERSHIP_HOLDER_TYPES)[number];
+
+export const OWNERSHIP_STATUSES = ["active", "ended", "disputed"] as const;
+export type OwnershipStatus = (typeof OWNERSHIP_STATUSES)[number];
+
+export const PROPERTY_CLAIM_STATUSES = ["pending", "approved", "rejected", "withdrawn"] as const;
+export type PropertyClaimStatus = (typeof PROPERTY_CLAIM_STATUSES)[number];
+
+export const PROPERTY_LIFECYCLE_STATES = ["active", "decommissioned", "merged"] as const;
+export type PropertyLifecycleState = (typeof PROPERTY_LIFECYCLE_STATES)[number];
+
+export const BILLING_ACCOUNT_STATUSES = ["active", "suspended", "closed"] as const;
+export type BillingAccountStatus = (typeof BILLING_ACCOUNT_STATUSES)[number];
+
+export const UNIT_BILLING_ASSIGNMENT_STATUSES = [
+  "active",
+  "scheduled",
+  "ended",
+  "disputed",
+] as const;
+export type UnitBillingAssignmentStatus = (typeof UNIT_BILLING_ASSIGNMENT_STATUSES)[number];
+
+export const LISTING_STATES = ["draft", "active", "paused", "let", "expired", "withdrawn"] as const;
+export type ListingState = (typeof LISTING_STATES)[number];
+
+export const LISTING_VISIBILITIES = ["public", "unlisted"] as const;
+export type ListingVisibility = (typeof LISTING_VISIBILITIES)[number];
+
+export const LISTING_PUBLISHER_ROLES = ["admin", "broker"] as const;
+export type ListingPublisherRole = (typeof LISTING_PUBLISHER_ROLES)[number];
+
+export const LISTING_PUBLISHER_STATES = ["active", "paused", "revoked", "expired"] as const;
+export type ListingPublisherState = (typeof LISTING_PUBLISHER_STATES)[number];
+
+export const BROKER_PROFILE_STATUSES = ["pending", "verified", "rejected", "suspended"] as const;
+export type BrokerProfileStatus = (typeof BROKER_PROFILE_STATUSES)[number];
+
+export const BROKER_AUTH_STATUSES = ["active", "suspended", "revoked"] as const;
+export type BrokerAuthStatus = (typeof BROKER_AUTH_STATUSES)[number];
+
+export const BROKER_SCOPE_TYPES = ["property", "block", "unit"] as const;
+export type BrokerScopeType = (typeof BROKER_SCOPE_TYPES)[number];
+
+export const COMMISSION_BASES = ["first_month_rent", "percentage_of_rent", "fixed"] as const;
+export type CommissionBasis = (typeof COMMISSION_BASES)[number];
+
+export const COMMISSION_AGREEMENT_STATUSES = ["draft", "active", "terminated"] as const;
+export type CommissionAgreementStatus = (typeof COMMISSION_AGREEMENT_STATUSES)[number];
+
+export const ATTRIBUTION_SOURCES = ["broker", "direct", "platform", "admin"] as const;
+export type AttributionSource = (typeof ATTRIBUTION_SOURCES)[number];
+
+export const ATTRIBUTION_STATUSES = [
+  "provisional",
+  "locked",
+  "confirmed",
+  "reversed",
+  "disputed",
+] as const;
+export type AttributionStatus = (typeof ATTRIBUTION_STATUSES)[number];
+
+export const COMMISSION_ACCRUAL_KINDS = ["initial", "recurring", "adjustment", "clawback"] as const;
+export type CommissionAccrualKind = (typeof COMMISSION_ACCRUAL_KINDS)[number];
+
+export const COMMISSION_ACCRUAL_STATUSES = [
+  "pending",
+  "eligible",
+  "approved",
+  "paid",
+  "reversed",
+  "disputed",
+] as const;
+export type CommissionAccrualStatus = (typeof COMMISSION_ACCRUAL_STATUSES)[number];
+
+export const COMMISSION_PAYOUT_STATUSES = [
+  "draft",
+  "approved",
+  "processing",
+  "paid",
+  "failed",
+  "void",
+] as const;
+export type CommissionPayoutStatus = (typeof COMMISSION_PAYOUT_STATUSES)[number];

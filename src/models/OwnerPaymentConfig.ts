@@ -31,6 +31,7 @@ export interface IDarajaConfig {
 
 export interface IOwnerPaymentConfig {
   ownerId: string;
+  billingAccountId?: string;
   /** Owner's on/off switch for the M-Pesa method, independent of creds present. */
   darajaEnabled: boolean;
   daraja: IDarajaConfig;
@@ -50,11 +51,14 @@ const darajaSchema = new Schema<IDarajaConfig>(
 const ownerPaymentConfigSchema = new Schema<IOwnerPaymentConfig>(
   {
     ownerId: { type: String, required: true, unique: true },
+    billingAccountId: { type: String, default: "" },
     darajaEnabled: { type: Boolean, default: false },
     daraja: { type: darajaSchema, default: () => ({}) },
   },
   { timestamps: true },
 );
+
+ownerPaymentConfigSchema.index({ billingAccountId: 1 }, { sparse: true });
 
 export type OwnerPaymentConfigDocument = InferSchemaType<IOwnerPaymentConfig>;
 

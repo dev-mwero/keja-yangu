@@ -14,7 +14,9 @@ export interface IPayment {
   providerReference: string;
   invoiceId: string;
   tenantId: string;
+  unitId?: string;
   ownerId: string;
+  billingAccountId?: string;
   propertyId: string;
   amountMinor: number;
   currency: string;
@@ -35,7 +37,9 @@ const paymentSchema = new Schema<IPayment>(
     providerReference: { type: String, required: true },
     invoiceId: { type: String, required: true },
     tenantId: { type: String, required: true },
+    unitId: { type: String, default: "" },
     ownerId: { type: String, required: true },
+    billingAccountId: { type: String, default: "" },
     propertyId: { type: String, required: true },
     amountMinor: { type: Number, required: true, min: 0 },
     currency: { type: String, default: "KES" },
@@ -66,6 +70,7 @@ paymentSchema.index(
 );
 paymentSchema.index({ tenantId: 1, createdAt: -1 });
 paymentSchema.index({ ownerId: 1, createdAt: -1 });
+paymentSchema.index({ billingAccountId: 1, createdAt: -1 });
 // Pending checkouts self-expire 90 minutes after initiation; successful,
 // failed and abandoned rows are kept as history.
 paymentSchema.index(

@@ -276,7 +276,7 @@ describe("GET /api/v1/properties/[id]", () => {
     });
   });
 
-  it("can include every unit status for public favouriting", async () => {
+  it("ignores includeUnits=all for anonymous callers and only embeds available units", async () => {
     property.findOne.mockReturnValue(
       buildQuery(makeProperty({ _id: PROPERTY_ID, status: "available" })),
     );
@@ -284,6 +284,49 @@ describe("GET /api/v1/properties/[id]", () => {
 
     const res = await GET(
       buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {
+        query: { includeUnits: "all" },
+      }),
+      withParams(PROPERTY_ID),
+    );
+    expect(res.status).toBe(200);
+    expect(unit.find).toHaveBeenCalledWith({
+      propertyId: PROPERTY_ID,
+      status: "available",
+      deletedAt: null,
+    });
+  });
+
+  it("ignores includeUnits=all for authenticated non-managers", async () => {
+    const tenantActor = makeUser({ _id: makeObjectId("tenant"), role: "tenant" });
+    user.findById.mockReturnValue(buildQuery(tenantActor));
+    property.findOne.mockReturnValue(
+      buildQuery(makeProperty({ _id: PROPERTY_ID, status: "available" })),
+    );
+    unit.find.mockReturnValue(buildQuery([]));
+
+    const res = await GET(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {
+        token: signToken(tenantActor._id),
+        query: { includeUnits: "all" },
+      }),
+      withParams(PROPERTY_ID),
+    );
+    expect(res.status).toBe(200);
+    expect(unit.find).toHaveBeenCalledWith({
+      propertyId: PROPERTY_ID,
+      status: "available",
+      deletedAt: null,
+    });
+  });
+
+  it("can include every unit status for a scoped manager", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    property.findOne.mockReturnValue(buildQuery(ownProperty()));
+    unit.find.mockReturnValue(buildQuery([]));
+
+    const res = await GET(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {
+        token: signToken(OWNER_ID),
         query: { includeUnits: "all" },
       }),
       withParams(PROPERTY_ID),

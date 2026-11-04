@@ -10,6 +10,7 @@ vi.mock("@/lib/mongoose", () => ({
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
+vi.mock("@/models/Block", () => ({ Block: getModelStubs().block }));
 
 import { PUT } from "@/app/api/v1/properties/[id]/structure/route";
 

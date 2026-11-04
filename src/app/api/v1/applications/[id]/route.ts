@@ -26,7 +26,11 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
   }
 
   const authError = await requirePermission(request, "application:manage", {
-    resource: { ownerId: application.ownerId },
+    resource: {
+      ownerId: application.ownerId,
+      propertyId: application.propertyId,
+      unitId: application.unitId ? String(application.unitId) : undefined,
+    },
   });
   if (authError) return authError;
 
@@ -51,7 +55,11 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
 
     if (application.unitId) {
       try {
-        await allocateUnit({ tenantId, unitId: String(application.unitId) });
+        await allocateUnit({
+          tenantId,
+          unitId: String(application.unitId),
+          applicationId: String(application._id),
+        });
       } catch (error) {
         if (error instanceof AllocationError) {
           return NextResponse.json({ error: error.message }, { status: error.status });

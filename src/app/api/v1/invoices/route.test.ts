@@ -32,6 +32,22 @@ vi.mock("@/models/Invoice", async () => {
   const { getModelStubs: get } = await import("@/test/utils/model-mocks");
   return { Invoice: get().invoice };
 });
+vi.mock("@/models/ManagementAssignment", async () => {
+  const { getModelStubs: get } = await import("@/test/utils/model-mocks");
+  return { ManagementAssignment: get().managementAssignment };
+});
+vi.mock("@/models/Unit", async () => {
+  const { getModelStubs: get } = await import("@/test/utils/model-mocks");
+  return { Unit: get().unit };
+});
+vi.mock("@/models/BillingAccount", async () => {
+  const { getModelStubs: get } = await import("@/test/utils/model-mocks");
+  return { BillingAccount: get().billingAccount };
+});
+vi.mock("@/models/UnitBillingAssignment", async () => {
+  const { getModelStubs: get } = await import("@/test/utils/model-mocks");
+  return { UnitBillingAssignment: get().unitBillingAssignment };
+});
 
 import { GET, POST } from "@/app/api/v1/invoices/route";
 import { notifyOverdueInvoices } from "@/lib/notifications";
@@ -42,6 +58,10 @@ const {
   tenant: tenantStub,
   lease: leaseStub,
   invoice: invoiceStub,
+  managementAssignment,
+  unit: unitStub,
+  billingAccount: billingAccountStub,
+  unitBillingAssignment: unitBillingAssignmentStub,
 } = getModelStubs();
 const notifyOverdueInvoicesMock = vi.mocked(notifyOverdueInvoices);
 
@@ -153,6 +173,32 @@ describe("GET /api/v1/invoices", () => {
     });
   });
 
+  it("scopes an admin to invoices on assigned properties or units", async () => {
+    const SCOPED_ADMIN_ID = makeObjectId("scoped-admin");
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: SCOPED_ADMIN_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["invoice:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    invoiceStub.find.mockReturnValue(buildQuery([]).sort({ issuedAt: -1 }).skip(0).limit(10));
+    invoiceStub.countDocuments.mockResolvedValue(0);
+
+    const res = await GET(buildRequest("/api/v1/invoices", { token: signToken(SCOPED_ADMIN_ID) }));
+    expect(res.status).toBe(200);
+    expect(invoiceStub.find).toHaveBeenCalledWith({
+      $or: [{ propertyId: { $in: [PROPERTY_ID] } }],
+    });
+  });
+
   it("403 when a caretaker filters by a property outside their assignment", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerDoc()));
     property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID }]));
@@ -251,6 +297,10 @@ describe("GET /api/v1/invoices", () => {
 describe("POST /api/v1/invoices", () => {
   beforeEach(() => {
     resetModelStubs();
+    billingAccountStub.find.mockReturnValue(buildQuery([]));
+    billingAccountStub.findOne.mockReturnValue(buildQuery(null));
+    unitStub.find.mockReturnValue(buildQuery([]));
+    unitBillingAssignmentStub.find.mockReturnValue(buildQuery([]));
   });
 
   it("403 for a mismatched origin", async () => {
@@ -366,7 +416,10 @@ describe("POST /api/v1/invoices", () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     leaseStub.findById.mockReturnValue(buildQuery(inScopeLease()));
     user.findOneAndUpdate.mockReturnValue(buildQuery({ invoiceCounters: {} }));
-    invoiceStub.create.mockRejectedValue({ code: 11000 });
+    invoiceStub.create.mockRejectedValue({
+      code: 11000,
+      keyPattern: { leaseId: 1, period: 1 },
+    });
 
     const res = await POST(
       buildRequest("/api/v1/invoices", {

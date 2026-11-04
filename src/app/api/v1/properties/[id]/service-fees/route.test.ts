@@ -16,8 +16,8 @@ vi.mock("@/models/UnitServiceFeeOverride", () => ({
 }));
 
 import { DELETE, PATCH } from "@/app/api/v1/properties/[id]/service-fees/[itemId]/route";
-import { GET, POST } from "@/app/api/v1/properties/[id]/service-fees/route";
 import { PUT } from "@/app/api/v1/properties/[id]/service-fees/overrides/route";
+import { GET, POST } from "@/app/api/v1/properties/[id]/service-fees/route";
 
 const { user, property, unit, serviceFeeItem, unitServiceFeeOverride } = getModelStubs();
 
@@ -154,7 +154,9 @@ describe("property service-fee routes", () => {
   });
 
   it("updates an item and clears unit ids when switching to all units", async () => {
-    serviceFeeItem.findOne.mockReturnValue(buildQuery(item({ appliesTo: "selected", unitIds: [UNIT_ID] })));
+    serviceFeeItem.findOne.mockReturnValue(
+      buildQuery(item({ appliesTo: "selected", unitIds: [UNIT_ID] })),
+    );
     serviceFeeItem.findOneAndUpdate.mockReturnValue(buildQuery(item({ amount: 700 })));
 
     const res = await PATCH(

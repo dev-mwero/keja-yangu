@@ -143,7 +143,12 @@ export async function GET(request: NextRequest) {
 
   const filter: Record<string, unknown> = { ...scope.filter };
   if (status) filter.status = status;
-  if (propertyId) filter.propertyId = propertyId;
+  if (propertyId) {
+    if (scope.role === "admin" && !scope.assignedPropertyIds?.includes(propertyId)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    filter.propertyId = propertyId;
+  }
 
   const [rows, total] = await Promise.all([
     Tenant.find(filter)
@@ -192,6 +197,9 @@ export async function POST(request: NextRequest) {
   }
 
   if (scope.role === "owner" && property.ownerId !== scope.userId) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (scope.role === "admin" && !scope.propertyScopeIds?.includes(parsed.data.propertyId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   if (

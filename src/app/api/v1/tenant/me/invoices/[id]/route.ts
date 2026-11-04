@@ -2,6 +2,7 @@ import { isValidObjectId } from "mongoose";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { readJsonBody, resolveTenantActor, resolveTenantIds } from "@/app/api/v1/_helpers";
+import { accrueCommissionForSettledInvoice } from "@/lib/commission";
 import { canMarkPaid, resolveManualPayment, serializeInvoice } from "@/lib/invoicing";
 import { connectToDatabase } from "@/lib/mongoose";
 import { notifyInvoicePaid } from "@/lib/notifications";
@@ -133,6 +134,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
   if (updated.status === "paid") {
     await notifyInvoicePaid(updated);
+    try {
+      await accrueCommissionForSettledInvoice(updated);
+    } catch (error) {
+      console.warn(`[commission] accrual failed invoice=${id}`, error);
+    }
   }
 
   return NextResponse.json({ data: serializeInvoice(updated, now) });

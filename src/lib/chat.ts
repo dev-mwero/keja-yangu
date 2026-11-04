@@ -9,7 +9,14 @@ export interface ThreadEnrichment {
   unread: number;
 }
 
-export type ThreadViewerRole = "tenant" | "owner" | "caretaker" | "custodian" | "system-admin";
+export type ThreadViewerRole =
+  | "tenant"
+  | "owner"
+  | "admin"
+  | "caretaker"
+  | "custodian"
+  | "broker"
+  | "system-admin";
 
 /**
  * Copies a thread doc and appends the fields the chat pages render. Tenants see

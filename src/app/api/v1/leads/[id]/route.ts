@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { connectToDatabase } from "@/lib/mongoose";
-import { authenticate, requirePermission } from "@/lib/permissions";
+import { authenticate, getAdminAssignmentScope, requirePermission } from "@/lib/permissions";
 import { Lead } from "@/models/Lead";
 import { Tenant } from "@/models/Tenant";
 import { User } from "@/models/User";
@@ -39,6 +39,19 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     filter.ownerId = user.managedByOwnerId;
+  } else if (user.role === "admin") {
+    const scope = await getAdminAssignmentScope(authUser.userId, "lead:read");
+    const scopes: Record<string, unknown>[] = [];
+    if (scope.propertyScopeIds.length > 0) {
+      scopes.push({ propertyId: { $in: scope.propertyScopeIds } });
+    }
+    if (scope.assignedUnitIds.length > 0) {
+      scopes.push({ unitId: { $in: scope.assignedUnitIds } });
+    }
+    if (scopes.length === 0) {
+      return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+    }
+    filter.$or = scopes;
   } else if (user.role === "system-admin") {
     // no owner filter
   } else {
@@ -95,6 +108,19 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     filter.ownerId = user.managedByOwnerId;
+  } else if (user.role === "admin") {
+    const scope = await getAdminAssignmentScope(authUser.userId, "lead:manage");
+    const scopes: Record<string, unknown>[] = [];
+    if (scope.propertyScopeIds.length > 0) {
+      scopes.push({ propertyId: { $in: scope.propertyScopeIds } });
+    }
+    if (scope.assignedUnitIds.length > 0) {
+      scopes.push({ unitId: { $in: scope.assignedUnitIds } });
+    }
+    if (scopes.length === 0) {
+      return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+    }
+    filter.$or = scopes;
   } else if (user.role === "system-admin") {
     // no owner filter
   } else {

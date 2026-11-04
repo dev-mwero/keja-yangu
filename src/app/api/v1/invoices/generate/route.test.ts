@@ -33,6 +33,22 @@ vi.mock("@/models/Tenant", async () => {
   const { getModelStubs: get } = await import("@/test/utils/model-mocks");
   return { Tenant: get().tenant };
 });
+vi.mock("@/models/ManagementAssignment", async () => {
+  const { getModelStubs: get } = await import("@/test/utils/model-mocks");
+  return { ManagementAssignment: get().managementAssignment };
+});
+vi.mock("@/models/Unit", async () => {
+  const { getModelStubs: get } = await import("@/test/utils/model-mocks");
+  return { Unit: get().unit };
+});
+vi.mock("@/models/BillingAccount", async () => {
+  const { getModelStubs: get } = await import("@/test/utils/model-mocks");
+  return { BillingAccount: get().billingAccount };
+});
+vi.mock("@/models/UnitBillingAssignment", async () => {
+  const { getModelStubs: get } = await import("@/test/utils/model-mocks");
+  return { UnitBillingAssignment: get().unitBillingAssignment };
+});
 
 import { POST } from "@/app/api/v1/invoices/generate/route";
 import { notifyLeaseExpiry } from "@/lib/notifications";
@@ -43,11 +59,16 @@ const {
   lease: leaseStub,
   invoice: invoiceStub,
   tenant: tenantStub,
+  managementAssignment,
+  unit: unitStub,
+  billingAccount: billingAccountStub,
+  unitBillingAssignment: unitBillingAssignmentStub,
 } = getModelStubs();
 const notifyLeaseExpiryMock = vi.mocked(notifyLeaseExpiry);
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
+const ADMIN_ID = makeObjectId("admin");
 const MANAGED_OWNER_ID = makeObjectId("managed-owner");
 const PROPERTY_ID = makeObjectId("p1");
 const LEASE_A = makeObjectId("lease-a");
@@ -82,6 +103,9 @@ describe("POST /api/v1/invoices/generate", () => {
     resetModelStubs();
     notifyLeaseExpiryMock.mockClear();
     tenantStub.find.mockReturnValue(buildQuery([]));
+    billingAccountStub.find.mockReturnValue(buildQuery([]));
+    unitStub.find.mockReturnValue(buildQuery([]));
+    unitBillingAssignmentStub.find.mockReturnValue(buildQuery([]));
   });
 
   it("403 for a mismatched origin", async () => {
@@ -370,6 +394,44 @@ describe("POST /api/v1/invoices/generate", () => {
     });
     const body = await json(res);
     expect(body.data).toEqual({ created: 0, skipped: 0 });
+  });
+
+  it("scopes an admin to leases on assigned properties using $or filter", async () => {
+    const period = currentPeriod();
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: ADMIN_ID, role: "admin" })));
+    user.findOneAndUpdate.mockReturnValue(buildQuery({ invoiceCounters: { [period]: 1 } }));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: ADMIN_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["invoice:generate"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    leaseStub.find.mockReturnValue(buildQuery(activeLeases()));
+    invoiceStub.find.mockReturnValue(buildQuery([]).select("leaseId"));
+    invoiceStub.create.mockResolvedValue({});
+    tenantStub.find.mockReturnValue(buildQuery([]));
+
+    const res = await POST(
+      buildRequest("/api/v1/invoices/generate", {
+        method: "POST",
+        token: signToken(ADMIN_ID, { role: "admin" }),
+        body: {},
+      }),
+    );
+    expect(res.status).toBe(200);
+    // Lease query should have used $or with propertyId filter
+    const leaseFilter = leaseStub.find.mock.calls[0][0] as Record<string, unknown>;
+    expect(leaseFilter).toMatchObject({
+      $or: [{ propertyId: { $in: [PROPERTY_ID] } }],
+    });
   });
 
   it("429 after the per-IP rate limit is exhausted", async () => {
