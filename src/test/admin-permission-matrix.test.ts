@@ -24,27 +24,40 @@ vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 vi.mock("@/models/Invoice", () => ({ Invoice: getModelStubs().invoice }));
 vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
-vi.mock("@/models/ManagementAssignment", () => ({ ManagementAssignment: getModelStubs().managementAssignment }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 
 // announcements
 vi.mock("@/models/Announcement", () => ({ Announcement: getModelStubs().announcement }));
 
 // commissions
-vi.mock("@/models/CommissionAccrual", () => ({ CommissionAccrual: getModelStubs().commissionAccrual }));
+vi.mock("@/models/CommissionAccrual", () => ({
+  CommissionAccrual: getModelStubs().commissionAccrual,
+}));
 
 import { GET as getAmounts } from "@/app/api/v1/amounts/route";
 import { GET as getAnnouncements } from "@/app/api/v1/announcements/route";
 import { GET as getCommissions } from "@/app/api/v1/commissions/route";
 
 const stubs = getModelStubs();
-const { user, property, unit, invoice, lease, managementAssignment, announcement, commissionAccrual } = stubs;
+const {
+  user,
+  property,
+  unit,
+  invoice,
+  lease,
+  managementAssignment,
+  announcement,
+  commissionAccrual,
+} = stubs;
 
 const ADMIN_ID = makeObjectId("admin");
 const PROP_ID = makeObjectId("prop");
-const OWNER_ID = makeObjectId("owner");
-
 function signInAdmin() {
-  user.findById.mockReturnValue(buildQuery(makeUser({ _id: ADMIN_ID, role: "admin", isActive: true })));
+  user.findById.mockReturnValue(
+    buildQuery(makeUser({ _id: ADMIN_ID, role: "admin", isActive: true })),
+  );
   return signToken(ADMIN_ID, { role: "admin" });
 }
 

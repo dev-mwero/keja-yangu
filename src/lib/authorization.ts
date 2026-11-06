@@ -182,6 +182,7 @@ const TENANT_ACTIONS = new Set<PolicyAction>([
   "chat:send",
   "announcement:read",
   "document:read-own",
+  "unit:read",
   "move-request:create",
 ]);
 

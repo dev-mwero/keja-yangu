@@ -227,7 +227,7 @@ describe("evaluatePolicy", () => {
         assignments: [],
         now: NOW,
       }).allowed,
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("uses the union of active assignments", () => {
@@ -343,7 +343,7 @@ describe("getCapabilities", () => {
     const capabilities = await getCapabilities("user-1");
     expect(capabilities?.global).toBe(false);
     expect(capabilities?.actions).toContain("invoice:read-own");
-    expect(capabilities?.actions).not.toContain("unit:read");
+    expect(capabilities?.actions).toContain("unit:read");
     expect(capabilities?.actions).not.toContain("tenant:manage");
   });
 
@@ -469,6 +469,7 @@ describe("policy action matrix", () => {
       "chat:send",
       "announcement:read",
       "document:read-own",
+      "unit:read",
       "move-request:create",
     ]);
     for (const action of POLICY_ACTIONS) {

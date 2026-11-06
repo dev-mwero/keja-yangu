@@ -283,7 +283,11 @@ describe("GET /api/v1/properties", () => {
       buildRequest("/api/v1/properties?status=available", { token: signToken(CARETAKER_ID) }),
     );
     expect(res.status).toBe(200);
-    expect(property.find).toHaveBeenCalledWith({ caretakerIds: CARETAKER_ID, ownerId: OTHER_OWNER_ID, status: "available" });
+    expect(property.find).toHaveBeenCalledWith({
+      caretakerIds: CARETAKER_ID,
+      ownerId: OTHER_OWNER_ID,
+      status: "available",
+    });
     expect(property.countDocuments).toHaveBeenCalledWith({
       caretakerIds: CARETAKER_ID,
       ownerId: OTHER_OWNER_ID,
