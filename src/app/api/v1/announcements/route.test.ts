@@ -214,8 +214,10 @@ describe("GET /api/v1/announcements", () => {
 
     expect(res.status).toBe(200);
     expect(announcement.find).toHaveBeenCalledWith({
-      propertyId: { $in: [PROPERTY_ID] },
-      $or: [{ audience: { $in: ["all", "staff"] } }, { authorId: ADMIN_ID }],
+      $and: [
+        { $or: [{ propertyId: { $in: [PROPERTY_ID] } }] },
+        { $or: [{ audience: { $in: ["all", "staff"] } }, { authorId: ADMIN_ID }] },
+      ],
     });
   });
 

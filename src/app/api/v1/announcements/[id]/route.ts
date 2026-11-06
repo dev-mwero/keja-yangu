@@ -6,6 +6,7 @@ import { connectToDatabase } from "@/lib/mongoose";
 import { requirePermission } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { Announcement } from "@/models/Announcement";
+import { Property } from "@/models/Property";
 
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const limit = await rateLimit(request, { windowMs: 60_000, limit: 20 });
@@ -35,10 +36,26 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   );
   if (authError) return authError;
 
+  let adminCanDelete = false;
+  if (actor.role === "admin") {
+    if (announcement.propertyId) {
+      adminCanDelete = actor.assignedPropertyIds.includes(announcement.propertyId);
+    } else {
+      const assignedProperties = await Property.find({
+        _id: { $in: actor.assignedPropertyIds },
+      })
+        .select("ownerId")
+        .lean();
+      const allowedOwners = new Set(assignedProperties.map((property) => String(property.ownerId)));
+      adminCanDelete = allowedOwners.has(announcement.ownerId);
+    }
+  }
+
   // Owners manage the whole portfolio; caretakers only their own postings, and
   // only while the posting is still inside a property they are assigned to.
   const canDelete =
     actor.role === "system-admin" ||
+    adminCanDelete ||
     (actor.role === "owner" && announcement.ownerId === actor.userId) ||
     (actor.role === "caretaker" &&
       announcement.ownerId === actor.managedByOwnerId &&

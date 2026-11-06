@@ -6,7 +6,13 @@ import { normalizeAmenities } from "@/lib/amenities";
 import { PROPERTY_PURPOSES } from "@/lib/domain-enums";
 import { connectToDatabase } from "@/lib/mongoose";
 import { asSoftDeleteModel } from "@/lib/mongoose-soft-delete";
-import { authenticate, isFullControlRole, requirePermission } from "@/lib/permissions";
+import {
+  type Action,
+  authenticate,
+  getAdminAssignmentScope,
+  isFullControlRole,
+  requirePermission,
+} from "@/lib/permissions";
 import { validatePropertyStaffAssignments } from "@/lib/property-staff";
 import { isActivePropertyTypeKey } from "@/lib/property-type-store";
 import { Property } from "@/models/Property";
@@ -72,6 +78,14 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         ? { ownerId: actor.managedByOwnerId }
         : {};
     property = await Property.findOne({ _id: id, caretakerIds: actor._id, ...scope }).lean();
+  } else if (actor.role === "admin") {
+    const adminScope = await getAdminAssignmentScope(
+      actor._id,
+      "property:read" as unknown as Action,
+    );
+    if (adminScope.assignedPropertyIds.includes(id)) {
+      property = await Property.findById(id).lean();
+    }
   } else {
     property = await Property.findOne({ _id: id, status: "available", published: true })
       .select(PUBLIC_PROJECTION)
@@ -84,7 +98,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
   const includeUnits = request.nextUrl.searchParams.get("includeUnits");
   const canViewAllUnits =
-    actor !== null && ["owner", "caretaker", "custodian", "system-admin"].includes(actor.role);
+    actor !== null &&
+    ["owner", "caretaker", "custodian", "system-admin", "admin"].includes(actor.role);
   const includeAllUnits = includeUnits === "all" && canViewAllUnits;
   const units =
     includeUnits === "0"

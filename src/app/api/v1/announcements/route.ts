@@ -57,11 +57,14 @@ export async function GET(request: NextRequest) {
     filter.ownerId = actor.managedByOwnerId;
     filter.$or = staffAudience;
   } else if (actor.role === "admin") {
-    if (actor.propertyScopeIds.length === 0) {
+    const scopes: Record<string, unknown>[] = [];
+    if (actor.assignedPropertyIds.length > 0) {
+      scopes.push({ propertyId: { $in: actor.assignedPropertyIds } });
+    }
+    if (scopes.length === 0) {
       return NextResponse.json(buildPaginationResult([], 0, page, limit));
     }
-    filter.propertyId = { $in: actor.propertyScopeIds };
-    filter.$or = staffAudience;
+    filter.$and = [{ $or: scopes }, { $or: staffAudience }];
   }
 
   const [announcements, total] = await Promise.all([
@@ -116,19 +119,33 @@ export async function POST(request: NextRequest) {
   const propertyId = parsed.data.propertyId ?? "";
   // The portfolio the post belongs to: the actor's own for owners/admins, the
   // managing owner's for caretakers/custodians (a delegation).
-  const portfolioOwnerId =
+  let portfolioOwnerId =
     actor.role === "caretaker" || actor.role === "custodian"
       ? actor.managedByOwnerId
       : actor.userId;
   if (actor.role === "caretaker" && propertyId && !actor.assignedPropertyIds.includes(propertyId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (propertyId && (actor.role === "owner" || actor.role === "custodian")) {
+  if (actor.role === "admin" && !propertyId) {
+    return NextResponse.json(
+      { error: "propertyId is required for admin announcements" },
+      { status: 400 },
+    );
+  }
+  if (actor.role === "admin" && propertyId && !actor.assignedPropertyIds.includes(propertyId)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (
+    propertyId &&
+    (actor.role === "owner" || actor.role === "custodian" || actor.role === "admin")
+  ) {
     const property = await Property.findById(propertyId).select("ownerId").lean();
     if (!property) {
       return NextResponse.json({ error: "Property not found" }, { status: 404 });
     }
-    if (property.ownerId !== portfolioOwnerId) {
+    if (actor.role === "admin") {
+      portfolioOwnerId = property.ownerId;
+    } else if (property.ownerId !== portfolioOwnerId) {
       return NextResponse.json(
         { error: "You do not have access to this property" },
         { status: 403 },
