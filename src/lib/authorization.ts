@@ -102,7 +102,9 @@ const ADMIN_ACTIONS: PolicyAction[] = [
 
 const CUSTODIAN_ACTIONS: PolicyAction[] = [
   "property:read",
+  "property:create",
   "property:edit",
+  "property:delete",
   "unit:read",
   "unit:manage",
   "tenant:manage",

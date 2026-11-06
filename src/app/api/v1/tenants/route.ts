@@ -208,6 +208,9 @@ export async function POST(request: NextRequest) {
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (scope.role === "custodian" && property.ownerId !== scope.managedByOwnerId) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const status = scope.role === "caretaker" ? "pending" : (parsed.data.status ?? "pending");
 
