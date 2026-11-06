@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useAuth } from "@/hooks/use-auth";
 import { formatKES } from "@/lib/format";
 
 interface Accrual {
@@ -40,6 +41,7 @@ function money(minor: number) {
 }
 
 export function CommissionManager({ canManagePayouts = true }: { canManagePayouts?: boolean }) {
+  const { user } = useAuth();
   const [accruals, setAccruals] = useState<Accrual[]>([]);
   const [payouts, setPayouts] = useState<Payout[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,24 +50,26 @@ export function CommissionManager({ canManagePayouts = true }: { canManagePayout
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const [accrualRes, payoutRes] = await Promise.all([
-        fetch("/api/v1/commissions?limit=100"),
-        fetch("/api/v1/admin/commission-payouts?limit=100"),
-      ]);
+      const accrualRes = await fetch("/api/v1/commissions?limit=100");
       if (accrualRes.ok) {
         const data = await accrualRes.json();
         setAccruals(data.data || []);
       }
-      if (payoutRes.ok) {
-        const data = await payoutRes.json();
-        setPayouts(data.data || []);
+      if (canManagePayouts) {
+        const payoutRes = await fetch("/api/v1/admin/commission-payouts?limit=100");
+        if (payoutRes.ok) {
+          const data = await payoutRes.json();
+          setPayouts(data.data || []);
+        }
+      } else {
+        setPayouts([]);
       }
     } catch {
       toast.error("Failed to load commissions");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [canManagePayouts]);
 
   useEffect(() => {
     load();
@@ -197,17 +201,19 @@ export function CommissionManager({ canManagePayouts = true }: { canManagePayout
                           Approve
                         </Button>
                       )}
-                      {accrual.status !== "reversed" && accrual.status !== "paid" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="ml-2"
-                          disabled={busyId === accrual._id}
-                          onClick={() => clawback(accrual._id)}
-                        >
-                          Clawback
-                        </Button>
-                      )}
+                      {accrual.status !== "reversed" &&
+                        accrual.status !== "paid" &&
+                        user?.role !== "admin" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="ml-2"
+                            disabled={busyId === accrual._id}
+                            onClick={() => clawback(accrual._id)}
+                          >
+                            Clawback
+                          </Button>
+                        )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -216,6 +222,12 @@ export function CommissionManager({ canManagePayouts = true }: { canManagePayout
           </div>
         )}
       </div>
+
+      {!canManagePayouts && (
+        <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+          Payouts are managed by system-admin.
+        </div>
+      )}
 
       {canManagePayouts && (
         <div className="rounded-xl border border-border bg-card">

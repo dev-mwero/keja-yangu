@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { sendInviteEmail } from "@/lib/email";
 import { connectToDatabase } from "@/lib/mongoose";
-import { authenticate, CARETAKER_PRIVILEGES } from "@/lib/permissions";
+import { authenticate, CARETAKER_PRIVILEGES, getAdminAssignmentScope } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { createPhoneOnlyAccount, resolveUserByContact } from "@/lib/user-identity";
 import { Property } from "@/models/Property";
@@ -110,7 +110,12 @@ export async function POST(request: NextRequest) {
   if (!actor?.isActive) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (actor.role !== "owner" && actor.role !== "custodian" && actor.role !== "system-admin") {
+  if (
+    actor.role !== "owner" &&
+    actor.role !== "custodian" &&
+    actor.role !== "system-admin" &&
+    actor.role !== "admin"
+  ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -147,6 +152,18 @@ export async function POST(request: NextRequest) {
         { error: "ownerId must reference an active owner" },
         { status: 400 },
       );
+    }
+    if (actor.role === "admin") {
+      const scope = await getAdminAssignmentScope(String(actor._id), "property:read" as never);
+      const assignedProperties = scope.assignedPropertyIds.length
+        ? await Property.find({ _id: { $in: scope.assignedPropertyIds } })
+            .select("ownerId")
+            .lean()
+        : [];
+      const allowedOwners = new Set(assignedProperties.map((property) => String(property.ownerId)));
+      if (!allowedOwners.has(boundOwnerId)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
   }
 

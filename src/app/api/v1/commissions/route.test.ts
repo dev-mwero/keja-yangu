@@ -68,7 +68,7 @@ describe("GET /api/v1/commissions", () => {
     await GET(buildRequest("/api/v1/commissions", { token: signToken(ADMIN_ID) }));
 
     expect(commissionAccrual.find).toHaveBeenCalledWith({
-      propertyId: { $in: ["prop-1", "prop-2"] },
+      $or: [{ propertyId: { $in: ["prop-1", "prop-2"] } }],
     });
   });
 });
