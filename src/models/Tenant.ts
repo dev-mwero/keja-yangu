@@ -57,6 +57,9 @@ tenantSchema.index(
   { unique: true, partialFilterExpression: { deletedAt: null, phone: { $gt: "" } } },
 );
 tenantSchema.index({ userId: 1 });
+tenantSchema.index({ ownerId: 1 });
+tenantSchema.index({ propertyId: 1, status: 1 });
+tenantSchema.index({ ownerId: 1, status: 1 });
 softDeletePlugin(tenantSchema);
 
 export type TenantDocument = InferSchemaType<ITenant>;

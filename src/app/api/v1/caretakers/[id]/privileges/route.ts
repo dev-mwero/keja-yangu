@@ -7,9 +7,11 @@ import {
   authenticate,
   CARETAKER_PRIVILEGES,
   type CaretakerPrivilege,
+  getAdminAssignmentScope,
   isPrivilegedCustodian,
 } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
+import { Property } from "@/models/Property";
 import { User } from "@/models/User";
 
 const privilegeInput = z.object({
@@ -39,7 +41,12 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const privilegedCustodian = isPrivilegedCustodian(actor);
-  if (actor.role !== "owner" && actor.role !== "system-admin" && !privilegedCustodian) {
+  if (
+    actor.role !== "owner" &&
+    actor.role !== "system-admin" &&
+    actor.role !== "admin" &&
+    !privilegedCustodian
+  ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -59,6 +66,19 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 
   const privileges: CaretakerPrivilege[] = [...new Set(parsed.data.privileges)];
   const update: { privileges: CaretakerPrivilege[]; managedByOwnerId?: string } = { privileges };
+
+  if (actor.role === "admin") {
+    const scope = await getAdminAssignmentScope(String(actor._id), "property:read" as never);
+    const assignedProperties = scope.assignedPropertyIds.length
+      ? await Property.find({ _id: { $in: scope.assignedPropertyIds } })
+          .select("ownerId")
+          .lean()
+      : [];
+    const allowedOwners = new Set(assignedProperties.map((property) => String(property.ownerId)));
+    if (!allowedOwners.has(String(target.managedByOwnerId ?? ""))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+  }
 
   if (actor.role === "owner") {
     const ownerId = String(actor._id);

@@ -87,6 +87,11 @@ const propertySchema = new Schema(
 
 propertySchema.index({ status: 1, published: 1 });
 propertySchema.index({ identityHash: 1 }, { sparse: true });
+propertySchema.index({ ownerId: 1 });
+propertySchema.index({ caretakerIds: 1 });
+propertySchema.index({ custodianIds: 1 });
+propertySchema.index({ createdById: 1 });
+propertySchema.index({ ownerId: 1, status: 1 });
 softDeletePlugin(propertySchema);
 
 export type PropertyDocument = InferSchemaType<typeof propertySchema>;

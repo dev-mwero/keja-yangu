@@ -2,7 +2,8 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { connectToDatabase } from "@/lib/mongoose";
-import { authenticate, CUSTODIAN_PRIVILEGES } from "@/lib/permissions";
+import { authenticate, CUSTODIAN_PRIVILEGES, getAdminAssignmentScope } from "@/lib/permissions";
+import { Property } from "@/models/Property";
 import { User } from "@/models/User";
 
 interface RouteContext {
@@ -24,7 +25,7 @@ async function loadActorAndCustodian(request: NextRequest, id: string) {
   if (!actor?.isActive) {
     return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   }
-  if (actor.role !== "owner" && actor.role !== "system-admin") {
+  if (actor.role !== "owner" && actor.role !== "system-admin" && actor.role !== "admin") {
     return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   }
 
@@ -32,7 +33,18 @@ async function loadActorAndCustodian(request: NextRequest, id: string) {
   if (!custodian) {
     return { error: NextResponse.json({ error: "Not found" }, { status: 404 }) };
   }
-  if (actor.role !== "system-admin" && custodian.managedByOwnerId !== String(actor._id)) {
+  if (actor.role === "admin") {
+    const scope = await getAdminAssignmentScope(String(actor._id), "custodian:manage" as never);
+    const assignedProperties = scope.assignedPropertyIds.length
+      ? await Property.find({ _id: { $in: scope.assignedPropertyIds } })
+          .select("ownerId")
+          .lean()
+      : [];
+    const allowedOwners = new Set(assignedProperties.map((property) => String(property.ownerId)));
+    if (!allowedOwners.has(String(custodian.managedByOwnerId ?? ""))) {
+      return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+    }
+  } else if (actor.role !== "system-admin" && custodian.managedByOwnerId !== String(actor._id)) {
     return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   }
 

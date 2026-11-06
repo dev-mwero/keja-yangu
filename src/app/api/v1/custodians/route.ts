@@ -5,9 +5,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { sendInviteEmail } from "@/lib/email";
 import { connectToDatabase } from "@/lib/mongoose";
-import { authenticate } from "@/lib/permissions";
+import { authenticate, getAdminAssignmentScope } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { createPhoneOnlyAccount, resolveUserByContact } from "@/lib/user-identity";
+import { Property } from "@/models/Property";
 import { User } from "@/models/User";
 
 const custodianInviteSchema = z
@@ -36,6 +37,7 @@ export async function GET(request: NextRequest) {
   if (
     user.role !== "owner" &&
     user.role !== "system-admin" &&
+    user.role !== "admin" &&
     !(user.role === "custodian" && forPropertyAssignment)
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -49,6 +51,24 @@ export async function GET(request: NextRequest) {
 
   if (user.role === "system-admin") {
     if (ownerId) filter.managedByOwnerId = ownerId;
+  } else if (user.role === "admin") {
+    const scope = await getAdminAssignmentScope(String(user._id), "custodian:manage" as never);
+    const assignedProperties = scope.assignedPropertyIds.length
+      ? await Property.find({ _id: { $in: scope.assignedPropertyIds } })
+          .select("ownerId")
+          .lean()
+      : [];
+    const allowedOwners = [
+      ...new Set(assignedProperties.map((property) => String(property.ownerId))),
+    ];
+    if (ownerId) {
+      if (!allowedOwners.includes(ownerId)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      filter.managedByOwnerId = ownerId;
+    } else {
+      filter.managedByOwnerId = { $in: allowedOwners };
+    }
   } else if (user.role === "custodian") {
     const managedByOwnerId = user.managedByOwnerId ?? "";
     if (!managedByOwnerId || (ownerId && ownerId !== managedByOwnerId)) {
@@ -100,7 +120,7 @@ export async function POST(request: NextRequest) {
   if (!actor?.isActive) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (actor.role !== "owner" && actor.role !== "system-admin") {
+  if (actor.role !== "owner" && actor.role !== "system-admin" && actor.role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -114,14 +134,21 @@ export async function POST(request: NextRequest) {
   }
 
   const callerId = String(actor._id);
-  const boundOwnerId = actor.role === "system-admin" ? (parsed.data.ownerId ?? "") : callerId;
+  let boundOwnerId = "";
+  if (actor.role === "owner") {
+    boundOwnerId = callerId;
+  } else if (actor.role === "system-admin" || actor.role === "admin") {
+    boundOwnerId = parsed.data.ownerId ?? "";
+  } else {
+    boundOwnerId = callerId;
+  }
   if (!boundOwnerId) {
     return NextResponse.json(
       { error: "ownerId is required when inviting a custodian as system-admin" },
       { status: 400 },
     );
   }
-  if (actor.role === "system-admin") {
+  if (actor.role === "system-admin" || actor.role === "admin") {
     const owner = await User.findOne({ _id: boundOwnerId, role: "owner", isActive: true })
       .select("_id")
       .lean();
@@ -130,6 +157,18 @@ export async function POST(request: NextRequest) {
         { error: "ownerId must reference an active owner" },
         { status: 400 },
       );
+    }
+    if (actor.role === "admin") {
+      const scope = await getAdminAssignmentScope(String(actor._id), "custodian:manage" as never);
+      const assignedProperties = scope.assignedPropertyIds.length
+        ? await Property.find({ _id: { $in: scope.assignedPropertyIds } })
+            .select("ownerId")
+            .lean()
+        : [];
+      const allowedOwners = new Set(assignedProperties.map((property) => String(property.ownerId)));
+      if (!allowedOwners.has(boundOwnerId)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
   }
 

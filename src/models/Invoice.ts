@@ -112,6 +112,9 @@ const invoiceSchema = new Schema<IInvoice>(
 invoiceSchema.index({ ownerId: 1, period: 1 });
 invoiceSchema.index({ billingAccountId: 1, period: 1 });
 invoiceSchema.index({ tenantId: 1 });
+invoiceSchema.index({ propertyId: 1, period: 1 });
+invoiceSchema.index({ status: 1, dueDate: 1 });
+invoiceSchema.index({ ownerId: 1, status: 1 });
 // Invoice numbers are unique among live invoices only.
 invoiceSchema.index(
   { invoiceNumber: 1 },

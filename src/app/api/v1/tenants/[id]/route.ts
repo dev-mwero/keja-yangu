@@ -122,6 +122,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     ) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+    if (scope.role === "admin" && !scope.assignedPropertyIds?.includes(parsed.data.propertyId)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     updateData.propertyId = parsed.data.propertyId;
     updateData.ownerId = newProperty.ownerId;
   }

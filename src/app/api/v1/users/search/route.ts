@@ -1,8 +1,9 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongoose";
-import { authenticate } from "@/lib/permissions";
+import { authenticate, getAdminAssignmentScope } from "@/lib/permissions";
 import { resolveUserByContact } from "@/lib/user-identity";
+import { Property } from "@/models/Property";
 import { User } from "@/models/User";
 
 const TEAM_ROLES = ["caretaker", "custodian"] as const;
@@ -19,7 +20,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const isOwnerOrAdmin = actor.role === "owner" || actor.role === "system-admin";
+  const isOwnerOrAdmin =
+    actor.role === "owner" || actor.role === "admin" || actor.role === "system-admin";
   const isCustodian = actor.role === "custodian" && Boolean(actor.managedByOwnerId);
   const isCaretakerWithTenants =
     actor.role === "caretaker" && (actor.privileges ?? []).includes("manage_tenants");
@@ -42,6 +44,7 @@ export async function GET(request: NextRequest) {
     requestedRole &&
     actor.role !== "owner" &&
     actor.role !== "custodian" &&
+    actor.role !== "admin" &&
     actor.role !== "system-admin"
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -57,6 +60,25 @@ export async function GET(request: NextRequest) {
     portfolioOwnerId = actor.managedByOwnerId ?? "";
     if (ownerId && ownerId !== portfolioOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+  } else if (actor.role === "admin") {
+    if (ownerId) {
+      const scope = await getAdminAssignmentScope(String(actor._id), "property:read" as never);
+      const assignedProperties = scope.assignedPropertyIds.length
+        ? await Property.find({ _id: { $in: scope.assignedPropertyIds } })
+            .select("ownerId")
+            .lean()
+        : [];
+      const allowedOwners = new Set(assignedProperties.map((property) => String(property.ownerId)));
+      if (!allowedOwners.has(ownerId)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      portfolioOwnerId = ownerId;
+    } else if (requestedRole) {
+      return NextResponse.json(
+        { error: "ownerId is required when checking a team member" },
+        { status: 400 },
+      );
     }
   } else if (actor.role === "system-admin" && ownerId) {
     const owner = await User.findOne({ _id: ownerId, role: "owner", isActive: true })
