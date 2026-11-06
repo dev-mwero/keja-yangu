@@ -43,6 +43,9 @@ leaseSchema.index({ ownerId: 1 });
 leaseSchema.index({ tenantId: 1 });
 leaseSchema.index({ propertyId: 1 });
 leaseSchema.index({ unitId: 1, status: 1 });
+leaseSchema.index({ ownerId: 1, status: 1 });
+leaseSchema.index({ propertyId: 1, status: 1 });
+leaseSchema.index({ ownerId: 1, propertyId: 1 });
 // One active lease per tenant among live leases; ended/deleted leases remain as
 // history.
 leaseSchema.index(

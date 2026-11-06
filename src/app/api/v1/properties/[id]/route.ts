@@ -155,10 +155,17 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const actorDoc = await User.findById(actor.userId).select("role").lean();
-  const canManageStaffAssignments =
+  let canManageStaffAssignments =
     actorDoc !== null &&
     actorDoc !== undefined &&
     (isFullControlRole(actorDoc.role) || actorDoc.role === "custodian");
+  if (!canManageStaffAssignments && actorDoc?.role === "admin") {
+    const adminScope = await getAdminAssignmentScope(
+      actor.userId,
+      "property:manage" as unknown as Action,
+    );
+    canManageStaffAssignments = adminScope.assignedPropertyIds.includes(id);
+  }
 
   const updateData = { ...parsed.data };
   if (
