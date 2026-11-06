@@ -41,8 +41,6 @@ const { user, property, unit, invoice, lease, managementAssignment, announcement
 
 const ADMIN_ID = makeObjectId("admin");
 const PROP_ID = makeObjectId("prop");
-const OWNER_ID = makeObjectId("owner");
-
 function signInAdmin() {
   user.findById.mockReturnValue(buildQuery(makeUser({ _id: ADMIN_ID, role: "admin", isActive: true })));
   return signToken(ADMIN_ID, { role: "admin" });

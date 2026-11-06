@@ -95,7 +95,7 @@ describe("GET /api/v1/tenant/me/invoices", () => {
       buildRequest("/api/v1/tenant/me/invoices", { token: signToken(TENANT_USER_ID) }),
     );
     expect(res.status).toBe(200);
-    expect(tenantStub.find).toHaveBeenCalledWith({ userId: TENANT_USER_ID });
+    expect(tenantStub.find).toHaveBeenCalledWith({ userId: TENANT_USER_ID, deletedAt: null });
     expect(invoiceStub.find).toHaveBeenCalledWith({ tenantId: { $in: [TENANT_A, TENANT_B] } });
   });
 

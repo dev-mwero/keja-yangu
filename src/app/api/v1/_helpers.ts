@@ -149,7 +149,9 @@ export async function resolveDashboardActor(
   // One Tenant query supplies the bound row ids, property ids and owner ids
   // (the split `resolveTenantIds` query is folded in for a single round-trip).
   if (user.role === "tenant") {
-    const rows = await Tenant.find({ userId }).select("_id propertyId ownerId").lean();
+    const rows = await Tenant.find({ userId, deletedAt: null })
+      .select("_id propertyId ownerId")
+      .lean();
     tenantIds = rows.map((t) => String(t._id));
     tenantPropertyIds = rows.map((t) => t.propertyId).filter(Boolean);
     tenantOwnerIds = rows.map((t) => t.ownerId).filter(Boolean);
@@ -200,7 +202,7 @@ export async function unitNameMap(unitIds: string[]): Promise<Map<string, string
 
 export async function resolveTenantIds(userId: string): Promise<string[]> {
   await connectToDatabase();
-  const tenantRows = await Tenant.find({ userId }).select("_id").lean();
+  const tenantRows = await Tenant.find({ userId, deletedAt: null }).select("_id").lean();
   return tenantRows.map((t) => String(t._id));
 }
 
