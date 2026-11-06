@@ -215,7 +215,7 @@ describe("PATCH /api/v1/invoices/[id]", () => {
       }),
       withParams(INVOICE_ID),
     );
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
     expect(invoiceStub.findOneAndUpdate).not.toHaveBeenCalled();
   });
 

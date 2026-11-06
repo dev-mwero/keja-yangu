@@ -68,8 +68,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   }
 
   await connectToDatabase();
+  const actor = await resolveInvoiceActor(request, "invoice:manage");
+  if (actor instanceof NextResponse) return actor;
+
   const invoice = await Invoice.findById(id).lean();
-  if (!invoice) {
+  if (!invoice || !invoiceInScope(invoice, actor)) {
     return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
   }
 
@@ -121,8 +124,11 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   }
 
   await connectToDatabase();
+  const actor = await resolveInvoiceActor(request, "invoice:manage");
+  if (actor instanceof NextResponse) return actor;
+
   const invoice = await Invoice.findById(id).lean();
-  if (!invoice) {
+  if (!invoice || !invoiceInScope(invoice, actor)) {
     return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
   }
 

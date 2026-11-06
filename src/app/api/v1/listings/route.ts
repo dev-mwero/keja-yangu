@@ -14,6 +14,7 @@ import { User } from "@/models/User";
 async function getAuthorizedPropertyIds(user: {
   _id: unknown;
   role: string;
+  managedByOwnerId?: string;
 }): Promise<string[] | null> {
   const role = user.role;
   if (role === "system-admin") return null;
@@ -35,6 +36,18 @@ async function getAuthorizedPropertyIds(user: {
     }
   }
 
+  if (role === "caretaker") {
+    const managedByOwnerId = user.managedByOwnerId ?? "";
+    if (!managedByOwnerId) return [];
+    const assignedProps = await Property.find({
+      caretakerIds: userId,
+      ownerId: managedByOwnerId,
+    })
+      .select("_id")
+      .lean();
+    for (const p of assignedProps) propIds.add(String(p._id));
+  }
+
   return [...propIds];
 }
 
@@ -45,10 +58,13 @@ export async function GET(request: NextRequest) {
   }
 
   await connectToDatabase();
-  const user = await User.findById(auth.userId).select("role isActive").lean();
+  const user = await User.findById(auth.userId).select("role isActive managedByOwnerId").lean();
   if (
     !user?.isActive ||
-    (user.role !== "admin" && user.role !== "owner" && user.role !== "system-admin")
+    (user.role !== "admin" &&
+      user.role !== "owner" &&
+      user.role !== "system-admin" &&
+      user.role !== "caretaker")
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -105,10 +121,13 @@ export async function POST(request: NextRequest) {
   }
 
   await connectToDatabase();
-  const user = await User.findById(auth.userId).select("role isActive").lean();
+  const user = await User.findById(auth.userId).select("role isActive managedByOwnerId").lean();
   if (
     !user?.isActive ||
-    (user.role !== "admin" && user.role !== "owner" && user.role !== "system-admin")
+    (user.role !== "admin" &&
+      user.role !== "owner" &&
+      user.role !== "system-admin" &&
+      user.role !== "caretaker")
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

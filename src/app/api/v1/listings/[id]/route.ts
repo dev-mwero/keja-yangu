@@ -18,7 +18,7 @@ import { Unit } from "@/models/Unit";
 import { User } from "@/models/User";
 
 async function verifyListingAccess(
-  user: { _id: unknown; role: string },
+  user: { _id: unknown; role: string; managedByOwnerId?: string },
   propertyId: string,
 ): Promise<boolean> {
   if (user.role === "system-admin") return true;
@@ -42,6 +42,15 @@ async function verifyListingAccess(
     return Boolean(assignment);
   }
 
+  if (user.role === "caretaker") {
+    const managedByOwnerId = user.managedByOwnerId ?? "";
+    return (
+      Boolean(managedByOwnerId) &&
+      property.ownerId === managedByOwnerId &&
+      (property.caretakerIds ?? []).includes(userId)
+    );
+  }
+
   return false;
 }
 
@@ -52,10 +61,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   }
 
   await connectToDatabase();
-  const user = await User.findById(auth.userId).select("role isActive").lean();
+  const user = await User.findById(auth.userId).select("role isActive managedByOwnerId").lean();
   if (
     !user?.isActive ||
-    (user.role !== "admin" && user.role !== "owner" && user.role !== "system-admin")
+    (user.role !== "admin" &&
+      user.role !== "owner" &&
+      user.role !== "system-admin" &&
+      user.role !== "caretaker")
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -92,10 +104,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   }
 
   await connectToDatabase();
-  const user = await User.findById(auth.userId).select("role isActive").lean();
+  const user = await User.findById(auth.userId).select("role isActive managedByOwnerId").lean();
   if (
     !user?.isActive ||
-    (user.role !== "admin" && user.role !== "owner" && user.role !== "system-admin")
+    (user.role !== "admin" &&
+      user.role !== "owner" &&
+      user.role !== "system-admin" &&
+      user.role !== "caretaker")
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -282,10 +297,13 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   }
 
   await connectToDatabase();
-  const user = await User.findById(auth.userId).select("role isActive").lean();
+  const user = await User.findById(auth.userId).select("role isActive managedByOwnerId").lean();
   if (
     !user?.isActive ||
-    (user.role !== "admin" && user.role !== "owner" && user.role !== "system-admin")
+    (user.role !== "admin" &&
+      user.role !== "owner" &&
+      user.role !== "system-admin" &&
+      user.role !== "caretaker")
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
