@@ -497,7 +497,10 @@ describe("getTenantScope", () => {
       ownerId: OTHER_OWNER_ID,
     });
     expect(res.assignedPropertyIds).toEqual([p1, p2]);
-    expect(property.find).toHaveBeenCalledWith({ caretakerIds: CARETAKER_ID, ownerId: OTHER_OWNER_ID });
+    expect(property.find).toHaveBeenCalledWith({
+      caretakerIds: CARETAKER_ID,
+      ownerId: OTHER_OWNER_ID,
+    });
   });
 
   it("403 for an orphaned caretaker", async () => {
