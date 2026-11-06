@@ -299,7 +299,10 @@ async function requirePermissionLegacy(
       if (
         !privileges.includes("edit_property") ||
         !resource ||
-        resource.ownerId !== managedByOwnerId
+        resource.ownerId !== managedByOwnerId ||
+        (Array.isArray(resource.caretakerIds) &&
+          resource.caretakerIds.length > 0 &&
+          !resource.caretakerIds.includes(actorId))
       ) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
@@ -673,7 +676,9 @@ export async function getTenantScope(
     if (!managedByOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    const properties = await Property.find({ caretakerIds: userId }).select("_id").lean();
+    const properties = await Property.find({ caretakerIds: userId, ownerId: managedByOwnerId })
+      .select("_id")
+      .lean();
     const assignedPropertyIds = properties.map((p) => String(p._id));
     return {
       filter: { propertyId: { $in: assignedPropertyIds }, ownerId: managedByOwnerId },

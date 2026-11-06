@@ -136,7 +136,9 @@ const CUSTODIAN_ACTIONS: PolicyAction[] = [
 
 const CARETAKER_ACTIONS: PolicyAction[] = [
   "property:read",
+  "property:create",
   "property:edit",
+  "property:delete",
   "unit:read",
   "unit:manage",
   "tenant:manage",

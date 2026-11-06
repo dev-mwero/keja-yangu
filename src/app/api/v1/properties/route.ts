@@ -187,6 +187,7 @@ export async function GET(request: NextRequest) {
     if (status) filter.status = status;
   } else if (actorDoc.role === "caretaker") {
     filter.caretakerIds = authUser.userId;
+    filter.ownerId = actorDoc.managedByOwnerId;
     if (status) filter.status = status;
   } else {
     if (ownerId) filter.ownerId = ownerId;
