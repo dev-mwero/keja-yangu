@@ -16,7 +16,10 @@ describe("GET /api/health", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.status).toBe("ok");
-    Object.defineProperty(mongoose.connection, "readyState", { value: original, configurable: true });
+    Object.defineProperty(mongoose.connection, "readyState", {
+      value: original,
+      configurable: true,
+    });
   });
 
   it("returns 503 when db disconnected", async () => {
@@ -26,6 +29,9 @@ describe("GET /api/health", () => {
     expect(res.status).toBe(503);
     const body = await res.json();
     expect(body.status).toBe("degraded");
-    Object.defineProperty(mongoose.connection, "readyState", { value: original, configurable: true });
+    Object.defineProperty(mongoose.connection, "readyState", {
+      value: original,
+      configurable: true,
+    });
   });
 });
