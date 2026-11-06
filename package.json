@@ -15,6 +15,7 @@
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "audit:phase9": "tsx scripts/phase9-readiness.ts",
+    "admin:grant": "tsx scripts/grant-system-admin.ts",
     "reconcile:attributions": "tsx scripts/reconcile-attributions.ts",
     "reconcile:commissions": "tsx scripts/reconcile-commissions.ts",
     "backfill:commissions": "tsx scripts/backfill-commissions.ts"

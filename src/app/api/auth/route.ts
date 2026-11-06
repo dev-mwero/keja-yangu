@@ -65,11 +65,24 @@ async function generateVerificationToken(): Promise<string> {
 
 function issueSession(
   response: NextResponse,
-  user: { _id?: unknown; id?: string; email: string; role: string; name?: string },
+  user: {
+    _id?: unknown;
+    id?: string;
+    email: string;
+    role: string;
+    name?: string;
+    tokenVersion?: number;
+  },
 ): NextResponse {
   const userId = user._id ? String(user._id) : (user.id ?? "");
   const token = jwt.sign(
-    { userId, email: user.email, role: user.role, name: user.name },
+    {
+      userId,
+      email: user.email,
+      role: user.role,
+      name: user.name,
+      tokenVersion: user.tokenVersion ?? 0,
+    },
     getJwtSecret(),
     { expiresIn: "7d" },
   );
