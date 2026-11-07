@@ -1,6 +1,10 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { formatInvoiceNumber, nextInvoiceNumber } from "@/lib/invoice-numbering";
+import {
+  formatInvoiceNumber,
+  nextInvoiceNumber,
+  reserveInvoiceNumbers,
+} from "@/lib/invoice-numbering";
 import { makeObjectId } from "@/test/utils/factories";
 import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-mocks";
 
@@ -87,5 +91,47 @@ describe("nextInvoiceNumber", () => {
   it("rejects a malformed period before touching any counter state", async () => {
     await expect(nextInvoiceNumber(OWNER_ID, "2026-13")).rejects.toThrow(RangeError);
     expect(user.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe("reserveInvoiceNumbers", () => {
+  beforeEach(() => {
+    resetModelStubs();
+  });
+
+  it("reserves a contiguous block with a single atomic increment", async () => {
+    // Counter advanced 0 → 3, so the block is [1, 2, 3].
+    user.findOneAndUpdate.mockReturnValue(buildQuery({ invoiceCounters: { "2026-09": 3 } }));
+    const numbers = await reserveInvoiceNumbers(OWNER_ID, "2026-09", 3);
+    expect(numbers).toEqual(["INV-202609-0001", "INV-202609-0002", "INV-202609-0003"]);
+    expect(user.findOneAndUpdate).toHaveBeenCalledTimes(1);
+    expect(user.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: OWNER_ID },
+      { $inc: { "invoiceCounters.2026-09": 3 } },
+      { new: true, upsert: false },
+    );
+  });
+
+  it("starts the first block at 1", async () => {
+    user.findOneAndUpdate.mockReturnValue(buildQuery({ invoiceCounters: { "2026-10": 2 } }));
+    const numbers = await reserveInvoiceNumbers(OWNER_ID, "2026-10", 2);
+    expect(numbers).toEqual(["INV-202610-0001", "INV-202610-0002"]);
+  });
+
+  it("returns an empty block for a non-positive count", async () => {
+    const numbers = await reserveInvoiceNumbers(OWNER_ID, "2026-09", 0);
+    expect(numbers).toEqual([]);
+    expect(user.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a malformed period before touching any counter state", async () => {
+    await expect(reserveInvoiceNumbers(OWNER_ID, "2026-13", 1)).rejects.toThrow(RangeError);
+    expect(user.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it("starts a fresh sequence at 1 when the owner document is missing", async () => {
+    user.findOneAndUpdate.mockReturnValue(buildQuery(null));
+    const numbers = await reserveInvoiceNumbers(OWNER_ID, "2026-09", 2);
+    expect(numbers).toEqual(["INV-202609-0001", "INV-202609-0002"]);
   });
 });
