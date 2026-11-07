@@ -106,16 +106,23 @@ describe("GET /api/v1/chat/threads", () => {
     chatthread.countDocuments.mockResolvedValue(1);
     user.find.mockReturnValue(buildQuery([{ _id: AGENT_ID, name: "John Kiprono" }]));
     property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, title: "Sunlit Studio" }]));
-    chatmessage.countDocuments.mockResolvedValue(2);
+    chatmessage.find.mockReturnValue(
+      buildQuery([
+        { threadId: THREAD_ID, createdAt: new Date("2026-09-02T08:30:00.000Z") },
+        { threadId: THREAD_ID, createdAt: new Date("2026-09-02T09:00:00.000Z") },
+      ]),
+    );
 
     const res = await GET(buildRequest("/api/v1/chat/threads", { token: signToken(USER_ID) }));
     expect(res.status).toBe(200);
     expect(chatthread.find).toHaveBeenCalledWith({ tenantId: { $in: [TENANT_ID] } });
-    expect(chatmessage.countDocuments).toHaveBeenCalledWith({
-      threadId: THREAD_ID,
+    // One batched candidate fetch replaces the per-thread countDocuments loop.
+    expect(chatmessage.find).toHaveBeenCalledWith({
+      threadId: { $in: [THREAD_ID] },
       senderUserId: { $ne: USER_ID },
       createdAt: { $gt: row.tenantLastReadAt },
     });
+    expect(chatmessage.countDocuments).not.toHaveBeenCalled();
     const body = await json(res);
     const data = body.data as Array<Record<string, unknown>>;
     expect(data).toHaveLength(1);
@@ -137,16 +144,66 @@ describe("GET /api/v1/chat/threads", () => {
     user.find.mockReturnValue(buildQuery([{ _id: AGENT_ID, name: "John Kiprono" }]));
     tenant.find.mockReturnValue(buildQuery([{ _id: TENANT_ID, name: "Amina Otieno" }]));
     property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, title: "Sunlit Studio" }]));
-    chatmessage.countDocuments.mockResolvedValue(0);
+    chatmessage.find.mockReturnValue(buildQuery([]));
 
     const res = await GET(buildRequest("/api/v1/chat/threads", { token: signToken(OWNER_ID) }));
     expect(res.status).toBe(200);
     expect(chatthread.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
-    expect(chatmessage.countDocuments).toHaveBeenCalledWith({
-      threadId: THREAD_ID,
+    expect(chatmessage.find).toHaveBeenCalledWith({
+      threadId: { $in: [THREAD_ID] },
       senderUserId: { $ne: OWNER_ID },
       createdAt: { $gt: row.agentLastReadAt },
     });
+  });
+
+  it("batches unread counts across threads in one query", async () => {
+    user.findById.mockReturnValue(buildQuery(tenantUser()));
+    tenant.find.mockReturnValue(
+      buildQuery([
+        makeTenant({ _id: TENANT_ID, propertyId: PROPERTY_ID, userId: USER_ID }),
+        makeTenant({ _id: makeObjectId("tenant2"), propertyId: PROPERTY_ID, userId: USER_ID }),
+      ]),
+    );
+    const secondId = makeObjectId("thread2");
+    const first = threadRow();
+    const second = makeChatThread({
+      _id: secondId,
+      tenantId: TENANT_ID,
+      propertyId: PROPERTY_ID,
+      ownerId: OWNER_ID,
+      agentUserId: AGENT_ID,
+      tenantLastReadAt: new Date("2026-09-02T09:30:00.000Z"),
+    });
+    chatthread.find.mockReturnValue(
+      buildQuery([first, second]).sort({ lastMessageAt: -1 }).skip(0).limit(20),
+    );
+    chatthread.countDocuments.mockResolvedValue(2);
+    user.find.mockReturnValue(buildQuery([{ _id: AGENT_ID, name: "John Kiprono" }]));
+    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, title: "Sunlit Studio" }]));
+    chatmessage.find.mockReturnValue(
+      buildQuery([
+        { threadId: THREAD_ID, createdAt: new Date("2026-09-02T08:15:00.000Z") }, // unread on first
+        { threadId: secondId, createdAt: new Date("2026-09-02T09:00:00.000Z") }, // read on second
+        { threadId: secondId, createdAt: new Date("2026-09-02T10:00:00.000Z") }, // unread on second
+      ]),
+    );
+
+    const res = await GET(buildRequest("/api/v1/chat/threads", { token: signToken(USER_ID) }));
+    expect(res.status).toBe(200);
+    // Exactly one candidate fetch, bounded by the page's oldest watermark.
+    expect(chatmessage.find).toHaveBeenCalledTimes(1);
+    expect(chatmessage.find).toHaveBeenCalledWith({
+      threadId: { $in: [THREAD_ID, secondId] },
+      senderUserId: { $ne: USER_ID },
+      createdAt: { $gt: first.tenantLastReadAt },
+    });
+    expect(chatmessage.countDocuments).not.toHaveBeenCalled();
+
+    const body = await json(res);
+    const data = body.data as Array<{ _id: string; unread: number }>;
+    expect(data).toHaveLength(2);
+    expect(data.find((t) => t._id === THREAD_ID)?.unread).toBe(1);
+    expect(data.find((t) => t._id === secondId)?.unread).toBe(1);
   });
 
   it("caretaker sees only threads where they are the agent", async () => {

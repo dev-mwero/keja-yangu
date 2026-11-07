@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { serializeMessage, serializeThread, type ThreadEnrichment } from "@/lib/chat";
+import {
+  countUnreadByThread,
+  serializeMessage,
+  serializeThread,
+  type ThreadEnrichment,
+} from "@/lib/chat";
 
 const thread = {
   _id: "thread-1",
@@ -62,5 +67,49 @@ describe("serializeMessage", () => {
       createdAt: new Date("2026-10-01T10:00:00.000Z"),
     };
     expect(serializeMessage(message, "user-2").sender).toBe("them");
+  });
+});
+
+describe("countUnreadByThread", () => {
+  const threads = [
+    { _id: "t1", tenantLastReadAt: new Date("2026-09-02T08:00:00.000Z") },
+    { _id: "t2", tenantLastReadAt: new Date("2026-09-02T09:30:00.000Z") },
+    { _id: "t3" },
+  ];
+
+  it("counts per-thread against the viewer's watermark", () => {
+    const messages = [
+      { threadId: "t1", createdAt: new Date("2026-09-02T08:15:00.000Z") }, // after t1 watermark
+      { threadId: "t1", createdAt: new Date("2026-09-02T07:00:00.000Z") }, // before t1 watermark
+      { threadId: "t2", createdAt: new Date("2026-09-02T09:00:00.000Z") }, // before t2 watermark
+      { threadId: "t2", createdAt: new Date("2026-09-02T10:00:00.000Z") }, // after t2 watermark
+      { threadId: "t3", createdAt: new Date("2026-01-01T00:00:00.000Z") }, // null watermark: counts all
+      { threadId: "other", createdAt: new Date("2026-09-02T10:00:00.000Z") }, // not in the page
+    ];
+    const counts = countUnreadByThread(threads, "tenant", messages);
+    expect(counts.get("t1")).toBe(1);
+    expect(counts.get("t2")).toBe(1);
+    expect(counts.get("t3")).toBe(1);
+  });
+
+  it("uses the agent watermark for staff viewers", () => {
+    const staffThreads = [
+      { _id: "t1", tenantLastReadAt: new Date("2026-01-01T00:00:00.000Z") },
+      { _id: "t2", agentLastReadAt: new Date("2026-09-02T09:30:00.000Z") },
+    ];
+    const messages = [
+      { threadId: "t1", createdAt: new Date("2026-09-02T08:15:00.000Z") }, // t1 has no agent watermark
+      { threadId: "t2", createdAt: new Date("2026-09-02T10:00:00.000Z") }, // after t2 agent watermark
+    ];
+    const counts = countUnreadByThread(staffThreads, "owner", messages);
+    expect(counts.get("t1")).toBe(1);
+    expect(counts.get("t2")).toBe(1);
+  });
+
+  it("defaults every thread to zero with no candidates", () => {
+    const counts = countUnreadByThread(threads, "tenant", []);
+    expect(counts.get("t1")).toBe(0);
+    expect(counts.get("t2")).toBe(0);
+    expect(counts.get("t3")).toBe(0);
   });
 });
