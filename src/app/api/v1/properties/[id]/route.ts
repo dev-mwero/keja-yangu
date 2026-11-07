@@ -10,6 +10,7 @@ import {
   type Action,
   authenticate,
   getAdminAssignmentScope,
+  getStaffAssignmentScope,
   isFullControlRole,
   requirePermission,
 } from "@/lib/permissions";
@@ -68,16 +69,29 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     property = await Property.findById(id).lean();
   } else if (actor.role === "owner") {
     property = await Property.findOne({ _id: id, ownerId: actor._id }).lean();
-  } else if (actor.role === "custodian") {
-    if (actor.managedByOwnerId) {
-      property = await Property.findOne({ _id: id, ownerId: actor.managedByOwnerId }).lean();
+  } else if (actor.role === "custodian" || actor.role === "caretaker") {
+    // Assignment-backed staff resolve through ManagementAssignment when
+    // backfilled; otherwise the legacy owner/caretaker binding applies.
+    const staffScope = await getStaffAssignmentScope(
+      actor._id,
+      actor.role,
+      "property:read" as unknown as Action,
+    );
+    if (staffScope.hasAssignments) {
+      if (staffScope.assignedPropertyIds.includes(id)) {
+        property = await Property.findById(id).lean();
+      }
+    } else if (actor.role === "custodian") {
+      if (actor.managedByOwnerId) {
+        property = await Property.findOne({ _id: id, ownerId: actor.managedByOwnerId }).lean();
+      }
+    } else {
+      const scope =
+        typeof actor.managedByOwnerId === "string" && actor.managedByOwnerId.length > 0
+          ? { ownerId: actor.managedByOwnerId }
+          : {};
+      property = await Property.findOne({ _id: id, caretakerIds: actor._id, ...scope }).lean();
     }
-  } else if (actor.role === "caretaker") {
-    const scope =
-      typeof actor.managedByOwnerId === "string" && actor.managedByOwnerId.length > 0
-        ? { ownerId: actor.managedByOwnerId }
-        : {};
-    property = await Property.findOne({ _id: id, caretakerIds: actor._id, ...scope }).lean();
   } else if (actor.role === "admin") {
     const adminScope = await getAdminAssignmentScope(
       actor._id,

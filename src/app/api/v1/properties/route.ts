@@ -5,7 +5,12 @@ import { normalizeAmenities } from "@/lib/amenities";
 import { DEFAULT_PROPERTY_PURPOSE, PROPERTY_PURPOSES } from "@/lib/domain-enums";
 import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
-import { authenticate, requirePermission } from "@/lib/permissions";
+import {
+  type Action,
+  authenticate,
+  getStaffAssignmentScope,
+  requirePermission,
+} from "@/lib/permissions";
 import { computeIdentityHash, findDuplicateCandidates } from "@/lib/property-identity";
 import { validatePropertyStaffAssignments } from "@/lib/property-staff";
 import { isActivePropertyTypeKey } from "@/lib/property-type-store";
@@ -178,17 +183,30 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json(buildPaginationResult(scopedProperties, total, page, limit));
-  } else if (actorDoc.role === "custodian") {
-    if (!actorDoc.managedByOwnerId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  } else if (actorDoc.role === "custodian" || actorDoc.role === "caretaker") {
+    // Prefer assignment-backed scope when backfilled; fall back to the legacy
+    // managedByOwnerId / Property.caretakerIds binding.
+    const staffScope = await getStaffAssignmentScope(
+      authUser.userId,
+      actorDoc.role,
+      "property:read" as unknown as Action,
+    );
+    if (staffScope.hasAssignments) {
+      filter._id = { $in: staffScope.assignedPropertyIds };
+      if (actorDoc.role === "custodian" && caretakerId) filter.caretakerIds = caretakerId;
+      if (status) filter.status = status;
+    } else if (actorDoc.role === "custodian") {
+      if (!actorDoc.managedByOwnerId) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      filter.ownerId = actorDoc.managedByOwnerId;
+      if (caretakerId) filter.caretakerIds = caretakerId;
+      if (status) filter.status = status;
+    } else {
+      filter.caretakerIds = authUser.userId;
+      filter.ownerId = actorDoc.managedByOwnerId;
+      if (status) filter.status = status;
     }
-    filter.ownerId = actorDoc.managedByOwnerId;
-    if (caretakerId) filter.caretakerIds = caretakerId;
-    if (status) filter.status = status;
-  } else if (actorDoc.role === "caretaker") {
-    filter.caretakerIds = authUser.userId;
-    filter.ownerId = actorDoc.managedByOwnerId;
-    if (status) filter.status = status;
   } else {
     if (ownerId) filter.ownerId = ownerId;
     if (caretakerId) filter.caretakerIds = caretakerId;
