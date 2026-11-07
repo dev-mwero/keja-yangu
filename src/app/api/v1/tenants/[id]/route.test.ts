@@ -17,11 +17,14 @@ vi.mock("@/models/Tenant", () => ({
   TENANT_SAFE_FIELDS:
     "name email phone propertyId ownerId status joinedAt notes createdAt updatedAt",
 }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 
 import { DELETE, GET, PATCH } from "@/app/api/v1/tenants/[id]/route";
 import { writeAuditEvent } from "@/lib/audit";
 
-const { user, property, tenant: tenantStub } = getModelStubs();
+const { user, property, tenant: tenantStub, managementAssignment } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
@@ -60,6 +63,8 @@ async function json(res: Response) {
 describe("GET /api/v1/tenants/[id]", () => {
   beforeEach(() => {
     resetModelStubs();
+    // Staff without assignments fall back to the legacy managedByOwnerId rules.
+    managementAssignment.find.mockReturnValue(buildQuery([]));
     vi.mocked(writeAuditEvent).mockClear();
   });
 

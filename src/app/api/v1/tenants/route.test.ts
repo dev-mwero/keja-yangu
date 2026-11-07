@@ -19,6 +19,9 @@ vi.mock("@/models/Tenant", () => ({
 }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 vi.mock("@/models/MoveRequest", () => ({ MoveRequest: getModelStubs().moverrequest }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 vi.mock("@/lib/email", () => ({
   sendInviteEmail: vi.fn(),
 }));
@@ -33,6 +36,7 @@ const {
   tenant: tenantStub,
   unit: unitStub,
   moverrequest: moveRequestStub,
+  managementAssignment,
 } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
@@ -75,6 +79,8 @@ async function json(res: Response) {
 describe("GET /api/v1/tenants", () => {
   beforeEach(() => {
     resetModelStubs();
+    // Staff without assignments fall back to the legacy managedByOwnerId rules.
+    managementAssignment.find.mockReturnValue(buildQuery([]));
     vi.mocked(writeAuditEvent).mockClear();
   });
 
@@ -351,6 +357,40 @@ describe("POST /api/v1/tenants", () => {
     expect(res.status).toBe(201);
     const createArgs = tenantStub.create.mock.calls[0][0] as { status?: string };
     expect(createArgs.status).toBe("pending");
+  });
+
+  it("assignment-backed caretaker can create on an assigned property without caretakerIds", async () => {
+    user.findById.mockReturnValue(buildQuery(caretakerDoc(["manage_tenants"])));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    // Property carries no legacy caretakerIds at all — assignment must suffice.
+    property.findById.mockReturnValue(
+      buildQuery(makeProperty({ _id: PROPERTY_ID, ownerId: OWNER_ID, caretakerIds: [] })),
+    );
+    tenantStub.findOne.mockReturnValue(buildQuery(null));
+    const created = makeTenant({ _id: TENANT_ID, status: "pending" });
+    tenantStub.create.mockResolvedValue(created);
+    tenantStub.findById.mockReturnValue(buildQuery(created));
+
+    const res = await POST(
+      buildRequest("/api/v1/tenants", {
+        method: "POST",
+        token: signToken(CARETAKER_ID),
+        body: { ...tenantInput, status: "active" },
+      }),
+    );
+    expect(res.status).toBe(201);
   });
 
   it("403 for caretaker C4 on an unassigned property", async () => {
