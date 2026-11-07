@@ -67,30 +67,15 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       .lean();
   } else if (actor.role === "system-admin") {
     property = await Property.findById(id).lean();
-  } else if (actor.role === "owner") {
-    property = await Property.findOne({ _id: id, ownerId: actor._id }).lean();
   } else if (actor.role === "custodian" || actor.role === "caretaker") {
-    // Assignment-backed staff resolve through ManagementAssignment when
-    // backfilled; otherwise the legacy owner/caretaker binding applies.
+    // Assignment-only scoping.
     const staffScope = await getStaffAssignmentScope(
       actor._id,
       actor.role,
       "property:read" as unknown as Action,
     );
-    if (staffScope.hasAssignments) {
-      if (staffScope.assignedPropertyIds.includes(id)) {
-        property = await Property.findById(id).lean();
-      }
-    } else if (actor.role === "custodian") {
-      if (actor.managedByOwnerId) {
-        property = await Property.findOne({ _id: id, ownerId: actor.managedByOwnerId }).lean();
-      }
-    } else {
-      const scope =
-        typeof actor.managedByOwnerId === "string" && actor.managedByOwnerId.length > 0
-          ? { ownerId: actor.managedByOwnerId }
-          : {};
-      property = await Property.findOne({ _id: id, caretakerIds: actor._id, ...scope }).lean();
+    if (staffScope.hasAssignments && staffScope.assignedPropertyIds.includes(id)) {
+      property = await Property.findById(id).lean();
     }
   } else if (actor.role === "admin") {
     const adminScope = await getAdminAssignmentScope(
