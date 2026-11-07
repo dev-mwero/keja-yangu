@@ -52,22 +52,14 @@ export async function resolveInvoiceActor(
   let staffAssignmentBacked = false;
 
   if ((user.role === "custodian" || user.role === "caretaker") && action) {
+    // Assignment-only scoping: un-backfilled staff get empty scope.
     const staffScope = await getStaffAssignmentScope(userId, user.role, action);
-    if (staffScope.hasAssignments) {
-      assignedPropertyIds = staffScope.assignedPropertyIds;
-      propertyScopeIds = staffScope.propertyScopeIds;
-      assignedBlockIds = staffScope.assignedBlockIds;
-      assignedUnitIds = staffScope.assignedUnitIds;
-      assignedTenantIds = staffScope.assignedTenantIds;
-      staffAssignmentBacked = true;
-    }
-  }
-
-  if (user.role === "caretaker" && !staffAssignmentBacked && managedByOwnerId) {
-    const properties = await Property.find({ caretakerIds: userId, ownerId: managedByOwnerId })
-      .select("_id")
-      .lean();
-    assignedPropertyIds = properties.map((p) => String(p._id));
+    assignedPropertyIds = staffScope.assignedPropertyIds;
+    propertyScopeIds = staffScope.propertyScopeIds;
+    assignedBlockIds = staffScope.assignedBlockIds;
+    assignedUnitIds = staffScope.assignedUnitIds;
+    assignedTenantIds = staffScope.assignedTenantIds;
+    staffAssignmentBacked = staffScope.hasAssignments;
   }
 
   if (user.role === "admin" && action) {
@@ -156,22 +148,14 @@ export async function resolveDashboardActor(
   let staffAssignmentBacked = false;
 
   if ((user.role === "custodian" || user.role === "caretaker") && action) {
+    // Assignment-only scoping: un-backfilled staff get empty scope.
     const staffScope = await getStaffAssignmentScope(userId, user.role, action);
-    if (staffScope.hasAssignments) {
-      assignedPropertyIds = staffScope.assignedPropertyIds;
-      propertyScopeIds = staffScope.propertyScopeIds;
-      assignedBlockIds = staffScope.assignedBlockIds;
-      assignedUnitIds = staffScope.assignedUnitIds;
-      assignedTenantIds = staffScope.assignedTenantIds;
-      staffAssignmentBacked = true;
-    }
-  }
-
-  if (user.role === "caretaker" && !staffAssignmentBacked && managedByOwnerId) {
-    const properties = await Property.find({ caretakerIds: userId, ownerId: managedByOwnerId })
-      .select("_id")
-      .lean();
-    assignedPropertyIds = properties.map((p) => String(p._id));
+    assignedPropertyIds = staffScope.assignedPropertyIds;
+    propertyScopeIds = staffScope.propertyScopeIds;
+    assignedBlockIds = staffScope.assignedBlockIds;
+    assignedUnitIds = staffScope.assignedUnitIds;
+    assignedTenantIds = staffScope.assignedTenantIds;
+    staffAssignmentBacked = staffScope.hasAssignments;
   }
 
   if (user.role === "admin" && action) {

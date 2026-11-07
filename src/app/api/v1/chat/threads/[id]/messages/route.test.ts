@@ -28,7 +28,7 @@ vi.mock("@/lib/notifications", () => ({
 import { GET, POST } from "@/app/api/v1/chat/threads/[id]/messages/route";
 import { notifyMessageReply } from "@/lib/notifications";
 
-const { user, tenant, property, chatthread, chatmessage } = getModelStubs();
+const { user, tenant, property, chatthread, chatmessage, managementAssignment } = getModelStubs();
 
 const USER_ID = makeObjectId("user");
 const OWNER_ID = makeObjectId("owner");
@@ -42,10 +42,6 @@ const INVALID_ID = "not-an-objectid";
 
 function tenantUser() {
   return makeUser({ _id: USER_ID, role: "tenant" });
-}
-
-function ownerUser() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
 }
 
 function caretakerUser(privileges: string[]) {
@@ -296,16 +292,27 @@ describe("POST /api/v1/chat/threads/[id]/messages", () => {
   });
 
   it("an owner sends on their own property thread", async () => {
-    user.findById
-      .mockReturnValueOnce(buildQuery(ownerUser()))
-      .mockReturnValueOnce(buildQuery(ownerUser()));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["chat:read-own", "chat:send"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     tenant.findById.mockReturnValue(buildQuery({ _id: TENANT_ID, userId: USER_ID }));
     chatthread.findById.mockReturnValue(buildQuery(threadRow()));
     const created = makeChatMessage({
       _id: MESSAGE_ID,
       threadId: THREAD_ID,
       senderUserId: OWNER_ID,
-      senderRole: "owner",
+      senderRole: "admin" as any,
       text: "Noted",
     });
     chatmessage.create.mockResolvedValue(created);
@@ -331,9 +338,20 @@ describe("POST /api/v1/chat/threads/[id]/messages", () => {
   });
 
   it("a custodian sends on a thread in the managed portfolio", async () => {
-    user.findById
-      .mockReturnValueOnce(buildQuery(custodianUser()))
-      .mockReturnValueOnce(buildQuery(custodianUser()));
+    user.findById.mockReturnValue(buildQuery(custodianUser()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "custodian",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["chat:read-own", "chat:send"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     tenant.findById.mockReturnValue(buildQuery({ _id: TENANT_ID, userId: USER_ID }));
     chatthread.findById.mockReturnValue(buildQuery(threadRow()));
     const created = makeChatMessage({

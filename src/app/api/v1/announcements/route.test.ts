@@ -223,7 +223,19 @@ describe("GET /api/v1/announcements", () => {
 
   it("caretaker sees assigned or portfolio-wide postings for the managed owner", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerUser(["manage_announcements"])));
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, title: "Sunlit Studio" }]));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["announcement:read", "announcement:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     announcement.find.mockReturnValue(
       buildQuery([]).sort({ pinned: -1, createdAt: -1 }).skip(0).limit(20),
     );
@@ -398,6 +410,19 @@ describe("POST /api/v1/announcements", () => {
       .mockReturnValueOnce(buildQuery(caretakerUser(["manage_announcements"])))
       .mockReturnValueOnce(buildQuery(caretakerUser(["manage_announcements"])))
       .mockReturnValueOnce(buildQuery({ _id: CARETAKER_ID, name: "Caretaker" }));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["announcement:read", "announcement:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, title: "Sunlit Studio" }]));
     const created = makeAnnouncement({
       _id: ANNOUNCEMENT_ID,
@@ -456,7 +481,19 @@ describe("POST /api/v1/announcements", () => {
       .mockReturnValueOnce(buildQuery(caretakerUser(["manage_announcements"])))
       .mockReturnValueOnce(buildQuery(caretakerUser(["manage_announcements"])))
       .mockReturnValueOnce(buildQuery({ _id: CARETAKER_ID, name: "Caretaker" }));
-    property.find.mockReturnValue(buildQuery([{ _id: OTHER_PROPERTY_ID }]));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: OTHER_PROPERTY_ID,
+          permissions: ["announcement:read", "announcement:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
 
     const res = await POST(
       buildRequest("/api/v1/announcements", {

@@ -16,7 +16,7 @@ vi.mock("@/models/ManagementAssignment", () => ({
 
 import { POST } from "@/app/api/v1/chat/threads/[id]/read/route";
 
-const { user, tenant, chatthread } = getModelStubs();
+const { user, tenant, chatthread, managementAssignment } = getModelStubs();
 
 const USER_ID = makeObjectId("user");
 const OWNER_ID = makeObjectId("owner");
@@ -99,7 +99,20 @@ describe("POST /api/v1/chat/threads/[id]/read", () => {
   });
 
   it("owner marks their side read", async () => {
-    user.findById.mockReturnValue(buildQuery(ownerUser()));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["chat:read-own", "chat:send"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     chatthread.findById.mockReturnValue(buildQuery(threadRow()));
     chatthread.updateOne.mockResolvedValue({ acknowledged: true });
 
