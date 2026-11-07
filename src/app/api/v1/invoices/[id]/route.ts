@@ -10,23 +10,38 @@ import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { invoiceUpdate } from "@/lib/schemas";
 import { Invoice } from "@/models/Invoice";
 
+function adminScopeMatches(
+  doc: { propertyId: string; unitId?: string; tenantId?: string },
+  actor: InvoiceActor,
+): boolean {
+  const propMatch = actor.propertyScopeIds.includes(doc.propertyId);
+  const unitMatch = doc.unitId && actor.assignedUnitIds.includes(doc.unitId);
+  const tenantMatch = doc.tenantId && actor.assignedTenantIds.includes(doc.tenantId);
+  return Boolean(propMatch || unitMatch || tenantMatch);
+}
+
 function invoiceInScope(
   doc: { ownerId: string; propertyId: string; unitId?: string; tenantId?: string },
   actor: InvoiceActor,
 ): boolean {
   if (actor.role === "system-admin") return true;
   if (actor.role === "owner") return doc.ownerId === actor.userId;
-  if (actor.role === "custodian") return doc.ownerId === actor.managedByOwnerId;
+  if (actor.role === "custodian") {
+    if (actor.staffAssignmentBacked) {
+      return adminScopeMatches(doc, actor);
+    }
+    return doc.ownerId === actor.managedByOwnerId;
+  }
   if (actor.role === "caretaker") {
+    if (actor.staffAssignmentBacked) {
+      return adminScopeMatches(doc, actor);
+    }
     return (
       doc.ownerId === actor.managedByOwnerId && actor.assignedPropertyIds.includes(doc.propertyId)
     );
   }
   if (actor.role === "admin") {
-    const propMatch = actor.propertyScopeIds.includes(doc.propertyId);
-    const unitMatch = doc.unitId && actor.assignedUnitIds.includes(doc.unitId);
-    const tenantMatch = doc.tenantId && actor.assignedTenantIds.includes(doc.tenantId);
-    return Boolean(propMatch || unitMatch || tenantMatch);
+    return adminScopeMatches(doc, actor);
   }
   return false;
 }

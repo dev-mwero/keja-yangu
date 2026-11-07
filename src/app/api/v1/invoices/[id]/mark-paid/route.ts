@@ -39,6 +39,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  if (actor.role === "custodian" && actor.staffAssignmentBacked) {
+    const coversProperty = actor.propertyScopeIds.includes(invoice.propertyId);
+    const coversUnit = invoice.unitId && actor.assignedUnitIds.includes(invoice.unitId);
+    if (!coversProperty && !coversUnit) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+  }
+
   if (
     actor.role === "admin" &&
     !actor.propertyScopeIds.includes(invoice.propertyId) &&

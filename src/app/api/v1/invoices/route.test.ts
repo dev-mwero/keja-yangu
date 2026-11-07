@@ -199,6 +199,36 @@ describe("GET /api/v1/invoices", () => {
     });
   });
 
+  it("scopes an assignment-backed custodian to invoices on assigned properties", async () => {
+    const CUSTODIAN_ID = makeObjectId("custodian");
+    user.findById.mockReturnValue(
+      buildQuery(
+        makeUser({ _id: CUSTODIAN_ID, role: "custodian", managedByOwnerId: MANAGED_OWNER_ID }),
+      ),
+    );
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "custodian",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["invoice:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    invoiceStub.find.mockReturnValue(buildQuery([]).sort({ issuedAt: -1 }).skip(0).limit(10));
+    invoiceStub.countDocuments.mockResolvedValue(0);
+
+    const res = await GET(buildRequest("/api/v1/invoices", { token: signToken(CUSTODIAN_ID) }));
+    expect(res.status).toBe(200);
+    expect(invoiceStub.find).toHaveBeenCalledWith({
+      $or: [{ propertyId: { $in: [PROPERTY_ID] } }],
+    });
+  });
+
   it("403 when a caretaker filters by a property outside their assignment", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerDoc()));
     property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID }]));
