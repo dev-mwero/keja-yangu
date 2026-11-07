@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { formatInvoiceNumber } from "@/lib/invoice-numbering";
 import { currentPeriod } from "@/lib/invoicing";
 import { buildRequest, signToken } from "@/test/utils/api-request";
+import { activeAssignment } from "@/test/utils/assignment-mocks";
 import { makeLease, makeObjectId, makeUser } from "@/test/utils/factories";
 import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-mocks";
 
@@ -74,7 +75,18 @@ const LEASE_A = makeObjectId("lease-a");
 const LEASE_B = makeObjectId("lease-b");
 
 function ownerDoc() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  const doc = makeUser({ _id: OWNER_ID, role: "admin" });
+  managementAssignment.find.mockReturnValue(
+    buildQuery([
+      activeAssignment({
+        principalUserId: OWNER_ID,
+        accessRole: "admin",
+        propertyId: PROPERTY_ID,
+        permissions: ["invoice:generate"],
+      }),
+    ]),
+  );
+  return doc;
 }
 
 function caretakerDoc() {
@@ -192,7 +204,10 @@ describe("POST /api/v1/invoices/generate", () => {
       }),
     );
     expect(res.status).toBe(200);
-    expect(leaseStub.find).toHaveBeenCalledWith({ status: "active", ownerId: OWNER_ID });
+    expect(leaseStub.find).toHaveBeenCalledWith({
+      status: "active",
+      $or: [{ propertyId: { $in: [PROPERTY_ID] } }],
+    });
     expect(invoiceStub.find).toHaveBeenCalledWith({
       leaseId: { $in: [LEASE_A, LEASE_B] },
       period,

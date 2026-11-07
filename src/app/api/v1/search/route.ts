@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
   let scopeOwnerId: string | null = null;
   let assignedPropertyIds: string[] | null = null;
 
-  if (role === "owner") {
+  if (role === "owner" || role === "admin") {
     scopeOwnerId = String(user._id);
   } else if (role === "custodian") {
     if (!user.managedByOwnerId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });

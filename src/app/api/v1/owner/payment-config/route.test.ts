@@ -22,7 +22,7 @@ const TENANT_ID = makeObjectId("tenant");
 const URL = "/api/v1/owner/payment-config";
 
 function ownerDoc() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  return makeUser({ _id: OWNER_ID, role: "admin" });
 }
 
 function tenantDoc() {

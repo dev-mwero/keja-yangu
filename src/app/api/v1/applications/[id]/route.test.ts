@@ -13,13 +13,16 @@ vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 vi.mock("@/lib/attributions", () => ({
   confirmAttributionForLease: vi.fn().mockResolvedValue(null),
 }));
 
 import { DELETE, PATCH } from "@/app/api/v1/applications/[id]/route";
 
-const { user, application, tenant, unit, lease, property } = getModelStubs();
+const { user, application, tenant, unit, lease, property, managementAssignment } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CUSTODIAN_ID = makeObjectId("custodian");
@@ -53,7 +56,21 @@ function appDoc(overrides: Record<string, unknown> = {}) {
 }
 
 function authOwner() {
-  user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+  user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+  managementAssignment.find.mockReturnValue(
+    buildQuery([
+      {
+        principalUserId: OWNER_ID,
+        accessRole: "admin",
+        scopeType: "property",
+        propertyId: PROP_ID,
+        permissions: ["application:manage"],
+        status: "active",
+        startsAt: new Date("2026-01-01T00:00:00.000Z"),
+        endsAt: null,
+      },
+    ]),
+  );
 }
 
 function authTenant() {
@@ -63,6 +80,10 @@ function authTenant() {
 describe("PATCH /api/v1/applications/[id]", () => {
   beforeEach(() => {
     resetModelStubs();
+    property.findOne.mockReturnValue(buildQuery({ _id: PROP_ID, lifecycleState: "active" }));
+    unit.findById.mockReturnValue(
+      buildQuery(makeUnit({ _id: UNIT_ID, propertyId: PROP_ID, status: "available" })),
+    );
   });
 
   it("401 when unauthenticated", async () => {
@@ -127,11 +148,6 @@ describe("PATCH /api/v1/applications/[id]", () => {
       withParams(APP_ID),
     );
     expect(res.status).toBe(403);
-    expect(property.findOne).toHaveBeenCalledWith({
-      _id: PROP_ID,
-      ownerId: OWNER_ID,
-      caretakerIds: CARETAKER_ID,
-    });
   });
 
   it("allows a caretaker to decide an application in an assigned property", async () => {
@@ -144,6 +160,20 @@ describe("PATCH /api/v1/applications/[id]", () => {
           privileges: ["manage_tenants"] as never,
         }),
       ),
+    );
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          permissions: ["application:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
     );
     application.findById.mockResolvedValue(appDoc());
     property.findOne.mockReturnValue(buildQuery({ _id: PROP_ID }));
@@ -400,6 +430,10 @@ describe("PATCH /api/v1/applications/[id]", () => {
 describe("DELETE /api/v1/applications/[id]", () => {
   beforeEach(() => {
     resetModelStubs();
+    property.findOne.mockReturnValue(buildQuery({ _id: PROP_ID, lifecycleState: "active" }));
+    unit.findById.mockReturnValue(
+      buildQuery(makeUnit({ _id: UNIT_ID, propertyId: PROP_ID, status: "available" })),
+    );
   });
 
   it("401 when unauthenticated", async () => {

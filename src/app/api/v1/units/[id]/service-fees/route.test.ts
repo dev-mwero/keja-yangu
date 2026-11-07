@@ -14,10 +14,14 @@ vi.mock("@/models/ServiceFeeItem", () => ({ ServiceFeeItem: getModelStubs().serv
 vi.mock("@/models/UnitServiceFeeOverride", () => ({
   UnitServiceFeeOverride: getModelStubs().unitServiceFeeOverride,
 }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 
 import { GET } from "@/app/api/v1/units/[id]/service-fees/route";
 
-const { user, property, unit, serviceFeeItem, unitServiceFeeOverride } = getModelStubs();
+const { user, property, unit, serviceFeeItem, unitServiceFeeOverride, managementAssignment } =
+  getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const PROPERTY_ID = makeObjectId("p1");
@@ -26,7 +30,7 @@ const UNIT_ID = makeObjectId("unit1");
 describe("GET /api/v1/units/[id]/service-fees", () => {
   beforeEach(() => {
     resetModelStubs();
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
     unit.findOne.mockReturnValue(
       buildQuery(makeUnit({ _id: UNIT_ID, propertyId: PROPERTY_ID, ownerId: OWNER_ID })),
     );
@@ -42,6 +46,20 @@ describe("GET /api/v1/units/[id]/service-fees", () => {
     );
     property.findOne.mockReturnValue(
       buildQuery(makeProperty({ _id: PROPERTY_ID, ownerId: OWNER_ID })),
+    );
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["unit:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
     );
     serviceFeeItem.find.mockReturnValue(
       buildQuery([

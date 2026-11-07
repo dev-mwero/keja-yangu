@@ -75,10 +75,9 @@ export async function GET(request: NextRequest) {
       }
       portfolioOwnerId = ownerId;
     } else if (requestedRole) {
-      return NextResponse.json(
-        { error: "ownerId is required when checking a team member" },
-        { status: 400 },
-      );
+      // Converted owners (admin role) act on their own portfolio when no
+      // explicit ownerId is supplied, mirroring the retired owner behaviour.
+      portfolioOwnerId = String(actor._id);
     }
   } else if (actor.role === "system-admin" && ownerId) {
     const owner = await User.findOne({ _id: ownerId, role: "owner", isActive: true })

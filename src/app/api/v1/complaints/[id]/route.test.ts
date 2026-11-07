@@ -31,7 +31,7 @@ const COMPLAINT_ID = makeObjectId("complaint");
 const INVALID_ID = "not-an-objectid";
 
 function ownerUser() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  return makeUser({ _id: OWNER_ID, role: "admin" });
 }
 
 function caretakerUser(privileges: string[]) {
@@ -101,7 +101,7 @@ describe("PATCH /api/v1/complaints/[id]", () => {
   });
 
   it("403 for a foreign owner updating another owner's complaint", async () => {
-    const foreignUser = makeUser({ _id: makeObjectId("other-owner"), role: "owner" });
+    const foreignUser = makeUser({ _id: makeObjectId("other-owner"), role: "admin" });
     user.findById.mockReturnValue(buildQuery(foreignUser));
     complaint.findById.mockReturnValue(buildQuery(openComplaint()));
     const res = await PATCH(
@@ -118,6 +118,20 @@ describe("PATCH /api/v1/complaints/[id]", () => {
   });
 
   it("400 for an invalid payload", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["complaint:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerUser()));
     complaint.findById.mockReturnValue(buildQuery(openComplaint()));
     const res = await PATCH(
@@ -133,6 +147,20 @@ describe("PATCH /api/v1/complaints/[id]", () => {
   });
 
   it("owner updates a complaint status with audit stamps", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["complaint:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerUser()));
     complaint.findById.mockReturnValue(buildQuery(openComplaint()));
     const updated = { ...openComplaint(), status: "resolved" };
@@ -152,12 +180,26 @@ describe("PATCH /api/v1/complaints/[id]", () => {
     expect(updateData.status).toBe("resolved");
     expect(updateData.resolution).toBe("Fixed the tap.");
     expect(updateData.updatedById).toBe(OWNER_ID);
-    expect(updateData.updatedByRole).toBe("owner");
+    expect(updateData.updatedByRole).toBe("admin");
     expect(notifyComplaintStatusChangeMock).toHaveBeenCalledTimes(1);
     expect(notifyComplaintStatusChangeMock).toHaveBeenCalledWith(updated);
   });
 
   it("re-scopes the atomic update with the permission-checked complaint fields", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["complaint:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerUser()));
     const complaintRow = openComplaint();
     const updated = { ...complaintRow, status: "resolved" };
@@ -187,7 +229,7 @@ describe("PATCH /api/v1/complaints/[id]", () => {
       expect.objectContaining({
         status: "resolved",
         updatedById: OWNER_ID,
-        updatedByRole: "owner",
+        updatedByRole: "admin",
       }),
       expect.objectContaining({ new: true }),
     );
@@ -198,6 +240,7 @@ describe("PATCH /api/v1/complaints/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: CARETAKER_ID,
           accessRole: "caretaker",
           scopeType: "property",
           propertyId: PROPERTY_ID,

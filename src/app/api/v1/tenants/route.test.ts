@@ -99,6 +99,7 @@ describe("GET /api/v1/tenants", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -132,6 +133,7 @@ describe("GET /api/v1/tenants", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -201,6 +203,7 @@ describe("GET /api/v1/tenants", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: CARETAKER_ID,
           accessRole: "caretaker",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -264,6 +267,7 @@ describe("POST /api/v1/tenants", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -316,6 +320,7 @@ describe("POST /api/v1/tenants", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -363,6 +368,20 @@ describe("POST /api/v1/tenants", () => {
   });
 
   it("422 when the property does not exist", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["tenant:manage", "property:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     property.findById.mockReturnValue(buildQuery(null));
     const res = await POST(
@@ -399,6 +418,7 @@ describe("POST /api/v1/tenants", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: CARETAKER_ID,
           accessRole: "caretaker",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -434,6 +454,7 @@ describe("POST /api/v1/tenants", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: CARETAKER_ID,
           accessRole: "caretaker",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -483,6 +504,7 @@ describe("POST /api/v1/tenants", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -513,6 +535,20 @@ describe("POST /api/v1/tenants", () => {
   });
 
   it("400 when propertyId is not a 24-hex ObjectId", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["tenant:manage", "property:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     const res = await POST(
       buildRequest("/api/v1/tenants", {
@@ -546,6 +582,7 @@ describe("POST /api/v1/tenants", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -591,6 +628,7 @@ describe("POST /api/v1/tenants", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -638,6 +676,7 @@ describe("POST /api/v1/tenants", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -705,6 +744,7 @@ describe("POST /api/v1/tenants", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -747,6 +787,7 @@ describe("POST /api/v1/tenants", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -775,6 +816,7 @@ describe("POST /api/v1/tenants", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -807,6 +849,7 @@ describe("POST /api/v1/tenants", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -840,6 +883,7 @@ describe("POST /api/v1/tenants", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -884,6 +928,7 @@ describe("POST /api/v1/tenants", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -931,6 +976,7 @@ describe("POST /api/v1/tenants", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,

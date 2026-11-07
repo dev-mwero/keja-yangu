@@ -8,8 +8,7 @@
  *  - An admin with NO assignment gets an empty result set (lists) / 403 (single
  *    resource), never legacy owner scope.
  *
- * Run with AUTHZ_ENFORCE_ROUTE_FAMILIES=* to also exercise the scoped policy
- * path; the legacy path alone is exercised by default.
+ * The scoped assignment policy is the only authorization path.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildRequest, signToken } from "@/test/utils/api-request";

@@ -71,6 +71,7 @@ describe("GET /api/v1/leases/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -94,6 +95,7 @@ describe("GET /api/v1/leases/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -117,6 +119,7 @@ describe("GET /api/v1/leases/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -178,6 +181,7 @@ describe("PATCH /api/v1/leases/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -205,6 +209,7 @@ describe("PATCH /api/v1/leases/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -235,6 +240,7 @@ describe("PATCH /api/v1/leases/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -264,6 +270,7 @@ describe("PATCH /api/v1/leases/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -308,6 +315,7 @@ describe("PATCH /api/v1/leases/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -344,6 +352,7 @@ describe("PATCH /api/v1/leases/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -389,6 +398,7 @@ describe("DELETE /api/v1/leases/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -421,6 +431,7 @@ describe("DELETE /api/v1/leases/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -453,6 +464,7 @@ describe("DELETE /api/v1/leases/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,

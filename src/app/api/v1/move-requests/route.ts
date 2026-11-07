@@ -171,8 +171,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ data: created }, { status: 201 });
   }
 
-  const scopeOwnerId =
-    role === "system-admin" ? property.ownerId : role === "owner" ? actorId : user.managedByOwnerId;
+  let scopeOwnerId: string | undefined;
+  if (role === "system-admin") {
+    scopeOwnerId = property.ownerId;
+  } else if (role === "owner") {
+    scopeOwnerId = actorId;
+  } else if (role === "admin") {
+    const adminScope = await getAdminAssignmentScope(actorId, "move-request:manage");
+    if (
+      !adminScope.assignedPropertyIds.includes(parsed.data.propertyId) &&
+      !adminScope.propertyScopeIds.includes(parsed.data.propertyId)
+    ) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    scopeOwnerId = property.ownerId;
+  } else {
+    scopeOwnerId = user.managedByOwnerId;
+  }
   if (!scopeOwnerId || property.ownerId !== scopeOwnerId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

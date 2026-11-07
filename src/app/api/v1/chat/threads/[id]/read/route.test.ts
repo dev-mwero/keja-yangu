@@ -1,6 +1,7 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildRequest, signToken, withParams } from "@/test/utils/api-request";
+import { activeAssignment } from "@/test/utils/assignment-mocks";
 import { makeChatThread, makeObjectId, makeTenant, makeUser } from "@/test/utils/factories";
 import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-mocks";
 
@@ -31,7 +32,7 @@ function tenantUser() {
 }
 
 function ownerUser() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  return makeUser({ _id: OWNER_ID, role: "admin" });
 }
 
 function threadRow() {
@@ -102,15 +103,12 @@ describe("POST /api/v1/chat/threads/[id]/read", () => {
     user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
     managementAssignment.find.mockReturnValue(
       buildQuery([
-        {
+        activeAssignment({
+          principalUserId: OWNER_ID,
           accessRole: "admin",
-          scopeType: "property",
           propertyId: PROPERTY_ID,
           permissions: ["chat:read-own", "chat:send"],
-          status: "active",
-          startsAt: new Date("2026-01-01T00:00:00.000Z"),
-          endsAt: null,
-        },
+        }),
       ]),
     );
     chatthread.findById.mockReturnValue(buildQuery(threadRow()));
@@ -131,6 +129,16 @@ describe("POST /api/v1/chat/threads/[id]/read", () => {
 
   it("404 for a thread outside the participant set", async () => {
     user.findById.mockReturnValue(buildQuery(ownerUser()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          propertyId: PROPERTY_ID,
+          permissions: ["chat:read-own", "chat:send"],
+        }),
+      ]),
+    );
     chatthread.findById.mockReturnValue(
       buildQuery(makeChatThread({ _id: THREAD_ID, ownerId: makeObjectId("other") })),
     );

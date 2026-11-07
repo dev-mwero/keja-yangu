@@ -8,6 +8,9 @@ vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Invoice", () => ({ Invoice: getModelStubs().invoice }));
 vi.mock("@/models/Payment", () => ({ Payment: getModelStubs().payment }));

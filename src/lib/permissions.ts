@@ -1,13 +1,21 @@
 import jwt from "jsonwebtoken";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { enforceScopedAuthorization } from "@/lib/authorization-enforcement";
-import { compareAuthorizationShadow, shadowSampleRate } from "@/lib/authorization-shadow";
+import {
+  evaluateActorPolicy,
+  evaluatePortfolioPolicy,
+  loadActorContext,
+} from "@/lib/authorization";
+import {
+  type PolicyResource as CorePolicyResource,
+  type PolicyAction,
+  TENANT_ACTIONS,
+} from "@/lib/authorization-policy";
 import { getJwtSecret } from "@/lib/jwt";
 import { connectToDatabase } from "@/lib/mongoose";
+import { loadUnitResource } from "@/lib/policy-resources";
 import { Lease } from "@/models/Lease";
 import { ManagementAssignment } from "@/models/ManagementAssignment";
-import { Property } from "@/models/Property";
 import { Unit } from "@/models/Unit";
 import { User } from "@/models/User";
 
@@ -101,13 +109,6 @@ export interface AuthUser {
   tokenVersion?: number;
 }
 
-export interface UserCtx {
-  role: Role;
-  isActive: boolean;
-  privileges: Privilege[];
-  managedByOwnerId: string;
-}
-
 export function authenticate(request: Request): AuthUser | null {
   const cookieHeader = request.headers.get("cookie");
   const token = cookieHeader
@@ -136,15 +137,7 @@ export function authenticate(request: Request): AuthUser | null {
 }
 
 export function isFullControlRole(role: Role): boolean {
-  return role === "owner" || role === "admin" || role === "system-admin";
-}
-
-/**
- * A role that manages a single owner's portfolio (owner, or an owner-delegate
- * custodian). Used to scope resource checks by `ownerId`.
- */
-export function isOwnerScopedRole(role: Role): boolean {
-  return role === "owner" || role === "admin" || role === "custodian";
+  return role === "admin" || role === "system-admin";
 }
 
 export async function requireAuth(
@@ -169,25 +162,65 @@ export interface PermissionResource {
   lifecycleState?: "draft" | "active" | "archived" | "merged";
 }
 
-async function caretakerAssignedToProperty(
-  actorId: string,
-  managedByOwnerId: string,
-  resource: PermissionResource | undefined,
-): Promise<boolean> {
-  if (!resource) return false;
-  if (resource.caretakerIds) return resource.caretakerIds.includes(actorId);
-  if (!resource.propertyId) return false;
-  const property = await Property.findOne({
-    _id: resource.propertyId,
-    ownerId: managedByOwnerId,
-    caretakerIds: actorId,
-  })
-    .select("_id")
-    .lean();
-  return property !== null;
+function stringId(value: unknown): string | undefined {
+  if (typeof value === "string" && value.length > 0) return value;
+  if (value && typeof value === "object" && "toString" in value) {
+    const rendered = String(value);
+    return rendered.length > 0 ? rendered : undefined;
+  }
+  return undefined;
 }
 
-async function requirePermissionLegacy(
+/**
+ * Converts a legacy route resource into the canonical policy scope. Property
+ * documents expose `_id` rather than `propertyId`, so infer it only when the
+ * route has not already supplied a narrower scope.
+ */
+export function toPolicyResource(
+  resource: PermissionResource | undefined,
+): CorePolicyResource | undefined {
+  if (!resource) return undefined;
+  const propertyId =
+    stringId(resource.propertyId) ?? (resource.unitId ? undefined : stringId(resource._id));
+  const blockId = stringId(resource.blockId);
+  const unitId = stringId(resource.unitId);
+  if (!propertyId) return undefined;
+  return {
+    propertyId,
+    ...(blockId ? { blockId } : {}),
+    ...(unitId ? { unitId } : {}),
+    ...(resource.lifecycleState ? { lifecycleState: resource.lifecycleState } : {}),
+  };
+}
+
+async function resolvePolicyResource(
+  resource: PermissionResource,
+): Promise<CorePolicyResource | null> {
+  const requested = toPolicyResource(resource);
+  if (!requested) return null;
+  if (!requested.unitId) return requested;
+
+  const resolved = await loadUnitResource(requested.unitId);
+  if (!resolved.ok || resolved.resource.propertyId !== requested.propertyId) return null;
+  if (requested.blockId && resolved.resource.blockId !== requested.blockId) return null;
+
+  return {
+    ...resolved.resource,
+    lifecycleState: requested.lifecycleState ?? resolved.resource.lifecycleState,
+  };
+}
+
+/**
+ * Permission entry point (clean slate): the scoped assignment policy is the
+ * only decider. Authentication semantics (401s, tokenVersion) are preserved.
+ *
+ * Platform actions (property-type:manage, recycle-bin:manage) remain
+ * system-admin only. Caretaker property:create / property:delete stay
+ * privilege-gated (create_property / delete_assigned_property) with no
+ * scoped-policy override — the backfill cannot represent those privileges.
+ * Staff without active assignments are denied (no legacy fallback).
+ */
+export async function requirePermission(
   request: NextRequest,
   action: Action,
   opts?: { resource?: PermissionResource },
@@ -217,328 +250,61 @@ async function requirePermissionLegacy(
     return NextResponse.json({ error: "Session expired" }, { status: 401 });
   }
 
-  const role = user.role;
-  const managedByOwnerId = user.managedByOwnerId ?? "";
-
-  // The property taxonomy is platform-wide: only the system administrator may
-  // change it, even though owners otherwise have full control of a portfolio.
-  // The recycle bin (restore/purge soft-deleted records) is likewise limited to
-  // the system administrator.
+  // The property taxonomy and recycle bin are platform-wide: only the system
+  // administrator may change them.
   if (
     (action === "property-type:manage" || action === "recycle-bin:manage") &&
-    role !== "system-admin"
+    user.role !== "system-admin"
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (role === "tenant") {
-    const tenantActions: Action[] = [
-      "invoice:read-own",
-      "notification:read-own",
-      "notification:manage",
-      "settings:read",
-      "settings:write",
-      "complaint:read-own",
-      "complaint:create",
-      "chat:read-own",
-      "chat:send",
-      "announcement:read",
-      "document:read-own",
-      "unit:read",
-      "move-request:create",
-    ];
-    return tenantActions.includes(action)
+  if (user.role === "tenant") {
+    return TENANT_ACTIONS.has(action as PolicyAction)
       ? null
       : NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (isFullControlRole(role) || role === "custodian") {
-    const resource = opts?.resource;
-    // A custodian must be bound to an owner.
-    if (role === "custodian" && !managedByOwnerId) {
+  if (user.role === "system-admin") return null;
+
+  if (user.role === "caretaker") {
+    const privileges = (user.privileges ?? []) as CaretakerPrivilege[];
+    if (action === "property:create" && !privileges.includes("create_property")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    // Custodians are owner-delegates: only owners and system-admins may manage
-    // custodians (a custodian cannot invite or revoke other custodians).
-    if (action === "custodian:manage" && role === "custodian") {
+    if (action === "property:delete" && !privileges.includes("delete_assigned_property")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    const scopeOwnerId =
-      role === "system-admin"
-        ? null
-        : role === "owner" || role === "admin"
-          ? String(user._id)
-          : managedByOwnerId;
-    const ownsResource =
-      !!resource &&
-      (action === "property:edit" ||
-        action === "property:delete" ||
-        action === "unit:read" ||
-        action === "unit:manage" ||
-        action === "tenant:manage" ||
-        action === "move-request:manage" ||
-        action === "application:manage" ||
-        action === "lease:manage" ||
-        action === "invoice:manage" ||
-        action === "invoice:mark-paid" ||
-        action === "complaint:manage" ||
-        action === "chat:manage" ||
-        action === "announcement:manage" ||
-        action === "document:manage" ||
-        action === "lead:manage" ||
-        action === "lead:read");
-    if (scopeOwnerId && ownsResource && resource.ownerId !== scopeOwnerId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-    return null;
   }
 
-  if (role !== "caretaker") {
+  const context = await loadActorContext(userId);
+  if (!context) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const actorId = String(user._id);
-  const privileges = (user.privileges ?? []) as CaretakerPrivilege[];
-  const resource = opts?.resource;
+  // A route that supplies a real resource is decided against that scope. A
+  // route without a concrete resource (list endpoints, collection creates) is
+  // decided at portfolio level: an active assignment granting the action
+  // passes, and the route narrows the data to the assignment scope itself.
+  let policyResource: CorePolicyResource | undefined;
+  if (opts?.resource) {
+    const base = toPolicyResource(opts.resource);
+    if (base) {
+      const resolved = await resolvePolicyResource(opts.resource);
+      if (!resolved) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      policyResource = resolved;
+    }
+  }
 
-  if (!managedByOwnerId) {
+  const decision = policyResource
+    ? evaluateActorPolicy(context, action as PolicyAction, policyResource)
+    : evaluatePortfolioPolicy(context, action as PolicyAction);
+  if (!decision.allowed) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-
-  switch (action) {
-    case "property:create":
-      if (!privileges.includes("create_property")) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-      return null;
-    case "property:edit":
-      if (
-        !privileges.includes("edit_property") ||
-        !resource ||
-        resource.ownerId !== managedByOwnerId ||
-        (Array.isArray(resource.caretakerIds) &&
-          resource.caretakerIds.length > 0 &&
-          !resource.caretakerIds.includes(actorId))
-      ) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-      return null;
-    case "property:delete":
-      if (
-        !privileges.includes("delete_assigned_property") ||
-        !resource ||
-        resource.ownerId !== managedByOwnerId ||
-        !resource.caretakerIds?.includes(actorId)
-      ) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-      return null;
-    case "unit:read":
-      if (
-        !resource ||
-        resource.ownerId !== managedByOwnerId ||
-        !(await caretakerAssignedToProperty(actorId, managedByOwnerId, resource))
-      ) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-      return null;
-    case "unit:manage":
-      if (
-        !privileges.includes("manage_units") ||
-        !resource ||
-        resource.ownerId !== managedByOwnerId ||
-        !(await caretakerAssignedToProperty(actorId, managedByOwnerId, resource))
-      ) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-      return null;
-    case "move-request:create":
-      return null;
-    case "move-request:manage":
-      if (
-        !privileges.includes("process_move_requests") ||
-        !resource ||
-        resource.ownerId !== managedByOwnerId ||
-        !(await caretakerAssignedToProperty(actorId, managedByOwnerId, resource))
-      ) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-      return null;
-    case "application:manage":
-      if (
-        !privileges.includes("manage_tenants") ||
-        !resource ||
-        resource.ownerId !== managedByOwnerId ||
-        !(await caretakerAssignedToProperty(actorId, managedByOwnerId, resource))
-      ) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-      return null;
-    case "custodian:manage":
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    case "tenant:manage":
-      if (!privileges.includes("manage_tenants")) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-      return null;
-    case "lease:manage":
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    case "invoice:read":
-      if (!privileges.includes("manage_invoices")) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-      return null;
-    case "invoice:manage":
-    case "invoice:mark-paid":
-      if (
-        !privileges.includes("manage_invoices") ||
-        !resource ||
-        resource.ownerId !== managedByOwnerId
-      ) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-      return null;
-    case "invoice:generate":
-      if (!privileges.includes("manage_invoices")) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-      return null;
-    case "invoice:read-own":
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    case "notification:read-own":
-    case "notification:manage":
-    case "settings:read":
-    case "settings:write":
-    case "complaint:read-own":
-    case "complaint:create":
-    case "chat:read-own":
-    case "chat:send":
-    case "announcement:read":
-    case "document:read-own":
-      return null;
-    case "complaint:manage":
-      if (
-        !privileges.includes("manage_complaints") ||
-        !resource ||
-        resource.ownerId !== managedByOwnerId
-      ) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-      return null;
-    case "chat:manage":
-      if (
-        !privileges.includes("send_messages") ||
-        !resource ||
-        resource.ownerId !== managedByOwnerId
-      ) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-      return null;
-    case "announcement:manage":
-      if (
-        !privileges.includes("manage_announcements") ||
-        !resource ||
-        resource.ownerId !== managedByOwnerId
-      ) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-      return null;
-    case "document:manage":
-      if (
-        !privileges.includes("manage_documents") ||
-        !resource ||
-        resource.ownerId !== managedByOwnerId
-      ) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-      return null;
-    case "lead:read":
-    case "lead:manage":
-      if (!privileges.includes("manage_tenants")) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-      return null;
-  }
-
-  return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-}
-
-/**
- * Permission entry point. Route families listed in
- * `AUTHZ_ENFORCE_ROUTE_FAMILIES` are decided by the scoped policy; all others
- * keep the legacy response while optionally running shadow comparison.
- */
-export async function requirePermission(
-  request: NextRequest,
-  action: Action,
-  opts?: { resource?: PermissionResource },
-): Promise<NextResponse | null> {
-  const result = await requirePermissionLegacy(request, action, opts);
-  // A failed authentication (including a stale `tokenVersion`) is never
-  // overridable by scoped-policy enforcement.
-  if (result && result.status === 401) return result;
-  const auth = authenticate(request);
-  if (!auth) return result;
-
-  try {
-    const enforced = await enforceScopedAuthorization({
-      request,
-      actorUserId: auth.userId,
-      action,
-      resource: opts?.resource,
-      legacyAllowed: result === null,
-      force: auth.role === "admin",
-    });
-    if (enforced) {
-      if (enforced.allowed) return null;
-      return result ?? NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-  } catch (error) {
-    console.error("Authorization enforcement failed", error);
-    return NextResponse.json({ error: "Authorization unavailable" }, { status: 500 });
-  }
-
-  if (shadowSampleRate() <= 0) return result;
-
-  const policyResource = opts?.resource?.propertyId
-    ? {
-        propertyId: opts.resource.propertyId,
-        blockId: opts.resource.blockId,
-        unitId: opts.resource.unitId,
-      }
-    : undefined;
-  if (opts?.resource && !policyResource) return result;
-
-  try {
-    await compareAuthorizationShadow({
-      actorUserId: auth.userId,
-      action,
-      resource: policyResource,
-      legacyAllowed: result === null,
-      request: {
-        ip: request.headers.get("x-forwarded-for"),
-        userAgent: request.headers.get("user-agent"),
-      },
-    });
-  } catch (error) {
-    console.error("Authorization shadow comparison failed", error);
-  }
-
-  return result;
-}
-
-export async function getCaretakerContext(userId: string): Promise<UserCtx> {
-  await connectToDatabase();
-  const user = await User.findById(userId).select("-passwordHash").lean();
-  if (!user) {
-    return { role: "caretaker", isActive: false, privileges: [], managedByOwnerId: "" };
-  }
-  return {
-    role: user.role,
-    isActive: user.isActive,
-    privileges: (user.privileges ?? []) as Privilege[],
-    managedByOwnerId: user.managedByOwnerId ?? "",
-  };
+  return null;
 }
 
 export interface TenantScope {
