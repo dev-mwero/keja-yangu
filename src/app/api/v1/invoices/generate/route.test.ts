@@ -181,10 +181,9 @@ describe("POST /api/v1/invoices/generate", () => {
     leaseStub.find.mockReturnValue(buildQuery(activeLeases()));
     invoiceStub.find.mockReturnValue(buildQuery([]).select("leaseId"));
     const period = currentPeriod();
-    user.findOneAndUpdate
-      .mockReturnValueOnce(buildQuery({ invoiceCounters: { [period]: 1 } }))
-      .mockReturnValueOnce(buildQuery({ invoiceCounters: { [period]: 2 } }));
-    invoiceStub.create.mockResolvedValue({});
+    // One bulk reservation: counter advanced 0 → 2, so the block is [1, 2].
+    user.findOneAndUpdate.mockReturnValue(buildQuery({ invoiceCounters: { [period]: 2 } }));
+    invoiceStub.insertMany.mockResolvedValue([{}, {}]);
 
     const res = await POST(
       buildRequest("/api/v1/invoices/generate", {
@@ -199,26 +198,23 @@ describe("POST /api/v1/invoices/generate", () => {
       leaseId: { $in: [LEASE_A, LEASE_B] },
       period,
     });
-    expect(user.findOneAndUpdate).toHaveBeenNthCalledWith(
-      1,
+    expect(user.findOneAndUpdate).toHaveBeenCalledTimes(1);
+    expect(user.findOneAndUpdate).toHaveBeenCalledWith(
       { _id: OWNER_ID },
-      { $inc: { [`invoiceCounters.${period}`]: 1 } },
+      { $inc: { [`invoiceCounters.${period}`]: 2 } },
       { new: true, upsert: false },
     );
-    const firstCreate = invoiceStub.create.mock.calls[0][0] as {
-      invoiceNumber: string;
-      leaseId: string;
-      amountDue: number;
-    };
-    const secondCreate = invoiceStub.create.mock.calls[1][0] as {
-      invoiceNumber: string;
-      leaseId: string;
-      amountDue: number;
-    };
-    expect(firstCreate.invoiceNumber).toBe(formatInvoiceNumber(period, 1));
-    expect(secondCreate.invoiceNumber).toBe(formatInvoiceNumber(period, 2));
-    expect(firstCreate.leaseId).toBe(LEASE_A);
-    expect(secondCreate.leaseId).toBe(LEASE_B);
+    expect(invoiceStub.insertMany).toHaveBeenCalledTimes(1);
+    const [drafts, options] = invoiceStub.insertMany.mock.calls[0] as [
+      Array<{ invoiceNumber: string; leaseId: string; amountDue: number }>,
+      { ordered: boolean },
+    ];
+    expect(options).toEqual({ ordered: false });
+    expect(drafts).toHaveLength(2);
+    expect(drafts[0].invoiceNumber).toBe(formatInvoiceNumber(period, 1));
+    expect(drafts[1].invoiceNumber).toBe(formatInvoiceNumber(period, 2));
+    expect(drafts[0].leaseId).toBe(LEASE_A);
+    expect(drafts[1].leaseId).toBe(LEASE_B);
     const body = await json(res);
     expect(body.data).toEqual({ created: 2, skipped: 0 });
   });
@@ -245,8 +241,8 @@ describe("POST /api/v1/invoices/generate", () => {
     );
     invoiceStub.find.mockReturnValue(buildQuery([]).select("leaseId"));
     const period = currentPeriod();
-    user.findOneAndUpdate.mockReturnValue(buildQuery({ invoiceCounters: { [period]: 1 } }));
-    invoiceStub.create.mockResolvedValue({});
+    user.findOneAndUpdate.mockReturnValue(buildQuery({ invoiceCounters: { [period]: 2 } }));
+    invoiceStub.insertMany.mockResolvedValue([{}, {}]);
 
     const res = await POST(
       buildRequest("/api/v1/invoices/generate", {
@@ -279,7 +275,7 @@ describe("POST /api/v1/invoices/generate", () => {
     );
     const period = currentPeriod();
     user.findOneAndUpdate.mockReturnValue(buildQuery({ invoiceCounters: { [period]: 1 } }));
-    invoiceStub.create.mockResolvedValue({});
+    invoiceStub.insertMany.mockResolvedValue([{}]);
 
     const res = await POST(
       buildRequest("/api/v1/invoices/generate", {
@@ -309,7 +305,7 @@ describe("POST /api/v1/invoices/generate", () => {
     expect(res.status).toBe(200);
     const body = await json(res);
     expect(body.data).toEqual({ created: 0, skipped: 1 });
-    expect(invoiceStub.create).not.toHaveBeenCalled();
+    expect(invoiceStub.insertMany).not.toHaveBeenCalled();
     expect(user.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
@@ -330,7 +326,7 @@ describe("POST /api/v1/invoices/generate", () => {
     expect(res.status).toBe(200);
     const body = await json(res);
     expect(body.data).toEqual({ created: 0, skipped: 2 });
-    expect(invoiceStub.create).not.toHaveBeenCalled();
+    expect(invoiceStub.insertMany).not.toHaveBeenCalled();
     expect(user.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
@@ -340,7 +336,8 @@ describe("POST /api/v1/invoices/generate", () => {
     invoiceStub.find.mockReturnValue(buildQuery([]).select("leaseId"));
     const period = currentPeriod();
     user.findOneAndUpdate.mockReturnValue(buildQuery({ invoiceCounters: { [period]: 1 } }));
-    invoiceStub.create.mockRejectedValue({ code: 11000 });
+    // A concurrent run won the (leaseId, period) unique-index race.
+    invoiceStub.insertMany.mockRejectedValue({ writeErrors: [{ code: 11000, index: 0 }] });
 
     const res = await POST(
       buildRequest("/api/v1/invoices/generate", {
@@ -354,13 +351,13 @@ describe("POST /api/v1/invoices/generate", () => {
     expect(body.data).toEqual({ created: 0, skipped: 1 });
   });
 
-  it("rethrows non-duplicate failures from create", async () => {
+  it("rethrows non-duplicate failures from the bulk insert", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     leaseStub.find.mockReturnValue(buildQuery([activeLeases()[0]]));
     invoiceStub.find.mockReturnValue(buildQuery([]).select("leaseId"));
     const period = currentPeriod();
     user.findOneAndUpdate.mockReturnValue(buildQuery({ invoiceCounters: { [period]: 1 } }));
-    invoiceStub.create.mockRejectedValue(new Error("db exploded"));
+    invoiceStub.insertMany.mockRejectedValue(new Error("db exploded"));
 
     await expect(
       POST(
@@ -399,7 +396,7 @@ describe("POST /api/v1/invoices/generate", () => {
   it("scopes an admin to leases on assigned properties using $or filter", async () => {
     const period = currentPeriod();
     user.findById.mockReturnValue(buildQuery(makeUser({ _id: ADMIN_ID, role: "admin" })));
-    user.findOneAndUpdate.mockReturnValue(buildQuery({ invoiceCounters: { [period]: 1 } }));
+    user.findOneAndUpdate.mockReturnValue(buildQuery({ invoiceCounters: { [period]: 2 } }));
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
@@ -416,7 +413,7 @@ describe("POST /api/v1/invoices/generate", () => {
     );
     leaseStub.find.mockReturnValue(buildQuery(activeLeases()));
     invoiceStub.find.mockReturnValue(buildQuery([]).select("leaseId"));
-    invoiceStub.create.mockResolvedValue({});
+    invoiceStub.insertMany.mockResolvedValue([{}, {}]);
     tenantStub.find.mockReturnValue(buildQuery([]));
 
     const res = await POST(
@@ -438,7 +435,7 @@ describe("POST /api/v1/invoices/generate", () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     leaseStub.find.mockReturnValue(buildQuery([]));
     invoiceStub.find.mockReturnValue(buildQuery([]).select("leaseId"));
-    invoiceStub.create.mockResolvedValue({});
+    invoiceStub.insertMany.mockResolvedValue([]);
     let lastStatus = 0;
     for (let i = 0; i < 21; i += 1) {
       const res = await POST(
