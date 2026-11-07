@@ -1,4 +1,4 @@
-import { type PolicyAction, roleMaximumActions } from "@/lib/authorization";
+import { type PolicyAction, roleMaximumActions } from "@/lib/authorization-policy";
 import type { AssignmentAccessRole, AssignmentScopeType } from "@/lib/domain-enums";
 
 export interface LegacyBackfillProperty {
