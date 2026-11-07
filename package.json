@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit",
     "audit:phase9": "tsx scripts/phase9-readiness.ts",
     "admin:grant": "tsx scripts/grant-system-admin.ts",
+    "migrate:role-capability-indexes": "tsx scripts/migrate-role-capability-indexes.ts",
     "reconcile:attributions": "tsx scripts/reconcile-attributions.ts",
     "reconcile:commissions": "tsx scripts/reconcile-commissions.ts",
     "backfill:commissions": "tsx scripts/backfill-commissions.ts"
