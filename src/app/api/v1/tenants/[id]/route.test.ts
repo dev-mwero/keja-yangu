@@ -35,7 +35,7 @@ const TENANT_ID = makeObjectId("t1");
 const INVALID_ID = "not-an-objectid";
 
 function ownerDoc() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  return makeUser({ _id: OWNER_ID, role: "admin" });
 }
 
 function caretakerDoc(privileges: string[]) {
@@ -88,6 +88,19 @@ describe("GET /api/v1/tenants/[id]", () => {
   });
 
   it("200 for an in-scope tenant", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     tenantStub.findById.mockReturnValue(buildQuery(inScopeTenant()));
     const res = await GET(
@@ -100,6 +113,19 @@ describe("GET /api/v1/tenants/[id]", () => {
   });
 
   it("404 for a cross-owner read (existence hidden)", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     tenantStub.findById.mockReturnValue(
       buildQuery(makeTenant({ _id: TENANT_ID, ownerId: OTHER_OWNER_ID })),
@@ -112,6 +138,19 @@ describe("GET /api/v1/tenants/[id]", () => {
   });
 
   it("404 when absent", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     tenantStub.findById.mockReturnValue(buildQuery(null));
     const res = await GET(
@@ -128,6 +167,19 @@ describe("PATCH /api/v1/tenants/[id]", () => {
   });
 
   it("owner updates a tenant name in scope", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     tenantStub.findById.mockReturnValue(buildQuery(inScopeTenant()));
     const updated = { ...inScopeTenant(), name: "Renamed Tenant" };
@@ -158,6 +210,19 @@ describe("PATCH /api/v1/tenants/[id]", () => {
   });
 
   it("ownerId in the payload is stripped and never persisted", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     tenantStub.findById.mockReturnValue(buildQuery(inScopeTenant()));
     tenantStub.findOne.mockReturnValue(buildQuery(null));
@@ -183,7 +248,19 @@ describe("PATCH /api/v1/tenants/[id]", () => {
 
   it("caretakers cannot set tenant status", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerDoc(["manage_tenants"])));
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID }]));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     tenantStub.findById.mockReturnValue(buildQuery(inScopeTenant()));
 
     const res = await PATCH(
@@ -200,7 +277,19 @@ describe("PATCH /api/v1/tenants/[id]", () => {
 
   it("403 when a caretaker reassigns to a property outside their scope", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerDoc(["manage_tenants"])));
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID }]));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     tenantStub.findById.mockReturnValue(buildQuery(inScopeTenant()));
     // target property is NOT assigned to this caretaker
     property.findById.mockReturnValue(
@@ -219,6 +308,19 @@ describe("PATCH /api/v1/tenants/[id]", () => {
   });
 
   it("422 when reassigning to a property that does not exist", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     tenantStub.findById.mockReturnValue(buildQuery(inScopeTenant()));
     property.findById.mockReturnValue(buildQuery(null));
@@ -235,6 +337,19 @@ describe("PATCH /api/v1/tenants/[id]", () => {
   });
 
   it("409 when the new email already exists on the target property", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     tenantStub.findById.mockReturnValue(buildQuery(inScopeTenant()));
     tenantStub.findOne.mockReturnValue(buildQuery({ _id: makeObjectId("other-tenant") }));
@@ -255,6 +370,19 @@ describe("PATCH /api/v1/tenants/[id]", () => {
   });
 
   it("owner can change status and joinedAt updates accordingly", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     tenantStub.findById.mockReturnValue(buildQuery({ ...inScopeTenant(), status: "pending" }));
     const updated = { ...inScopeTenant(), status: "active" };
@@ -278,6 +406,19 @@ describe("PATCH /api/v1/tenants/[id]", () => {
   });
 
   it("400 for an invalid email shape", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     tenantStub.findById.mockReturnValue(buildQuery(inScopeTenant()));
     const res = await PATCH(
@@ -292,6 +433,19 @@ describe("PATCH /api/v1/tenants/[id]", () => {
   });
 
   it("404 for a cross-owner tenant", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     tenantStub.findById.mockReturnValue(
       buildQuery(makeTenant({ _id: TENANT_ID, ownerId: OTHER_OWNER_ID })),
@@ -314,6 +468,19 @@ describe("DELETE /api/v1/tenants/[id]", () => {
   });
 
   it("owner deletes an in-scope tenant", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     tenantStub.findById.mockReturnValue(buildQuery(inScopeTenant()));
     tenantStub.softDeleteById.mockResolvedValue({ acknowledged: true });
@@ -339,6 +506,19 @@ describe("DELETE /api/v1/tenants/[id]", () => {
   });
 
   it("404 for a cross-owner delete", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     tenantStub.findById.mockReturnValue(
       buildQuery(makeTenant({ _id: TENANT_ID, ownerId: OTHER_OWNER_ID })),
@@ -355,6 +535,19 @@ describe("DELETE /api/v1/tenants/[id]", () => {
   });
 
   it("normalises a local phone when updating a tenant", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     tenantStub.findById.mockReturnValue(buildQuery(inScopeTenant()));
     tenantStub.findOne.mockReturnValue(buildQuery(null));
@@ -375,6 +568,19 @@ describe("DELETE /api/v1/tenants/[id]", () => {
   });
 
   it("rejects clearing both email and phone", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     tenantStub.findById.mockReturnValue(buildQuery(inScopeTenant()));
 
@@ -391,9 +597,29 @@ describe("DELETE /api/v1/tenants/[id]", () => {
   });
 
   it("allows clearing email while keeping a phone", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     tenantStub.findById.mockReturnValue(
-      buildQuery(makeTenant({ _id: TENANT_ID, ownerId: OWNER_ID, phone: "+254700000000" })),
+      buildQuery(
+        makeTenant({
+          _id: TENANT_ID,
+          ownerId: OWNER_ID,
+          propertyId: PROPERTY_ID,
+          phone: "+254700000000",
+        }),
+      ),
     );
     tenantStub.findOne.mockReturnValue(buildQuery(null));
     tenantStub.findOneAndUpdate.mockReturnValue(buildQuery({ ...inScopeTenant(), email: "" }));

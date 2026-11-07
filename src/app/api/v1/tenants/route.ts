@@ -133,10 +133,6 @@ export async function GET(request: NextRequest) {
   if (ownerId) {
     if (scope.role === "system-admin") {
       scope.filter.ownerId = ownerId;
-    } else if (scope.role === "owner") {
-      if (ownerId !== scope.userId) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
     } else {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -197,30 +193,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Property not found" }, { status: 422 });
   }
 
-  if (scope.role === "owner" && property.ownerId !== scope.userId) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
   if (scope.role === "admin" && !scope.propertyScopeIds?.includes(parsed.data.propertyId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (scope.role === "caretaker") {
-    // Assignment-backed caretakers are scoped by their assignments; legacy
-    // caretakers by Property.caretakerIds under the managing owner.
-    const covered = scope.staffAssignmentBacked
-      ? (scope.propertyScopeIds?.includes(parsed.data.propertyId) ?? false)
-      : Boolean(
-          property.caretakerIds?.includes(scope.userId) &&
-            property.ownerId === scope.managedByOwnerId,
-        );
+  if (scope.role === "caretaker" || scope.role === "custodian") {
+    const covered = scope.propertyScopeIds?.includes(parsed.data.propertyId) ?? false;
     if (!covered) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-  }
-  if (scope.role === "custodian") {
-    const allowed = scope.staffAssignmentBacked
-      ? (scope.propertyScopeIds?.includes(parsed.data.propertyId) ?? false)
-      : property.ownerId === scope.managedByOwnerId;
-    if (!allowed) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
   }

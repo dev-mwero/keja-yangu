@@ -710,10 +710,6 @@ export async function getTenantScope(
   const userId = String(user._id);
   const managedByOwnerId = user.managedByOwnerId ?? "";
 
-  if (user.role === "owner") {
-    const filter = { ownerId: userId };
-    return { filter, leaseFilter: filter, userId, role: user.role, managedByOwnerId };
-  }
   if (user.role === "admin") {
     const assignmentScope = await getAdminAssignmentScope(userId, action);
 
@@ -749,56 +745,25 @@ export async function getTenantScope(
       ...assignmentScope,
     };
   }
-  if (user.role === "custodian") {
-    const staffScope = await getStaffAssignmentScope(userId, "custodian", action);
-    if (staffScope.hasAssignments) {
-      return {
-        filter: staffTenantFilter(staffScope),
-        leaseFilter: staffLeaseFilter(staffScope),
-        userId,
-        role: user.role,
-        managedByOwnerId,
-        ...staffScope,
-        staffAssignmentBacked: true,
-      };
-    }
-    if (!managedByOwnerId) {
+  if (user.role === "custodian" || user.role === "caretaker") {
+    // Assignment-only scoping (clean slate): staff without an active
+    // assignment have no scope and are denied.
+    const staffScope = await getStaffAssignmentScope(userId, user.role, action);
+    if (!staffScope.hasAssignments) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    const filter = { ownerId: managedByOwnerId };
-    return { filter, leaseFilter: filter, userId, role: user.role, managedByOwnerId };
-  }
-  if (user.role === "system-admin") {
-    return { filter: {}, leaseFilter: {}, userId, role: user.role, managedByOwnerId };
-  }
-  if (user.role === "caretaker") {
-    const staffScope = await getStaffAssignmentScope(userId, "caretaker", action);
-    if (staffScope.hasAssignments) {
-      return {
-        filter: staffTenantFilter(staffScope),
-        leaseFilter: staffLeaseFilter(staffScope),
-        userId,
-        role: user.role,
-        managedByOwnerId,
-        ...staffScope,
-        staffAssignmentBacked: true,
-      };
-    }
-    if (!managedByOwnerId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-    const properties = await Property.find({ caretakerIds: userId, ownerId: managedByOwnerId })
-      .select("_id")
-      .lean();
-    const assignedPropertyIds = properties.map((p) => String(p._id));
     return {
-      filter: { propertyId: { $in: assignedPropertyIds }, ownerId: managedByOwnerId },
-      leaseFilter: { propertyId: { $in: assignedPropertyIds }, ownerId: managedByOwnerId },
+      filter: staffTenantFilter(staffScope),
+      leaseFilter: staffLeaseFilter(staffScope),
       userId,
       role: user.role,
       managedByOwnerId,
-      assignedPropertyIds,
+      ...staffScope,
+      staffAssignmentBacked: true,
     };
+  }
+  if (user.role === "system-admin") {
+    return { filter: {}, leaseFilter: {}, userId, role: user.role, managedByOwnerId };
   }
 
   return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -808,38 +773,20 @@ export function tenantMatchesScope(
   tenant: { _id?: unknown; ownerId: string; propertyId: string },
   scope: TenantScope,
 ): boolean {
-  if (scope.role === "owner") {
-    return tenant.ownerId === scope.userId;
-  }
   if (scope.role === "admin") {
     return (
       (scope.propertyScopeIds?.includes(tenant.propertyId) ?? false) ||
       (scope.assignedTenantIds?.includes(String(tenant._id ?? "")) ?? false)
     );
   }
-  if (scope.role === "custodian") {
-    if (scope.staffAssignmentBacked) {
-      return (
-        (scope.propertyScopeIds?.includes(tenant.propertyId) ?? false) ||
-        (scope.assignedTenantIds?.includes(String(tenant._id ?? "")) ?? false)
-      );
-    }
-    return tenant.ownerId === scope.managedByOwnerId;
-  }
   if (scope.role === "system-admin") {
     return true;
   }
-  if (scope.role !== "caretaker") {
-    return false;
-  }
-  if (scope.staffAssignmentBacked) {
+  if (scope.role === "custodian" || scope.role === "caretaker") {
     return (
       (scope.propertyScopeIds?.includes(tenant.propertyId) ?? false) ||
       (scope.assignedTenantIds?.includes(String(tenant._id ?? "")) ?? false)
     );
   }
-  return (
-    tenant.ownerId === scope.managedByOwnerId &&
-    (scope.assignedPropertyIds?.includes(tenant.propertyId) ?? false)
-  );
+  return false;
 }
