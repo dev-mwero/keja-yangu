@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { writeAuditEvent } from "@/lib/audit";
 import { connectToDatabase } from "@/lib/mongoose";
+import { syncCaretakerPrivilegeAssignments } from "@/lib/property-staff";
 import {
   authenticate,
   CARETAKER_PRIVILEGES,
@@ -104,6 +105,12 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
   if (!updated) {
     return NextResponse.json({ error: "Caretaker not found" }, { status: 404 });
   }
+
+  await syncCaretakerPrivilegeAssignments(
+    id,
+    (updated.privileges ?? privileges) as string[],
+    String(actor._id),
+  );
 
   await writeAuditEvent({
     actor: { userId: String(actor._id), role: actor.role },

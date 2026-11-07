@@ -11,6 +11,9 @@ vi.mock("@/lib/audit", () => ({
   writeAuditEvent: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 
 import { PUT } from "@/app/api/v1/caretakers/[id]/privileges/route";
 import { writeAuditEvent } from "@/lib/audit";
