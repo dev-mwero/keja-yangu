@@ -51,14 +51,28 @@ export async function POST(request: NextRequest) {
   const filter: Record<string, unknown> = { status: "active" };
   if (actor.role === "owner") filter.ownerId = actor.userId;
   if (actor.role === "custodian") {
-    if (!actor.managedByOwnerId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (actor.staffAssignmentBacked) {
+      const scopes: Record<string, unknown>[] = [];
+      if (actor.propertyScopeIds.length > 0) {
+        scopes.push({ propertyId: { $in: actor.propertyScopeIds } });
+      }
+      if (actor.assignedUnitIds.length > 0) {
+        scopes.push({ unitId: { $in: actor.assignedUnitIds } });
+      }
+      if (scopes.length === 0) {
+        return NextResponse.json({ data: { generatedCount: 0, invoices: [] } }, { status: 201 });
+      }
+      filter.$or = scopes;
+    } else {
+      if (!actor.managedByOwnerId) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      filter.ownerId = actor.managedByOwnerId;
     }
-    filter.ownerId = actor.managedByOwnerId;
   }
   if (actor.role === "caretaker") {
     filter.propertyId = { $in: actor.assignedPropertyIds };
-    filter.ownerId = actor.managedByOwnerId;
+    if (!actor.staffAssignmentBacked) filter.ownerId = actor.managedByOwnerId;
   }
   if (actor.role === "admin") {
     const scopes: Record<string, unknown>[] = [];

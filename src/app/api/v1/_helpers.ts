@@ -1,7 +1,13 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongoose";
-import { type Action, authenticate, getAdminAssignmentScope, type Role } from "@/lib/permissions";
+import {
+  type Action,
+  authenticate,
+  getAdminAssignmentScope,
+  getStaffAssignmentScope,
+  type Role,
+} from "@/lib/permissions";
 import { Property } from "@/models/Property";
 import { Tenant } from "@/models/Tenant";
 import { Unit } from "@/models/Unit";
@@ -16,6 +22,8 @@ export interface InvoiceActor {
   assignedBlockIds: string[];
   assignedUnitIds: string[];
   assignedTenantIds: string[];
+  /** Custodian/caretaker scope resolved from ManagementAssignment (not legacy fields). */
+  staffAssignmentBacked?: boolean;
 }
 
 export async function resolveInvoiceActor(
@@ -41,7 +49,21 @@ export async function resolveInvoiceActor(
   let assignedUnitIds: string[] = [];
   let assignedTenantIds: string[] = [];
 
-  if (user.role === "caretaker" && managedByOwnerId) {
+  let staffAssignmentBacked = false;
+
+  if ((user.role === "custodian" || user.role === "caretaker") && action) {
+    const staffScope = await getStaffAssignmentScope(userId, user.role, action);
+    if (staffScope.hasAssignments) {
+      assignedPropertyIds = staffScope.assignedPropertyIds;
+      propertyScopeIds = staffScope.propertyScopeIds;
+      assignedBlockIds = staffScope.assignedBlockIds;
+      assignedUnitIds = staffScope.assignedUnitIds;
+      assignedTenantIds = staffScope.assignedTenantIds;
+      staffAssignmentBacked = true;
+    }
+  }
+
+  if (user.role === "caretaker" && !staffAssignmentBacked && managedByOwnerId) {
     const properties = await Property.find({ caretakerIds: userId, ownerId: managedByOwnerId })
       .select("_id")
       .lean();
@@ -66,6 +88,7 @@ export async function resolveInvoiceActor(
     assignedBlockIds,
     assignedUnitIds,
     assignedTenantIds,
+    staffAssignmentBacked,
   };
 }
 
