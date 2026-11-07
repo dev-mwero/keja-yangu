@@ -103,6 +103,31 @@ describe("GET /api/v1/units", () => {
     expect(unit.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
   });
 
+  it("scopes an assignment-backed custodian to assigned properties", async () => {
+    const propertyId = makeObjectId("custodian-property");
+    user.findById.mockReturnValue(
+      buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian", managedByOwnerId: "" })),
+    );
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "custodian",
+          scopeType: "property",
+          propertyId,
+          permissions: ["unit:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    listResult([]);
+
+    const res = await GET(buildRequest("/api/v1/units", { token: signToken(CUSTODIAN_ID) }));
+    expect(res.status).toBe(200);
+    expect(unit.find).toHaveBeenCalledWith({ $or: [{ propertyId: { $in: [propertyId] } }] });
+  });
+
   it("403 for an orphaned custodian", async () => {
     user.findById.mockReturnValue(
       buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian", managedByOwnerId: "" })),
