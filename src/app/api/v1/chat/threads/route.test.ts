@@ -219,6 +219,36 @@ describe("GET /api/v1/chat/threads", () => {
     expect(chatthread.find).toHaveBeenCalledWith({ agentUserId: AGENT_ID });
   });
 
+  it("scopes an assignment-backed custodian to threads on assigned properties", async () => {
+    // managedByOwnerId satisfies the (still legacy) permission gate; the
+    // assignment scope must win for the data filter.
+    user.findById.mockReturnValue(buildQuery(custodianUser()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "custodian",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["chat:read-own"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    chatthread.find.mockReturnValue(buildQuery([]).sort({ lastMessageAt: -1 }).skip(0).limit(20));
+    chatthread.countDocuments.mockResolvedValue(0);
+    user.find.mockReturnValue(buildQuery([]));
+    tenant.find.mockReturnValue(buildQuery([]));
+    property.find.mockReturnValue(buildQuery([]));
+
+    const res = await GET(buildRequest("/api/v1/chat/threads", { token: signToken(CUSTODIAN_ID) }));
+    expect(res.status).toBe(200);
+    expect(chatthread.find).toHaveBeenCalledWith({
+      $or: [{ propertyId: { $in: [PROPERTY_ID] } }],
+    });
+  });
+
   it("custodian sees every thread in the managed owner's portfolio", async () => {
     user.findById.mockReturnValue(buildQuery(custodianUser()));
     chatthread.find.mockReturnValue(buildQuery([]).sort({ lastMessageAt: -1 }).skip(0).limit(20));

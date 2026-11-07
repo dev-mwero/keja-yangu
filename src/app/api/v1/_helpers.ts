@@ -117,6 +117,8 @@ export interface DashboardActor {
   assignedBlockIds: string[];
   assignedUnitIds: string[];
   assignedTenantIds: string[];
+  /** Custodian/caretaker scope resolved from ManagementAssignment (not legacy fields). */
+  staffAssignmentBacked?: boolean;
 }
 
 /**
@@ -151,7 +153,21 @@ export async function resolveDashboardActor(
   let assignedUnitIds: string[] = [];
   let assignedTenantIds: string[] = [];
 
-  if (user.role === "caretaker" && managedByOwnerId) {
+  let staffAssignmentBacked = false;
+
+  if ((user.role === "custodian" || user.role === "caretaker") && action) {
+    const staffScope = await getStaffAssignmentScope(userId, user.role, action);
+    if (staffScope.hasAssignments) {
+      assignedPropertyIds = staffScope.assignedPropertyIds;
+      propertyScopeIds = staffScope.propertyScopeIds;
+      assignedBlockIds = staffScope.assignedBlockIds;
+      assignedUnitIds = staffScope.assignedUnitIds;
+      assignedTenantIds = staffScope.assignedTenantIds;
+      staffAssignmentBacked = true;
+    }
+  }
+
+  if (user.role === "caretaker" && !staffAssignmentBacked && managedByOwnerId) {
     const properties = await Property.find({ caretakerIds: userId, ownerId: managedByOwnerId })
       .select("_id")
       .lean();
@@ -192,6 +208,7 @@ export async function resolveDashboardActor(
     assignedBlockIds,
     assignedUnitIds,
     assignedTenantIds,
+    staffAssignmentBacked,
   };
 }
 
