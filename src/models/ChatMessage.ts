@@ -24,6 +24,9 @@ const chatMessageSchema = new Schema<IChatMessage>(
 );
 
 chatMessageSchema.index({ threadId: 1, createdAt: 1 });
+// Supports the batched unread-count candidate fetch (thread set + other-side
+// sender + watermark bound) in one query.
+chatMessageSchema.index({ threadId: 1, senderUserId: 1, createdAt: 1 });
 
 export type ChatMessageDocument = InferSchemaType<IChatMessage>;
 
