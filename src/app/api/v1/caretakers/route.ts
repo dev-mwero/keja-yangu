@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { writeAuditEvent } from "@/lib/audit";
 import { sendInviteEmail } from "@/lib/email";
 import { connectToDatabase } from "@/lib/mongoose";
 import { authenticate, CARETAKER_PRIVILEGES, getAdminAssignmentScope } from "@/lib/permissions";
@@ -182,6 +183,19 @@ export async function POST(request: NextRequest) {
   const privileges = [...new Set(parsed.data.privileges ?? [])];
   const displayName = parsed.data.name ?? existing?.name ?? email ?? phone;
 
+  const audit = (action: string, entityId: string, after: Record<string, unknown>) =>
+    writeAuditEvent({
+      actor: { userId: String(actor._id), role: actor.role },
+      action,
+      entityType: "user",
+      entityId,
+      after,
+      request: {
+        ip: request.headers.get("x-forwarded-for"),
+        userAgent: request.headers.get("user-agent"),
+      },
+    });
+
   if (existing) {
     if (existing.role !== "caretaker") {
       return NextResponse.json(
@@ -210,6 +224,11 @@ export async function POST(request: NextRequest) {
         ...(phone && existing.phone !== phone ? { phone } : {}),
       };
       await User.updateOne({ _id: existing._id }, { $set: update });
+      await audit("caretaker.linked", String(existing._id), {
+        managedByOwnerId: boundOwnerId,
+        name: update.name ?? existing.name,
+        privileges,
+      });
       return NextResponse.json({
         linked: true,
         data: {
@@ -240,6 +259,11 @@ export async function POST(request: NextRequest) {
       },
     );
     await sendInviteEmail(email, displayName, "caretaker", verificationToken);
+    await audit("caretaker.invited", String(existing._id), {
+      managedByOwnerId: boundOwnerId,
+      name: displayName,
+      privileges,
+    });
 
     return NextResponse.json(
       {
@@ -264,6 +288,11 @@ export async function POST(request: NextRequest) {
       phone,
       managedByOwnerId: boundOwnerId,
       privileges,
+    });
+    await audit("caretaker.created", String(created._id), {
+      managedByOwnerId: created.managedByOwnerId ?? "",
+      name: created.name,
+      privileges: created.privileges ?? privileges,
     });
 
     return NextResponse.json(
@@ -303,6 +332,11 @@ export async function POST(request: NextRequest) {
   });
 
   await sendInviteEmail(email, created.name, "caretaker", verificationToken);
+  await audit("caretaker.invited", String(created._id), {
+    managedByOwnerId: created.managedByOwnerId ?? "",
+    name: created.name,
+    privileges: created.privileges ?? privileges,
+  });
 
   return NextResponse.json(
     {

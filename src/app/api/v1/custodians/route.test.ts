@@ -7,11 +7,15 @@ import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-m
 vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("@/lib/audit", () => ({
+  writeAuditEvent: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/lib/email", () => ({ sendInviteEmail: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("bcryptjs", () => ({ default: { hash: vi.fn().mockResolvedValue("hashed") } }));
 
 import { GET, POST } from "@/app/api/v1/custodians/route";
+import { writeAuditEvent } from "@/lib/audit";
 import { sendInviteEmail } from "@/lib/email";
 
 const { user } = getModelStubs();
@@ -44,6 +48,7 @@ function custodianDoc(overrides: Record<string, unknown> = {}) {
 describe("GET /api/v1/custodians", () => {
   beforeEach(() => {
     resetModelStubs();
+    vi.mocked(writeAuditEvent).mockClear();
   });
 
   it("401 when unauthenticated", async () => {
@@ -177,6 +182,9 @@ describe("POST /api/v1/custodians", () => {
       }),
     );
     expect(res.status).toBe(201);
+    expect(writeAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "custodian.invited", entityType: "user" }),
+    );
     expect(user.create).toHaveBeenCalledWith(
       expect.objectContaining({ role: "custodian", managedByOwnerId: OWNER_ID, isActive: false }),
     );

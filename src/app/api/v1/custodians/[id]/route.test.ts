@@ -7,9 +7,13 @@ import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-m
 vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("@/lib/audit", () => ({
+  writeAuditEvent: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 
 import { DELETE, PATCH } from "@/app/api/v1/custodians/[id]/route";
+import { writeAuditEvent } from "@/lib/audit";
 
 const { user } = getModelStubs();
 
@@ -45,6 +49,7 @@ function authOwner(id = OWNER_ID) {
 describe("PATCH /api/v1/custodians/[id]", () => {
   beforeEach(() => {
     resetModelStubs();
+    vi.mocked(writeAuditEvent).mockClear();
   });
 
   it("404 when the custodian does not exist", async () => {
@@ -130,6 +135,13 @@ describe("PATCH /api/v1/custodians/[id]", () => {
     expect(doc.name).toBe("Renamed");
     expect(doc.phone).toBe("+254700000000");
     expect(doc.save).toHaveBeenCalled();
+    expect(writeAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "custodian.updated",
+        entityType: "user",
+        entityId: CUSTODIAN_ID,
+      }),
+    );
   });
 });
 
@@ -154,6 +166,13 @@ describe("DELETE /api/v1/custodians/[id]", () => {
     expect(doc.managedByOwnerId).toBe("");
     expect(doc.isActive).toBe(false);
     expect(doc.save).toHaveBeenCalled();
+    expect(writeAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "custodian.revoked",
+        entityType: "user",
+        entityId: CUSTODIAN_ID,
+      }),
+    );
   });
 
   it("owner grants assign_privileges to a custodian", async () => {

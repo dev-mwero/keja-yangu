@@ -2,6 +2,7 @@ import { isValidObjectId } from "mongoose";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { writeAuditEvent } from "@/lib/audit";
 import { connectToDatabase } from "@/lib/mongoose";
 import {
   authenticate,
@@ -59,7 +60,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     );
   }
 
-  const target = await User.findById(id).select("role managedByOwnerId").lean();
+  const target = await User.findById(id).select("role managedByOwnerId privileges").lean();
   if (target?.role !== "caretaker") {
     return NextResponse.json({ error: "Target user is not a caretaker" }, { status: 400 });
   }
@@ -103,6 +104,19 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
   if (!updated) {
     return NextResponse.json({ error: "Caretaker not found" }, { status: 404 });
   }
+
+  await writeAuditEvent({
+    actor: { userId: String(actor._id), role: actor.role },
+    action: "caretaker.privileges.updated",
+    entityType: "user",
+    entityId: id,
+    before: { privileges: target.privileges ?? [] },
+    after: { privileges: updated.privileges ?? privileges },
+    request: {
+      ip: request.headers.get("x-forwarded-for"),
+      userAgent: request.headers.get("user-agent"),
+    },
+  });
 
   return NextResponse.json({
     data: {

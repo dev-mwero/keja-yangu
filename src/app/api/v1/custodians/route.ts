@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { writeAuditEvent } from "@/lib/audit";
 import { sendInviteEmail } from "@/lib/email";
 import { connectToDatabase } from "@/lib/mongoose";
 import { authenticate, getAdminAssignmentScope } from "@/lib/permissions";
@@ -186,6 +187,19 @@ export async function POST(request: NextRequest) {
   const { email, phone, user: existing } = identity;
   const displayName = parsed.data.name ?? existing?.name ?? email ?? phone;
 
+  const audit = (action: string, entityId: string, after: Record<string, unknown>) =>
+    writeAuditEvent({
+      actor: { userId: String(actor._id), role: actor.role },
+      action,
+      entityType: "user",
+      entityId,
+      after,
+      request: {
+        ip: request.headers.get("x-forwarded-for"),
+        userAgent: request.headers.get("user-agent"),
+      },
+    });
+
   if (existing) {
     if (existing.role !== "custodian") {
       return NextResponse.json(
@@ -206,6 +220,10 @@ export async function POST(request: NextRequest) {
         ...(phone && existing.phone !== phone ? { phone } : {}),
       };
       await User.updateOne({ _id: existing._id }, { $set: update });
+      await audit("custodian.linked", String(existing._id), {
+        managedByOwnerId: boundOwnerId,
+        name: update.name ?? existing.name,
+      });
       return NextResponse.json({
         linked: true,
         data: {
@@ -242,6 +260,10 @@ export async function POST(request: NextRequest) {
       },
     );
     await sendInviteEmail(email, displayName, "custodian", verificationToken);
+    await audit("custodian.invited", String(existing._id), {
+      managedByOwnerId: boundOwnerId,
+      name: displayName,
+    });
 
     return NextResponse.json(
       {
@@ -268,6 +290,10 @@ export async function POST(request: NextRequest) {
       name: displayName,
       phone,
       managedByOwnerId: boundOwnerId,
+    });
+    await audit("custodian.created", String(created._id), {
+      managedByOwnerId: created.managedByOwnerId ?? "",
+      name: created.name,
     });
 
     return NextResponse.json(
@@ -306,6 +332,10 @@ export async function POST(request: NextRequest) {
   });
 
   await sendInviteEmail(email, created.name, "custodian", verificationToken);
+  await audit("custodian.invited", String(created._id), {
+    managedByOwnerId: created.managedByOwnerId ?? "",
+    name: created.name,
+  });
 
   return NextResponse.json(
     {

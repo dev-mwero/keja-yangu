@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { writeAuditEvent } from "@/lib/audit";
 import { sendInviteEmail } from "@/lib/email";
 import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
@@ -288,6 +289,23 @@ export async function POST(request: NextRequest) {
       userId,
     });
 
+    await writeAuditEvent({
+      actor: { userId: scope.userId, role: scope.role },
+      action: "tenant.created",
+      entityType: "tenant",
+      entityId: String(tenant._id),
+      scope: { propertyId: parsed.data.propertyId },
+      after: {
+        status: "active",
+        propertyId: parsed.data.propertyId,
+        type: parsed.data.type,
+      },
+      request: {
+        ip: request.headers.get("x-forwarded-for"),
+        userAgent: request.headers.get("user-agent"),
+      },
+    });
+
     const created = await Tenant.findById(tenant._id).select(TENANT_SAFE_FIELDS).lean();
     return NextResponse.json(
       {
@@ -335,6 +353,23 @@ export async function POST(request: NextRequest) {
     joinedAt: status === "active" ? new Date() : undefined,
     notes: parsed.data.notes,
     userId,
+  });
+
+  await writeAuditEvent({
+    actor: { userId: scope.userId, role: scope.role },
+    action: "tenant.created",
+    entityType: "tenant",
+    entityId: String(tenant._id),
+    scope: { propertyId: parsed.data.propertyId },
+    after: {
+      status,
+      propertyId: parsed.data.propertyId,
+      type: parsed.data.type,
+    },
+    request: {
+      ip: request.headers.get("x-forwarded-for"),
+      userAgent: request.headers.get("user-agent"),
+    },
   });
 
   if (!existingUser) {
