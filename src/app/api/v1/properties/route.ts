@@ -128,11 +128,7 @@ export async function GET(request: NextRequest) {
   }
 
   const filter: Record<string, unknown> = {};
-  if (actorDoc.role === "owner") {
-    filter.ownerId = authUser.userId;
-    if (caretakerId) filter.caretakerIds = caretakerId;
-    if (status) filter.status = status;
-  } else if (actorDoc.role === "admin") {
+  if (actorDoc.role === "admin") {
     const now = new Date();
     const assignments = await ManagementAssignment.find({
       principalUserId: authUser.userId,
@@ -184,29 +180,15 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(buildPaginationResult(scopedProperties, total, page, limit));
   } else if (actorDoc.role === "custodian" || actorDoc.role === "caretaker") {
-    // Prefer assignment-backed scope when backfilled; fall back to the legacy
-    // managedByOwnerId / Property.caretakerIds binding.
+    // Assignment-only scoping: staff without an active assignment see nothing.
     const staffScope = await getStaffAssignmentScope(
       authUser.userId,
       actorDoc.role,
       "property:read" as unknown as Action,
     );
-    if (staffScope.hasAssignments) {
-      filter._id = { $in: staffScope.assignedPropertyIds };
-      if (actorDoc.role === "custodian" && caretakerId) filter.caretakerIds = caretakerId;
-      if (status) filter.status = status;
-    } else if (actorDoc.role === "custodian") {
-      if (!actorDoc.managedByOwnerId) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-      filter.ownerId = actorDoc.managedByOwnerId;
-      if (caretakerId) filter.caretakerIds = caretakerId;
-      if (status) filter.status = status;
-    } else {
-      filter.caretakerIds = authUser.userId;
-      filter.ownerId = actorDoc.managedByOwnerId;
-      if (status) filter.status = status;
-    }
+    filter._id = { $in: staffScope.hasAssignments ? staffScope.assignedPropertyIds : [] };
+    if (actorDoc.role === "custodian" && caretakerId) filter.caretakerIds = caretakerId;
+    if (status) filter.status = status;
   } else {
     if (ownerId) filter.ownerId = ownerId;
     if (caretakerId) filter.caretakerIds = caretakerId;

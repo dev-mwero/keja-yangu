@@ -25,6 +25,7 @@ const { user, property, unit, managementAssignment, block } = getModelStubs();
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
+const PROPERTY_ID = makeObjectId("property");
 
 const validPropertyBody = {
   title: "Sunset Villa",
@@ -179,16 +180,34 @@ describe("GET /api/v1/properties", () => {
   });
 
   it("returns all properties for an authenticated owner with no filters", async () => {
-    const ownerDoc = makeUser({ _id: OWNER_ID, role: "owner" });
+    const ownerDoc = makeUser({ _id: OWNER_ID, role: "admin" });
     user.findById.mockReturnValue(buildQuery(ownerDoc));
-    const owned = [makeProperty({ _id: makeObjectId("p1") })];
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["property:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    const owned = [makeProperty({ _id: PROPERTY_ID })];
     property.find.mockReturnValue(buildQuery(owned));
     property.countDocuments.mockResolvedValue(1);
 
     const res = await GET(buildRequest("/api/v1/properties", { token: signToken(OWNER_ID) }));
     expect(res.status).toBe(200);
     const body = await json(res);
-    expect(property.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
+    expect(managementAssignment.find).toHaveBeenCalledWith({
+      principalUserId: OWNER_ID,
+      accessRole: "admin",
+      status: "active",
+    });
+    expect(property.find).toHaveBeenCalledWith({ _id: { $in: [PROPERTY_ID] } });
     expect(body.data).toHaveLength(1);
   });
 
@@ -240,18 +259,19 @@ describe("GET /api/v1/properties", () => {
   });
 
   it("applies ownerId and status filters for authenticated requests", async () => {
-    const ownerDoc = makeUser({ _id: OWNER_ID, role: "owner" });
-    user.findById.mockReturnValue(buildQuery(ownerDoc));
+    const actorId = makeObjectId("system-admin");
+    const actorDoc = makeUser({ _id: actorId, role: "system-admin" });
+    user.findById.mockReturnValue(buildQuery(actorDoc));
     property.find.mockReturnValue(buildQuery([]));
     property.countDocuments.mockResolvedValue(0);
 
     const res = await GET(
       buildRequest("/api/v1/properties?status=available&ownerId=abc123", {
-        token: signToken(OWNER_ID),
+        token: signToken(actorId),
       }),
     );
     expect(res.status).toBe(200);
-    expect(property.find).toHaveBeenCalledWith({ status: "available", ownerId: OWNER_ID });
+    expect(property.find).toHaveBeenCalledWith({ status: "available", ownerId: "abc123" });
   });
 
   it("treats a signed-in tenant like anonymous (published + available only)", async () => {
@@ -276,6 +296,19 @@ describe("GET /api/v1/properties", () => {
       privileges: ["edit_property"],
     });
     user.findById.mockReturnValue(buildQuery(caretaker));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["property:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     property.find.mockReturnValue(buildQuery([]));
     property.countDocuments.mockResolvedValue(0);
 
@@ -283,14 +316,17 @@ describe("GET /api/v1/properties", () => {
       buildRequest("/api/v1/properties?status=available", { token: signToken(CARETAKER_ID) }),
     );
     expect(res.status).toBe(200);
+    expect(managementAssignment.find).toHaveBeenCalledWith({
+      principalUserId: CARETAKER_ID,
+      accessRole: "caretaker",
+      status: "active",
+    });
     expect(property.find).toHaveBeenCalledWith({
-      caretakerIds: CARETAKER_ID,
-      ownerId: OTHER_OWNER_ID,
+      _id: { $in: [PROPERTY_ID] },
       status: "available",
     });
     expect(property.countDocuments).toHaveBeenCalledWith({
-      caretakerIds: CARETAKER_ID,
-      ownerId: OTHER_OWNER_ID,
+      _id: { $in: [PROPERTY_ID] },
       status: "available",
     });
   });
@@ -310,34 +346,78 @@ describe("GET /api/v1/properties", () => {
   });
 
   it("applies caretakerId filter via the caretakerIds multikey", async () => {
-    const ownerDoc = makeUser({ _id: OWNER_ID, role: "owner" });
-    user.findById.mockReturnValue(buildQuery(ownerDoc));
+    const caretaker = makeUser({
+      _id: CARETAKER_ID,
+      role: "caretaker",
+      managedByOwnerId: OTHER_OWNER_ID,
+      privileges: [],
+    });
+    user.findById.mockReturnValue(buildQuery(caretaker));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["property:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     property.find.mockReturnValue(buildQuery([]));
     property.countDocuments.mockResolvedValue(0);
 
-    await GET(buildRequest("/api/v1/properties?caretakerId=c1", { token: signToken(OWNER_ID) }));
-    expect(property.find).toHaveBeenCalledWith({ ownerId: OWNER_ID, caretakerIds: "c1" });
+    await GET(
+      buildRequest("/api/v1/properties?caretakerId=c1", { token: signToken(CARETAKER_ID) }),
+    );
+    expect(managementAssignment.find).toHaveBeenCalledWith({
+      principalUserId: CARETAKER_ID,
+      accessRole: "caretaker",
+      status: "active",
+    });
+    expect(property.find).toHaveBeenCalledWith({ _id: { $in: [PROPERTY_ID] } });
   });
 
   it("keeps custodians scoped to their owner's full portfolio", async () => {
+    const custodianId = makeObjectId("custodian");
     const custodian = makeUser({
-      _id: makeObjectId("custodian"),
+      _id: custodianId,
       role: "custodian",
       managedByOwnerId: OWNER_ID,
     });
     user.findById.mockReturnValue(buildQuery(custodian));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "custodian",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["property:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     property.find.mockReturnValue(buildQuery([]));
     property.countDocuments.mockResolvedValue(0);
 
     await GET(
       buildRequest("/api/v1/properties", {
-        token: signToken(custodian._id),
+        token: signToken(custodianId),
         query: { caretakerId: CARETAKER_ID },
       }),
     );
 
+    expect(managementAssignment.find).toHaveBeenCalledWith({
+      principalUserId: custodianId,
+      accessRole: "custodian",
+      status: "active",
+    });
     expect(property.find).toHaveBeenCalledWith({
-      ownerId: OWNER_ID,
+      _id: { $in: [PROPERTY_ID] },
       caretakerIds: CARETAKER_ID,
     });
   });
