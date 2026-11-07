@@ -71,7 +71,7 @@ describe("legacy readiness", () => {
     const report = buildLegacyReadinessReport(input);
 
     expect(report.blocking.ownersWithoutAssignment).toEqual([]);
-    expect(report.readyForLegacyRetirement).toBe(false);
+    expect(report.readyForLegacyRetirement).toBe(true);
     expect(report.counts.propertiesWithLegacyOwner).toBe(1);
   });
 

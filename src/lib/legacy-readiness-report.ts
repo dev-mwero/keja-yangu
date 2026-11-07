@@ -178,12 +178,14 @@ export function buildLegacyReadinessReport(input: LegacyReadinessInput): LegacyR
     }
   }
 
+  // Property.ownerId is retained as data attribution (ownership of record) and
+  // is no longer an authorization signal. The legacy *authorization* fields
+  // (managedByOwnerId, caretakerIds, custodianIds) are likewise metadata: the
+  // only authorization source is ManagementAssignment. Retirement is therefore
+  // gated on the absence of legacy *roles* and assignment/billing drift, not on
+  // the presence of those attribution/metadata fields.
   const readyForLegacyRetirement =
     ownerRoleUsers.length === 0 &&
-    propertiesWithLegacyOwner === 0 &&
-    propertiesWithLegacyCaretakers === 0 &&
-    propertiesWithLegacyCustodians === 0 &&
-    usersWithLegacyManager === 0 &&
     ownersWithoutAssignment.length === 0 &&
     orphanAssignments.length === 0 &&
     missingBlockAssignments.length === 0 &&
