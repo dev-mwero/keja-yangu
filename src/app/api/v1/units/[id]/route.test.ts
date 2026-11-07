@@ -1,7 +1,13 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildRequest, signToken, withParams } from "@/test/utils/api-request";
-import { makeObjectId, makeUnit, makeUser, type TestUnit } from "@/test/utils/factories";
+import {
+  makeObjectId,
+  makeProperty,
+  makeUnit,
+  makeUser,
+  type TestUnit,
+} from "@/test/utils/factories";
 import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-mocks";
 
 vi.mock("@/lib/mongoose", () => ({
@@ -10,6 +16,9 @@ vi.mock("@/lib/mongoose", () => ({
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 vi.mock("@/lib/notifications", () => ({
   notifyUnitAvailable: vi.fn().mockResolvedValue(true),
 }));
@@ -17,7 +26,7 @@ vi.mock("@/lib/notifications", () => ({
 import { DELETE, GET, PATCH } from "@/app/api/v1/units/[id]/route";
 import { notifyUnitAvailable } from "@/lib/notifications";
 
-const { user, unit, property } = getModelStubs();
+const { user, unit, property, managementAssignment } = getModelStubs();
 const notifyUnitAvailableMock = vi.mocked(notifyUnitAvailable);
 
 const OWNER_ID = makeObjectId("owner");
@@ -47,6 +56,28 @@ function persistedUnit(overrides = {}): PersistedUnit {
 describe("GET /api/v1/units/[id]", () => {
   beforeEach(() => {
     resetModelStubs();
+    property.findOne.mockReturnValue(
+      buildQuery(
+        makeProperty({
+          _id: makeObjectId("prop"),
+          blocks: [{ _id: makeObjectId("block") }],
+        } as any),
+      ),
+    );
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: makeObjectId("prop"),
+          permissions: ["unit:read", "unit:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
   });
 
   it("401 when unauthenticated", async () => {
@@ -55,7 +86,7 @@ describe("GET /api/v1/units/[id]", () => {
   });
 
   it("404 when absent", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
     unit.findById.mockReturnValue(buildQuery(null));
     const res = await GET(
       buildRequest(`/api/v1/units/${UNIT_ID}`, { token: signToken(OWNER_ID) }),
@@ -65,8 +96,30 @@ describe("GET /api/v1/units/[id]", () => {
   });
 
   it("owner reads their own unit", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
     unit.findById.mockReturnValue(buildQuery(unitDoc()));
+    property.findOne.mockReturnValue(
+      buildQuery(
+        makeProperty({
+          _id: makeObjectId("prop"),
+          blocks: [{ _id: makeObjectId("block") }],
+        } as any),
+      ),
+    );
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: makeObjectId("prop"),
+          permissions: ["unit:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     const res = await GET(
       buildRequest(`/api/v1/units/${UNIT_ID}`, { token: signToken(OWNER_ID) }),
       withParams(UNIT_ID),
@@ -131,7 +184,25 @@ describe("GET /api/v1/units/[id]", () => {
       ),
     );
     unit.findById.mockReturnValue(buildQuery(unitDoc({ propertyId: UNIT_PROPERTY_ID })));
-    property.findOne.mockReturnValue(buildQuery({ _id: UNIT_PROPERTY_ID }));
+    property.findOne.mockReturnValue(
+      buildQuery(
+        makeProperty({ _id: UNIT_PROPERTY_ID, blocks: [{ _id: makeObjectId("block") }] } as any),
+      ),
+    );
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: UNIT_PROPERTY_ID,
+          permissions: ["unit:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
 
     const res = await GET(
       buildRequest(`/api/v1/units/${UNIT_ID}`, { token: signToken(CARETAKER_ID) }),
@@ -145,6 +216,28 @@ describe("PATCH /api/v1/units/[id]", () => {
   beforeEach(() => {
     resetModelStubs();
     notifyUnitAvailableMock.mockClear();
+    property.findOne.mockReturnValue(
+      buildQuery(
+        makeProperty({
+          _id: makeObjectId("prop"),
+          blocks: [{ _id: makeObjectId("block") }],
+        } as any),
+      ),
+    );
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: makeObjectId("prop"),
+          permissions: ["unit:read", "unit:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
   });
 
   it("403 when a caretaker edits a unit outside their assigned properties", async () => {
@@ -158,7 +251,7 @@ describe("PATCH /api/v1/units/[id]", () => {
         }),
       ),
     );
-    unit.findById.mockResolvedValue(unitDoc({ propertyId: UNIT_PROPERTY_ID }));
+    unit.findById.mockReturnValue(buildQuery(unitDoc({ propertyId: UNIT_PROPERTY_ID })));
     property.findOne.mockReturnValue(buildQuery(null));
 
     const res = await PATCH(
@@ -173,9 +266,9 @@ describe("PATCH /api/v1/units/[id]", () => {
   });
 
   it("owner updates unit status and rent", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
     const doc = persistedUnit();
-    unit.findById.mockResolvedValue(doc);
+    unit.findById.mockReturnValue(buildQuery(doc));
 
     const res = await PATCH(
       buildRequest(`/api/v1/units/${UNIT_ID}`, {
@@ -192,9 +285,9 @@ describe("PATCH /api/v1/units/[id]", () => {
   });
 
   it("owner updates unit purpose override", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
     const doc = persistedUnit();
-    unit.findById.mockResolvedValue(doc);
+    unit.findById.mockReturnValue(buildQuery(doc));
 
     const res = await PATCH(
       buildRequest(`/api/v1/units/${UNIT_ID}`, {
@@ -210,9 +303,9 @@ describe("PATCH /api/v1/units/[id]", () => {
   });
 
   it("409 when renaming to a name already used in the block", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
     const doc = persistedUnit({ name: "3A" });
-    unit.findById.mockResolvedValue(doc);
+    unit.findById.mockReturnValue(buildQuery(doc));
     unit.findOne.mockReturnValue(buildQuery({ _id: makeObjectId("other") }));
 
     const res = await PATCH(
@@ -233,7 +326,7 @@ describe("PATCH /api/v1/units/[id]", () => {
         makeUser({ _id: CUSTODIAN_ID, role: "custodian", managedByOwnerId: OTHER_OWNER_ID }),
       ),
     );
-    unit.findById.mockResolvedValue(unitDoc({ ownerId: OWNER_ID }));
+    unit.findById.mockReturnValue(buildQuery(unitDoc({ ownerId: OWNER_ID })));
 
     const res = await PATCH(
       buildRequest(`/api/v1/units/${UNIT_ID}`, {
@@ -247,9 +340,9 @@ describe("PATCH /api/v1/units/[id]", () => {
   });
 
   it("rejects setting tenantId directly (occupancy changes via allocation)", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
     const doc = persistedUnit();
-    unit.findById.mockResolvedValue(doc);
+    unit.findById.mockReturnValue(buildQuery(doc));
 
     const res = await PATCH(
       buildRequest(`/api/v1/units/${UNIT_ID}`, {
@@ -264,9 +357,9 @@ describe("PATCH /api/v1/units/[id]", () => {
   });
 
   it("rejects setting status occupied directly", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
     const doc = persistedUnit();
-    unit.findById.mockResolvedValue(doc);
+    unit.findById.mockReturnValue(buildQuery(doc));
 
     const res = await PATCH(
       buildRequest(`/api/v1/units/${UNIT_ID}`, {
@@ -281,9 +374,9 @@ describe("PATCH /api/v1/units/[id]", () => {
   });
 
   it("rejects flipping an occupied unit to available directly", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
     const doc = persistedUnit({ status: "occupied", tenantId: TENANT_ID });
-    unit.findById.mockResolvedValue(doc);
+    unit.findById.mockReturnValue(buildQuery(doc));
 
     const res = await PATCH(
       buildRequest(`/api/v1/units/${UNIT_ID}`, {
@@ -298,9 +391,9 @@ describe("PATCH /api/v1/units/[id]", () => {
   });
 
   it("notifies favourites when a unit transitions to available", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
     const doc = persistedUnit({ status: "maintenance" });
-    unit.findById.mockResolvedValue(doc);
+    unit.findById.mockReturnValue(buildQuery(doc));
 
     const res = await PATCH(
       buildRequest(`/api/v1/units/${UNIT_ID}`, {
@@ -317,9 +410,9 @@ describe("PATCH /api/v1/units/[id]", () => {
   });
 
   it("does not notify when the status is already available", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
     const doc = persistedUnit({ status: "available" });
-    unit.findById.mockResolvedValue(doc);
+    unit.findById.mockReturnValue(buildQuery(doc));
 
     const res = await PATCH(
       buildRequest(`/api/v1/units/${UNIT_ID}`, {
@@ -335,9 +428,9 @@ describe("PATCH /api/v1/units/[id]", () => {
   });
 
   it("owner updates unit service-charge configuration", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
     const doc = persistedUnit();
-    unit.findById.mockResolvedValue(doc);
+    unit.findById.mockReturnValue(buildQuery(doc));
 
     const res = await PATCH(
       buildRequest(`/api/v1/units/${UNIT_ID}`, {
@@ -364,11 +457,33 @@ describe("PATCH /api/v1/units/[id]", () => {
 describe("DELETE /api/v1/units/[id]", () => {
   beforeEach(() => {
     resetModelStubs();
+    property.findOne.mockReturnValue(
+      buildQuery(
+        makeProperty({
+          _id: makeObjectId("prop"),
+          blocks: [{ _id: makeObjectId("block") }],
+        } as any),
+      ),
+    );
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: makeObjectId("prop"),
+          permissions: ["unit:read", "unit:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
   });
 
   it("409 when the unit is occupied", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
-    unit.findById.mockResolvedValue(unitDoc({ status: "occupied", tenantId: TENANT_ID }));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+    unit.findById.mockReturnValue(buildQuery(unitDoc({ status: "occupied", tenantId: TENANT_ID })));
     const res = await DELETE(
       buildRequest(`/api/v1/units/${UNIT_ID}`, { method: "DELETE", token: signToken(OWNER_ID) }),
       withParams(UNIT_ID),
@@ -378,8 +493,8 @@ describe("DELETE /api/v1/units/[id]", () => {
   });
 
   it("owner soft-deletes a vacated unit", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
-    unit.findById.mockResolvedValue(unitDoc({ status: "available", tenantId: "" }));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+    unit.findById.mockReturnValue(buildQuery(unitDoc({ status: "available", tenantId: "" })));
     unit.softDeleteById.mockResolvedValue({ acknowledged: true });
     const res = await DELETE(
       buildRequest(`/api/v1/units/${UNIT_ID}`, { method: "DELETE", token: signToken(OWNER_ID) }),

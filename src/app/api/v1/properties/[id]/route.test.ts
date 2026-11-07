@@ -29,7 +29,7 @@ const OTHER_PROPERTY_ID = makeObjectId("other-property");
 const INVALID_ID = "not-a-valid-objectid";
 
 function ownerDoc(overrides: Partial<ReturnType<typeof makeUser>> = {}) {
-  return makeUser({ _id: OWNER_ID, role: "owner", ...overrides });
+  return makeUser({ _id: OWNER_ID, role: "admin", ...overrides });
 }
 
 function caretakerDoc(privileges: string[], overrides: Partial<ReturnType<typeof makeUser>> = {}) {
@@ -149,6 +149,7 @@ describe("GET /api/v1/properties/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -180,6 +181,7 @@ describe("GET /api/v1/properties/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: CUSTODIAN_ID,
           accessRole: "custodian",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -213,6 +215,7 @@ describe("GET /api/v1/properties/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: CUSTODIAN_ID,
           accessRole: "custodian",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -284,6 +287,7 @@ describe("GET /api/v1/properties/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: CARETAKER_ID,
           accessRole: "caretaker",
           scopeType: "property",
           propertyId: OTHER_PROPERTY_ID,
@@ -396,7 +400,21 @@ describe("GET /api/v1/properties/[id]", () => {
 
   it("can include every unit status for a scoped manager", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
-    property.findOne.mockReturnValue(buildQuery(ownProperty()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["property:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    property.findById.mockReturnValue(buildQuery(ownProperty()));
     unit.find.mockReturnValue(buildQuery([]));
 
     const res = await GET(
@@ -438,6 +456,20 @@ describe("PATCH /api/v1/properties/[id]", () => {
 
   it("owner can edit own property but identity fields cannot be mutated", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["property:edit"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.find.mockReturnValue(buildQuery([{ _id: CARETAKER_ID }]));
     property.findById.mockReturnValue(buildQuery(ownProperty()));
     const updated = { ...ownProperty(), title: "Renamed" };
@@ -470,6 +502,20 @@ describe("PATCH /api/v1/properties/[id]", () => {
 
   it("owner can update caretakerIds (full-control role)", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["property:edit"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.find.mockReturnValue(buildQuery([{ _id: CARETAKER_ID }]));
     property.findById.mockReturnValue(buildQuery(ownProperty()));
     property.findOneAndUpdate.mockReturnValue(buildQuery(ownProperty()));
@@ -489,6 +535,20 @@ describe("PATCH /api/v1/properties/[id]", () => {
 
   it("owner can assign a custodian to their property", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["property:edit"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.find.mockReturnValue(buildQuery([{ _id: CUSTODIAN_ID }]));
     property.findById.mockReturnValue(buildQuery(ownProperty()));
     property.findOneAndUpdate.mockReturnValue(
@@ -519,6 +579,20 @@ describe("PATCH /api/v1/properties/[id]", () => {
 
   it("rejects assigning a custodian bound to another owner", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["property:edit"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.find.mockReturnValue(buildQuery([]));
     property.findById.mockReturnValue(buildQuery(ownProperty()));
 
@@ -537,6 +611,20 @@ describe("PATCH /api/v1/properties/[id]", () => {
 
   it("preserves a previously assigned staff member who is now inactive", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["property:edit"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.find.mockReturnValue(
       buildQuery([
         {
@@ -563,6 +651,20 @@ describe("PATCH /api/v1/properties/[id]", () => {
 
   it("does not allow assigning an inactive staff account", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["property:edit"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.find.mockReturnValue(
       buildQuery([
         {
@@ -594,6 +696,20 @@ describe("PATCH /api/v1/properties/[id]", () => {
       managedByOwnerId: OWNER_ID,
     });
     user.findById.mockReturnValue(buildQuery(custodian));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CUSTODIAN_ID,
+          accessRole: "custodian",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["property:edit"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.find.mockReturnValue(buildQuery([{ _id: CARETAKER_ID }]));
     property.findById.mockReturnValue(buildQuery(ownProperty()));
     property.findOneAndUpdate.mockReturnValue(
@@ -619,6 +735,20 @@ describe("PATCH /api/v1/properties/[id]", () => {
 
   it("owner can update purpose and dateCompleted", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["property:edit"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     property.findById.mockReturnValue(buildQuery(ownProperty()));
     const updated = {
       ...ownProperty(),
@@ -659,6 +789,20 @@ describe("PATCH /api/v1/properties/[id]", () => {
 
   it("caretaker C2 cannot assign staff when editing an in-scope property", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerDoc(["edit_property"])));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["property:edit"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     property.findById.mockReturnValue(buildQuery(managedProperty()));
     const res = await PATCH(
       buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {
@@ -727,6 +871,20 @@ describe("DELETE /api/v1/properties/[id]", () => {
 
   it("owner soft-deletes their own property", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["property:delete"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     property.findById.mockReturnValue(buildQuery(ownProperty()));
     tenant.exists.mockResolvedValue(null);
     property.softDeleteById.mockResolvedValue({ acknowledged: true });
@@ -763,6 +921,20 @@ describe("DELETE /api/v1/properties/[id]", () => {
 
   it("caretaker C3 can delete a property they are assigned to when in-scope", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerDoc(["delete_assigned_property"])));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["property:delete"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     property.findById.mockReturnValue(buildQuery(managedProperty()));
     tenant.exists.mockResolvedValue(null);
     property.softDeleteById.mockResolvedValue({ acknowledged: true });
@@ -798,6 +970,20 @@ describe("DELETE /api/v1/properties/[id]", () => {
 
   it("409 when a tenant references the property", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["property:delete"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     property.findById.mockReturnValue(buildQuery(ownProperty()));
     tenant.exists.mockResolvedValue({ _id: makeObjectId("t1") });
 

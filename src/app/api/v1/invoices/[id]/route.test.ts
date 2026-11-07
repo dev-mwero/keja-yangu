@@ -1,6 +1,7 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildRequest, signToken, withParams } from "@/test/utils/api-request";
+import { activeAssignment } from "@/test/utils/assignment-mocks";
 import { makeInvoice, makeObjectId, makeUser } from "@/test/utils/factories";
 import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-mocks";
 
@@ -18,7 +19,7 @@ vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
 
 import { DELETE, GET, PATCH } from "@/app/api/v1/invoices/[id]/route";
 
-const { user, property, invoice: invoiceStub, managementAssignment } = getModelStubs();
+const { user, invoice: invoiceStub, managementAssignment } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
@@ -28,7 +29,18 @@ const INVOICE_ID = makeObjectId("invoice");
 const INVALID_ID = "not-an-objectid";
 
 function ownerDoc() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  const doc = makeUser({ _id: OWNER_ID, role: "admin" });
+  managementAssignment.find.mockReturnValue(
+    buildQuery([
+      activeAssignment({
+        principalUserId: OWNER_ID,
+        accessRole: "admin",
+        propertyId: PROPERTY_ID,
+        permissions: ["invoice:read", "invoice:manage"],
+      }),
+    ]),
+  );
+  return doc;
 }
 
 function caretakerDoc() {
@@ -100,6 +112,8 @@ describe("GET /api/v1/invoices/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
+
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -125,6 +139,8 @@ describe("GET /api/v1/invoices/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: CARETAKER_ID,
+
           accessRole: "caretaker",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -149,6 +165,8 @@ describe("GET /api/v1/invoices/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: SCOPED_ADMIN_ID,
+
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -169,10 +187,23 @@ describe("GET /api/v1/invoices/[id]", () => {
 
   it("404 for a caretaker whose managing owner does not own the invoice", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerDoc()));
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID }]));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          propertyId: PROPERTY_ID,
+          permissions: ["invoice:read"],
+        }),
+      ]),
+    );
     invoiceStub.findById.mockReturnValue(
       buildQuery(
-        makeInvoice({ _id: INVOICE_ID, ownerId: OTHER_OWNER_ID, propertyId: PROPERTY_ID }),
+        makeInvoice({
+          _id: INVOICE_ID,
+          ownerId: OTHER_OWNER_ID,
+          propertyId: makeObjectId("foreign"),
+        }),
       ),
     );
     const res = await GET(
@@ -250,6 +281,8 @@ describe("PATCH /api/v1/invoices/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
+
           accessRole: "admin",
           scopeType: "property",
           propertyId: paidInvoice.propertyId,
@@ -280,6 +313,8 @@ describe("PATCH /api/v1/invoices/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
+
           accessRole: "admin",
           scopeType: "property",
           propertyId: voidInvoice.propertyId,
@@ -307,6 +342,8 @@ describe("PATCH /api/v1/invoices/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
+
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -336,6 +373,8 @@ describe("PATCH /api/v1/invoices/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
+
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -413,6 +452,8 @@ describe("DELETE /api/v1/invoices/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
+
           accessRole: "admin",
           scopeType: "property",
           propertyId: nonDraftInvoice.propertyId,
@@ -443,6 +484,8 @@ describe("DELETE /api/v1/invoices/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: OWNER_ID,
+
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,

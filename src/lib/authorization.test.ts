@@ -58,7 +58,7 @@ describe("evaluatePolicy", () => {
     expect(result.allowed).toBe(true);
   });
 
-  it("maps the legacy owner role to an admin assignment", () => {
+  it("denies the retired owner role as unsupported", () => {
     const result = evaluatePolicy({
       actor: actor({ role: "owner" }),
       action: "unit:read",
@@ -66,18 +66,7 @@ describe("evaluatePolicy", () => {
       assignments: [assignment()],
       now: NOW,
     });
-    expect(result.allowed).toBe(true);
-  });
-
-  it("denies an owner without an assignment", () => {
-    const result = evaluatePolicy({
-      actor: actor({ role: "owner" }),
-      action: "unit:read",
-      resource: { propertyId: "property-1" },
-      assignments: [],
-      now: NOW,
-    });
-    expect(result).toMatchObject({ allowed: false, reason: "no-matching-assignment" });
+    expect(result).toMatchObject({ allowed: false, reason: "unsupported-role" });
   });
 
   it("denies a different property", () => {

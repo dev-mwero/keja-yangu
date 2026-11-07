@@ -19,7 +19,7 @@ const CARE_ID = makeObjectId("care");
 const TENANT_USER_ID = makeObjectId("tenant-user");
 
 function ownerDoc() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  return makeUser({ _id: OWNER_ID, role: "admin" });
 }
 
 function caretakerDoc(privileges: string[]) {

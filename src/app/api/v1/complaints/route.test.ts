@@ -42,7 +42,7 @@ function tenantUser() {
 }
 
 function ownerUser() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  return makeUser({ _id: OWNER_ID, role: "admin" });
 }
 
 async function json(res: Response) {
@@ -108,6 +108,20 @@ describe("GET /api/v1/complaints", () => {
   });
 
   it("owner scopes by their own id", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["complaint:read-own"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerUser()));
     complaint.find.mockReturnValue(buildQuery([]).sort({ createdAt: -1 }).skip(0).limit(20));
     complaint.countDocuments.mockResolvedValue(0);
@@ -115,7 +129,9 @@ describe("GET /api/v1/complaints", () => {
 
     const res = await GET(buildRequest("/api/v1/complaints", { token: signToken(OWNER_ID) }));
     expect(res.status).toBe(200);
-    expect(complaint.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
+    expect(complaint.find).toHaveBeenCalledWith({
+      $or: [{ propertyId: { $in: [PROPERTY_ID] } }],
+    });
   });
 
   it("scopes an admin to property-assigned complaints", async () => {
@@ -124,6 +140,7 @@ describe("GET /api/v1/complaints", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: ADMIN_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -157,6 +174,7 @@ describe("GET /api/v1/complaints", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: caretakerId,
           accessRole: "caretaker",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -179,6 +197,20 @@ describe("GET /api/v1/complaints", () => {
   });
 
   it("custodian scopes to the managing owner only", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: makeObjectId("custodian"),
+          accessRole: "custodian",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["complaint:read-own"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(
       buildQuery(
         makeUser({ _id: makeObjectId("custodian"), role: "custodian", managedByOwnerId: OWNER_ID }),

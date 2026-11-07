@@ -1,6 +1,7 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildRequest, signToken } from "@/test/utils/api-request";
+import { activeAssignment } from "@/test/utils/assignment-mocks";
 import {
   makeChatThread,
   makeObjectId,
@@ -42,7 +43,7 @@ function tenantUser() {
 }
 
 function ownerUser() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  return makeUser({ _id: OWNER_ID, role: "admin" });
 }
 
 function caretakerUser(privileges: string[]) {
@@ -138,15 +139,12 @@ describe("GET /api/v1/chat/threads", () => {
     user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
     managementAssignment.find.mockReturnValue(
       buildQuery([
-        {
+        activeAssignment({
+          principalUserId: OWNER_ID,
           accessRole: "admin",
-          scopeType: "property",
           propertyId: PROPERTY_ID,
           permissions: ["chat:read-own", "chat:send"],
-          status: "active",
-          startsAt: new Date("2026-01-01T00:00:00.000Z"),
-          endsAt: null,
-        },
+        }),
       ]),
     );
     const row = threadRow();
@@ -223,6 +221,16 @@ describe("GET /api/v1/chat/threads", () => {
 
   it("caretaker sees only threads where they are the agent", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerUser([])));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: AGENT_ID,
+          accessRole: "caretaker",
+          propertyId: PROPERTY_ID,
+          permissions: ["chat:read-own"],
+        }),
+      ]),
+    );
     chatthread.find.mockReturnValue(buildQuery([]).sort({ lastMessageAt: -1 }).skip(0).limit(20));
     chatthread.countDocuments.mockResolvedValue(0);
     user.find.mockReturnValue(buildQuery([]));
@@ -240,15 +248,12 @@ describe("GET /api/v1/chat/threads", () => {
     user.findById.mockReturnValue(buildQuery(custodianUser()));
     managementAssignment.find.mockReturnValue(
       buildQuery([
-        {
+        activeAssignment({
+          principalUserId: CUSTODIAN_ID,
           accessRole: "custodian",
-          scopeType: "property",
           propertyId: PROPERTY_ID,
           permissions: ["chat:read-own"],
-          status: "active",
-          startsAt: new Date("2026-01-01T00:00:00.000Z"),
-          endsAt: null,
-        },
+        }),
       ]),
     );
     chatthread.find.mockReturnValue(buildQuery([]).sort({ lastMessageAt: -1 }).skip(0).limit(20));
@@ -268,15 +273,12 @@ describe("GET /api/v1/chat/threads", () => {
     user.findById.mockReturnValue(buildQuery(custodianUser()));
     managementAssignment.find.mockReturnValue(
       buildQuery([
-        {
+        activeAssignment({
+          principalUserId: CUSTODIAN_ID,
           accessRole: "custodian",
-          scopeType: "property",
           propertyId: PROPERTY_ID,
           permissions: ["chat:read-own", "chat:send"],
-          status: "active",
-          startsAt: new Date("2026-01-01T00:00:00.000Z"),
-          endsAt: null,
-        },
+        }),
       ]),
     );
     chatthread.find.mockReturnValue(buildQuery([]).sort({ lastMessageAt: -1 }).skip(0).limit(20));
@@ -298,17 +300,15 @@ describe("GET /api/v1/chat/threads", () => {
     user.findById.mockReturnValue(buildQuery(makeUser({ _id: ADMIN_ID, role: "admin" })));
     managementAssignment.find.mockReturnValue(
       buildQuery([
-        {
+        activeAssignment({
+          principalUserId: ADMIN_ID,
           accessRole: "admin",
-          scopeType: "unit",
           propertyId: PROPERTY_ID,
+          scopeType: "unit",
           blockId: makeObjectId("assigned-block"),
           unitId: UNIT_ID,
           permissions: ["chat:read-own"],
-          status: "active",
-          startsAt: new Date("2026-01-01T00:00:00.000Z"),
-          endsAt: null,
-        },
+        }),
       ]),
     );
     unit.find.mockReturnValue(buildQuery([{ _id: UNIT_ID }]));

@@ -16,7 +16,7 @@ vi.mock("@/models/ManagementAssignment", () => ({
 
 import { GET } from "@/app/api/v1/chat/contacts/route";
 
-const { user, property, tenant } = getModelStubs();
+const { user, property, tenant, managementAssignment } = getModelStubs();
 
 const USER_ID = makeObjectId("user");
 const OWNER_ID = makeObjectId("owner");
@@ -33,7 +33,8 @@ it("401 when unauthenticated", async () => {
 });
 
 it("403 for a non-tenant", async () => {
-  user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+  user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+  managementAssignment.find.mockReturnValue(buildQuery([]));
 
   const res = await GET(buildRequest("/api/v1/chat/contacts", { token: signToken(OWNER_ID) }));
   expect(res.status).toBe(403);
@@ -61,7 +62,7 @@ describe("GET /api/v1/chat/contacts", () => {
     );
     user.find.mockReturnValue(
       buildQuery([
-        { _id: OWNER_ID, name: "Test Owner", role: "owner" },
+        { _id: OWNER_ID, name: "Test Owner", role: "admin" },
         { _id: CARETAKER_ID, name: "John Kiprono", role: "caretaker" },
       ]),
     );

@@ -1,6 +1,7 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildRequest, signToken } from "@/test/utils/api-request";
+import { activeAssignment } from "@/test/utils/assignment-mocks";
 import {
   makeInvoice,
   makeLease,
@@ -69,6 +70,18 @@ function stubReads({
 
 function signIn(role: TestUser["role"], overrides: Partial<TestUser> = {}) {
   user.findById.mockReturnValue(buildQuery(makeUser({ _id: SELF_ID, role, ...overrides })));
+  if (role === "admin") {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: SELF_ID,
+          accessRole: "admin",
+          propertyId: PROP_ID,
+          permissions: ["invoice:read"],
+        }),
+      ]),
+    );
+  }
   return signToken(SELF_ID);
 }
 
@@ -95,7 +108,7 @@ describe("GET /api/v1/amounts", () => {
   });
 
   it("returns the documented response shape", async () => {
-    const token = signIn("owner");
+    const token = signIn("admin");
     stubReads();
 
     const body = await json(await GET(buildRequest("/api/v1/amounts", { token })));
@@ -120,7 +133,7 @@ describe("GET /api/v1/amounts", () => {
   });
 
   it("forces an owner onto their own portfolio even when ownerId is supplied", async () => {
-    const token = signIn("owner");
+    const token = signIn("admin");
     stubReads({
       docs: [propertyWithHierarchy()],
       units: [
@@ -157,9 +170,9 @@ describe("GET /api/v1/amounts", () => {
 
     expect(res.status).toBe(200);
     // Scope is derived from the session, never the query string.
-    expect(unit.find).toHaveBeenCalledWith({ ownerId: SELF_ID });
+    expect(unit.find).toHaveBeenCalledWith({ propertyId: { $in: [PROP_ID] } });
     expect(invoice.find).toHaveBeenCalledWith({
-      ownerId: SELF_ID,
+      propertyId: { $in: [PROP_ID] },
       period: expect.any(String),
       status: { $nin: ["draft", "void"] },
     });
@@ -179,7 +192,7 @@ describe("GET /api/v1/amounts", () => {
   });
 
   it("summarises per-period history scoped to the caller, excluding drafts and voids", async () => {
-    const token = signIn("owner");
+    const token = signIn("admin");
     stubReads({
       periodHistory: [
         { _id: "2026-09", billed: 50000, collected: 20000, open: 1, count: 2 },
@@ -198,13 +211,13 @@ describe("GET /api/v1/amounts", () => {
     ]);
     expect(invoice.aggregate).toHaveBeenCalledWith(
       expect.arrayContaining([
-        { $match: { ownerId: SELF_ID, status: { $nin: ["draft", "void"] } } },
+        { $match: { propertyId: { $in: [PROP_ID] }, status: { $nin: ["draft", "void"] } } },
       ]),
     );
   });
 
   it("resolves a unit with no rent through the block override", async () => {
-    const token = signIn("owner");
+    const token = signIn("admin");
     stubReads({
       docs: [
         propertyWithHierarchy({
@@ -213,7 +226,7 @@ describe("GET /api/v1/amounts", () => {
           ],
         }),
       ],
-      units: [makeUnit({ floorId: FLOOR_ID, blockId: BLOCK_ID, rent: null })],
+      units: [makeUnit({ propertyId: PROP_ID, floorId: FLOOR_ID, blockId: BLOCK_ID, rent: null })],
     });
 
     const body = await json(await GET(buildRequest("/api/v1/amounts", { token })));
@@ -222,9 +235,23 @@ describe("GET /api/v1/amounts", () => {
 
   it("scopes a custodian to the managing owner", async () => {
     const token = signIn("custodian", { managedByOwnerId: OWNER_ID });
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: SELF_ID,
+          accessRole: "custodian",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          permissions: ["invoice:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     stubReads({
       docs: [propertyWithHierarchy()],
-      units: [makeUnit({ ownerId: OWNER_ID, rent: 15000 })],
+      units: [makeUnit({ propertyId: PROP_ID, ownerId: OWNER_ID, rent: 15000 })],
     });
 
     const res = await GET(
@@ -244,6 +271,7 @@ describe("GET /api/v1/amounts", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: SELF_ID,
           accessRole: "caretaker",
           scopeType: "property",
           propertyId: PROP_ID,
@@ -278,6 +306,7 @@ describe("GET /api/v1/amounts", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: SELF_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROP_ID,
@@ -355,18 +384,28 @@ describe("GET /api/v1/amounts", () => {
   });
 
   it("honours an explicit period and rejects a malformed one", async () => {
-    const token = signIn("owner");
+    const token = signIn("admin");
     stubReads();
 
     await GET(buildRequest("/api/v1/amounts", { token, query: { period: "2026-05" } }));
     expect(invoice.find).toHaveBeenCalledWith({
-      ownerId: SELF_ID,
+      propertyId: { $in: [PROP_ID] },
       period: "2026-05",
       status: { $nin: ["draft", "void"] },
     });
 
     resetModelStubs();
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: SELF_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: SELF_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: SELF_ID,
+          accessRole: "admin",
+          propertyId: PROP_ID,
+          permissions: ["invoice:read"],
+        }),
+      ]),
+    );
     stubReads();
     const res = await GET(
       buildRequest("/api/v1/amounts", { token, query: { period: "not-a-period" } }),
@@ -375,7 +414,7 @@ describe("GET /api/v1/amounts", () => {
   });
 
   it("returns zeros for an empty portfolio", async () => {
-    const token = signIn("owner");
+    const token = signIn("admin");
     stubReads();
 
     const body = await json(await GET(buildRequest("/api/v1/amounts", { token })));

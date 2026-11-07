@@ -74,6 +74,7 @@ const OTHER_PROPERTY_ID = makeObjectId("p2");
 const LEASE_ID = makeObjectId("lease");
 
 const ADMIN_ASSIGNMENT = {
+  principalUserId: ADMIN_ID,
   accessRole: "admin",
   scopeType: "property",
   propertyId: PROPERTY_ID,
@@ -84,6 +85,7 @@ const ADMIN_ASSIGNMENT = {
 };
 
 const CARETAKER_ASSIGNMENT = {
+  principalUserId: CARETAKER_ID,
   accessRole: "caretaker",
   scopeType: "property",
   propertyId: PROPERTY_ID,
@@ -204,6 +206,7 @@ describe("GET /api/v1/invoices", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: SCOPED_ADMIN_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -234,6 +237,7 @@ describe("GET /api/v1/invoices", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: CUSTODIAN_ID,
           accessRole: "custodian",
           scopeType: "property",
           propertyId: PROPERTY_ID,

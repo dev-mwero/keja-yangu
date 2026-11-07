@@ -11,6 +11,9 @@ vi.mock("@/lib/notifications", () => ({
   notifyOverdueInvoices: vi.fn().mockResolvedValue(true),
 }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Invoice", () => ({ Invoice: getModelStubs().invoice }));
 vi.mock("@/models/OwnerPaymentConfig", () => ({

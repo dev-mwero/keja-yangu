@@ -1,10 +1,9 @@
 /** @vitest-environment node */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Action, CaretakerPrivilege, Role } from "@/lib/permissions";
 import {
   getTenantScope,
   isFullControlRole,
-  isOwnerScopedRole,
   isPrivilegedCustodian,
   requirePermission,
   tenantMatchesScope,
@@ -45,6 +44,7 @@ const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
 const CUSTODIAN_ID = makeObjectId("custodian");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
+const PROPERTY_ID = makeObjectId("property");
 
 function ownerUser(overrides: Partial<TestUser> = {}) {
   return makeUser({ _id: OWNER_ID, role: "owner", ...overrides });
@@ -96,9 +96,13 @@ const ALL_ACTIONS: Action[] = [
 ];
 
 describe("isFullControlRole", () => {
-  it("returns true for owner and system-admin", () => {
-    expect(isFullControlRole("owner")).toBe(true);
+  it("returns true for admin and system-admin", () => {
+    expect(isFullControlRole("admin")).toBe(true);
     expect(isFullControlRole("system-admin")).toBe(true);
+  });
+
+  it("returns false for owner", () => {
+    expect(isFullControlRole("owner")).toBe(false);
   });
 
   it("returns false for caretaker and tenant", () => {
@@ -128,11 +132,6 @@ describe("isPrivilegedCustodian", () => {
 describe("requirePermission — caretaker privilege gating", () => {
   beforeEach(() => {
     resetModelStubs();
-    process.env.AUTHZ_ENFORCE_ROUTE_FAMILIES = "properties";
-  });
-
-  afterEach(() => {
-    delete process.env.AUTHZ_ENFORCE_ROUTE_FAMILIES;
   });
 
   function caretakerWithAssignment(
@@ -231,7 +230,9 @@ describe("requirePermission — authentication failure modes", () => {
   });
 
   it("allows a matching tokenVersion", async () => {
-    user.findById.mockReturnValue(buildQuery(ownerUser({ tokenVersion: 3 })));
+    user.findById.mockReturnValue(
+      buildQuery(makeUser({ _id: OWNER_ID, role: "admin", tokenVersion: 3 })),
+    );
     const res = await requirePermission(
       buildRequest("/api/v1/properties", {
         token: signToken(OWNER_ID, { tokenVersion: 3 }),
@@ -247,26 +248,22 @@ describe("requirePermission — owner", () => {
     resetModelStubs();
   });
 
-  it("allows every action without a resource", async () => {
+  it("denies every action (unsupported role)", async () => {
     for (const action of ALL_ACTIONS) {
-      expect(await guard(action, undefined, ownerUser())).toBeNull();
+      expect((await guard(action, undefined, ownerUser()))?.status).toBe(403);
     }
   });
 
-  it("allows edit/delete of own property", async () => {
+  it("403 for edit/delete of own property", async () => {
     const resource = { ownerId: OWNER_ID, caretakerIds: [] };
-    expect(await guard("property:edit", { resource }, ownerUser())).toBeNull();
-    expect(await guard("property:delete", { resource }, ownerUser())).toBeNull();
+    expect((await guard("property:edit", { resource }, ownerUser()))?.status).toBe(403);
+    expect((await guard("property:delete", { resource }, ownerUser()))?.status).toBe(403);
   });
 
   it("403 for edit/delete of a foreign owner's property", async () => {
     const resource = { ownerId: OTHER_OWNER_ID, caretakerIds: [] };
     expect((await guard("property:edit", { resource }, ownerUser()))?.status).toBe(403);
     expect((await guard("property:delete", { resource }, ownerUser()))?.status).toBe(403);
-  });
-
-  it("allows tenant:manage with no resource restraint", async () => {
-    expect(await guard("tenant:manage", undefined, ownerUser())).toBeNull();
   });
 });
 
@@ -309,21 +306,38 @@ describe("requirePermission — caretaker", () => {
     resetModelStubs();
   });
 
-  it("403 for all actions when the caretaker is orphaned (no managedByOwnerId)", async () => {
+  function assignment(permissions: string[]) {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions,
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+  }
+
+  it("403 for all actions when the caretaker is orphaned (no assignments)", async () => {
     const mocker = caretakerUser([], { managedByOwnerId: "" });
     for (const action of ALL_ACTIONS) {
       expect((await guard(action, undefined, mocker))?.status).toBe(403);
     }
   });
 
-  it("403 for all actions when the caretaker has no privileges (C0)", async () => {
+  it("403 for all actions when the caretaker has no privileges and no assignments (C0)", async () => {
     const mocker = caretakerUser([]);
     for (const action of ALL_ACTIONS) {
       expect((await guard(action, undefined, mocker))?.status).toBe(403);
     }
   });
 
-  it("C1 — create_property permits property:create only", async () => {
+  it("C1 — create_property permits property:create only (privilege gate)", async () => {
     const mocker = caretakerUser(["create_property"]);
     expect(await guard("property:create", undefined, mocker)).toBeNull();
     expect((await guard("property:edit", undefined, mocker))?.status).toBe(403);
@@ -331,104 +345,133 @@ describe("requirePermission — caretaker", () => {
     expect((await guard("tenant:manage", undefined, mocker))?.status).toBe(403);
   });
 
-  it("C2 — edit_property permits in-scope edit without assignment", async () => {
-    const mocker = caretakerUser(["edit_property"]);
-    // Intentional asymmetry: assignment is NOT required for edit, only owner scope.
-    const unassigned = { ownerId: OTHER_OWNER_ID, caretakerIds: [] };
-    expect(await guard("property:edit", { resource: unassigned }, mocker)).toBeNull();
-    expect((await guard("property:create", undefined, mocker))?.status).toBe(403);
-    expect((await guard("tenant:manage", undefined, mocker))?.status).toBe(403);
-  });
-
-  it("C2 — edit_property rejects out-of-scope edit", async () => {
-    const mocker = caretakerUser(["edit_property"]);
-    const foreign = { ownerId: OWNER_ID, caretakerIds: [CARETAKER_ID] };
-    expect((await guard("property:edit", { resource: foreign }, mocker))?.status).toBe(403);
-  });
-
-  it("C3 — delete_assigned_property requires assignment AND owner scope", async () => {
-    const mocker = caretakerUser(["delete_assigned_property"]);
-    const assigned = { ownerId: OTHER_OWNER_ID, caretakerIds: [CARETAKER_ID] };
-    expect(await guard("property:delete", { resource: assigned }, mocker)).toBeNull();
-
-    const notAssigned = { ownerId: OTHER_OWNER_ID, caretakerIds: [] };
-    expect((await guard("property:delete", { resource: notAssigned }, mocker))?.status).toBe(403);
-
-    const wrongOwner = { ownerId: OWNER_ID, caretakerIds: [CARETAKER_ID] };
-    expect((await guard("property:delete", { resource: wrongOwner }, mocker))?.status).toBe(403);
-  });
-
-  it("C4 — manage_tenants permits tenant:manage only", async () => {
-    const mocker = caretakerUser(["manage_tenants"]);
-    expect(await guard("tenant:manage", undefined, mocker)).toBeNull();
-    expect((await guard("property:create", undefined, mocker))?.status).toBe(403);
-    expect((await guard("property:edit", undefined, mocker))?.status).toBe(403);
-    expect((await guard("property:delete", undefined, mocker))?.status).toBe(403);
-  });
-
-  it("C5 — manage_units permits unit:manage only in the managing owner's scope", async () => {
-    const mocker = caretakerUser(["manage_units"]);
-    const inScope = { ownerId: OTHER_OWNER_ID, caretakerIds: [CARETAKER_ID] };
-    const foreign = { ownerId: OWNER_ID, caretakerIds: [CARETAKER_ID] };
-    expect(await guard("unit:manage", { resource: inScope }, mocker)).toBeNull();
-    expect((await guard("unit:manage", { resource: foreign }, mocker))?.status).toBe(403);
-    expect((await guard("unit:manage", undefined, mocker))?.status).toBe(403);
-    const noUnits = caretakerUser(["edit_property"]);
-    expect((await guard("unit:manage", { resource: inScope }, noUnits))?.status).toBe(403);
-
-    const notAssigned = { ownerId: OTHER_OWNER_ID, caretakerIds: [] };
-    expect((await guard("unit:manage", { resource: notAssigned }, mocker))?.status).toBe(403);
-
-    const propertyId = makeObjectId("scoped-property");
-    property.findOne.mockReturnValue(buildQuery({ _id: propertyId }));
-    expect(
-      await guard("unit:manage", { resource: { ownerId: OTHER_OWNER_ID, propertyId } }, mocker),
-    ).toBeNull();
-    expect(property.findOne).toHaveBeenCalledWith({
-      _id: propertyId,
-      ownerId: OTHER_OWNER_ID,
-      caretakerIds: CARETAKER_ID,
-    });
-  });
-
-  it("unit:read requires an assigned property in the managing owner's scope", async () => {
+  it("C1 — create_property denied without the privilege", async () => {
     const mocker = caretakerUser([]);
-    const assigned = { ownerId: OTHER_OWNER_ID, caretakerIds: [CARETAKER_ID] };
-    expect(await guard("unit:read", { resource: assigned }, mocker)).toBeNull();
-
-    const notAssigned = { ownerId: OTHER_OWNER_ID, caretakerIds: [] };
-    expect((await guard("unit:read", { resource: notAssigned }, mocker))?.status).toBe(403);
-
-    const foreign = { ownerId: OWNER_ID, caretakerIds: [CARETAKER_ID] };
-    expect((await guard("unit:read", { resource: foreign }, mocker))?.status).toBe(403);
-    expect((await guard("unit:read", undefined, mocker))?.status).toBe(403);
+    expect((await guard("property:create", undefined, mocker))?.status).toBe(403);
   });
 
-  it("C6 — process_move_requests permits move-request:manage only in scope", async () => {
-    const mocker = caretakerUser(["process_move_requests"]);
-    const inScope = { ownerId: OTHER_OWNER_ID, caretakerIds: [CARETAKER_ID] };
-    const foreign = { ownerId: OWNER_ID, caretakerIds: [CARETAKER_ID] };
-    expect(await guard("move-request:manage", { resource: inScope }, mocker)).toBeNull();
-    expect((await guard("move-request:manage", { resource: foreign }, mocker))?.status).toBe(403);
-    const noPriv = caretakerUser(["manage_units"]);
-    expect((await guard("move-request:manage", { resource: inScope }, noPriv))?.status).toBe(403);
-
-    const notAssigned = { ownerId: OTHER_OWNER_ID, caretakerIds: [] };
-    expect((await guard("move-request:manage", { resource: notAssigned }, mocker))?.status).toBe(
-      403,
-    );
-  });
-
-  it("C7 — application:manage requires an assigned property", async () => {
-    const mocker = caretakerUser(["manage_tenants"]);
-    const assigned = { ownerId: OTHER_OWNER_ID, caretakerIds: [CARETAKER_ID] };
-    const notAssigned = { ownerId: OTHER_OWNER_ID, caretakerIds: [] };
-    expect(await guard("application:manage", { resource: assigned }, mocker)).toBeNull();
-    expect((await guard("application:manage", { resource: notAssigned }, mocker))?.status).toBe(
-      403,
-    );
+  it("C2 — assignment with property:edit permits in-scope edit", async () => {
+    const mocker = caretakerUser([]);
+    assignment(["property:edit"]);
     expect(
-      (await guard("application:manage", { resource: assigned }, caretakerUser([])))?.status,
+      await guard("property:edit", { resource: { propertyId: PROPERTY_ID } }, mocker),
+    ).toBeNull();
+  });
+
+  it("C2 — assignment without property:edit denies even with edit_property privilege", async () => {
+    const mocker = caretakerUser(["edit_property"]);
+    assignment([]);
+    expect(
+      (await guard("property:edit", { resource: { propertyId: PROPERTY_ID } }, mocker))?.status,
+    ).toBe(403);
+  });
+
+  it("C2 — out-of-scope property denied", async () => {
+    const mocker = caretakerUser([]);
+    assignment(["property:edit"]);
+    const foreignPropertyId = makeObjectId("foreign-property");
+    expect(
+      (await guard("property:edit", { resource: { propertyId: foreignPropertyId } }, mocker))
+        ?.status,
+    ).toBe(403);
+  });
+
+  it("C3 — delete_assigned_property requires privilege AND assignment", async () => {
+    const mocker = caretakerUser(["delete_assigned_property"]);
+    assignment(["property:delete"]);
+    expect(
+      await guard("property:delete", { resource: { propertyId: PROPERTY_ID } }, mocker),
+    ).toBeNull();
+
+    // privilege present but no assignment permission -> denied
+    const mocker2 = caretakerUser(["delete_assigned_property"]);
+    assignment([]);
+    expect(
+      (await guard("property:delete", { resource: { propertyId: PROPERTY_ID } }, mocker2))?.status,
+    ).toBe(403);
+
+    // assignment permission present but no privilege -> denied
+    const mocker3 = caretakerUser([]);
+    assignment(["property:delete"]);
+    expect(
+      (await guard("property:delete", { resource: { propertyId: PROPERTY_ID } }, mocker3))?.status,
+    ).toBe(403);
+  });
+
+  it("C4 — assignment with tenant:manage permits tenant:manage", async () => {
+    const mocker = caretakerUser([]);
+    assignment(["tenant:manage"]);
+    expect(
+      await guard("tenant:manage", { resource: { propertyId: PROPERTY_ID } }, mocker),
+    ).toBeNull();
+  });
+
+  it("C4 — assignment without tenant:manage denies even with manage_tenants privilege", async () => {
+    const mocker = caretakerUser(["manage_tenants"]);
+    assignment([]);
+    expect(
+      (await guard("tenant:manage", { resource: { propertyId: PROPERTY_ID } }, mocker))?.status,
+    ).toBe(403);
+  });
+
+  it("C5 — assignment with unit:manage permits unit:manage", async () => {
+    const mocker = caretakerUser([]);
+    assignment(["unit:manage"]);
+    expect(
+      await guard("unit:manage", { resource: { propertyId: PROPERTY_ID } }, mocker),
+    ).toBeNull();
+  });
+
+  it("C5 — assignment without unit:manage denies", async () => {
+    const mocker = caretakerUser(["manage_units"]);
+    assignment([]);
+    expect(
+      (await guard("unit:manage", { resource: { propertyId: PROPERTY_ID } }, mocker))?.status,
+    ).toBe(403);
+  });
+
+  it("unit:read requires assignment coverage", async () => {
+    const mocker = caretakerUser([]);
+    assignment(["unit:read"]);
+    expect(await guard("unit:read", { resource: { propertyId: PROPERTY_ID } }, mocker)).toBeNull();
+
+    assignment([]);
+    expect(
+      (await guard("unit:read", { resource: { propertyId: PROPERTY_ID } }, mocker))?.status,
+    ).toBe(403);
+  });
+
+  it("C6 — assignment with move-request:manage permits move-request:manage", async () => {
+    const mocker = caretakerUser([]);
+    assignment(["move-request:manage"]);
+    expect(
+      await guard("move-request:manage", { resource: { propertyId: PROPERTY_ID } }, mocker),
+    ).toBeNull();
+  });
+
+  it("C6 — assignment without move-request:manage denies", async () => {
+    const mocker = caretakerUser(["process_move_requests"]);
+    assignment([]);
+    expect(
+      (await guard("move-request:manage", { resource: { propertyId: PROPERTY_ID } }, mocker))
+        ?.status,
+    ).toBe(403);
+  });
+
+  it("C7 — assignment with application:manage permits application:manage", async () => {
+    const mocker = caretakerUser([]);
+    assignment(["application:manage"]);
+    expect(
+      await guard("application:manage", { resource: { propertyId: PROPERTY_ID } }, mocker),
+    ).toBeNull();
+  });
+
+  it("C7 — assignment without application:manage denies", async () => {
+    const mocker = caretakerUser(["manage_tenants"]);
+    assignment([]);
+    expect(
+      (await guard("application:manage", { resource: { propertyId: PROPERTY_ID } }, mocker))
+        ?.status,
     ).toBe(403);
   });
 
@@ -679,26 +722,17 @@ describe("requirePermission — invoicing actions", () => {
     resetModelStubs();
   });
 
-  it("owner can perform every invoicing action without a resource", async () => {
+  it("system-admin can perform every invoicing action without a resource", async () => {
+    const admin = makeUser({ _id: makeObjectId("admin"), role: "system-admin" });
     for (const action of INVOICE_ACTIONS) {
-      expect(await guard(action, undefined, ownerUser())).toBeNull();
+      expect(await guard(action, undefined, admin)).toBeNull();
     }
   });
 
-  it("owner can manage and mark-paid their own lease/invoice resources", async () => {
-    const own = { ownerId: OWNER_ID, caretakerIds: [] };
-    expect(await guard("lease:manage", { resource: own }, ownerUser())).toBeNull();
-    expect(await guard("invoice:manage", { resource: own }, ownerUser())).toBeNull();
-    expect(await guard("invoice:mark-paid", { resource: own }, ownerUser())).toBeNull();
-  });
-
-  it("owner is denied lease/invoice mutations on a foreign owner's resource", async () => {
-    const foreign = { ownerId: OTHER_OWNER_ID, caretakerIds: [] };
-    expect((await guard("lease:manage", { resource: foreign }, ownerUser()))?.status).toBe(403);
-    expect((await guard("invoice:manage", { resource: foreign }, ownerUser()))?.status).toBe(403);
-    expect((await guard("invoice:mark-paid", { resource: foreign }, ownerUser()))?.status).toBe(
-      403,
-    );
+  it("owner is denied invoicing actions", async () => {
+    for (const action of INVOICE_ACTIONS) {
+      expect((await guard(action, undefined, ownerUser()))?.status).toBe(403);
+    }
   });
 
   it("tenant passes through ONLY for invoice:read-own", async () => {
@@ -710,22 +744,63 @@ describe("requirePermission — invoicing actions", () => {
     }
   });
 
-  it("C6 — manage_invoices caretaker reads, marks paid and generates, but never touches leases", async () => {
+  it("C6 — manage_invoices caretaker reads, marks paid and generates with assignment, but never touches leases", async () => {
     const mocker = caretakerUser(["manage_invoices"]);
-    expect(await guard("invoice:read", undefined, mocker)).toBeNull();
-    expect(await guard("invoice:generate", undefined, mocker)).toBeNull();
-    expect((await guard("lease:manage", undefined, mocker))?.status).toBe(403);
-    expect((await guard("invoice:read-own", undefined, mocker))?.status).toBe(403);
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["invoice:read", "invoice:manage", "invoice:mark-paid", "invoice:generate"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    const resource = { propertyId: PROPERTY_ID };
+    expect(await guard("invoice:read", { resource }, mocker)).toBeNull();
+    expect(await guard("invoice:generate", { resource }, mocker)).toBeNull();
+    expect(await guard("invoice:manage", { resource }, mocker)).toBeNull();
+    expect(await guard("invoice:mark-paid", { resource }, mocker)).toBeNull();
+    expect((await guard("lease:manage", { resource }, mocker))?.status).toBe(403);
+    expect((await guard("invoice:read-own", { resource }, mocker))?.status).toBe(403);
   });
 
   it("C6 — invoice:manage and invoice:mark-paid require an in-scope resource", async () => {
     const mocker = caretakerUser(["manage_invoices"]);
-    const inScope = { ownerId: OTHER_OWNER_ID, caretakerIds: [CARETAKER_ID] };
-    const foreign = { ownerId: OWNER_ID, caretakerIds: [CARETAKER_ID] };
-    expect(await guard("invoice:manage", { resource: inScope }, mocker)).toBeNull();
-    expect(await guard("invoice:mark-paid", { resource: inScope }, mocker)).toBeNull();
-    expect((await guard("invoice:manage", { resource: foreign }, mocker))?.status).toBe(403);
-    expect((await guard("invoice:mark-paid", { resource: foreign }, mocker))?.status).toBe(403);
+    const inScopeProperty = PROPERTY_ID;
+    const foreignProperty = makeObjectId("foreign-property");
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: inScopeProperty,
+          permissions: ["invoice:manage", "invoice:mark-paid"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    expect(
+      await guard("invoice:manage", { resource: { propertyId: inScopeProperty } }, mocker),
+    ).toBeNull();
+    expect(
+      await guard("invoice:mark-paid", { resource: { propertyId: inScopeProperty } }, mocker),
+    ).toBeNull();
+    expect(
+      (await guard("invoice:manage", { resource: { propertyId: foreignProperty } }, mocker))
+        ?.status,
+    ).toBe(403);
+    expect(
+      (await guard("invoice:mark-paid", { resource: { propertyId: foreignProperty } }, mocker))
+        ?.status,
+    ).toBe(403);
   });
 
   it("caretaker without manage_invoices is denied every invoicing action", async () => {
@@ -755,10 +830,7 @@ describe("requirePermission — notification & settings actions", () => {
     resetModelStubs();
   });
 
-  it("owner and system-admin pass every notification/settings action", async () => {
-    for (const action of NOTIFICATION_SETTINGS_ACTIONS) {
-      expect(await guard(action, undefined, ownerUser())).toBeNull();
-    }
+  it("system-admin passes every notification/settings action", async () => {
     const admin = makeUser({ _id: makeObjectId("admin"), role: "system-admin" });
     for (const action of NOTIFICATION_SETTINGS_ACTIONS) {
       expect(await guard(action, undefined, admin)).toBeNull();
@@ -774,10 +846,31 @@ describe("requirePermission — notification & settings actions", () => {
     expect((await guard("invoice:read", undefined, t))?.status).toBe(403);
   });
 
-  it("caretaker reads own notifications and settings without any privilege", async () => {
+  it("caretaker passes notification/settings actions with an assignment", async () => {
+    const mocker = caretakerUser([]);
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: [...NOTIFICATION_SETTINGS_ACTIONS],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    for (const action of NOTIFICATION_SETTINGS_ACTIONS) {
+      expect(await guard(action, { resource: { propertyId: PROPERTY_ID } }, mocker)).toBeNull();
+    }
+  });
+
+  it("caretaker without assignment is denied every notification/settings action", async () => {
     const mocker = caretakerUser([]);
     for (const action of NOTIFICATION_SETTINGS_ACTIONS) {
-      expect(await guard(action, undefined, mocker)).toBeNull();
+      expect((await guard(action, undefined, mocker))?.status).toBe(403);
     }
   });
 
@@ -824,10 +917,7 @@ describe("requirePermission — communication actions", () => {
     }
   });
 
-  it("owner and system-admin pass every communication action without a resource", async () => {
-    for (const action of [...COMMUNICATION_SELF_ACTIONS, ...COMMUNICATION_MANAGE_ACTIONS]) {
-      expect(await guard(action, undefined, ownerUser())).toBeNull();
-    }
+  it("system-admin passes every communication action without a resource", async () => {
     const admin = makeUser({ _id: makeObjectId("admin"), role: "system-admin" });
     for (const action of [...COMMUNICATION_SELF_ACTIONS, ...COMMUNICATION_MANAGE_ACTIONS]) {
       expect(await guard(action, undefined, admin)).toBeNull();
@@ -841,26 +931,80 @@ describe("requirePermission — communication actions", () => {
     }
   });
 
-  it("caretaker passes every own-scope communication action without any privilege", async () => {
+  it("caretaker passes every own-scope communication action with an assignment", async () => {
     const mocker = caretakerUser([]);
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: [...COMMUNICATION_SELF_ACTIONS],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     for (const action of COMMUNICATION_SELF_ACTIONS) {
-      expect(await guard(action, undefined, mocker)).toBeNull();
+      expect(await guard(action, { resource: { propertyId: PROPERTY_ID } }, mocker)).toBeNull();
     }
   });
 
-  it("caretaker manage actions require the privilege and an in-scope resource", async () => {
-    const privileged: CaretakerPrivilege[] = [
-      "manage_complaints",
-      "manage_announcements",
-      "send_messages",
-      "manage_documents",
-    ];
-    const withPrivileges = caretakerUser([...privileged, "manage_invoices"]);
-    const inScope = { ownerId: OTHER_OWNER_ID, caretakerIds: [CARETAKER_ID] };
-    const foreign = { ownerId: OWNER_ID, caretakerIds: [CARETAKER_ID] };
+  it("caretaker without assignment is denied every own-scope communication action", async () => {
+    const mocker = caretakerUser([]);
+    for (const action of COMMUNICATION_SELF_ACTIONS) {
+      expect((await guard(action, undefined, mocker))?.status).toBe(403);
+    }
+  });
+
+  it("caretaker manage actions require an assignment covering the resource", async () => {
+    const mocker = caretakerUser([]);
+    const inScope = PROPERTY_ID;
+    const foreign = makeObjectId("foreign-property");
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: inScope,
+          permissions: [...COMMUNICATION_MANAGE_ACTIONS],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     for (const action of COMMUNICATION_MANAGE_ACTIONS) {
-      expect(await guard(action, { resource: inScope }, withPrivileges)).toBeNull();
-      expect((await guard(action, { resource: foreign }, withPrivileges))?.status).toBe(403);
+      expect(await guard(action, { resource: { propertyId: inScope } }, mocker)).toBeNull();
+      expect((await guard(action, { resource: { propertyId: foreign } }, mocker))?.status).toBe(
+        403,
+      );
+    }
+  });
+
+  it("caretaker manage actions fail without the matching assignment permission", async () => {
+    const mocker = caretakerUser([]);
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: [],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    for (const action of COMMUNICATION_MANAGE_ACTIONS) {
+      expect((await guard(action, { resource: { propertyId: PROPERTY_ID } }, mocker))?.status).toBe(
+        403,
+      );
     }
   });
 
@@ -879,31 +1023,43 @@ describe("requirePermission — communication actions", () => {
   });
 });
 
-describe("isOwnerScopedRole", () => {
-  it("is true for owner and custodian", () => {
-    expect(isOwnerScopedRole("owner")).toBe(true);
-    expect(isOwnerScopedRole("custodian")).toBe(true);
-  });
-
-  it("is false for other roles", () => {
-    expect(isOwnerScopedRole("system-admin")).toBe(false);
-    expect(isOwnerScopedRole("caretaker")).toBe(false);
-    expect(isOwnerScopedRole("tenant")).toBe(false);
-  });
-});
-
 describe("requirePermission — custodian", () => {
   beforeEach(() => {
     resetModelStubs();
   });
 
-  it("acts as an owner-delegate: passes unscoped actions", async () => {
+  function assignment(permissions: string[]) {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CUSTODIAN_ID,
+          accessRole: "custodian",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions,
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+  }
+
+  it("passes resource-free actions without an assignment", async () => {
     expect(await guard("property:create", undefined, custodianUser())).toBeNull();
-    expect(await guard("unit:manage", undefined, custodianUser())).toBeNull();
   });
 
-  it("passes resource-scoped actions for the managing owner's resources", async () => {
-    const inScope = { ownerId: OTHER_OWNER_ID, caretakerIds: [] };
+  it("passes resource-scoped actions with an assignment", async () => {
+    assignment([
+      "property:edit",
+      "property:delete",
+      "unit:manage",
+      "tenant:manage",
+      "move-request:manage",
+      "invoice:manage",
+      "complaint:manage",
+    ]);
+    const resource = { propertyId: PROPERTY_ID };
     for (const action of [
       "property:edit",
       "property:delete",
@@ -913,35 +1069,48 @@ describe("requirePermission — custodian", () => {
       "invoice:manage",
       "complaint:manage",
     ] as Action[]) {
-      expect(await guard(action, { resource: inScope }, custodianUser())).toBeNull();
+      expect(await guard(action, { resource }, custodianUser())).toBeNull();
     }
   });
 
-  it("is denied resource-scoped actions on a foreign owner's resource", async () => {
-    const foreign = { ownerId: OWNER_ID, caretakerIds: [] };
-    expect((await guard("property:edit", { resource: foreign }, custodianUser()))?.status).toBe(
-      403,
-    );
-    expect((await guard("unit:manage", { resource: foreign }, custodianUser()))?.status).toBe(403);
-    expect((await guard("invoice:manage", { resource: foreign }, custodianUser()))?.status).toBe(
-      403,
-    );
+  it("is denied resource-scoped actions on a foreign property", async () => {
+    assignment(["property:edit", "unit:manage", "invoice:manage"]);
+    const foreign = makeObjectId("foreign-property");
+    expect(
+      (await guard("property:edit", { resource: { propertyId: foreign } }, custodianUser()))
+        ?.status,
+    ).toBe(403);
+    expect(
+      (await guard("unit:manage", { resource: { propertyId: foreign } }, custodianUser()))?.status,
+    ).toBe(403);
+    expect(
+      (await guard("invoice:manage", { resource: { propertyId: foreign } }, custodianUser()))
+        ?.status,
+    ).toBe(403);
   });
 
-  it("403 for an orphaned custodian (no managing owner)", async () => {
-    const mocker = custodianUser({ managedByOwnerId: "" });
-    expect((await guard("property:create", undefined, mocker))?.status).toBe(403);
-    expect((await guard("unit:manage", undefined, mocker))?.status).toBe(403);
+  it("is denied resource-scoped actions without an assignment", async () => {
+    expect(
+      (await guard("property:edit", { resource: { propertyId: PROPERTY_ID } }, custodianUser()))
+        ?.status,
+    ).toBe(403);
+    expect(
+      (await guard("unit:manage", { resource: { propertyId: PROPERTY_ID } }, custodianUser()))
+        ?.status,
+    ).toBe(403);
   });
 
   it("cannot manage other custodians", async () => {
     expect((await guard("custodian:manage", undefined, custodianUser()))?.status).toBe(403);
   });
 
-  it("owners and system-admins may manage custodians", async () => {
-    expect(await guard("custodian:manage", undefined, ownerUser())).toBeNull();
+  it("system-admin may manage custodians", async () => {
     const admin = makeUser({ _id: makeObjectId("admin"), role: "system-admin" });
     expect(await guard("custodian:manage", undefined, admin)).toBeNull();
+  });
+
+  it("owner is denied managing custodians", async () => {
+    expect((await guard("custodian:manage", undefined, ownerUser()))?.status).toBe(403);
   });
 
   it("tenant still cannot manage custodians", async () => {

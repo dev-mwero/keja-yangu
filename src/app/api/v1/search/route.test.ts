@@ -70,7 +70,7 @@ describe("GET /api/v1/search", () => {
   });
 
   it("scopes owner results to their portfolio", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
     property.find.mockReturnValue(
       buildQuery([{ _id: makeObjectId("prop"), title: "Sunset Villa", location: "Kilimani" }]),
     );

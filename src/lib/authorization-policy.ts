@@ -217,7 +217,6 @@ export function isResourceFreePolicyAction(action: PolicyAction): boolean {
 }
 
 export function normalizeAccessRole(role: Role): AccessRole | null {
-  if (role === "owner") return "admin";
   if (role === "admin" || role === "custodian" || role === "caretaker") return role;
   return null;
 }
@@ -350,6 +349,46 @@ export function evaluateActorPolicy(
     assignments: context.assignments,
     now,
   });
+}
+
+/**
+ * Portfolio-level decision for routes that act on a collection rather than a
+ * single resource (list endpoints, creates without a chosen property). A staff
+ * actor passes when at least one active assignment grants the action; the
+ * route is responsible for narrowing the data to the assignment scope.
+ */
+export function evaluatePortfolioPolicy(
+  context: ActorContext,
+  action: PolicyAction,
+  now: Date = new Date(),
+): AuthorizationResult {
+  const { actor } = context;
+  if (!actor.isActive) return { allowed: false, reason: "inactive-actor" };
+  if (actor.role === "system-admin") return { allowed: true, reason: "system-admin" };
+  if (actor.role === "tenant") {
+    return TENANT_ACTIONS.has(action)
+      ? { allowed: true, reason: "tenant-self-service" }
+      : { allowed: false, reason: "tenant-action-not-allowed" };
+  }
+  const accessRole = normalizeAccessRole(actor.role);
+  if (!accessRole) return { allowed: false, reason: "unsupported-role" };
+  const maximum = ROLE_MAXIMUM[accessRole];
+  if (PLATFORM_ACTIONS.has(action) || !maximum.has(action)) {
+    return { allowed: false, reason: "role-maximum" };
+  }
+  if (RESOURCE_FREE_ACTIONS.has(action)) {
+    return { allowed: true, reason: "resource-free-action" };
+  }
+  const granted = context.assignments.some(
+    (assignment) =>
+      assignment.principalUserId === actor.userId &&
+      assignment.accessRole === accessRole &&
+      isActiveAssignment(assignment, now) &&
+      assignment.permissions.includes(action),
+  );
+  return granted
+    ? { allowed: true, reason: "portfolio-assignment" }
+    : { allowed: false, reason: "no-matching-assignment" };
 }
 
 export function roleMaximumActions(role: AccessRole): PolicyAction[] {

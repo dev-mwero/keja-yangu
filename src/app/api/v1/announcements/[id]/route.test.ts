@@ -1,6 +1,7 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildRequest, signToken, withParams } from "@/test/utils/api-request";
+import { activeAssignment } from "@/test/utils/assignment-mocks";
 import { makeAnnouncement, makeObjectId, makeUser } from "@/test/utils/factories";
 import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-mocks";
 
@@ -17,7 +18,7 @@ vi.mock("@/models/Announcement", () => ({ Announcement: getModelStubs().announce
 
 import { DELETE } from "@/app/api/v1/announcements/[id]/route";
 
-const { user, announcement, managementAssignment } = getModelStubs();
+const { user, property, announcement, managementAssignment } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
@@ -27,7 +28,7 @@ const OTHER_PROPERTY_ID = makeObjectId("p2");
 const ANNOUNCEMENT_ID = makeObjectId("announcement");
 
 function ownerUser() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  return makeUser({ _id: OWNER_ID, role: "admin" });
 }
 
 function caretakerUser() {
@@ -81,6 +82,17 @@ describe("DELETE /api/v1/announcements/[id]", () => {
 
   it("lets an owner delete their own announcement", async () => {
     user.findById.mockReturnValue(buildQuery(ownerUser()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          propertyId: PROPERTY_ID,
+          permissions: ["announcement:manage"],
+        }),
+      ]),
+    );
+    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, ownerId: OWNER_ID }]));
     announcement.findById.mockReturnValue(
       buildQuery(makeAnnouncement({ _id: ANNOUNCEMENT_ID, ownerId: OWNER_ID, propertyId: "" })),
     );
@@ -116,15 +128,12 @@ describe("DELETE /api/v1/announcements/[id]", () => {
     user.findById.mockReturnValue(buildQuery(caretakerUser()));
     managementAssignment.find.mockReturnValue(
       buildQuery([
-        {
+        activeAssignment({
+          principalUserId: CARETAKER_ID,
           accessRole: "caretaker",
-          scopeType: "property",
           propertyId: PROPERTY_ID,
           permissions: ["announcement:read", "announcement:manage"],
-          status: "active",
-          startsAt: new Date("2026-01-01T00:00:00.000Z"),
-          endsAt: null,
-        },
+        }),
       ]),
     );
     announcement.findById.mockReturnValue(
@@ -154,15 +163,12 @@ describe("DELETE /api/v1/announcements/[id]", () => {
     user.findById.mockReturnValue(buildQuery(caretakerUser()));
     managementAssignment.find.mockReturnValue(
       buildQuery([
-        {
+        activeAssignment({
+          principalUserId: CARETAKER_ID,
           accessRole: "caretaker",
-          scopeType: "property",
           propertyId: PROPERTY_ID,
           permissions: ["announcement:read", "announcement:manage"],
-          status: "active",
-          startsAt: new Date("2026-01-01T00:00:00.000Z"),
-          endsAt: null,
-        },
+        }),
       ]),
     );
     announcement.findById.mockReturnValue(
@@ -189,15 +195,12 @@ describe("DELETE /api/v1/announcements/[id]", () => {
     user.findById.mockReturnValue(buildQuery(caretakerUser()));
     managementAssignment.find.mockReturnValue(
       buildQuery([
-        {
+        activeAssignment({
+          principalUserId: CARETAKER_ID,
           accessRole: "caretaker",
-          scopeType: "property",
           propertyId: PROPERTY_ID,
           permissions: ["announcement:read", "announcement:manage"],
-          status: "active",
-          startsAt: new Date("2026-01-01T00:00:00.000Z"),
-          endsAt: null,
-        },
+        }),
       ]),
     );
     announcement.findById.mockReturnValue(

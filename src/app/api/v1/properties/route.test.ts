@@ -41,8 +41,12 @@ const validCreatedProperty = makeProperty({
   createdById: OWNER_ID,
 });
 
+beforeEach(() => {
+  resetModelStubs();
+});
+
 it("owner create assigns an active owner-scoped custodian", async () => {
-  user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+  user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
   user.find.mockReturnValue(buildQuery([{ _id: makeObjectId("custodian") }]));
   property.create.mockResolvedValue(
     makeProperty({
@@ -73,7 +77,7 @@ it("owner create assigns an active owner-scoped custodian", async () => {
 });
 
 it("rejects duplicate staff IDs when creating a property", async () => {
-  user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+  user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
   const caretakerId = makeObjectId("caretaker");
 
   const res = await POST(
@@ -89,7 +93,7 @@ it("rejects duplicate staff IDs when creating a property", async () => {
 });
 
 it("rejects caretaker assignment to another owner's property", async () => {
-  user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+  user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
   user.find.mockReturnValue(buildQuery([]));
 
   const res = await POST(
@@ -510,7 +514,7 @@ describe("POST /api/v1/properties", () => {
   });
 
   it("owner create attributes ownerId and createdById to the actor", async () => {
-    const owner = makeUser({ _id: OWNER_ID, role: "owner" });
+    const owner = makeUser({ _id: OWNER_ID, role: "admin" });
     user.findById.mockReturnValue(buildQuery(owner));
     property.create.mockResolvedValue(validCreatedProperty);
 
@@ -536,7 +540,7 @@ describe("POST /api/v1/properties", () => {
   });
 
   it("owner create ignores a spoofed ownerId in the body", async () => {
-    const owner = makeUser({ _id: OWNER_ID, role: "owner" });
+    const owner = makeUser({ _id: OWNER_ID, role: "admin" });
     user.findById.mockReturnValue(buildQuery(owner));
     property.create.mockResolvedValue(validCreatedProperty);
 
@@ -570,7 +574,7 @@ describe("POST /api/v1/properties", () => {
   });
 
   it("owner create validates caretakerIds reference caretaker users", async () => {
-    const owner = makeUser({ _id: OWNER_ID, role: "owner" });
+    const owner = makeUser({ _id: OWNER_ID, role: "admin" });
     user.findById.mockReturnValue(buildQuery(owner));
     // Requested two caretakers but only one exists as a caretaker user.
     user.find.mockReturnValue(buildQuery([makeUser({ _id: CARETAKER_ID, role: "caretaker" })]));
@@ -680,7 +684,7 @@ describe("POST /api/v1/properties", () => {
   });
 
   it("returns 400 for an invalid payload", async () => {
-    const owner = makeUser({ _id: OWNER_ID, role: "owner" });
+    const owner = makeUser({ _id: OWNER_ID, role: "admin" });
     user.findById.mockReturnValue(buildQuery(owner));
     const res = await POST(
       buildRequest("/api/v1/properties", {
@@ -694,7 +698,7 @@ describe("POST /api/v1/properties", () => {
   });
 
   it("generates units from the block/floor structure", async () => {
-    const owner = makeUser({ _id: OWNER_ID, role: "owner" });
+    const owner = makeUser({ _id: OWNER_ID, role: "admin" });
     user.findById.mockReturnValue(buildQuery(owner));
     property.create.mockResolvedValue({
       ...validCreatedProperty,
@@ -745,7 +749,7 @@ describe("POST /api/v1/properties", () => {
   });
 
   it("rejects a structure exceeding the unit cap", async () => {
-    const owner = makeUser({ _id: OWNER_ID, role: "owner" });
+    const owner = makeUser({ _id: OWNER_ID, role: "admin" });
     user.findById.mockReturnValue(buildQuery(owner));
 
     const floors = Array.from({ length: 11 }, (_, i) => ({ level: i, unitsPerFloor: 200 }));
@@ -762,7 +766,7 @@ describe("POST /api/v1/properties", () => {
   });
 
   it("rolls the property back when unit generation fails", async () => {
-    const owner = makeUser({ _id: OWNER_ID, role: "owner" });
+    const owner = makeUser({ _id: OWNER_ID, role: "admin" });
     user.findById.mockReturnValue(buildQuery(owner));
     property.create.mockResolvedValue({
       ...validCreatedProperty,
@@ -794,7 +798,7 @@ describe("POST /api/v1/properties", () => {
   });
 
   it("persists purpose and dateCompleted with block/floor purpose overrides", async () => {
-    const owner = makeUser({ _id: OWNER_ID, role: "owner" });
+    const owner = makeUser({ _id: OWNER_ID, role: "admin" });
     user.findById.mockReturnValue(buildQuery(owner));
     property.create.mockResolvedValue({
       ...validCreatedProperty,

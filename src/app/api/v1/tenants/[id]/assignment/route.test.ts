@@ -45,6 +45,7 @@ function ownerDoc() {
 function adminAssignment() {
   return [
     {
+      principalUserId: OWNER_ID,
       accessRole: "admin",
       scopeType: "property",
       propertyId: PROPERTY_ID,

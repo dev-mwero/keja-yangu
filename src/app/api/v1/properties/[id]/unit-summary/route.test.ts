@@ -10,10 +10,13 @@ vi.mock("@/lib/mongoose", () => ({
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 
 import { GET } from "@/app/api/v1/properties/[id]/unit-summary/route";
 
-const { user, property, unit } = getModelStubs();
+const { user, property, unit, managementAssignment } = getModelStubs();
 const PROPERTY_ID = makeObjectId("summary-property");
 const OWNER_ID = makeObjectId("summary-owner");
 const CARETAKER_ID = makeObjectId("summary-caretaker");
@@ -136,6 +139,20 @@ describe("GET /api/v1/properties/[id]/unit-summary", () => {
           caretakerIds: [CARETAKER_ID],
         }),
       ),
+    );
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["unit:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
     );
     unit.find.mockReturnValue(buildQuery([]));
 

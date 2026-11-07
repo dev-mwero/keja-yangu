@@ -14,12 +14,16 @@ vi.mock("@/models/ServiceFeeItem", () => ({ ServiceFeeItem: getModelStubs().serv
 vi.mock("@/models/UnitServiceFeeOverride", () => ({
   UnitServiceFeeOverride: getModelStubs().unitServiceFeeOverride,
 }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 
 import { DELETE, PATCH } from "@/app/api/v1/properties/[id]/service-fees/[itemId]/route";
 import { PUT } from "@/app/api/v1/properties/[id]/service-fees/overrides/route";
 import { GET, POST } from "@/app/api/v1/properties/[id]/service-fees/route";
 
-const { user, property, unit, serviceFeeItem, unitServiceFeeOverride } = getModelStubs();
+const { user, property, unit, serviceFeeItem, unitServiceFeeOverride, managementAssignment } =
+  getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
@@ -29,7 +33,7 @@ const UNIT_ID = makeObjectId("unit1");
 const INVALID_ID = "not-a-valid-objectid";
 
 function owner() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  return makeUser({ _id: OWNER_ID, role: "admin" });
 }
 
 function ownProperty() {
@@ -63,6 +67,20 @@ describe("property service-fee routes", () => {
     resetModelStubs();
     user.findById.mockReturnValue(buildQuery(owner()));
     property.findOne.mockReturnValue(buildQuery(ownProperty()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["unit:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
   });
 
   it("400 for an invalid property id", async () => {
@@ -196,6 +214,7 @@ describe("property service-fee routes", () => {
   });
 
   it("rejects a foreign owner", async () => {
+    managementAssignment.find.mockReturnValue(buildQuery([]));
     property.findOne.mockReturnValue(
       buildQuery(makeProperty({ _id: PROPERTY_ID, ownerId: OTHER_OWNER_ID })),
     );

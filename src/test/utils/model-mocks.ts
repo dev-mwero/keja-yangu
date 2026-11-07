@@ -112,6 +112,13 @@ export function resetModelStubs() {
  */
 export function buildQuery(value: unknown) {
   const chain = {
+    // Thenable so `await Model.findById(id)` resolves to the stubbed value, mirroring
+    // Mongoose queries and letting policy resource loaders call `.select().lean()`.
+    // biome-ignore lint/suspicious/noThenProperty: intentional thenable so the stub behaves like a Mongoose query
+    then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) =>
+      Promise.resolve(value).then(resolve, reject),
+    catch: (reject: (reason: unknown) => unknown) => Promise.resolve(value).catch(reject),
+    finally: (cb: () => void) => Promise.resolve(value).finally(cb),
     // Variadic so chainable calls match whatever selector the route passes
     // (vitest types a `vi.fn(() => chain)` impl as zero-arg, which fails `tsc`
     // on `.select(LEASE_SAFE_FIELDS)` / `.sort({...})` / `.skip(0)` / `.limit(10)`).

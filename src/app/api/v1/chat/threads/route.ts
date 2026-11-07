@@ -189,7 +189,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const agent = await User.findById(recipientId).select("role").lean();
-  if (!agent || agent.role !== parsed.data.role) {
+  const roleMatches =
+    parsed.data.role === "owner"
+      ? agent?.role === "owner" || agent?.role === "admin"
+      : agent?.role === "caretaker";
+  if (!agent || !roleMatches) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

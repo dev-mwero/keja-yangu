@@ -49,11 +49,27 @@ describe("GET /api/v1/applications", () => {
   });
 
   it("scopes an owner to applications against their portfolio", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          permissions: ["application:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     listResult([]);
     const res = await GET(buildRequest("/api/v1/applications", { token: signToken(OWNER_ID) }));
     expect(res.status).toBe(200);
-    expect(application.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
+    expect(application.find).toHaveBeenCalledWith({
+      $or: [{ propertyId: { $in: [PROP_ID] } }],
+    });
   });
 
   it("scopes a tenant to their own applications", async () => {
@@ -99,6 +115,7 @@ describe("GET /api/v1/applications", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: makeObjectId("admin"),
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROP_ID,
@@ -119,7 +136,21 @@ describe("GET /api/v1/applications", () => {
   });
 
   it("enriches results with property titles", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          permissions: ["application:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     listResult([
       {
         _id: makeObjectId("app"),
@@ -141,7 +172,21 @@ describe("GET /api/v1/applications", () => {
 
   it("enriches results with the requested unit name", async () => {
     const UNIT_ID = makeObjectId("unit");
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          permissions: ["application:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     listResult([
       {
         _id: makeObjectId("app"),
@@ -193,7 +238,7 @@ describe("POST /api/v1/applications", () => {
   });
 
   it("403 when a non-tenant applies", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
     const res = await POST(
       buildRequest("/api/v1/applications", {
         method: "POST",
