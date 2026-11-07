@@ -7,6 +7,9 @@ import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-m
 vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("@/lib/audit", () => ({
+  writeAuditEvent: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/lib/email", () => ({
@@ -14,6 +17,7 @@ vi.mock("@/lib/email", () => ({
 }));
 
 import { GET, POST } from "@/app/api/v1/caretakers/route";
+import { writeAuditEvent } from "@/lib/audit";
 import { sendInviteEmail } from "@/lib/email";
 
 const { user, property } = getModelStubs();
@@ -48,6 +52,7 @@ async function json(res: Response) {
 describe("GET /api/v1/caretakers", () => {
   beforeEach(() => {
     resetModelStubs();
+    vi.mocked(writeAuditEvent).mockClear();
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
   });
 
@@ -269,6 +274,13 @@ describe("POST /api/v1/caretakers", () => {
       }),
     );
     expect(res.status).toBe(201);
+    expect(writeAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "caretaker.invited",
+        entityType: "user",
+        after: expect.objectContaining({ name: "New Care", privileges: expect.any(Array) }),
+      }),
+    );
     const body = await json(res);
     expect(body.invited).toBe(true);
     expect(user.create).toHaveBeenCalledWith(

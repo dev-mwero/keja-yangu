@@ -7,6 +7,9 @@ import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-m
 vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("@/lib/audit", () => ({
+  writeAuditEvent: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Tenant", () => ({
@@ -21,6 +24,7 @@ vi.mock("@/lib/email", () => ({
 }));
 
 import { GET, POST } from "@/app/api/v1/tenants/route";
+import { writeAuditEvent } from "@/lib/audit";
 import { sendInviteEmail } from "@/lib/email";
 
 const {
@@ -71,6 +75,7 @@ async function json(res: Response) {
 describe("GET /api/v1/tenants", () => {
   beforeEach(() => {
     resetModelStubs();
+    vi.mocked(writeAuditEvent).mockClear();
   });
 
   it("401 when unauthenticated", async () => {
@@ -239,6 +244,13 @@ describe("POST /api/v1/tenants", () => {
       }),
     );
     expect(res.status).toBe(201);
+    expect(writeAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor: expect.objectContaining({ userId: OWNER_ID }),
+        action: "tenant.created",
+        entityType: "tenant",
+      }),
+    );
     const body = await json(res);
     expect((body.data as { ownerId?: string }).ownerId).toBe(OWNER_ID);
     expect(tenantStub.create).toHaveBeenCalledWith(

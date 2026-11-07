@@ -7,6 +7,9 @@ import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-m
 vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("@/lib/audit", () => ({
+  writeAuditEvent: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Tenant", () => ({
@@ -16,6 +19,7 @@ vi.mock("@/models/Tenant", () => ({
 }));
 
 import { DELETE, GET, PATCH } from "@/app/api/v1/tenants/[id]/route";
+import { writeAuditEvent } from "@/lib/audit";
 
 const { user, property, tenant: tenantStub } = getModelStubs();
 
@@ -56,6 +60,7 @@ async function json(res: Response) {
 describe("GET /api/v1/tenants/[id]", () => {
   beforeEach(() => {
     resetModelStubs();
+    vi.mocked(writeAuditEvent).mockClear();
   });
 
   it("400 for an invalid id", async () => {
@@ -136,6 +141,14 @@ describe("PATCH /api/v1/tenants/[id]", () => {
       { _id: TENANT_ID },
       { name: "Renamed Tenant" },
       expect.any(Object),
+    );
+    expect(writeAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor: expect.objectContaining({ userId: OWNER_ID }),
+        action: "tenant.updated",
+        entityType: "tenant",
+        entityId: TENANT_ID,
+      }),
     );
   });
 
@@ -309,6 +322,13 @@ describe("DELETE /api/v1/tenants/[id]", () => {
     );
     expect(res.status).toBe(200);
     expect(tenantStub.softDeleteById).toHaveBeenCalledWith(TENANT_ID);
+    expect(writeAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "tenant.deleted",
+        entityType: "tenant",
+        entityId: TENANT_ID,
+      }),
+    );
     const body = await json(res);
     expect(body.message).toBe("Tenant deleted");
   });

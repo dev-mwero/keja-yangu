@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { writeAuditEvent } from "@/lib/audit";
 import { connectToDatabase } from "@/lib/mongoose";
 import { authenticate, CUSTODIAN_PRIVILEGES, getAdminAssignmentScope } from "@/lib/permissions";
 import { Property } from "@/models/Property";
@@ -56,7 +57,7 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
   const { id } = await ctx.params;
   const result = await loadActorAndCustodian(request, id);
   if (result.error) return result.error;
-  const { custodian } = result;
+  const { actor, custodian } = result;
 
   const body = await request.json();
   const parsed = custodianUpdateSchema.safeParse(body);
@@ -67,12 +68,34 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
     );
   }
 
+  const before = {
+    name: custodian.name,
+    phone: custodian.phone ?? "",
+    privileges: custodian.privileges ?? [],
+  };
   if (parsed.data.name !== undefined) custodian.name = parsed.data.name;
   if (parsed.data.phone !== undefined) custodian.phone = parsed.data.phone;
   if (parsed.data.privileges !== undefined) {
     custodian.privileges = parsed.data.privileges;
   }
   await custodian.save();
+
+  await writeAuditEvent({
+    actor: { userId: String(actor._id), role: actor.role },
+    action: "custodian.updated",
+    entityType: "user",
+    entityId: id,
+    before,
+    after: {
+      name: custodian.name,
+      phone: custodian.phone ?? "",
+      privileges: custodian.privileges ?? [],
+    },
+    request: {
+      ip: request.headers.get("x-forwarded-for"),
+      userAgent: request.headers.get("user-agent"),
+    },
+  });
 
   return NextResponse.json({
     data: {
@@ -94,11 +117,25 @@ export async function DELETE(request: NextRequest, ctx: RouteContext) {
   const { id } = await ctx.params;
   const result = await loadActorAndCustodian(request, id);
   if (result.error) return result.error;
-  const { custodian } = result;
+  const { actor, custodian } = result;
 
+  const before = { managedByOwnerId: custodian.managedByOwnerId ?? "", isActive: true };
   custodian.managedByOwnerId = "";
   custodian.isActive = false;
   await custodian.save();
+
+  await writeAuditEvent({
+    actor: { userId: String(actor._id), role: actor.role },
+    action: "custodian.revoked",
+    entityType: "user",
+    entityId: id,
+    before,
+    after: { managedByOwnerId: "", isActive: false },
+    request: {
+      ip: request.headers.get("x-forwarded-for"),
+      userAgent: request.headers.get("user-agent"),
+    },
+  });
 
   return NextResponse.json({ data: { _id: id } });
 }

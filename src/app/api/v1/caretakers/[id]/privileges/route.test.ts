@@ -7,9 +7,13 @@ import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-m
 vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("@/lib/audit", () => ({
+  writeAuditEvent: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 
 import { PUT } from "@/app/api/v1/caretakers/[id]/privileges/route";
+import { writeAuditEvent } from "@/lib/audit";
 
 const { user } = getModelStubs();
 
@@ -73,6 +77,7 @@ async function json(res: Response) {
 describe("PUT /api/v1/caretakers/[id]/privileges", () => {
   beforeEach(() => {
     resetModelStubs();
+    vi.mocked(writeAuditEvent).mockClear();
   });
 
   it("429 after the per-IP rate limit is exhausted", async () => {
@@ -191,6 +196,16 @@ describe("PUT /api/v1/caretakers/[id]/privileges", () => {
     const data = (await json(res)).data as { managedByOwnerId?: string; privileges?: string[] };
     expect(data.managedByOwnerId).toBe(OWNER_ID);
     expect(data.privileges).toEqual(["manage_tenants", "manage_invoices"]);
+    expect(writeAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "caretaker.privileges.updated",
+        entityType: "user",
+        entityId: TARGET_ID,
+        after: expect.objectContaining({
+          privileges: ["manage_tenants", "manage_invoices"],
+        }),
+      }),
+    );
   });
 
   it("409 when the caretaker is bound to another owner", async () => {
