@@ -469,16 +469,12 @@ describe("getTenantScope", () => {
     expect((res as Response).status).toBe(401);
   });
 
-  it("owner scope filters by own id", async () => {
+  it("owner role has no legacy scope (denied)", async () => {
     user.findById.mockReturnValue(buildQuery(ownerUser()));
     const res = await getTenantScope(
       buildRequest("/api/v1/tenants", { token: signToken(OWNER_ID) }),
     );
-    expect(res instanceof Response).toBe(false);
-    if (res instanceof Response) return;
-    expect(res.filter).toEqual({ ownerId: OWNER_ID });
-    expect(res.userId).toBe(OWNER_ID);
-    expect(res.role).toBe("owner");
+    expect((res as Response).status).toBe(403);
   });
 
   it("scopes an admin to property assignments rather than its own user id", async () => {
@@ -563,25 +559,40 @@ describe("getTenantScope", () => {
     expect(res.filter).toEqual({});
   });
 
-  it("caretaker scope is limited to assigned properties of the managing owner", async () => {
+  it("caretaker scope follows active assignments (no legacy property query)", async () => {
     const p1 = makeObjectId("p1");
     const p2 = makeObjectId("p2");
     user.findById.mockReturnValue(buildQuery(caretakerUser(["manage_tenants"])));
-    property.find.mockReturnValue(buildQuery([{ _id: p1 }, { _id: p2 }]));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: p1,
+          permissions: ["tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+        {
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: p2,
+          permissions: ["tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     const res = await getTenantScope(
       buildRequest("/api/v1/tenants", { token: signToken(CARETAKER_ID) }),
     );
     expect(res instanceof Response).toBe(false);
     if (res instanceof Response) return;
-    expect(res.filter).toEqual({
-      propertyId: { $in: [p1, p2] },
-      ownerId: OTHER_OWNER_ID,
-    });
+    expect(res.filter).toEqual({ propertyId: { $in: [p1, p2] } });
     expect(res.assignedPropertyIds).toEqual([p1, p2]);
-    expect(property.find).toHaveBeenCalledWith({
-      caretakerIds: CARETAKER_ID,
-      ownerId: OTHER_OWNER_ID,
-    });
+    expect(property.find).not.toHaveBeenCalled();
   });
 
   it("403 for an orphaned caretaker", async () => {
@@ -601,7 +612,7 @@ describe("getTenantScope", () => {
 });
 
 describe("tenantMatchesScope", () => {
-  it("owner matches only own tenants", () => {
+  it("owner role matches nothing (legacy scoping removed)", () => {
     const scope = {
       filter: { ownerId: OWNER_ID },
       userId: OWNER_ID,
@@ -609,11 +620,8 @@ describe("tenantMatchesScope", () => {
       managedByOwnerId: "",
     };
     expect(tenantMatchesScope({ ownerId: OWNER_ID, propertyId: makeObjectId("p1") }, scope)).toBe(
-      true,
+      false,
     );
-    expect(
-      tenantMatchesScope({ ownerId: OTHER_OWNER_ID, propertyId: makeObjectId("p1") }, scope),
-    ).toBe(false);
   });
 
   it("system-admin matches every tenant", () => {
@@ -628,20 +636,19 @@ describe("tenantMatchesScope", () => {
     ).toBe(true);
   });
 
-  it("caretaker matches only managing owner's assigned properties", () => {
+  it("caretaker matches by assigned property regardless of legacy owner", () => {
     const p1 = makeObjectId("p1");
     const p2 = makeObjectId("p2");
     const scope = {
-      filter: { propertyId: { $in: [p1] }, ownerId: OTHER_OWNER_ID },
+      filter: { propertyId: { $in: [p1] } },
       userId: CARETAKER_ID,
       role: "caretaker" as Role,
-      managedByOwnerId: OTHER_OWNER_ID,
+      managedByOwnerId: "",
+      propertyScopeIds: [p1],
       assignedPropertyIds: [p1],
     };
     expect(tenantMatchesScope({ ownerId: OTHER_OWNER_ID, propertyId: p1 }, scope)).toBe(true);
-    // assigned to the caretaker but wrong owner
-    expect(tenantMatchesScope({ ownerId: OWNER_ID, propertyId: p1 }, scope)).toBe(false);
-    // right owner but not an assigned property
+    expect(tenantMatchesScope({ ownerId: OWNER_ID, propertyId: p1 }, scope)).toBe(true);
     expect(tenantMatchesScope({ ownerId: OTHER_OWNER_ID, propertyId: p2 }, scope)).toBe(false);
   });
 
@@ -947,29 +954,9 @@ describe("getTenantScope — custodian", () => {
     resetModelStubs();
   });
 
-  it("scopes to the managing owner's id", async () => {
-    user.findById.mockReturnValue(buildQuery(custodianUser()));
-    const res = await getTenantScope(
-      buildRequest("/api/v1/tenants", { token: signToken(CUSTODIAN_ID) }),
-    );
-    expect(res instanceof Response).toBe(false);
-    if (res instanceof Response) return;
-    expect(res.filter).toEqual({ ownerId: OTHER_OWNER_ID });
-    expect(res.role).toBe("custodian");
-    expect(res.managedByOwnerId).toBe(OTHER_OWNER_ID);
-  });
-
-  it("403 for an orphaned custodian", async () => {
-    user.findById.mockReturnValue(buildQuery(custodianUser({ managedByOwnerId: "" })));
-    const res = await getTenantScope(
-      buildRequest("/api/v1/tenants", { token: signToken(CUSTODIAN_ID) }),
-    );
-    expect((res as Response).status).toBe(403);
-  });
-
-  it("scopes to active assignments when backfilled (no legacy owner binding needed)", async () => {
+  it("scopes to active assignments (no legacy owner binding)", async () => {
     const assignedPropertyId = makeObjectId("custodian-property");
-    user.findById.mockReturnValue(buildQuery(custodianUser({ managedByOwnerId: "" })));
+    user.findById.mockReturnValue(buildQuery(custodianUser()));
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
@@ -983,14 +970,29 @@ describe("getTenantScope — custodian", () => {
         },
       ]),
     );
-
     const res = await getTenantScope(
       buildRequest("/api/v1/tenants", { token: signToken(CUSTODIAN_ID) }),
     );
     expect(res instanceof Response).toBe(false);
     if (res instanceof Response) return;
     expect(res.filter).toEqual({ propertyId: { $in: [assignedPropertyId] } });
-    expect(res.staffAssignmentBacked).toBe(true);
+    expect(res.role).toBe("custodian");
+  });
+
+  it("403 for a custodian without assignments", async () => {
+    user.findById.mockReturnValue(buildQuery(custodianUser()));
+    const res = await getTenantScope(
+      buildRequest("/api/v1/tenants", { token: signToken(CUSTODIAN_ID) }),
+    );
+    expect((res as Response).status).toBe(403);
+  });
+
+  it("403 for an orphaned custodian", async () => {
+    user.findById.mockReturnValue(buildQuery(custodianUser({ managedByOwnerId: "" })));
+    const res = await getTenantScope(
+      buildRequest("/api/v1/tenants", { token: signToken(CUSTODIAN_ID) }),
+    );
+    expect((res as Response).status).toBe(403);
   });
 });
 
