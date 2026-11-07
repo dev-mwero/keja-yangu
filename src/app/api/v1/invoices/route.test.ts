@@ -54,7 +54,6 @@ import { notifyOverdueInvoices } from "@/lib/notifications";
 
 const {
   user,
-  property,
   tenant: tenantStub,
   lease: leaseStub,
   invoice: invoiceStub,
@@ -74,8 +73,37 @@ const PROPERTY_ID = makeObjectId("p1");
 const OTHER_PROPERTY_ID = makeObjectId("p2");
 const LEASE_ID = makeObjectId("lease");
 
-function ownerDoc() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+const ADMIN_ASSIGNMENT = {
+  accessRole: "admin",
+  scopeType: "property",
+  propertyId: PROPERTY_ID,
+  permissions: ["invoice:read", "invoice:manage"],
+  status: "active",
+  startsAt: new Date("2026-01-01T00:00:00.000Z"),
+  endsAt: null,
+};
+
+const CARETAKER_ASSIGNMENT = {
+  accessRole: "caretaker",
+  scopeType: "property",
+  propertyId: PROPERTY_ID,
+  permissions: ["invoice:read"],
+  status: "active",
+  startsAt: new Date("2026-01-01T00:00:00.000Z"),
+  endsAt: null,
+};
+
+function scopedAdminDoc() {
+  return makeUser({ _id: ADMIN_ID, role: "admin" });
+}
+
+function mockScopedAdmin() {
+  user.findById.mockReturnValue(buildQuery(scopedAdminDoc()));
+  managementAssignment.find.mockReturnValue(buildQuery([ADMIN_ASSIGNMENT]));
+}
+
+function mockCaretakerAssignment() {
+  managementAssignment.find.mockReturnValue(buildQuery([CARETAKER_ASSIGNMENT]));
 }
 
 function adminDoc() {
@@ -122,17 +150,19 @@ describe("GET /api/v1/invoices", () => {
     expect(invoiceStub.find).not.toHaveBeenCalled();
   });
 
-  it("scopes an owner to their own invoices", async () => {
-    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+  it("scopes an admin to assigned invoices", async () => {
+    mockScopedAdmin();
     const invoice = makeInvoice({ _id: makeObjectId("inv"), ownerId: OWNER_ID, status: "paid" });
     invoiceStub.find.mockReturnValue(
       buildQuery([invoice]).sort({ issuedAt: -1 }).skip(0).limit(10),
     );
     invoiceStub.countDocuments.mockResolvedValue(1);
 
-    const res = await GET(buildRequest("/api/v1/invoices", { token: signToken(OWNER_ID) }));
+    const res = await GET(buildRequest("/api/v1/invoices", { token: signToken(ADMIN_ID) }));
     expect(res.status).toBe(200);
-    expect(invoiceStub.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
+    expect(invoiceStub.find).toHaveBeenCalledWith({
+      $or: [{ propertyId: { $in: [PROPERTY_ID] } }],
+    });
     const body = await json(res);
     expect(body.data).toHaveLength(1);
     expect(body.pagination).toEqual({
@@ -157,19 +187,14 @@ describe("GET /api/v1/invoices", () => {
 
   it("scopes a managing caretaker to assigned properties of their owner", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerDoc()));
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID }]));
+    mockCaretakerAssignment();
     invoiceStub.find.mockReturnValue(buildQuery([]).sort({ issuedAt: -1 }).skip(0).limit(10));
     invoiceStub.countDocuments.mockResolvedValue(0);
 
     const res = await GET(buildRequest("/api/v1/invoices", { token: signToken(CARETAKER_ID) }));
     expect(res.status).toBe(200);
-    expect(property.find).toHaveBeenCalledWith({
-      caretakerIds: CARETAKER_ID,
-      ownerId: MANAGED_OWNER_ID,
-    });
     expect(invoiceStub.find).toHaveBeenCalledWith({
       propertyId: { $in: [PROPERTY_ID] },
-      ownerId: MANAGED_OWNER_ID,
     });
   });
 
@@ -231,7 +256,7 @@ describe("GET /api/v1/invoices", () => {
 
   it("403 when a caretaker filters by a property outside their assignment", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerDoc()));
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID }]));
+    mockCaretakerAssignment();
 
     const res = await GET(
       buildRequest(`/api/v1/invoices?propertyId=${OTHER_PROPERTY_ID}`, {
@@ -244,12 +269,12 @@ describe("GET /api/v1/invoices", () => {
   });
 
   it("derives the overdue filter as pending-and-dueDate-past and sweeps the owner scope", async () => {
-    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    mockScopedAdmin();
     invoiceStub.find.mockReturnValue(buildQuery([]).sort({ issuedAt: -1 }).skip(0).limit(10));
     invoiceStub.countDocuments.mockResolvedValue(0);
 
     const res = await GET(
-      buildRequest("/api/v1/invoices?status=overdue", { token: signToken(OWNER_ID) }),
+      buildRequest("/api/v1/invoices?status=overdue", { token: signToken(ADMIN_ID) }),
     );
     expect(res.status).toBe(200);
     const filter = invoiceStub.find.mock.calls[0][0] as {
@@ -259,12 +284,12 @@ describe("GET /api/v1/invoices", () => {
     expect(filter.status).toBe("pending");
     expect(filter.dueDate.$lt).toBeInstanceOf(Date);
     expect(notifyOverdueInvoicesMock).toHaveBeenCalledTimes(1);
-    expect(notifyOverdueInvoicesMock).toHaveBeenCalledWith(expect.any(Date), { ownerId: OWNER_ID });
+    expect(notifyOverdueInvoicesMock).toHaveBeenCalledWith(expect.any(Date), {});
   });
 
   it("sweeps a caretaker's assigned-property scope on overdue reads", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerDoc()));
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID }]));
+    mockCaretakerAssignment();
     invoiceStub.find.mockReturnValue(buildQuery([]).sort({ issuedAt: -1 }).skip(0).limit(10));
     invoiceStub.countDocuments.mockResolvedValue(0);
 
@@ -274,25 +299,24 @@ describe("GET /api/v1/invoices", () => {
     expect(res.status).toBe(200);
     expect(notifyOverdueInvoicesMock).toHaveBeenCalledWith(expect.any(Date), {
       propertyId: { $in: [PROPERTY_ID] },
-      ownerId: MANAGED_OWNER_ID,
     });
   });
 
   it("appends period, tenantId, propertyId and leaseId filters", async () => {
-    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    mockScopedAdmin();
     invoiceStub.find.mockReturnValue(buildQuery([]).sort({ issuedAt: -1 }).skip(0).limit(10));
     invoiceStub.countDocuments.mockResolvedValue(0);
 
     const res = await GET(
       buildRequest(
         `/api/v1/invoices?period=2026-09&tenantId=t&propertyId=p&leaseId=l&status=pending`,
-        { token: signToken(OWNER_ID) },
+        { token: signToken(ADMIN_ID) },
       ),
     );
     expect(res.status).toBe(200);
     expect(invoiceStub.find).toHaveBeenCalledWith(
       expect.objectContaining({
-        ownerId: OWNER_ID,
+        $or: [{ propertyId: { $in: [PROPERTY_ID] } }],
         period: "2026-09",
         tenantId: "t",
         propertyId: "p",
@@ -303,7 +327,7 @@ describe("GET /api/v1/invoices", () => {
   });
 
   it("serializes stored docs with a derived status and overdue flag", async () => {
-    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    mockScopedAdmin();
     const now = new Date();
     const pastDue = makeInvoice({
       _id: makeObjectId("inv"),
@@ -315,7 +339,7 @@ describe("GET /api/v1/invoices", () => {
     );
     invoiceStub.countDocuments.mockResolvedValue(1);
 
-    const res = await GET(buildRequest("/api/v1/invoices", { token: signToken(OWNER_ID) }));
+    const res = await GET(buildRequest("/api/v1/invoices", { token: signToken(ADMIN_ID) }));
     const body = await json(res);
     const serialized = body.data as Array<Record<string, unknown>>;
     expect(serialized[0].status).toBe(deriveStatus(pastDue, now));
@@ -337,7 +361,7 @@ describe("POST /api/v1/invoices", () => {
     const res = await POST(
       buildRequest("/api/v1/invoices", {
         method: "POST",
-        token: signToken(OWNER_ID),
+        token: signToken(ADMIN_ID),
         headers: { origin: "http://evil.example" },
         body: { leaseId: LEASE_ID },
       }),
@@ -351,11 +375,11 @@ describe("POST /api/v1/invoices", () => {
   });
 
   it("400 for an uninspectable payload", async () => {
-    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    mockScopedAdmin();
     const res = await POST(
       buildRequest("/api/v1/invoices", {
         method: "POST",
-        token: signToken(OWNER_ID),
+        token: signToken(ADMIN_ID),
         body: { leaseId: "not-an-objectid" },
       }),
     );
@@ -365,11 +389,11 @@ describe("POST /api/v1/invoices", () => {
   });
 
   it("400 when a leaseId payload also attempts to spoof derived fields", async () => {
-    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    mockScopedAdmin();
     const res = await POST(
       buildRequest("/api/v1/invoices", {
         method: "POST",
-        token: signToken(OWNER_ID),
+        token: signToken(ADMIN_ID),
         body: { leaseId: LEASE_ID, tenantId: TENANT_ID, propertyId: PROPERTY_ID, amountDue: 1 },
       }),
     );
@@ -380,11 +404,11 @@ describe("POST /api/v1/invoices", () => {
   });
 
   it("400 when a manual invoice omits tenantId (schema-level)", async () => {
-    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    mockScopedAdmin();
     const res = await POST(
       buildRequest("/api/v1/invoices", {
         method: "POST",
-        token: signToken(OWNER_ID),
+        token: signToken(ADMIN_ID),
         body: { propertyId: PROPERTY_ID, amountDue: 5000 },
       }),
     );
@@ -394,14 +418,14 @@ describe("POST /api/v1/invoices", () => {
   });
 
   it("400 for a manual invoice without amountDue", async () => {
-    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    mockScopedAdmin();
     tenantStub.findById.mockReturnValue(
       buildQuery(makeTenant({ _id: TENANT_ID, ownerId: OWNER_ID, propertyId: PROPERTY_ID })),
     );
     const res = await POST(
       buildRequest("/api/v1/invoices", {
         method: "POST",
-        token: signToken(OWNER_ID),
+        token: signToken(ADMIN_ID),
         body: { tenantId: TENANT_ID, propertyId: PROPERTY_ID },
       }),
     );
@@ -411,12 +435,12 @@ describe("POST /api/v1/invoices", () => {
   });
 
   it("404 when the referenced lease is missing", async () => {
-    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    mockScopedAdmin();
     leaseStub.findById.mockReturnValue(buildQuery(null));
     const res = await POST(
       buildRequest("/api/v1/invoices", {
         method: "POST",
-        token: signToken(OWNER_ID),
+        token: signToken(ADMIN_ID),
         body: { leaseId: LEASE_ID },
       }),
     );
@@ -426,14 +450,14 @@ describe("POST /api/v1/invoices", () => {
   });
 
   it("403 when an owner references another owner's lease", async () => {
-    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    mockScopedAdmin();
     leaseStub.findById.mockReturnValue(
       buildQuery(makeLease({ _id: LEASE_ID, ownerId: makeObjectId("foreign") })),
     );
     const res = await POST(
       buildRequest("/api/v1/invoices", {
         method: "POST",
-        token: signToken(OWNER_ID),
+        token: signToken(ADMIN_ID),
         body: { leaseId: LEASE_ID },
       }),
     );
@@ -443,7 +467,7 @@ describe("POST /api/v1/invoices", () => {
   });
 
   it("409 when an invoice already exists for the lease and period", async () => {
-    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    mockScopedAdmin();
     leaseStub.findById.mockReturnValue(buildQuery(inScopeLease()));
     user.findOneAndUpdate.mockReturnValue(buildQuery({ invoiceCounters: {} }));
     invoiceStub.create.mockRejectedValue({
@@ -454,7 +478,7 @@ describe("POST /api/v1/invoices", () => {
     const res = await POST(
       buildRequest("/api/v1/invoices", {
         method: "POST",
-        token: signToken(OWNER_ID),
+        token: signToken(ADMIN_ID),
         body: { leaseId: LEASE_ID },
       }),
     );
@@ -464,7 +488,7 @@ describe("POST /api/v1/invoices", () => {
   });
 
   it("201 derives all invoice fields from the lease and numbers per current period", async () => {
-    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    mockScopedAdmin();
     leaseStub.findById.mockReturnValue(buildQuery(inScopeLease()));
     user.findOneAndUpdate.mockReturnValue(buildQuery({ invoiceCounters: {} }));
     invoiceStub.create.mockResolvedValue({ _id: makeObjectId("new-inv") });
@@ -479,7 +503,7 @@ describe("POST /api/v1/invoices", () => {
     const res = await POST(
       buildRequest("/api/v1/invoices", {
         method: "POST",
-        token: signToken(OWNER_ID),
+        token: signToken(ADMIN_ID),
         body: { leaseId: LEASE_ID },
       }),
     );
@@ -510,7 +534,7 @@ describe("POST /api/v1/invoices", () => {
   });
 
   it("201 manual invoice without a lease", async () => {
-    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    mockScopedAdmin();
     tenantStub.findById.mockReturnValue(
       buildQuery(makeTenant({ _id: TENANT_ID, ownerId: OWNER_ID, propertyId: PROPERTY_ID })),
     );
@@ -526,7 +550,7 @@ describe("POST /api/v1/invoices", () => {
     const res = await POST(
       buildRequest("/api/v1/invoices", {
         method: "POST",
-        token: signToken(OWNER_ID),
+        token: signToken(ADMIN_ID),
         body: { tenantId: TENANT_ID, propertyId: PROPERTY_ID, amountDue: 5000, status: "draft" },
       }),
     );
@@ -544,7 +568,7 @@ describe("POST /api/v1/invoices", () => {
   });
 
   it("429 after the per-IP rate limit is exhausted", async () => {
-    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    mockScopedAdmin();
     leaseStub.findById.mockReturnValue(buildQuery(inScopeLease()));
     user.findOneAndUpdate.mockReturnValue(buildQuery({ invoiceCounters: {} }));
     invoiceStub.create.mockRejectedValue({ code: 11000 });
@@ -553,7 +577,7 @@ describe("POST /api/v1/invoices", () => {
       const res = await POST(
         buildRequest("/api/v1/invoices", {
           method: "POST",
-          token: signToken(OWNER_ID),
+          token: signToken(ADMIN_ID),
           headers: { "x-forwarded-for": "203.0.113.12" },
           body: { leaseId: LEASE_ID },
         }),
