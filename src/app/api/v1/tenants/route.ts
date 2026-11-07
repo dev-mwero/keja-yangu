@@ -203,14 +203,26 @@ export async function POST(request: NextRequest) {
   if (scope.role === "admin" && !scope.propertyScopeIds?.includes(parsed.data.propertyId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (
-    scope.role === "caretaker" &&
-    (!property.caretakerIds?.includes(scope.userId) || property.ownerId !== scope.managedByOwnerId)
-  ) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (scope.role === "caretaker") {
+    // Assignment-backed caretakers are scoped by their assignments; legacy
+    // caretakers by Property.caretakerIds under the managing owner.
+    const covered = scope.staffAssignmentBacked
+      ? (scope.propertyScopeIds?.includes(parsed.data.propertyId) ?? false)
+      : Boolean(
+          property.caretakerIds?.includes(scope.userId) &&
+            property.ownerId === scope.managedByOwnerId,
+        );
+    if (!covered) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
-  if (scope.role === "custodian" && property.ownerId !== scope.managedByOwnerId) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (scope.role === "custodian") {
+    const allowed = scope.staffAssignmentBacked
+      ? (scope.propertyScopeIds?.includes(parsed.data.propertyId) ?? false)
+      : property.ownerId === scope.managedByOwnerId;
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   const status = scope.role === "caretaker" ? "pending" : (parsed.data.status ?? "pending");

@@ -98,6 +98,11 @@ export function resetModelStubs() {
       fn.mockReset();
     }
   }
+  // Assignment-backed staff scope defaults to "no assignments" so custodian/
+  // caretaker fixtures exercise the legacy managedByOwnerId fallback unless a
+  // test opts into assignment coverage with its own mock. Previously
+  // undefined, which broke the staff scope resolver.
+  stubs.managementAssignment.find.mockReturnValue(buildQuery([]));
 }
 
 /**

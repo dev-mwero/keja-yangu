@@ -128,6 +128,8 @@ describe("isPrivilegedCustodian", () => {
 describe("requirePermission — authentication failure modes", () => {
   beforeEach(() => {
     resetModelStubs();
+    // Staff without assignments fall back to the legacy managedByOwnerId rules.
+    managementAssignment.find.mockReturnValue(buildQuery([]));
   });
 
   it("401 when no token is present", async () => {
@@ -906,5 +908,64 @@ describe("getTenantScope — custodian", () => {
       buildRequest("/api/v1/tenants", { token: signToken(CUSTODIAN_ID) }),
     );
     expect((res as Response).status).toBe(403);
+  });
+
+  it("scopes to active assignments when backfilled (no legacy owner binding needed)", async () => {
+    const assignedPropertyId = makeObjectId("custodian-property");
+    user.findById.mockReturnValue(buildQuery(custodianUser({ managedByOwnerId: "" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "custodian",
+          scopeType: "property",
+          propertyId: assignedPropertyId,
+          permissions: ["tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+
+    const res = await getTenantScope(
+      buildRequest("/api/v1/tenants", { token: signToken(CUSTODIAN_ID) }),
+    );
+    expect(res instanceof Response).toBe(false);
+    if (res instanceof Response) return;
+    expect(res.filter).toEqual({ propertyId: { $in: [assignedPropertyId] } });
+    expect(res.staffAssignmentBacked).toBe(true);
+  });
+});
+
+describe("getTenantScope — caretaker assignments", () => {
+  beforeEach(() => {
+    resetModelStubs();
+  });
+
+  it("scopes to active assignments instead of Property.caretakerIds", async () => {
+    const assignedPropertyId = makeObjectId("caretaker-property");
+    user.findById.mockReturnValue(buildQuery(caretakerUser(["manage_tenants"])));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: assignedPropertyId,
+          permissions: ["tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+
+    const res = await getTenantScope(
+      buildRequest("/api/v1/tenants", { token: signToken(CARETAKER_ID) }),
+    );
+    expect(res instanceof Response).toBe(false);
+    if (res instanceof Response) return;
+    expect(res.filter).toEqual({ propertyId: { $in: [assignedPropertyId] } });
+    expect(res.leaseFilter).toEqual({ propertyId: { $in: [assignedPropertyId] } });
+    expect(res.staffAssignmentBacked).toBe(true);
   });
 });

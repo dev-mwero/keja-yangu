@@ -551,6 +551,8 @@ export interface TenantScope {
   propertyScopeIds?: string[];
   assignedUnitIds?: string[];
   assignedTenantIds?: string[];
+  /** Custodian/caretaker scope resolved from ManagementAssignment (not legacy fields). */
+  staffAssignmentBacked?: boolean;
 }
 
 export interface AdminAssignmentScope {
@@ -561,14 +563,22 @@ export interface AdminAssignmentScope {
   assignedTenantIds: string[];
 }
 
-export async function getAdminAssignmentScope(
+export interface StaffAssignmentScope extends AdminAssignmentScope {
+  /** True when the principal holds at least one active assignment (in window, with the action). */
+  hasAssignments: boolean;
+}
+
+type StaffAccessRole = "admin" | "custodian" | "caretaker";
+
+async function getAssignmentScope(
   userId: string,
+  accessRole: StaffAccessRole,
   action: Action,
-): Promise<AdminAssignmentScope> {
+): Promise<StaffAssignmentScope> {
   const now = new Date();
   const assignments = await ManagementAssignment.find({
     principalUserId: userId,
-    accessRole: "admin",
+    accessRole,
     status: "active",
   }).lean();
   const activeAssignments = assignments.filter(
@@ -619,10 +629,68 @@ export async function getAdminAssignmentScope(
     assignedBlockIds,
     assignedUnitIds,
     assignedTenantIds,
+    hasAssignments: activeAssignments.length > 0,
   };
 }
 
+export async function getAdminAssignmentScope(
+  userId: string,
+  action: Action,
+): Promise<AdminAssignmentScope> {
+  const { hasAssignments, ...scope } = await getAssignmentScope(userId, "admin", action);
+  void hasAssignments;
+  return scope;
+}
+
+/**
+ * Assignment-backed scope for custodian/caretaker staff. Consumers prefer this
+ * over the legacy `managedByOwnerId` / `Property.caretakerIds` fields whenever
+ * `hasAssignments` is true; staff without assignments keep the legacy fallback
+ * until backfilled.
+ */
+export async function getStaffAssignmentScope(
+  userId: string,
+  accessRole: "custodian" | "caretaker",
+  action: Action,
+): Promise<StaffAssignmentScope> {
+  return getAssignmentScope(userId, accessRole, action);
+}
+
 type TenantScopeAction = "tenant:manage" | "lease:manage" | "unit:manage";
+
+/**
+ * Tenant list filter from an assignment-backed staff scope: property-scoped
+ * assignments match by property, unit-level coverage matches via the tenants
+ * already assigned to those units. Mirrors the admin branch's $or clauses.
+ */
+function staffTenantFilter(scope: StaffAssignmentScope): Record<string, unknown> {
+  const clauses: Record<string, unknown>[] = [];
+  if (scope.propertyScopeIds.length > 0) {
+    clauses.push({ propertyId: { $in: scope.propertyScopeIds } });
+  }
+  if (scope.assignedTenantIds.length > 0) {
+    clauses.push({ _id: { $in: scope.assignedTenantIds } });
+  }
+  if (clauses.length === 0) return { _id: { $in: [] } };
+  return clauses.length === 1 ? clauses[0] : { $or: clauses };
+}
+
+/**
+ * Lease list filter from an assignment-backed staff scope (mirror of the
+ * admin lease clauses): property-scoped assignments match by property,
+ * unit-scoped assignments match by unit.
+ */
+function staffLeaseFilter(scope: StaffAssignmentScope): Record<string, unknown> {
+  const clauses: Record<string, unknown>[] = [];
+  if (scope.propertyScopeIds.length > 0) {
+    clauses.push({ propertyId: { $in: scope.propertyScopeIds } });
+  }
+  if (scope.assignedUnitIds.length > 0) {
+    clauses.push({ unitId: { $in: scope.assignedUnitIds } });
+  }
+  if (clauses.length === 0) return { _id: { $in: [] } };
+  return clauses.length === 1 ? clauses[0] : { $or: clauses };
+}
 
 export async function getTenantScope(
   request: NextRequest,
@@ -682,6 +750,18 @@ export async function getTenantScope(
     };
   }
   if (user.role === "custodian") {
+    const staffScope = await getStaffAssignmentScope(userId, "custodian", action);
+    if (staffScope.hasAssignments) {
+      return {
+        filter: staffTenantFilter(staffScope),
+        leaseFilter: staffLeaseFilter(staffScope),
+        userId,
+        role: user.role,
+        managedByOwnerId,
+        ...staffScope,
+        staffAssignmentBacked: true,
+      };
+    }
     if (!managedByOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -692,6 +772,18 @@ export async function getTenantScope(
     return { filter: {}, leaseFilter: {}, userId, role: user.role, managedByOwnerId };
   }
   if (user.role === "caretaker") {
+    const staffScope = await getStaffAssignmentScope(userId, "caretaker", action);
+    if (staffScope.hasAssignments) {
+      return {
+        filter: staffTenantFilter(staffScope),
+        leaseFilter: staffLeaseFilter(staffScope),
+        userId,
+        role: user.role,
+        managedByOwnerId,
+        ...staffScope,
+        staffAssignmentBacked: true,
+      };
+    }
     if (!managedByOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -726,6 +818,12 @@ export function tenantMatchesScope(
     );
   }
   if (scope.role === "custodian") {
+    if (scope.staffAssignmentBacked) {
+      return (
+        (scope.propertyScopeIds?.includes(tenant.propertyId) ?? false) ||
+        (scope.assignedTenantIds?.includes(String(tenant._id ?? "")) ?? false)
+      );
+    }
     return tenant.ownerId === scope.managedByOwnerId;
   }
   if (scope.role === "system-admin") {
@@ -733,6 +831,12 @@ export function tenantMatchesScope(
   }
   if (scope.role !== "caretaker") {
     return false;
+  }
+  if (scope.staffAssignmentBacked) {
+    return (
+      (scope.propertyScopeIds?.includes(tenant.propertyId) ?? false) ||
+      (scope.assignedTenantIds?.includes(String(tenant._id ?? "")) ?? false)
+    );
   }
   return (
     tenant.ownerId === scope.managedByOwnerId &&
