@@ -12,7 +12,7 @@ import {
   requirePermission,
 } from "@/lib/permissions";
 import { computeIdentityHash, findDuplicateCandidates } from "@/lib/property-identity";
-import { validatePropertyStaffAssignments } from "@/lib/property-staff";
+import { syncPropertyStaffAssignments, validatePropertyStaffAssignments } from "@/lib/property-staff";
 import { isActivePropertyTypeKey } from "@/lib/property-type-store";
 import { blockInput, MAX_UNITS_PER_PROPERTY } from "@/lib/schemas/structure";
 import { buildUnitInserts, countRequestedUnits } from "@/lib/units";
@@ -405,6 +405,15 @@ export async function POST(request: NextRequest) {
       source: "system",
     });
   }
+
+  // Assignment rows are the only authorization source: mirror the staff lists
+  // the client sent (caretaker privileges derive their permissions).
+  await syncPropertyStaffAssignments({
+    propertyId,
+    caretakerIds: uniqueCaretakerIds,
+    custodianIds: uniqueCustodianIds,
+    grantedByUserId: actorId,
+  });
 
   let unitsCreated = 0;
   if (inputBlocks.length > 0) {

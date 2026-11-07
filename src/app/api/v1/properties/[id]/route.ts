@@ -14,7 +14,7 @@ import {
   isFullControlRole,
   requirePermission,
 } from "@/lib/permissions";
-import { validatePropertyStaffAssignments } from "@/lib/property-staff";
+import { syncPropertyStaffAssignments, validatePropertyStaffAssignments } from "@/lib/property-staff";
 import { isActivePropertyTypeKey } from "@/lib/property-type-store";
 import { Property } from "@/models/Property";
 import { Tenant } from "@/models/Tenant";
@@ -203,6 +203,16 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   if (!updated) {
     return NextResponse.json({ error: "Property not found" }, { status: 404 });
   }
+
+  if (updateData.caretakerIds !== undefined || updateData.custodianIds !== undefined) {
+    await syncPropertyStaffAssignments({
+      propertyId: id,
+      caretakerIds: updated.caretakerIds ?? [],
+      custodianIds: updated.custodianIds ?? [],
+      grantedByUserId: actor.userId,
+    });
+  }
+
   return NextResponse.json({ data: updated });
 }
 
