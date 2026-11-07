@@ -388,7 +388,20 @@ describe("POST /api/v1/invoices/[id]/mark-paid", () => {
 
   it("an in-scope caretaker marks an attached invoice paid as caretaker", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerDoc()));
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID }]));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["invoice:mark-paid"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     invoiceStub.findById.mockReturnValue(buildQuery(pendingInvoice()));
     invoiceStub.findOneAndUpdate.mockReturnValue(
       buildQuery({ ...pendingInvoice(), status: "paid" }),
