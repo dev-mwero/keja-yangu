@@ -55,7 +55,6 @@ import { notifyLeaseExpiry } from "@/lib/notifications";
 
 const {
   user,
-  property,
   lease: leaseStub,
   invoice: invoiceStub,
   tenant: tenantStub,
@@ -372,7 +371,20 @@ describe("POST /api/v1/invoices/generate", () => {
 
   it("scopes a managing caretaker to leases of their assigned properties", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerDoc()));
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID }]));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["invoice:generate"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     leaseStub.find.mockReturnValue(buildQuery([]));
     invoiceStub.find.mockReturnValue(buildQuery([]).select("leaseId"));
 
@@ -387,7 +399,6 @@ describe("POST /api/v1/invoices/generate", () => {
     expect(leaseStub.find).toHaveBeenCalledWith({
       status: "active",
       propertyId: { $in: [PROPERTY_ID] },
-      ownerId: MANAGED_OWNER_ID,
     });
     const body = await json(res);
     expect(body.data).toEqual({ created: 0, skipped: 0 });

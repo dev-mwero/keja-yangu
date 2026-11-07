@@ -158,6 +158,19 @@ describe("GET /api/v1/documents", () => {
     user.findById.mockReturnValue(
       buildQuery(makeUser({ _id: CARETAKER_ID, role: "caretaker", managedByOwnerId: OWNER_ID })),
     );
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["document:read-own"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, title: "Sunlit Studio" }]));
     propertydocument.find.mockReturnValue(buildQuery([]).sort({ createdAt: -1 }).skip(0).limit(20));
     propertydocument.countDocuments.mockResolvedValue(0);

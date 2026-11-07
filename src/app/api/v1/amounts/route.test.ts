@@ -241,6 +241,19 @@ describe("GET /api/v1/amounts", () => {
       managedByOwnerId: OWNER_ID,
       privileges: ["manage_invoices"],
     });
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          permissions: ["invoice:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     // resolveInvoiceActor and the route both read Property; the same docs
     // satisfy both queries (one carries `_id`, the other `blocks`).
     stubReads({

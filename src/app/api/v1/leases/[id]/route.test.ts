@@ -10,19 +10,22 @@ vi.mock("@/lib/mongoose", () => ({
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
 vi.mock("@/models/Invoice", () => ({ Invoice: getModelStubs().invoice }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 
 import { DELETE, GET, PATCH } from "@/app/api/v1/leases/[id]/route";
 
-const { user, lease: leaseStub, invoice: invoiceStub } = getModelStubs();
-
+const { user, lease: leaseStub, invoice: invoiceStub, managementAssignment } = getModelStubs();
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
+const PROPERTY_ID = makeObjectId("p1");
 const LEASE_ID = makeObjectId("lease");
 const INVALID_ID = "not-an-objectid";
 
 function ownerDoc() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  return makeUser({ _id: OWNER_ID, role: "admin" });
 }
 
 function caretakerDoc() {
@@ -30,7 +33,7 @@ function caretakerDoc() {
 }
 
 function inScopeLease() {
-  return makeLease({ _id: LEASE_ID, ownerId: OWNER_ID, status: "active" });
+  return makeLease({ _id: LEASE_ID, ownerId: OWNER_ID, propertyId: PROPERTY_ID, status: "active" });
 }
 
 async function json(res: Response) {
@@ -40,6 +43,7 @@ async function json(res: Response) {
 describe("GET /api/v1/leases/[id]", () => {
   beforeEach(() => {
     resetModelStubs();
+    managementAssignment.find.mockReturnValue(buildQuery([]));
   });
 
   it("400 for an invalid id", async () => {
@@ -64,6 +68,19 @@ describe("GET /api/v1/leases/[id]", () => {
   });
 
   it("404 when absent", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["lease:manage", "tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     leaseStub.findOne.mockReturnValue(buildQuery(null));
     const res = await GET(
@@ -74,6 +91,19 @@ describe("GET /api/v1/leases/[id]", () => {
   });
 
   it("404 for another owner's lease (existence hidden)", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["lease:manage", "tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     leaseStub.findOne.mockReturnValue(buildQuery(null));
     const res = await GET(
@@ -84,6 +114,19 @@ describe("GET /api/v1/leases/[id]", () => {
   });
 
   it("200 for an in-scope lease", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["lease:manage", "tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     leaseStub.findOne.mockReturnValue(buildQuery(inScopeLease()));
     const res = await GET(
@@ -91,7 +134,10 @@ describe("GET /api/v1/leases/[id]", () => {
       withParams(LEASE_ID),
     );
     expect(res.status).toBe(200);
-    expect(leaseStub.findOne).toHaveBeenCalledWith({ _id: LEASE_ID, ownerId: OWNER_ID });
+    expect(leaseStub.findOne).toHaveBeenCalledWith({
+      _id: LEASE_ID,
+      propertyId: { $in: [PROPERTY_ID] },
+    });
     const body = await json(res);
     expect((body.data as { ownerId?: string }).ownerId).toBe(OWNER_ID);
   });
@@ -100,6 +146,7 @@ describe("GET /api/v1/leases/[id]", () => {
 describe("PATCH /api/v1/leases/[id]", () => {
   beforeEach(() => {
     resetModelStubs();
+    managementAssignment.find.mockReturnValue(buildQuery([]));
   });
 
   it("403 for a mismatched origin", async () => {
@@ -128,6 +175,19 @@ describe("PATCH /api/v1/leases/[id]", () => {
   });
 
   it("404 when absent", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["lease:manage", "tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     leaseStub.findById.mockReturnValue(buildQuery(null));
     const res = await PATCH(
@@ -142,6 +202,19 @@ describe("PATCH /api/v1/leases/[id]", () => {
   });
 
   it("403 for another owner's lease", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["lease:manage", "tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     leaseStub.findById.mockReturnValue(
       buildQuery(makeLease({ _id: LEASE_ID, ownerId: OTHER_OWNER_ID })),
@@ -159,6 +232,19 @@ describe("PATCH /api/v1/leases/[id]", () => {
   });
 
   it("400 for an invalid payload", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["lease:manage", "tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     leaseStub.findById.mockReturnValue(buildQuery(inScopeLease()));
     const res = await PATCH(
@@ -175,6 +261,19 @@ describe("PATCH /api/v1/leases/[id]", () => {
   });
 
   it("strips identity fields and persists only editable ones", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["lease:manage", "tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     leaseStub.findById.mockReturnValue(buildQuery(inScopeLease()));
     const updated = { ...inScopeLease(), rentAmount: 30000 };
@@ -206,6 +305,19 @@ describe("PATCH /api/v1/leases/[id]", () => {
   });
 
   it("auto-stamps endDate when an active lease is ended without one", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["lease:manage", "tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     leaseStub.findById.mockReturnValue(buildQuery(inScopeLease())); // active, endDate null
     leaseStub.findOneAndUpdate.mockReturnValue(buildQuery({ ...inScopeLease(), status: "ended" }));
@@ -229,6 +341,19 @@ describe("PATCH /api/v1/leases/[id]", () => {
   });
 
   it("does not stamp endDate when one is provided in the payload", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["lease:manage", "tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     leaseStub.findById.mockReturnValue(buildQuery(inScopeLease()));
     const providedEnd = new Date("2026-11-30T00:00:00.000Z");
@@ -257,9 +382,23 @@ describe("PATCH /api/v1/leases/[id]", () => {
 describe("DELETE /api/v1/leases/[id]", () => {
   beforeEach(() => {
     resetModelStubs();
+    managementAssignment.find.mockReturnValue(buildQuery([]));
   });
 
   it("409 when invoices reference the lease", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["lease:manage", "tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     leaseStub.findById.mockReturnValue(buildQuery(inScopeLease()));
     invoiceStub.exists.mockResolvedValue({ _id: makeObjectId("inv") });
@@ -279,6 +418,19 @@ describe("DELETE /api/v1/leases/[id]", () => {
   });
 
   it("200 and soft-deletes when no invoices reference the lease", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["lease:manage", "tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     leaseStub.findById.mockReturnValue(buildQuery(inScopeLease()));
     invoiceStub.exists.mockResolvedValue(null);
@@ -298,6 +450,19 @@ describe("DELETE /api/v1/leases/[id]", () => {
   });
 
   it("403 for a cross-owner delete before any invoice check", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["lease:manage", "tenant:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     leaseStub.findById.mockReturnValue(
       buildQuery(makeLease({ _id: LEASE_ID, ownerId: OTHER_OWNER_ID })),
