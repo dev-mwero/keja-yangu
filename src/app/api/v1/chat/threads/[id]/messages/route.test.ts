@@ -18,6 +18,9 @@ vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/ChatThread", () => ({ ChatThread: getModelStubs().chatthread }));
 vi.mock("@/models/ChatMessage", () => ({ ChatMessage: getModelStubs().chatmessage }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 vi.mock("@/lib/notifications", () => ({
   notifyMessageReply: vi.fn().mockResolvedValue(true),
 }));
