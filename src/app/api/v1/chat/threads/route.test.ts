@@ -135,7 +135,20 @@ describe("GET /api/v1/chat/threads", () => {
   });
 
   it("owner sees threads on their properties", async () => {
-    user.findById.mockReturnValue(buildQuery(ownerUser()));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["chat:read-own", "chat:send"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     const row = threadRow();
     chatthread.find.mockReturnValue(
       buildQuery([row]).sort({ lastMessageAt: -1 }).skip(0).limit(20),
@@ -148,7 +161,9 @@ describe("GET /api/v1/chat/threads", () => {
 
     const res = await GET(buildRequest("/api/v1/chat/threads", { token: signToken(OWNER_ID) }));
     expect(res.status).toBe(200);
-    expect(chatthread.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
+    expect(chatthread.find).toHaveBeenCalledWith({
+      $or: [{ propertyId: { $in: [PROPERTY_ID] } }],
+    });
     expect(chatmessage.find).toHaveBeenCalledWith({
       threadId: { $in: [THREAD_ID] },
       senderUserId: { $ne: OWNER_ID },
@@ -251,6 +266,19 @@ describe("GET /api/v1/chat/threads", () => {
 
   it("custodian sees every thread in the managed owner's portfolio", async () => {
     user.findById.mockReturnValue(buildQuery(custodianUser()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "custodian",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["chat:read-own", "chat:send"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     chatthread.find.mockReturnValue(buildQuery([]).sort({ lastMessageAt: -1 }).skip(0).limit(20));
     chatthread.countDocuments.mockResolvedValue(0);
     user.find.mockReturnValue(buildQuery([]));
@@ -259,7 +287,9 @@ describe("GET /api/v1/chat/threads", () => {
 
     const res = await GET(buildRequest("/api/v1/chat/threads", { token: signToken(CUSTODIAN_ID) }));
     expect(res.status).toBe(200);
-    expect(chatthread.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
+    expect(chatthread.find).toHaveBeenCalledWith({
+      $or: [{ propertyId: { $in: [PROPERTY_ID] } }],
+    });
   });
 
   it("scopes a unit-only admin to threads for tenants on the assigned unit", async () => {

@@ -39,27 +39,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(buildPaginationResult([], 0, page, limit));
     }
     filter.tenantId = { $in: actor.tenantIds };
-  } else if (actor.role === "owner") {
-    filter.ownerId = actor.userId;
   } else if (actor.role === "caretaker") {
     filter.agentUserId = actor.userId;
   } else if (actor.role === "custodian") {
-    if (actor.staffAssignmentBacked) {
-      const scopes: Record<string, unknown>[] = [];
-      if (actor.propertyScopeIds.length > 0) {
-        scopes.push({ propertyId: { $in: actor.propertyScopeIds } });
-      }
-      if (actor.assignedTenantIds.length > 0) {
-        scopes.push({ tenantId: { $in: actor.assignedTenantIds } });
-      }
-      if (scopes.length === 0) {
-        return NextResponse.json(buildPaginationResult([], 0, page, limit));
-      }
-      filter.$or = scopes;
-    } else {
-      // Owner-delegate: every thread in the managed owner's portfolio.
-      filter.ownerId = actor.managedByOwnerId;
+    const scopes: Record<string, unknown>[] = [];
+    if (actor.propertyScopeIds.length > 0) {
+      scopes.push({ propertyId: { $in: actor.propertyScopeIds } });
     }
+    if (actor.assignedTenantIds.length > 0) {
+      scopes.push({ tenantId: { $in: actor.assignedTenantIds } });
+    }
+    if (scopes.length === 0) {
+      return NextResponse.json(buildPaginationResult([], 0, page, limit));
+    }
+    filter.$or = scopes;
   } else if (actor.role === "admin") {
     const scopes: Record<string, unknown>[] = [];
     if (actor.propertyScopeIds.length > 0) {

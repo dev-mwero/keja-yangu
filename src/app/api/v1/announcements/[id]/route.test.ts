@@ -17,7 +17,7 @@ vi.mock("@/models/Announcement", () => ({ Announcement: getModelStubs().announce
 
 import { DELETE } from "@/app/api/v1/announcements/[id]/route";
 
-const { user, property, announcement } = getModelStubs();
+const { user, announcement, managementAssignment } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
@@ -114,7 +114,19 @@ describe("DELETE /api/v1/announcements/[id]", () => {
 
   it("lets a caretaker delete an announcement they authored for their managed owner", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerUser()));
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID }]));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["announcement:read", "announcement:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     announcement.findById.mockReturnValue(
       buildQuery(
         makeAnnouncement({
@@ -140,7 +152,19 @@ describe("DELETE /api/v1/announcements/[id]", () => {
 
   it("forbids a caretaker from deleting an announcement the owner authored", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerUser()));
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID }]));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["announcement:read", "announcement:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     announcement.findById.mockReturnValue(
       buildQuery(
         makeAnnouncement({
@@ -163,7 +187,19 @@ describe("DELETE /api/v1/announcements/[id]", () => {
 
   it("forbids a caretaker from deleting an announcement outside their properties", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerUser()));
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID }]));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["announcement:read", "announcement:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     announcement.findById.mockReturnValue(
       buildQuery(
         makeAnnouncement({

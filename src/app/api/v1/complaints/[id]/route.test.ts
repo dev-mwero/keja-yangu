@@ -20,7 +20,7 @@ vi.mock("@/lib/notifications", () => ({
 import { PATCH } from "@/app/api/v1/complaints/[id]/route";
 import { notifyComplaintStatusChange } from "@/lib/notifications";
 
-const { user, property, complaint } = getModelStubs();
+const { user, property, complaint, managementAssignment } = getModelStubs();
 const notifyComplaintStatusChangeMock = vi.mocked(notifyComplaintStatusChange);
 
 const OWNER_ID = makeObjectId("owner");
@@ -195,6 +195,19 @@ describe("PATCH /api/v1/complaints/[id]", () => {
 
   it("an assigned caretaker with manage_complaints updates an in-scope complaint", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerUser(["manage_complaints"])));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["complaint:read-own", "complaint:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, title: "Sunlit Studio" }]));
     complaint.findById.mockReturnValue(buildQuery(openComplaint()));
     const updated = { ...openComplaint(), status: "in-progress" };

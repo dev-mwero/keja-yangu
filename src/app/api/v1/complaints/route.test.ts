@@ -147,17 +147,30 @@ describe("GET /api/v1/complaints", () => {
   });
 
   it("caretaker scopes to managed owner + assigned properties", async () => {
+    const caretakerId = makeObjectId("caretaker");
     const caretaker = makeUser({
-      _id: makeObjectId("caretaker"),
+      _id: caretakerId,
       role: "caretaker",
       managedByOwnerId: OWNER_ID,
     });
     user.findById.mockReturnValue(buildQuery(caretaker));
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, title: "Sunlit Studio" }]));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["complaint:read-own", "complaint:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     complaint.find.mockReturnValue(buildQuery([]).sort({ createdAt: -1 }).skip(0).limit(20));
     complaint.countDocuments.mockResolvedValue(0);
 
-    const res = await GET(buildRequest("/api/v1/complaints", { token: signToken(caretaker._id) }));
+    const res = await GET(buildRequest("/api/v1/complaints", { token: signToken(caretakerId) }));
     expect(res.status).toBe(200);
     expect(complaint.find).toHaveBeenCalledWith({
       ownerId: OWNER_ID,
