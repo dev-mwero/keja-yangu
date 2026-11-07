@@ -52,6 +52,26 @@ Keep the four outputs for the release-cycle evidence pack.
 - Duplicate accruals per invoice must be zero. Never delete rows; append a
   reversal or correction.
 
+### Scoped authorization rollout (shadow → enforce)
+
+1. **Shadow first:** set `AUTHZ_SHADOW_SAMPLE_RATE=1.0` and collect at least
+   one full release cycle of `authz.shadow.mismatch` / `authz.enforce.mismatch`
+   audit events. Gate: zero **unexplained** mismatches (or documented,
+   accepted intended-tightening cases) before enforcing anything. Observational
+   only — no behavior change.
+2. **Enforce per family, one at a time**, with a soak between each:
+   `chat` → `units` → (`invoices`, `tenants`) → `properties` **last**
+   (properties carries the caretaker capability-gating risk and is
+   foundational to the others' resource resolution).
+3. **Precondition:** caretaker `property:create` / `property:delete` remain
+   privilege-gated (`create_property` / `delete_assigned_property`) with no
+   scoped-policy override — the scoped policy handles scoping only. Do not
+   assume privileges map to assignments; the backfill cannot represent them.
+4. **Rollback is env-only:** clear a family from
+   `AUTHZ_ENFORCE_ROUTE_FAMILIES` or set the sample rate back to `0`. The
+   legacy fallback stays until backfill coverage is 100% and a full clean
+   cycle has passed. `*` is staging-only.
+
 ## Escalation
 
 | Signal | Owner | Action |
