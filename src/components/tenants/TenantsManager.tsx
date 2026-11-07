@@ -149,12 +149,15 @@ export const TenantsManager = ({
     [properties],
   );
 
-  const counts: Record<StatusFilter, number> = {
-    all: tenants.length,
-    pending: tenants.filter((t) => t.status === "pending").length,
-    active: tenants.filter((t) => t.status === "active").length,
-    rejected: tenants.filter((t) => t.status === "rejected").length,
-  };
+  const counts: Record<StatusFilter, number> = useMemo(
+    () => ({
+      all: tenants.length,
+      pending: tenants.filter((t) => t.status === "pending").length,
+      active: tenants.filter((t) => t.status === "active").length,
+      rejected: tenants.filter((t) => t.status === "rejected").length,
+    }),
+    [tenants],
+  );
 
   const visible = useMemo(
     () =>

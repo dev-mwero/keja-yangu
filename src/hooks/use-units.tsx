@@ -93,22 +93,40 @@ export function useUnits(filters?: UnitFilters, options?: UseUnitsOptions) {
       setLoading(true);
       try {
         if (fetchAll) {
-          const all: Unit[] = [];
-          let seenTotal = 0;
-          for (let page = 1; page <= MAX_FETCH_ALL_PAGES; page++) {
+          // First page discovers the total; remaining pages are fetched in
+          // parallel chunks so large portfolios don't pay a serial waterfall.
+          const pageUrl = (page: number) => {
             const search = new URLSearchParams(params);
             search.set("page", String(page));
             search.set("limit", String(FETCH_ALL_PAGE_SIZE));
-            const res = await fetch(`/api/v1/units?${search.toString()}`);
+            return `/api/v1/units?${search.toString()}`;
+          };
+          const fetchPage = async (page: number) => {
+            const res = await fetch(pageUrl(page));
             const json = await res.json();
-            if (cancelled) return;
-            if (!res.ok) {
-              setError(json.error || "Failed to fetch units");
-              return;
+            if (!res.ok) throw new Error(json.error || "Failed to fetch units");
+            return json as {
+              data: Unit[];
+              pagination?: { total: number; hasNextPage: boolean };
+            };
+          };
+
+          const first = await fetchPage(1);
+          if (cancelled) return;
+          const all: Unit[] = [...(first.data ?? [])];
+          const seenTotal = first.pagination?.total ?? all.length;
+
+          if (first.pagination?.hasNextPage) {
+            const totalPages = Math.max(2, Math.ceil(seenTotal / FETCH_ALL_PAGE_SIZE));
+            const lastPage = Math.min(MAX_FETCH_ALL_PAGES, totalPages);
+            const pageNumbers: number[] = [];
+            for (let p = 2; p <= lastPage; p++) pageNumbers.push(p);
+            for (let i = 0; i < pageNumbers.length; i += 4) {
+              const chunk = pageNumbers.slice(i, i + 4);
+              const results = await Promise.all(chunk.map(fetchPage));
+              if (cancelled) return;
+              for (const json of results) all.push(...(json.data ?? []));
             }
-            all.push(...(json.data as Unit[]));
-            seenTotal = json.pagination?.total ?? all.length;
-            if (!json.pagination?.hasNextPage) break;
           }
           if (cancelled) return;
           setUnits(all);
