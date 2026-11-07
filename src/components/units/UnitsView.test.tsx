@@ -47,6 +47,23 @@ vi.mock("@/components/DashboardShell", async () => {
       createElement("div", { "data-testid": "shell" }, props.children),
   };
 });
+// jsdom has no layout, so the real virtualizer windows to nothing. Replace it
+// with a pass-through that renders every row with fixed estimated sizes.
+vi.mock("@tanstack/react-virtual", () => ({
+  useVirtualizer: (options: { count: number }) => ({
+    getVirtualItems: () =>
+      Array.from({ length: options.count }, (_, index) => ({
+        key: index,
+        index,
+        start: index * 60,
+        end: (index + 1) * 60,
+        size: 60,
+      })),
+    getTotalSize: () => options.count * 60,
+    measureElement: () => {},
+  }),
+  measureElement: () => {},
+}));
 vi.mock("@/hooks/use-units", () => ({
   useUnits: mocks.useUnits,
   useUnitMutations: mocks.useUnitMutations,
