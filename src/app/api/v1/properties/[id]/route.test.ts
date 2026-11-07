@@ -11,10 +11,13 @@ vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 
 import { DELETE, GET, PATCH } from "@/app/api/v1/properties/[id]/route";
 
-const { user, property, tenant, unit } = getModelStubs();
+const { user, property, tenant, unit, managementAssignment } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
@@ -148,6 +151,39 @@ describe("GET /api/v1/properties/[id]", () => {
     expect(property.findOne).toHaveBeenCalledWith(expect.objectContaining({ ownerId: OWNER_ID }));
     const body = await json(res);
     expect((body.data as { ownerId?: string }).ownerId).toBe(OWNER_ID);
+  });
+
+  it("lets an assignment-backed custodian read the assigned property without a managing owner", async () => {
+    const custodian = makeUser({
+      _id: CUSTODIAN_ID,
+      role: "custodian",
+      managedByOwnerId: "",
+    });
+    user.findById.mockReturnValue(buildQuery(custodian));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "custodian",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["property:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    property.findById.mockReturnValue(buildQuery(ownProperty()));
+
+    const res = await GET(
+      buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {
+        token: signToken(CUSTODIAN_ID),
+      }),
+      withParams(PROPERTY_ID),
+    );
+
+    expect(res.status).toBe(200);
+    expect(property.findById).toHaveBeenCalledWith(PROPERTY_ID);
   });
 
   it("lets a custodian read any property in their owner's portfolio", async () => {
