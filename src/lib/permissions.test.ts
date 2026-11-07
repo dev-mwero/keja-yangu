@@ -1,5 +1,5 @@
 /** @vitest-environment node */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Action, CaretakerPrivilege, Role } from "@/lib/permissions";
 import {
   getTenantScope,
@@ -122,6 +122,63 @@ describe("isPrivilegedCustodian", () => {
     expect(isPrivilegedCustodian({ ...privileged, managedByOwnerId: "" })).toBe(false);
     expect(isPrivilegedCustodian({ ...privileged, role: "owner" })).toBe(false);
     expect(isPrivilegedCustodian({ ...privileged, role: "caretaker" })).toBe(false);
+  });
+});
+
+describe("requirePermission — caretaker privilege gating", () => {
+  beforeEach(() => {
+    resetModelStubs();
+    process.env.AUTHZ_ENFORCE_ROUTE_FAMILIES = "properties";
+  });
+
+  afterEach(() => {
+    delete process.env.AUTHZ_ENFORCE_ROUTE_FAMILIES;
+  });
+
+  function caretakerWithAssignment(
+    privileges: Array<"create_property" | "delete_assigned_property">,
+  ) {
+    user.findById.mockReturnValue(
+      buildQuery(
+        makeUser({
+          _id: CARETAKER_ID,
+          role: "caretaker",
+          managedByOwnerId: OTHER_OWNER_ID,
+          privileges: privileges as ReturnType<typeof makeUser>["privileges"],
+        }),
+      ),
+    );
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: makeObjectId("prop"),
+          permissions: ["property:create"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+  }
+
+  it("scoped policy cannot grant property:create without the create_property privilege", async () => {
+    caretakerWithAssignment([]);
+    const res = await requirePermission(
+      buildRequest("/api/v1/properties", { token: signToken(CARETAKER_ID) }),
+      "property:create",
+    );
+    expect(res?.status).toBe(403);
+  });
+
+  it("create_property privilege still permits property:create", async () => {
+    caretakerWithAssignment(["create_property"]);
+    const res = await requirePermission(
+      buildRequest("/api/v1/properties", { token: signToken(CARETAKER_ID) }),
+      "property:create",
+    );
+    expect(res).toBeNull();
   });
 });
 

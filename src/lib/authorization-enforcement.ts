@@ -121,6 +121,19 @@ export async function enforceScopedAuthorization(input: {
   // Tenants retain legacy self-service routing until tenant loaders are wired,
   // and legacy staff without assignments stay on the compatibility path.
   if (context.actor.role === "tenant") return null;
+
+  // Caretaker property:create / property:delete are privilege-gated in the
+  // legacy model and have no scoped-policy equivalent: the backfill maps
+  // create_property / delete_assigned_property to nothing (unrepresentable),
+  // and assignments never carry property:delete for caretakers. Letting the
+  // scoped policy override would grant create broadly and deny delete to
+  // privilege holders. The legacy decision stays authoritative for both.
+  if (
+    context.actor.role === "caretaker" &&
+    (input.action === "property:create" || input.action === "property:delete")
+  ) {
+    return null;
+  }
   if (isLegacyActorWithoutAssignments(context)) return null;
 
   if (!requestedResource && !isResourceFreePolicyAction(input.action)) {
