@@ -29,6 +29,7 @@ export interface TestUser {
   passwordHash?: string;
   isVerified?: boolean;
   phone?: string;
+  tokenVersion?: number;
 }
 
 export interface TestProperty {

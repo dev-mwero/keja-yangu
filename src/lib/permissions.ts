@@ -98,6 +98,7 @@ export interface AuthUser {
   role: Role;
   name?: string;
   email?: string;
+  tokenVersion?: number;
 }
 
 export interface UserCtx {
@@ -120,8 +121,15 @@ export function authenticate(request: Request): AuthUser | null {
       role: Role;
       name?: string;
       email?: string;
+      tokenVersion?: number;
     };
-    return { userId: payload.userId, role: payload.role, name: payload.name, email: payload.email };
+    return {
+      userId: payload.userId,
+      role: payload.role,
+      name: payload.name,
+      email: payload.email,
+      tokenVersion: payload.tokenVersion,
+    };
   } catch {
     return null;
   }
@@ -188,9 +196,14 @@ async function requirePermissionLegacy(
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   let userId: string;
+  let tokenVersion: number;
   try {
-    const payload = jwt.verify(token, getJwtSecret()) as { userId: string };
+    const payload = jwt.verify(token, getJwtSecret()) as {
+      userId: string;
+      tokenVersion?: number;
+    };
     userId = payload.userId;
+    tokenVersion = payload.tokenVersion ?? 0;
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -199,6 +212,9 @@ async function requirePermissionLegacy(
   const user = await User.findById(userId).select("-passwordHash").lean();
   if (!user?.isActive) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if ((user.tokenVersion ?? 0) !== tokenVersion) {
+    return NextResponse.json({ error: "Session expired" }, { status: 401 });
   }
 
   const role = user.role;
@@ -458,6 +474,9 @@ export async function requirePermission(
   opts?: { resource?: PermissionResource },
 ): Promise<NextResponse | null> {
   const result = await requirePermissionLegacy(request, action, opts);
+  // A failed authentication (including a stale `tokenVersion`) is never
+  // overridable by scoped-policy enforcement.
+  if (result && result.status === 401) return result;
   const auth = authenticate(request);
   if (!auth) return result;
 

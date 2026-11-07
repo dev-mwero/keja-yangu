@@ -23,6 +23,12 @@ export interface IUser {
   nationalId: string;
   verificationToken?: string;
   verificationTokenExpiry?: Date;
+  /**
+   * Monotonic session version. Bumped whenever the account's role or security
+   * posture changes; JWTs carrying an older value are rejected so a role change
+   * takes effect without waiting for the 7-day token to expire.
+   */
+  tokenVersion: number;
   invoiceCounters: Record<string, number>;
   migratedFromOwner?: boolean;
   settings: IUserSettings;
@@ -80,6 +86,7 @@ const userSchema = new Schema<IUser>(
     nationalId: { type: String, trim: true, default: "" },
     verificationToken: { type: String },
     verificationTokenExpiry: { type: Date },
+    tokenVersion: { type: Number, default: 0 },
     invoiceCounters: { type: Schema.Types.Map, of: Number, default: {} },
     migratedFromOwner: { type: Boolean, default: false },
     settings: { type: userSettingsSchema, default: () => ({}) },

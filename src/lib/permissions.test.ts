@@ -159,6 +159,28 @@ describe("requirePermission — authentication failure modes", () => {
     );
     expect(res?.status).toBe(401);
   });
+
+  it("401 when the token's tokenVersion is stale", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerUser({ tokenVersion: 5 })));
+    const res = await requirePermission(
+      buildRequest("/api/v1/properties", {
+        token: signToken(OWNER_ID, { tokenVersion: 4 }),
+      }),
+      "property:create",
+    );
+    expect(res?.status).toBe(401);
+  });
+
+  it("allows a matching tokenVersion", async () => {
+    user.findById.mockReturnValue(buildQuery(ownerUser({ tokenVersion: 3 })));
+    const res = await requirePermission(
+      buildRequest("/api/v1/properties", {
+        token: signToken(OWNER_ID, { tokenVersion: 3 }),
+      }),
+      "property:create",
+    );
+    expect(res).toBeNull();
+  });
 });
 
 describe("requirePermission — owner", () => {
