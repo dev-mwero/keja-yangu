@@ -120,19 +120,18 @@ async function main() {
   );
 
   const blocking = Object.entries(report.blocking).filter(([, rows]) => rows.length > 0);
-  if (blocking.length === 0) {
-    console.log("No blocking drift found.");
-    await mongoose.disconnect();
-    process.exit(0);
-  }
-
   for (const [name, rows] of blocking) {
     console.log(`${name} (${rows.length}):`);
     console.table(rows);
   }
+  if (blocking.length === 0) {
+    console.log("No blocking drift found.");
+  }
 
+  // Exit non-zero unless retirement is actually ready: empty blocking lists
+  // alone are not enough while legacy counts remain.
   await mongoose.disconnect();
-  process.exit(1);
+  process.exit(report.readyForLegacyRetirement ? 0 : 1);
 }
 
 main().catch(async (error) => {
