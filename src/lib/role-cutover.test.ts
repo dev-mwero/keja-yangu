@@ -1,6 +1,6 @@
 /** @vitest-environment node */
 import { describe, expect, it } from "vitest";
-import { planRoleCutover, planRoleRollback } from "@/lib/role-cutover";
+import { planCutoverPreflight, planRoleCutover, planRoleRollback } from "@/lib/role-cutover";
 
 describe("planRoleCutover", () => {
   it("plans cutover for owner users and emits audit events", () => {
@@ -25,10 +25,12 @@ describe("planRoleCutover", () => {
     });
     expect(plan.auditEvents).toHaveLength(1);
     expect(plan.auditEvents[0]).toEqual({
+      actorUserId: "system",
+      actorRole: "system",
       action: "user.role_cutover",
-      actorId: "system",
-      targetId: "u1",
-      details: {
+      entityType: "user",
+      entityId: "u1",
+      after: {
         fromRole: "owner",
         toRole: "admin",
         reason: "Phase 4 multi-admin role cutover",
@@ -45,6 +47,36 @@ describe("planRoleCutover", () => {
     expect(plan.usersToUpdate).toHaveLength(0);
     expect(plan.skippedCount).toBe(1);
     expect(plan.warnings).toContain("User u1 was already migrated from owner to admin");
+  });
+});
+
+describe("planCutoverPreflight", () => {
+  const users = [
+    { _id: "u1", name: "Alice Owner", email: "alice@keja.co", role: "owner" },
+    { _id: "u2", name: "Bob Owner", email: "bob@keja.co", role: "owner" },
+    { _id: "u3", name: "Carol Admin", role: "admin" },
+    { _id: "u4", name: "Dan Tenant", role: "tenant" },
+  ];
+
+  it("is ready when every owner holds an active assignment", () => {
+    const preflight = planCutoverPreflight(users, new Set(["u1", "u2"]));
+    expect(preflight.ready).toBe(true);
+    expect(preflight.uncovered).toEqual([]);
+    expect(preflight.warnings).toEqual([]);
+  });
+
+  it("blocks when an owner has no active assignment (would lock them out)", () => {
+    const preflight = planCutoverPreflight(users, new Set(["u1"]));
+    expect(preflight.ready).toBe(false);
+    expect(preflight.uncovered).toEqual([
+      { userId: "u2", name: "Bob Owner", email: "bob@keja.co" },
+    ]);
+    expect(preflight.warnings.some((w) => w.includes("u2"))).toBe(true);
+  });
+
+  it("ignores non-owner users entirely", () => {
+    const preflight = planCutoverPreflight(users, new Set());
+    expect(preflight.uncovered.map((u) => u.userId)).toEqual(["u1", "u2"]);
   });
 });
 
