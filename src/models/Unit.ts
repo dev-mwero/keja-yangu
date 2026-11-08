@@ -87,6 +87,7 @@ unitSchema.index(
   { unique: true, partialFilterExpression: { deletedAt: null } },
 );
 unitSchema.index({ propertyId: 1, status: 1 });
+unitSchema.index({ propertyId: 1, deletedAt: 1 });
 unitSchema.index({ ownerId: 1, status: 1 });
 unitSchema.index({ blockId: 1, floorLevel: 1 });
 unitSchema.index({ propertyId: 1, blockId: 1 });

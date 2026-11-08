@@ -10,6 +10,22 @@ vi.mock("@/components/DashboardShell", async () => {
   };
 });
 
+vi.mock("@tanstack/react-virtual", () => ({
+  useVirtualizer: (options: { count: number }) => ({
+    getVirtualItems: () =>
+      Array.from({ length: options.count }, (_, index) => ({
+        key: index,
+        index,
+        start: index * 56,
+        end: (index + 1) * 56,
+        size: 56,
+      })),
+    getTotalSize: () => options.count * 56,
+    measureElement: () => {},
+  }),
+  measureElement: () => {},
+}));
+
 vi.mock("@/hooks/use-properties", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/hooks/use-properties")>();
   return {
