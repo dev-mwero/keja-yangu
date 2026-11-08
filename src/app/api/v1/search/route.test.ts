@@ -92,9 +92,7 @@ describe("GET /api/v1/search", () => {
 
   it("403 for an orphaned custodian", async () => {
     user.findById.mockReturnValue(
-      buildQuery(
-        makeUser({ _id: makeObjectId("custodian"), role: "custodian", managedByOwnerId: "" }),
-      ),
+      buildQuery(makeUser({ _id: makeObjectId("custodian"), role: "custodian" })),
     );
     const res = await GET(
       buildRequest("/api/v1/search", {

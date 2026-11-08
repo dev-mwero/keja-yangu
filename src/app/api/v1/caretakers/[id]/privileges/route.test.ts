@@ -44,7 +44,6 @@ function caretakerDoc(id: string, overrides: Partial<ReturnType<typeof makeUser>
     role: "caretaker",
     name: "Test Caretaker",
     email: "care@keja.co",
-    managedByOwnerId: "",
     privileges: [],
     ...overrides,
   });
@@ -140,9 +139,7 @@ describe("PUT /api/v1/caretakers/[id]/privileges", () => {
   });
 
   it("403 for a caretaker actor", async () => {
-    user.findById.mockReturnValue(
-      buildQuery(caretakerDoc(CARE_ID, { managedByOwnerId: OWNER_ID })),
-    );
+    user.findById.mockReturnValue(buildQuery(caretakerDoc(CARE_ID, {})));
     const res = await PUT(
       putRequest(signToken(CARE_ID), TARGET_ID, { privileges: ["manage_tenants"] }),
       withParams(TARGET_ID),
@@ -181,7 +178,6 @@ describe("PUT /api/v1/caretakers/[id]/privileges", () => {
   it("owner grants privileges to an unbound caretaker", async () => {
     mockActorAndTarget(ownerDoc(), caretakerDoc(TARGET_ID));
     const updated = caretakerDoc(TARGET_ID, {
-      managedByOwnerId: OWNER_ID,
       privileges: ["manage_tenants", "manage_invoices"],
     });
     user.findOneAndUpdate.mockReturnValue(buildQuery(updated));
@@ -264,11 +260,10 @@ describe("PUT /api/v1/caretakers/[id]/privileges", () => {
   });
 
   it("system-admin sets privileges without binding the caretaker", async () => {
-    mockActorAndTarget(adminDoc(), caretakerDoc(TARGET_ID, { managedByOwnerId: OTHER_OWNER_ID }));
+    mockActorAndTarget(adminDoc(), caretakerDoc(TARGET_ID, {}));
     user.findOneAndUpdate.mockReturnValue(
       buildQuery(
         caretakerDoc(TARGET_ID, {
-          managedByOwnerId: OTHER_OWNER_ID,
           privileges: ["manage_tenants"],
         }),
       ),
@@ -318,7 +313,6 @@ describe("PUT /api/v1/caretakers/[id]/privileges", () => {
     user.findOneAndUpdate.mockReturnValue(
       buildQuery(
         caretakerDoc(TARGET_ID, {
-          managedByOwnerId: OWNER_ID,
           privileges: ["manage_tenants"],
         }),
       ),
@@ -340,7 +334,6 @@ describe("PUT /api/v1/caretakers/[id]/privileges", () => {
     const custodian = makeUser({
       _id: CARE_ID,
       role: "custodian",
-      managedByOwnerId: OWNER_ID,
       privileges: [],
     });
     user.findById.mockReturnValue(buildQuery(custodian));
@@ -357,10 +350,9 @@ describe("PUT /api/v1/caretakers/[id]/privileges", () => {
     const custodian = makeUser({
       _id: CARE_ID,
       role: "custodian",
-      managedByOwnerId: OWNER_ID,
       privileges: ["assign_privileges"],
     });
-    mockActorAndTarget(custodian, caretakerDoc(TARGET_ID, { managedByOwnerId: OTHER_OWNER_ID }));
+    mockActorAndTarget(custodian, caretakerDoc(TARGET_ID, {}));
 
     const res = await PUT(
       putRequest(signToken(CARE_ID), TARGET_ID, { privileges: ["manage_tenants"] }),

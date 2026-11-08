@@ -43,7 +43,6 @@ function caretakerRow(overrides: Partial<ReturnType<typeof makeUser>> = {}) {
   return makeUser({
     _id: CARE_1,
     role: "caretaker",
-    managedByOwnerId: OWNER_ID,
     privileges: ["manage_tenants"],
     ...overrides,
   });
@@ -118,7 +117,6 @@ describe("GET /api/v1/caretakers", () => {
     expect(data[0]).toMatchObject({
       id: CARE_1,
       name: "Test Owner",
-      managedByOwnerId: OWNER_ID,
       privileges: ["manage_tenants"],
       propertyCount: 3,
     });
@@ -314,7 +312,6 @@ describe("POST /api/v1/caretakers", () => {
       role: "caretaker",
       name: "New Care",
       email: "new@care.co",
-      managedByOwnerId: OWNER_ID,
       isActive: false,
     });
     user.create.mockResolvedValue(created);
@@ -412,7 +409,6 @@ describe("POST /api/v1/caretakers", () => {
       role: "caretaker",
       name: "New Care",
       email: "new@care.co",
-      managedByOwnerId: OWNER_ID,
       isActive: false,
     });
     user.create.mockResolvedValue(created);
@@ -435,7 +431,6 @@ describe("POST /api/v1/caretakers", () => {
       name: "Phone Care",
       phone: "+254712345678",
       role: "caretaker",
-      managedByOwnerId: OWNER_ID,
       privileges: [],
       isActive: true,
       isVerified: true,
@@ -469,7 +464,6 @@ describe("POST /api/v1/caretakers", () => {
       _id: CARE_1,
       role: "caretaker",
       email: "pending@care.co",
-      managedByOwnerId: OWNER_ID,
       isActive: false,
       isVerified: false,
     });

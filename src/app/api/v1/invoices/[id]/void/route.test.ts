@@ -49,7 +49,6 @@ function caretakerDoc() {
   return makeUser({
     _id: CARETAKER_ID,
     role: "caretaker",
-    managedByOwnerId: OWNER_ID,
     privileges: ["manage_invoices"],
   });
 }

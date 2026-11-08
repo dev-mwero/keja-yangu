@@ -1048,7 +1048,6 @@ One-off, idempotent migrations/backfills run with `tsx` and `.env.local`:
 - `backfill-approved-applications-to-tenants.ts`
 - `backfill-lease-unit-ids.ts`
 - `backfill-phone-e164.ts`
-- `backfill-property-createdBy.ts`
 - `backfill-rental-invoicing.ts`
 - `backfill-tenant-user-ids.ts`
 - `encrypt-national-ids.ts`

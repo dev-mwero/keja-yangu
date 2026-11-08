@@ -69,7 +69,6 @@ const notifyLeaseExpiryMock = vi.mocked(notifyLeaseExpiry);
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
 const ADMIN_ID = makeObjectId("admin");
-const MANAGED_OWNER_ID = makeObjectId("managed-owner");
 const PROPERTY_ID = makeObjectId("p1");
 const LEASE_A = makeObjectId("lease-a");
 const LEASE_B = makeObjectId("lease-b");
@@ -93,7 +92,6 @@ function caretakerDoc() {
   return makeUser({
     _id: CARETAKER_ID,
     role: "caretaker",
-    managedByOwnerId: MANAGED_OWNER_ID,
     privileges: ["manage_invoices"],
   });
 }
@@ -142,7 +140,6 @@ describe("POST /api/v1/invoices/generate", () => {
         makeUser({
           _id: CARETAKER_ID,
           role: "caretaker",
-          managedByOwnerId: MANAGED_OWNER_ID,
           privileges: [],
         }),
       ),

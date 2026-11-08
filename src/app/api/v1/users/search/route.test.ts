@@ -31,7 +31,6 @@ function caretakerDoc(privileges: string[]) {
   return makeUser({
     _id: CARE_ID,
     role: "caretaker",
-    managedByOwnerId: OWNER_ID,
     privileges: privileges as ReturnType<typeof makeUser>["privileges"],
   });
 }
@@ -126,14 +125,12 @@ describe("GET /api/v1/users/search", () => {
     const custodian = makeUser({
       _id: makeObjectId("custodian"),
       role: "custodian",
-      managedByOwnerId: OWNER_ID,
     });
     const found = makeUser({
       _id: makeObjectId("found-caretaker"),
       name: "Existing Caretaker",
       email: "care@keja.co",
       role: "caretaker",
-      managedByOwnerId: OWNER_ID,
       isActive: true,
       isVerified: true,
     });
@@ -216,7 +213,6 @@ describe("GET /api/v1/users/search", () => {
     const custodian = makeUser({
       _id: makeObjectId("custodian"),
       role: "custodian",
-      managedByOwnerId: OWNER_ID,
     });
     user.findById.mockReturnValue(buildQuery(custodian));
     managementAssignment.find.mockReturnValue(

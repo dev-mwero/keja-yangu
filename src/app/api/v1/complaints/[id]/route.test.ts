@@ -38,7 +38,6 @@ function caretakerUser(privileges: string[]) {
   return makeUser({
     _id: CARETAKER_ID,
     role: "caretaker",
-    managedByOwnerId: OWNER_ID,
     privileges: privileges as never,
   });
 }

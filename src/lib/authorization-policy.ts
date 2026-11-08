@@ -394,3 +394,54 @@ export function evaluatePortfolioPolicy(
 export function roleMaximumActions(role: AccessRole): PolicyAction[] {
   return [...ROLE_MAXIMUM[role]];
 }
+
+const CARETAKER_BASELINE_ACTIONS: PolicyAction[] = [
+  "property:read",
+  "unit:read",
+  "assignment:read",
+];
+
+const CARETAKER_PRIVILEGE_ACTIONS: Record<string, PolicyAction[]> = {
+  edit_property: ["property:edit"],
+  manage_units: ["unit:manage"],
+  manage_tenants: ["tenant:manage", "application:manage"],
+  process_move_requests: ["move-request:create", "move-request:manage"],
+  manage_invoices: ["invoice:read", "invoice:manage", "invoice:mark-paid", "invoice:generate"],
+  manage_complaints: ["complaint:manage"],
+  manage_announcements: ["announcement:read", "announcement:manage"],
+  send_messages: ["chat:read-own", "chat:send", "chat:manage"],
+  manage_documents: ["document:read-own", "document:manage"],
+};
+
+const UNREPRESENTABLE_CARETAKER_PRIVILEGES = new Set([
+  "create_property",
+  "delete_assigned_property",
+]);
+
+/**
+ * Maps a caretaker's privilege tokens to the assignment actions derived from
+ * them. Returned `unrepresentable` tokens exceed the caretaker maximum and
+ * must surface as warnings when staff are bound or their privileges change.
+ */
+export function caretakerPrivilegeActions(privileges: string[]): {
+  actions: PolicyAction[];
+  unrepresentable: string[];
+} {
+  const actions = [...CARETAKER_BASELINE_ACTIONS];
+  const unrepresentable: string[] = [];
+
+  for (const privilege of privileges) {
+    if (UNREPRESENTABLE_CARETAKER_PRIVILEGES.has(privilege)) {
+      unrepresentable.push(privilege);
+      continue;
+    }
+    const mapped = CARETAKER_PRIVILEGE_ACTIONS[privilege];
+    if (!mapped) {
+      unrepresentable.push(privilege);
+      continue;
+    }
+    actions.push(...mapped);
+  }
+
+  return { actions: [...new Set(actions)], unrepresentable };
+}

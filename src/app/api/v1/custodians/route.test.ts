@@ -41,7 +41,6 @@ function custodianDoc(overrides: Record<string, unknown> = {}) {
     email: "custodian@keja.co",
     phone: "",
     role: "custodian",
-    managedByOwnerId: OWNER_ID,
     isActive: true,
     save: vi.fn<() => Promise<unknown>>(),
     ...overrides,
@@ -62,9 +61,7 @@ describe("GET /api/v1/custodians", () => {
   });
 
   it("403 for a custodian (non-owner)", async () => {
-    user.findById.mockReturnValue(
-      buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian", managedByOwnerId: OWNER_ID })),
-    );
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian" })));
     const res = await GET(buildRequest("/api/v1/custodians", { token: signToken(CUSTODIAN_ID) }));
     expect(res.status).toBe(403);
   });
@@ -226,7 +223,7 @@ describe("POST /api/v1/custodians", () => {
   it("owner invites a brand-new custodian bound to themselves", async () => {
     user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
     user.findOne.mockReturnValue(buildQuery(null));
-    user.create.mockResolvedValue(custodianDoc({ managedByOwnerId: OWNER_ID, isActive: false }));
+    user.create.mockResolvedValue(custodianDoc({ isActive: false }));
 
     const res = await POST(
       buildRequest("/api/v1/custodians", {
@@ -266,9 +263,7 @@ describe("POST /api/v1/custodians", () => {
 
   it("refreshes an existing pending custodian invite instead of duplicating it", async () => {
     user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
-    user.findOne.mockReturnValue(
-      buildQuery(custodianDoc({ managedByOwnerId: "", isActive: false, isVerified: false })),
-    );
+    user.findOne.mockReturnValue(buildQuery(custodianDoc({ isActive: false, isVerified: false })));
 
     const res = await POST(
       buildRequest("/api/v1/custodians", {
@@ -292,7 +287,7 @@ describe("POST /api/v1/custodians", () => {
 
   it("links an existing active custodian under the same owner", async () => {
     user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
-    user.findOne.mockReturnValue(buildQuery(custodianDoc({ managedByOwnerId: "" })));
+    user.findOne.mockReturnValue(buildQuery(custodianDoc({})));
 
     const res = await POST(
       buildRequest("/api/v1/custodians", {
@@ -328,7 +323,6 @@ describe("POST /api/v1/custodians", () => {
       email: undefined,
       phone: "+254712345678",
       role: "custodian",
-      managedByOwnerId: OWNER_ID,
       isActive: true,
       isVerified: true,
     });

@@ -1,14 +1,13 @@
 import { isValidObjectId } from "mongoose";
-import { caretakerMigrationActions } from "@/lib/assignment-backfill";
-import { roleMaximumActions } from "@/lib/authorization-policy";
+import { caretakerPrivilegeActions, roleMaximumActions } from "@/lib/authorization-policy";
 import { ManagementAssignment } from "@/models/ManagementAssignment";
 import { User } from "@/models/User";
 
 /**
  * Mirrors a property's staff lists into `ManagementAssignment` rows — the only
  * authorization source. Caretaker permissions are derived from the user's
- * legacy privilege set so privilege changes keep working; custodians get their
- * role maximum.
+ * privilege set so privilege changes keep working; custodians get their role
+ * maximum.
  */
 export async function syncPropertyStaffAssignments(input: {
   propertyId: string;
@@ -53,7 +52,7 @@ export async function syncPropertyStaffAssignments(input: {
 
     const permissions =
       accessRole === "caretaker"
-        ? caretakerMigrationActions((user.privileges ?? []) as string[]).actions
+        ? caretakerPrivilegeActions((user.privileges ?? []) as string[]).actions
         : roleMaximumActions("custodian");
 
     // Deactivate any other active row for this principal/property/role so the
@@ -108,7 +107,7 @@ export async function syncCaretakerPrivilegeAssignments(
   privileges: string[],
   grantedByUserId: string,
 ): Promise<void> {
-  const permissions = caretakerMigrationActions(privileges).actions;
+  const permissions = caretakerPrivilegeActions(privileges).actions;
   await ManagementAssignment.updateMany(
     { principalUserId: caretakerId, accessRole: "caretaker", status: "active" },
     { $set: { permissions: [...permissions], grantedByUserId, grantedAt: new Date() } },

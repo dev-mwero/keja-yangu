@@ -29,7 +29,7 @@ function ownerDoc() {
 }
 
 function caretakerDoc() {
-  return makeUser({ _id: CARETAKER_ID, role: "caretaker", managedByOwnerId: OWNER_ID });
+  return makeUser({ _id: CARETAKER_ID, role: "caretaker" });
 }
 
 function inScopeLease() {

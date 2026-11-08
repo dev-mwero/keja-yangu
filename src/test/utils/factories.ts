@@ -25,7 +25,6 @@ export interface TestUser {
   role: Role;
   isActive: boolean;
   privileges: Privilege[];
-  managedByOwnerId: string;
   passwordHash?: string;
   isVerified?: boolean;
   phone?: string;
@@ -46,8 +45,6 @@ export interface TestProperty {
   dateCompleted?: Date | string | null;
   purpose?: PropertyPurpose;
   ownerId: string;
-  caretakerIds: string[];
-  custodianIds: string[];
   createdById: string;
   beds: number;
   baths: number;
@@ -75,7 +72,6 @@ export function makeUser(overrides: Partial<TestUser> = {}): TestUser {
     role: "owner",
     isActive: true,
     privileges: [],
-    managedByOwnerId: "",
     ...overrides,
   };
 }
@@ -93,8 +89,6 @@ export function makeProperty(overrides: Partial<TestProperty> = {}): TestPropert
     status: "available",
     published: true,
     ownerId: makeObjectId("user"),
-    caretakerIds: [],
-    custodianIds: [],
     createdById: makeObjectId("user"),
     beds: 2,
     baths: 1,

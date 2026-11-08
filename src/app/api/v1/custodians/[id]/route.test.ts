@@ -33,7 +33,6 @@ function custodianDoc(overrides: Record<string, unknown> = {}) {
     email: "custodian@keja.co",
     phone: "",
     role: "custodian",
-    managedByOwnerId: OWNER_ID,
     isActive: true,
     privileges: [],
     save: vi.fn<() => Promise<unknown>>(),
@@ -103,9 +102,7 @@ describe("PATCH /api/v1/custodians/[id]", () => {
   });
 
   it("403 for a non-owner actor", async () => {
-    user.findById.mockReturnValue(
-      buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian", managedByOwnerId: OWNER_ID })),
-    );
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian" })));
     const res = await PATCH(
       buildRequest(`/api/v1/custodians/${CUSTODIAN_ID}`, {
         method: "PATCH",
@@ -123,7 +120,6 @@ describe("PATCH /api/v1/custodians/[id]", () => {
         makeUser({
           _id: CUSTODIAN_ID,
           role: "custodian",
-          managedByOwnerId: OWNER_ID,
           privileges: ["assign_privileges"],
         }),
       ),
@@ -252,7 +248,6 @@ describe("DELETE /api/v1/custodians/[id]", () => {
         makeUser({
           _id: CUSTODIAN_ID,
           role: "custodian",
-          managedByOwnerId: OWNER_ID,
           privileges: ["assign_privileges"],
         }),
       ),
@@ -275,7 +270,6 @@ describe("DELETE /api/v1/custodians/[id]", () => {
         makeUser({
           _id: CUSTODIAN_ID,
           role: "custodian",
-          managedByOwnerId: OWNER_ID,
           privileges: ["assign_privileges"],
         }),
       ),
@@ -293,9 +287,7 @@ describe("DELETE /api/v1/custodians/[id]", () => {
   });
 
   it("403 when a caretaker tries to deactivate the owner", async () => {
-    user.findById.mockReturnValue(
-      buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "caretaker", managedByOwnerId: OWNER_ID })),
-    );
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "caretaker" })));
 
     const res = await DELETE(
       buildRequest(`/api/v1/custodians/${OWNER_ID}`, {

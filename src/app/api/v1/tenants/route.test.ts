@@ -57,13 +57,12 @@ function caretakerDoc(privileges: string[]) {
   return makeUser({
     _id: CARETAKER_ID,
     role: "caretaker",
-    managedByOwnerId: OWNER_ID,
     privileges: privileges as ReturnType<typeof makeUser>["privileges"],
   });
 }
 
 function ownedProperty() {
-  return makeProperty({ _id: PROPERTY_ID, ownerId: OWNER_ID, caretakerIds: [CARETAKER_ID] });
+  return makeProperty({ _id: PROPERTY_ID, ownerId: OWNER_ID });
 }
 
 const tenantInput = {
@@ -467,7 +466,7 @@ describe("POST /api/v1/tenants", () => {
     );
     // Property carries no legacy caretakerIds at all — assignment must suffice.
     property.findById.mockReturnValue(
-      buildQuery(makeProperty({ _id: PROPERTY_ID, ownerId: OWNER_ID, caretakerIds: [] })),
+      buildQuery(makeProperty({ _id: PROPERTY_ID, ownerId: OWNER_ID })),
     );
     tenantStub.findOne.mockReturnValue(buildQuery(null));
     const created = makeTenant({ _id: TENANT_ID, status: "pending" });
@@ -488,7 +487,7 @@ describe("POST /api/v1/tenants", () => {
     user.findById.mockReturnValue(buildQuery(caretakerDoc(["manage_tenants"])));
     property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID }]));
     property.findById.mockReturnValue(
-      buildQuery(makeProperty({ _id: PROPERTY_ID, ownerId: OWNER_ID, caretakerIds: [] })),
+      buildQuery(makeProperty({ _id: PROPERTY_ID, ownerId: OWNER_ID })),
     );
     const res = await POST(
       buildRequest("/api/v1/tenants", {
