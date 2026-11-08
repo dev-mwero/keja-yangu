@@ -6,6 +6,22 @@ import type { PropertyBlock } from "@/hooks/use-properties";
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
+vi.mock("@tanstack/react-virtual", () => ({
+  useVirtualizer: (options: { count: number }) => ({
+    getVirtualItems: () =>
+      Array.from({ length: options.count }, (_, index) => ({
+        key: index,
+        index,
+        start: index * 56,
+        end: (index + 1) * 56,
+        size: 56,
+      })),
+    getTotalSize: () => options.count * 56,
+    measureElement: () => {},
+  }),
+  measureElement: () => {},
+}));
+
 const blocks: PropertyBlock[] = [
   {
     _id: "b1",

@@ -1,6 +1,7 @@
 "use client";
 
 import { DoorOpen, Loader2, Pencil, Trash2, UserMinus, UserPlus } from "lucide-react";
+import { measureElement, useVirtualizer } from "@tanstack/react-virtual";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -125,6 +126,20 @@ export function PropertyUnitsTable({
     refetch();
   }, [refreshKey, refetch]);
 
+  // Window the table body so large portfolios (up to ~2,000 units) only
+  // mount the visible rows. Rows are measured dynamically.
+  const parentRef = useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: units.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 56,
+    overscan: 10,
+    measureElement,
+  });
+  const virtualItems = rowVirtualizer.getVirtualItems();
+  const firstVirtualItem = virtualItems[0];
+  const lastVirtualItem = virtualItems.at(-1);
+
   const blockById = useMemo(() => {
     const map = new Map<string, PropertyBlock>();
     for (const block of blocks) map.set(block._id, block);
@@ -239,114 +254,142 @@ export function PropertyUnitsTable({
   return (
     <div className="space-y-3">
       <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Unit</TableHead>
-              <TableHead>Block</TableHead>
-              <TableHead>Floor</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Beds</TableHead>
-              <TableHead className="text-right">Baths</TableHead>
-              <TableHead>Rent</TableHead>
-              {canManage && <TableHead className="text-right">Actions</TableHead>}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
+        <div ref={parentRef} className="max-h-[600px] overflow-auto">
+          <Table className="[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-card">
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={colSpan} className="py-8 text-center text-muted-foreground">
-                  Loading units…
-                </TableCell>
+                <TableHead>Unit</TableHead>
+                <TableHead>Block</TableHead>
+                <TableHead>Floor</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Beds</TableHead>
+                <TableHead className="text-right">Baths</TableHead>
+                <TableHead>Rent</TableHead>
+                {canManage && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
-            ) : error ? (
-              <TableRow>
-                <TableCell colSpan={colSpan} className="py-8 text-center text-destructive">
-                  {error}
-                </TableCell>
-              </TableRow>
-            ) : units.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={colSpan} className="py-8 text-center text-muted-foreground">
-                  <DoorOpen className="mx-auto mb-2 h-6 w-6 opacity-50" />
-                  No units yet. Add blocks and floors above to create units.
-                </TableCell>
-              </TableRow>
-            ) : (
-              units.map((unit) => (
-                <TableRow key={unit._id}>
-                  <TableCell className="font-medium">
-                    <div>{unit.name}</div>
-                    <div className="mt-0.5">
-                      <Badge
-                        variant="outline"
-                        className="text-[10px] font-normal capitalize px-1 py-0 text-muted-foreground"
-                      >
-                        {effectivePurposeFor(unit)}
-                      </Badge>
-                    </div>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={colSpan} className="py-8 text-center text-muted-foreground">
+                    Loading units…
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{unit.blockName}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {unit.floorLabel || (unit.floorLevel === 0 ? "Ground" : unit.floorLevel)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={STATUS_VARIANT[unit.status]} className="capitalize">
-                      {unit.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">{seat(unit.beds)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{seat(unit.baths)}</TableCell>
-                  <TableCell>{formatKES(effectiveFor(unit))}</TableCell>
-                  {canManage && (
-                    <TableCell className="text-right">
-                      {unit.status === "available" && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`Assign tenant to ${unit.name}`}
-                          onClick={() => {
-                            setSelectedTenantId("");
-                            setAssigningUnit(unit);
-                          }}
-                        >
-                          <UserPlus className="h-4 w-4" />
-                        </Button>
-                      )}
-                      {unit.tenantId.length > 0 && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`Unassign tenant from ${unit.name}`}
-                          onClick={() => setVacatingUnit(unit)}
-                        >
-                          <UserMinus className="h-4 w-4" />
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Edit ${unit.name}`}
-                        onClick={() => openEdit(unit)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Delete ${unit.name}`}
-                        disabled={unit.status === "occupied"}
-                        onClick={() => remove(unit)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  )}
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ) : error ? (
+                <TableRow>
+                  <TableCell colSpan={colSpan} className="py-8 text-center text-destructive">
+                    {error}
+                  </TableCell>
+                </TableRow>
+              ) : units.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={colSpan} className="py-8 text-center text-muted-foreground">
+                    <DoorOpen className="mx-auto mb-2 h-6 w-6 opacity-50" />
+                    No units yet. Add blocks and floors above to create units.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                <>
+                  {firstVirtualItem && (
+                    <tr aria-hidden>
+                      <td colSpan={colSpan} style={{ height: firstVirtualItem.start, padding: 0, border: 0 }} />
+                    </tr>
+                  )}
+                  {virtualItems.map((virtualRow) => {
+                    const unit = units[virtualRow.index];
+                    return (
+                      <TableRow
+                        key={virtualRow.key}
+                        ref={rowVirtualizer.measureElement}
+                        data-index={virtualRow.index}
+                      >
+                        <TableCell className="font-medium">
+                          <div>{unit.name}</div>
+                          <div className="mt-0.5">
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] font-normal capitalize px-1 py-0 text-muted-foreground"
+                            >
+                              {effectivePurposeFor(unit)}
+                            </Badge>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{unit.blockName}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {unit.floorLabel || (unit.floorLevel === 0 ? "Ground" : unit.floorLevel)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={STATUS_VARIANT[unit.status]} className="capitalize">
+                            {unit.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{seat(unit.beds)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{seat(unit.baths)}</TableCell>
+                        <TableCell>{formatKES(effectiveFor(unit))}</TableCell>
+                        {canManage && (
+                          <TableCell className="text-right">
+                            {unit.status === "available" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label={`Assign tenant to ${unit.name}`}
+                                onClick={() => {
+                                  setSelectedTenantId("");
+                                  setAssigningUnit(unit);
+                                }}
+                              >
+                                <UserPlus className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {unit.tenantId.length > 0 && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label={`Unassign tenant from ${unit.name}`}
+                                onClick={() => setVacatingUnit(unit)}
+                              >
+                                <UserMinus className="h-4 w-4" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Edit ${unit.name}`}
+                              onClick={() => openEdit(unit)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Delete ${unit.name}`}
+                              disabled={unit.status === "occupied"}
+                              onClick={() => remove(unit)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })}
+                  {lastVirtualItem && (
+                    <tr aria-hidden>
+                      <td
+                        colSpan={colSpan}
+                        style={{
+                          height: rowVirtualizer.getTotalSize() - lastVirtualItem.end,
+                          padding: 0,
+                          border: 0,
+                        }}
+                      />
+                    </tr>
+                  )}
+                </>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>

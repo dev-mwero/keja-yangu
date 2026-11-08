@@ -1,14 +1,17 @@
 import { isValidObjectId } from "mongoose";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { writeAuditEvent } from "@/lib/audit";
+import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { connectToDatabase } from "@/lib/mongoose";
 import { asSoftDeleteModel } from "@/lib/mongoose-soft-delete";
-import { requirePermission } from "@/lib/permissions";
+import { authenticate, requirePermission } from "@/lib/permissions";
 import { type ExistingUnit, planStructureUpdate, StructureError } from "@/lib/property-structure";
 import { structureUpdateInput } from "@/lib/schemas/structure";
 import { Block } from "@/models/Block";
 import { Property } from "@/models/Property";
 import { Unit } from "@/models/Unit";
+import { User } from "@/models/User";
 
 /**
  * Replace a property's block/floor structure, reconciling its units.
@@ -19,6 +22,12 @@ import { Unit } from "@/models/Unit";
  * removed — but only when every unit they hold is vacant.
  */
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const limit = await rateLimit(request, { windowMs: 60_000, limit: 10 });
+  if (limit instanceof NextResponse) return limit;
+
+  const originError = checkSameOrigin(request);
+  if (originError) return originError;
+
   const { id } = await context.params;
   if (!isValidObjectId(id)) {
     return NextResponse.json({ error: "Invalid property id" }, { status: 400 });
@@ -33,6 +42,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
   const authError = await requirePermission(request, "property:edit", { resource: property });
   if (authError) return authError;
 
+  const authUser = authenticate(request);
   const body = await request.json().catch(() => null);
   const parsed = structureUpdateInput.safeParse(body);
   if (!parsed.success) {
@@ -109,7 +119,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
   }
 
   if (plan.unitCreates.length > 0) {
-    await Unit.insertMany(plan.unitCreates);
+    await Unit.insertMany(plan.unitCreates, { ordered: false });
   }
 
   // Phase 2: sync standalone Block collection with plan.blocks
@@ -147,6 +157,35 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     { blocks: plan.blocks },
     { new: true, runValidators: true },
   ).lean();
+
+  if (authUser) {
+    try {
+      const actorDoc = await User.findById(authUser.userId).select("role").lean();
+      await writeAuditEvent({
+        actor: { userId: authUser.userId, role: String(actorDoc?.role ?? "unknown") },
+        action: "property.structure.update",
+        entityType: "Property",
+        entityId: id,
+        before: { unitCount: existingUnits.length },
+        after: {
+          unitsCreated: plan.unitCreates.length,
+          unitsUpdated: plan.unitUpdates.length,
+          unitsDeleted: plan.unitDeletes.length,
+          totalUnits: existingUnits.length - plan.unitDeletes.length + plan.unitCreates.length,
+        },
+        request: {
+          ip: request.headers.get("x-forwarded-for"),
+          userAgent: request.headers.get("user-agent"),
+        },
+      });
+    } catch (error) {
+      console.error("Structure audit failed", error);
+      return NextResponse.json(
+        { error: "Audit unavailable; structure update aborted" },
+        { status: 500 },
+      );
+    }
+  }
 
   return NextResponse.json({
     data: updated,
