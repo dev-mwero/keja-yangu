@@ -197,7 +197,10 @@ export async function POST(request: Request) {
           !existing.isVerified &&
           (existing.role === "caretaker" ||
             existing.role === "tenant" ||
-            existing.role === "custodian");
+            existing.role === "custodian" ||
+            existing.role === "owner" ||
+            existing.role === "admin" ||
+            existing.role === "broker");
         if (adoptable) {
           const passwordHash = await bcrypt.hash(parsed.data.password, 12);
           const verificationToken = await generateVerificationToken();
