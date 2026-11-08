@@ -1,7 +1,7 @@
 "use client";
 
 import { ShieldCheck, Users } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { SearchInput } from "@/components/SearchInput";
 import { StatCard } from "@/components/StatCard";
@@ -59,7 +59,7 @@ const ASSIGNABLE_ROLES: UserRow["role"][] = [
   "broker",
 ];
 
-export const UserRoleManager = () => {
+export const UserRoleManager = ({ refreshKey = 0 }: { refreshKey?: number }) => {
   const { user: currentUser } = useAuth();
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
@@ -78,6 +78,11 @@ export const UserRoleManager = () => {
   );
 
   const { users, pagination, loading, error, refetch } = useUsers(filters);
+
+  // Re-fetch when the parent signals a new user was created.
+  useEffect(() => {
+    if (refreshKey > 0) refetch();
+  }, [refreshKey, refetch]);
   const { promoteUserRole, pending, pendingId } = useUserRolePromotion();
 
   const [confirmTarget, setConfirmTarget] = useState<{
