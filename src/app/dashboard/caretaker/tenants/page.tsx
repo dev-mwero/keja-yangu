@@ -13,7 +13,7 @@ const CaretakerTenantsPage = () => {
   const { properties } = useProperties();
 
   const allowedProperties = useMemo(
-    () => properties.filter((p) => p.caretakerIds.includes(user?.id ?? "")).map((p) => p._id),
+    () => properties.filter((p) =>  (p.caretakerIds ?? []).includes(user?.id ?? "")).map((p) => p._id),
     [properties, user?.id],
   );
 

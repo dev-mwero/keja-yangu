@@ -55,7 +55,7 @@ export function useCaretakers(ownerId?: string, enabled = true, forPropertyAssig
         const json = await res.json();
         if (cancelled) return;
         if (res.ok) {
-          setCaretakers(json.data);
+          setCaretakers(json.data ?? []);
           setError(null);
         } else {
           setError(json.error || "Failed to fetch caretakers");

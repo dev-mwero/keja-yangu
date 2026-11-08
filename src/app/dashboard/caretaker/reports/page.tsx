@@ -22,7 +22,7 @@ const CaretakerReportsPage = () => {
 
   const { properties, loading } = useProperties({ caretakerId: user?.id });
   const mine = useMemo(
-    () => (user?.id ? properties.filter((p) => p.caretakerIds.includes(user.id)) : []),
+    () => (user?.id ? properties.filter((p) =>  (p.caretakerIds ?? []).includes(user.id)) : []),
     [properties, user?.id],
   );
   const { items: tasks } = useLocalStore<MaintenanceTask>(tasksStore);
