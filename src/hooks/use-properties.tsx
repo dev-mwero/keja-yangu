@@ -147,7 +147,7 @@ export function useProperties(filters?: PropertyFilters) {
         const json = await res.json();
         if (cancelled) return;
         if (res.ok) {
-          setProperties(json.data);
+          setProperties(json.data ?? []);
           setError(null);
         } else {
           setError(json.error || "Failed to fetch properties");

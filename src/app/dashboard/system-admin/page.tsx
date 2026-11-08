@@ -157,7 +157,7 @@ const SystemAdminDashboard = () => {
                     <TableCell className="text-muted-foreground">{p.location}</TableCell>
                     <TableCell>
                       <div className="flex -space-x-2">
-                        {p.caretakerIds.map((id) => (
+                        { (p.caretakerIds ?? []).map((id) => (
                           <div
                             key={id}
                             className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-card gradient-warm text-[10px] font-semibold text-primary-foreground"

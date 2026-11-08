@@ -52,7 +52,7 @@ export const PropertyCardWithActions = ({
           status: property.status,
           published: property.published,
           ownerId: property.ownerId,
-          caretakerIds: property.caretakerIds,
+          caretakerIds: property.caretakerIds ?? [],
           beds: property.beds,
           baths: property.baths,
           area: property.area,

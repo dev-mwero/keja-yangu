@@ -93,7 +93,7 @@ export function useTenants(filters?: TenantFilters, options?: UseTenantsOptions)
         const json = await res.json();
         if (cancelled) return;
         if (res.ok) {
-          setTenants(json.data);
+          setTenants(json.data ?? []);
           setError(null);
         } else {
           setError(json.error || "Failed to fetch tenants");

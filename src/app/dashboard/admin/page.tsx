@@ -200,7 +200,7 @@ const AdminDashboard = () => {
                     <TableCell className="text-muted-foreground">{p.location}</TableCell>
                     <TableCell>
                       <div className="flex -space-x-2">
-                        {p.caretakerIds.map((id) => {
+                        { (p.caretakerIds ?? []).map((id) => {
                           const c = caretakers.find((x) => x.id === id);
                           return (
                             <div
