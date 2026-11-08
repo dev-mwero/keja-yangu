@@ -12,7 +12,13 @@ import { CountryCodeSelect } from "@/components/account/CountryCodeSelect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/use-auth";
 import { DEFAULT_COUNTRY, isValidE164, normalizeNationalId, toE164 } from "@/lib/phone";
@@ -27,12 +33,12 @@ const signUpSchema = z.object({
   name: z.string().min(2, "Tell us your name"),
   email: z.string().email("Enter a valid email"),
   password: z.string().min(8, "At least 8 characters"),
-  role: z.enum(["tenant", "caretaker", "owner"]),
+  role: z.enum(["tenant", "caretaker", "admin"]),
   phone: z.string().min(1, "Enter your mobile number"),
   nationalId: z.string().min(4, "Enter your national ID number"),
 });
 
-const INVITED_ROLES = ["tenant", "caretaker", "owner"] as const;
+const INVITED_ROLES = ["tenant", "caretaker", "admin"] as const;
 
 const isInvitedRole = (value: string | null): value is (typeof INVITED_ROLES)[number] =>
   value !== null && (INVITED_ROLES as readonly string[]).includes(value);
@@ -134,7 +140,7 @@ const AuthForm = () => {
             ? "Sign in to continue to Keja."
             : isInvited
               ? "You've been invited — finish setting up your account."
-              : "Join as a tenant, caretaker, or owner."
+              : "Join as a tenant, caretaker, or admin."
       }
     >
       {pendingEmail ? (
@@ -301,22 +307,19 @@ const AuthForm = () => {
               </div>
               <div className="space-y-2">
                 <Label>I am a</Label>
-                <RadioGroup
+                <Select
                   value={signUpForm.watch("role")}
                   onValueChange={(v) => signUpForm.setValue("role", v as SignUpValues["role"])}
-                  className="grid grid-cols-3 gap-2"
                 >
-                  {(["tenant", "caretaker", "owner"] as const).map((r) => (
-                    <Label
-                      key={r}
-                      htmlFor={`role-${r}`}
-                      className="flex cursor-pointer items-center justify-center rounded-xl border border-border bg-card px-3 py-3 text-sm font-medium capitalize transition-all hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5 has-[:checked]:text-primary"
-                    >
-                      <RadioGroupItem id={`role-${r}`} value={r} className="sr-only" />
-                      {r}
-                    </Label>
-                  ))}
-                </RadioGroup>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="tenant">Tenant</SelectItem>
+                    <SelectItem value="caretaker">Caretaker</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <Button type="submit" className="w-full rounded-full" disabled={submitting}>
                 {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{" "}
