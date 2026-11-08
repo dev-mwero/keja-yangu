@@ -1,6 +1,7 @@
 "use client";
 
 import { UserRoleManager } from "@/components/admin/UserRoleManager";
+import { UserInviteCard } from "@/components/admin/UserInviteCard";
 import { DashboardShell } from "@/components/DashboardShell";
 import { systemAdminNav } from "@/config/dashboardNav";
 
@@ -12,6 +13,7 @@ const SystemAdminUsersPage = () => {
       title="Users & Roles"
       subtitle="Manage platform users and their roles."
     >
+      <UserInviteCard />
       <UserRoleManager />
     </DashboardShell>
   );
