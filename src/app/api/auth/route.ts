@@ -26,7 +26,7 @@ const signUpSchema = z.object({
   name: z.string().min(2, "Tell us your name"),
   email: z.string().email("Enter a valid email"),
   password: z.string().min(8, "At least 8 characters"),
-  role: z.enum(["tenant", "caretaker", "owner"]),
+  role: z.enum(["tenant", "caretaker", "admin"]),
   phone: z
     .string()
     .trim()
@@ -198,7 +198,6 @@ export async function POST(request: Request) {
           (existing.role === "caretaker" ||
             existing.role === "tenant" ||
             existing.role === "custodian" ||
-            existing.role === "owner" ||
             existing.role === "admin" ||
             existing.role === "broker");
         if (adoptable) {
