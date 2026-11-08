@@ -60,7 +60,6 @@ describe("GET /api/v1/leads", () => {
     const caretaker = makeUser({
       _id: CARETAKER_ID,
       role: "caretaker",
-      managedByOwnerId: OWNER_ID,
       privileges: [],
     });
     user.findById.mockReturnValue(buildQuery(caretaker));
@@ -133,7 +132,6 @@ describe("GET /api/v1/leads", () => {
     const custodian = makeUser({
       _id: CUSTODIAN_ID,
       role: "custodian",
-      managedByOwnerId: "",
     });
     user.findById.mockReturnValue(buildQuery(custodian));
     const res = await GET(buildRequest("/api/v1/leads", { token: signToken(CUSTODIAN_ID) }));
@@ -239,7 +237,6 @@ describe("POST /api/v1/leads", () => {
     const caretaker = makeUser({
       _id: CARETAKER_ID,
       role: "caretaker",
-      managedByOwnerId: OWNER_ID,
       privileges: [],
     });
     user.findById.mockReturnValue(buildQuery(caretaker));

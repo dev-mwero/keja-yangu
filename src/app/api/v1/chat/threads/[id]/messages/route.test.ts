@@ -49,7 +49,6 @@ function caretakerUser(privileges: string[]) {
   return makeUser({
     _id: AGENT_ID,
     role: "caretaker",
-    managedByOwnerId: OWNER_ID,
     privileges: privileges as never,
   });
 }
@@ -58,7 +57,6 @@ function custodianUser() {
   return makeUser({
     _id: CUSTODIAN_ID,
     role: "custodian",
-    managedByOwnerId: OWNER_ID,
   });
 }
 

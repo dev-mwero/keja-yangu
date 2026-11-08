@@ -56,7 +56,6 @@ describe("GET /api/v1/leads/[id]", () => {
     const caretaker = makeUser({
       _id: CARETAKER_ID,
       role: "caretaker",
-      managedByOwnerId: OWNER_ID,
       privileges: [],
     });
     user.findById.mockReturnValue(buildQuery(caretaker));
@@ -175,7 +174,6 @@ describe("PATCH /api/v1/leads/[id]", () => {
     const caretaker = makeUser({
       _id: CARETAKER_ID,
       role: "caretaker",
-      managedByOwnerId: OWNER_ID,
       privileges: [],
     });
     user.findById.mockReturnValue(buildQuery(caretaker));

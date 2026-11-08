@@ -36,7 +36,6 @@ function caretakerDoc(privileges: string[], overrides: Partial<ReturnType<typeof
   return makeUser({
     _id: CARETAKER_ID,
     role: "caretaker",
-    managedByOwnerId: OTHER_OWNER_ID,
     privileges: privileges as ReturnType<typeof makeUser>["privileges"],
     ...overrides,
   });
@@ -47,7 +46,6 @@ function ownProperty() {
     _id: PROPERTY_ID,
     ownerId: OWNER_ID,
     createdById: OWNER_ID,
-    caretakerIds: [CARETAKER_ID],
   });
 }
 
@@ -56,7 +54,6 @@ function managedProperty() {
     _id: PROPERTY_ID,
     ownerId: OTHER_OWNER_ID,
     createdById: OTHER_OWNER_ID,
-    caretakerIds: [CARETAKER_ID],
   });
 }
 
@@ -173,7 +170,6 @@ describe("GET /api/v1/properties/[id]", () => {
     const custodian = makeUser({
       _id: CUSTODIAN_ID,
       role: "custodian",
-      managedByOwnerId: "",
     });
     user.findById.mockReturnValue(buildQuery(custodian));
     managementAssignment.find.mockReturnValue(
@@ -207,7 +203,6 @@ describe("GET /api/v1/properties/[id]", () => {
     const custodian = makeUser({
       _id: CUSTODIAN_ID,
       role: "custodian",
-      managedByOwnerId: OWNER_ID,
     });
     user.findById.mockReturnValue(buildQuery(custodian));
     managementAssignment.find.mockReturnValue(
@@ -479,7 +474,6 @@ describe("PATCH /api/v1/properties/[id]", () => {
           title: "Renamed",
           ownerId: makeObjectId("spoof"),
           createdById: makeObjectId("spoof"),
-          caretakerIds: [CARETAKER_ID],
         },
       }),
       withParams(PROPERTY_ID),
@@ -695,7 +689,6 @@ describe("PATCH /api/v1/properties/[id]", () => {
     const custodian = makeUser({
       _id: CUSTODIAN_ID,
       role: "custodian",
-      managedByOwnerId: OWNER_ID,
     });
     user.findById.mockReturnValue(buildQuery(custodian));
     managementAssignment.find.mockReturnValue(
@@ -955,7 +948,6 @@ describe("DELETE /api/v1/properties/[id]", () => {
     const unassigned = makeProperty({
       _id: PROPERTY_ID,
       ownerId: OTHER_OWNER_ID,
-      caretakerIds: [],
     });
     user.findById.mockReturnValue(buildQuery(caretakerDoc(["delete_assigned_property"])));
     property.findById.mockReturnValue(buildQuery(unassigned));

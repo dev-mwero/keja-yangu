@@ -123,7 +123,6 @@ domains onto it.
 - [x] Implement `authorize(actor, action, resource)` and resource loaders.
 - [x] Add a capability endpoint (`/api/v1/capabilities`) for the frontend.
 - [x] Add assignment CRUD/invitation (`/api/v1/assignments`) for admins, custodians and caretakers.
-- [x] Backfill assignments from legacy `ownerId`/arrays in dry-run and apply modes (`scripts/backfill-management-assignments.ts`).
 - [x] Add prefix-aware dashboard guards (`proxy.ts` edge gate) and fix `AuthGuard` (deny on missing/unrecognized routes).
 - [x] Add audit write on privileged changes (`src/lib/audit.ts`, `AuditEvent`).
 - [x] Run legacy and new authorization in shadow mode on sampled routes (`src/lib/authorization-shadow.ts`).

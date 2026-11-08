@@ -67,7 +67,6 @@ const notifyOverdueInvoicesMock = vi.mocked(notifyOverdueInvoices);
 const OWNER_ID = makeObjectId("owner");
 const CARETAKER_ID = makeObjectId("caretaker");
 const ADMIN_ID = makeObjectId("admin");
-const MANAGED_OWNER_ID = makeObjectId("managed-owner");
 const TENANT_ID = makeObjectId("tenant");
 const PROPERTY_ID = makeObjectId("p1");
 const OTHER_PROPERTY_ID = makeObjectId("p2");
@@ -116,7 +115,6 @@ function caretakerDoc(privileges: string[] = ["manage_invoices"]) {
   return makeUser({
     _id: CARETAKER_ID,
     role: "caretaker",
-    managedByOwnerId: MANAGED_OWNER_ID,
     privileges: privileges as ReturnType<typeof makeUser>["privileges"],
   });
 }
@@ -229,11 +227,7 @@ describe("GET /api/v1/invoices", () => {
 
   it("scopes an assignment-backed custodian to invoices on assigned properties", async () => {
     const CUSTODIAN_ID = makeObjectId("custodian");
-    user.findById.mockReturnValue(
-      buildQuery(
-        makeUser({ _id: CUSTODIAN_ID, role: "custodian", managedByOwnerId: MANAGED_OWNER_ID }),
-      ),
-    );
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian" })));
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {

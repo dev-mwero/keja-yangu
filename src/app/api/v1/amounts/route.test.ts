@@ -234,7 +234,7 @@ describe("GET /api/v1/amounts", () => {
   });
 
   it("scopes a custodian to the managing owner", async () => {
-    const token = signIn("custodian", { managedByOwnerId: OWNER_ID });
+    const token = signIn("custodian", {});
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
@@ -265,7 +265,6 @@ describe("GET /api/v1/amounts", () => {
 
   it("scopes a caretaker to their assigned properties", async () => {
     const token = signIn("caretaker", {
-      managedByOwnerId: OWNER_ID,
       privileges: ["manage_invoices"],
     });
     managementAssignment.find.mockReturnValue(
@@ -335,7 +334,6 @@ describe("GET /api/v1/amounts", () => {
 
   it("returns 403 for a caretaker asking about a property outside their assignment", async () => {
     const token = signIn("caretaker", {
-      managedByOwnerId: OWNER_ID,
       privileges: ["manage_invoices"],
     });
     stubReads({ docs: [propertyWithHierarchy()] });

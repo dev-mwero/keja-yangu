@@ -33,7 +33,6 @@ const notifyMoveRequestDecidedMock = vi.mocked(notifyMoveRequestDecided);
 const OWNER_ID = makeObjectId("owner");
 const CUSTODIAN_ID = makeObjectId("custodian");
 const CARETAKER_ID = makeObjectId("caretaker");
-const OTHER_OWNER_ID = makeObjectId("other-owner");
 const TENANT_ID = makeObjectId("tenant");
 const TENANT_DOC_ID = makeObjectId("tenantdoc");
 const PROP_ID = makeObjectId("prop");
@@ -124,11 +123,7 @@ describe("PATCH /api/v1/move-requests/[id]", () => {
   });
 
   it("403 when a custodian decides a foreign owner's request", async () => {
-    user.findById.mockReturnValue(
-      buildQuery(
-        makeUser({ _id: CUSTODIAN_ID, role: "custodian", managedByOwnerId: OTHER_OWNER_ID }),
-      ),
-    );
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian" })));
     moverrequest.findById.mockResolvedValue(moveRequest());
     const res = await PATCH(
       buildRequest(`/api/v1/move-requests/${MR_ID}`, {
@@ -148,7 +143,6 @@ describe("PATCH /api/v1/move-requests/[id]", () => {
         makeUser({
           _id: CARETAKER_ID,
           role: "caretaker",
-          managedByOwnerId: OWNER_ID,
           privileges: ["process_move_requests"] as never,
         }),
       ),
@@ -174,7 +168,6 @@ describe("PATCH /api/v1/move-requests/[id]", () => {
         makeUser({
           _id: CARETAKER_ID,
           role: "caretaker",
-          managedByOwnerId: OWNER_ID,
           privileges: ["process_move_requests"] as never,
         }),
       ),

@@ -151,7 +151,6 @@ describe("GET /api/v1/properties/[id]/unit-counts", () => {
         makeProperty({
           _id: PROPERTY_ID,
           ownerId: OWNER_ID,
-          caretakerIds: [makeObjectId("other-caretaker")],
         }),
       ),
     );
@@ -160,7 +159,6 @@ describe("GET /api/v1/properties/[id]/unit-counts", () => {
         makeUser({
           _id: CARETAKER_ID,
           role: "caretaker",
-          managedByOwnerId: OWNER_ID,
         }),
       ),
     );
@@ -182,7 +180,6 @@ describe("GET /api/v1/properties/[id]/unit-counts", () => {
         makeProperty({
           _id: PROPERTY_ID,
           ownerId: OWNER_ID,
-          caretakerIds: [CARETAKER_ID],
         }),
       ),
     );
@@ -191,7 +188,6 @@ describe("GET /api/v1/properties/[id]/unit-counts", () => {
         makeUser({
           _id: CARETAKER_ID,
           role: "caretaker",
-          managedByOwnerId: OWNER_ID,
         }),
       ),
     );

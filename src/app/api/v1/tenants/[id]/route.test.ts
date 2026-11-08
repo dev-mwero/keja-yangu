@@ -42,7 +42,6 @@ function caretakerDoc(privileges: string[]) {
   return makeUser({
     _id: CARETAKER_ID,
     role: "caretaker",
-    managedByOwnerId: OWNER_ID,
     privileges: privileges as ReturnType<typeof makeUser>["privileges"],
   });
 }
@@ -300,7 +299,7 @@ describe("PATCH /api/v1/tenants/[id]", () => {
     tenantStub.findById.mockReturnValue(buildQuery(inScopeTenant()));
     // target property is NOT assigned to this caretaker
     property.findById.mockReturnValue(
-      buildQuery(makeProperty({ _id: OTHER_PROPERTY_ID, ownerId: OWNER_ID, caretakerIds: [] })),
+      buildQuery(makeProperty({ _id: OTHER_PROPERTY_ID, ownerId: OWNER_ID })),
     );
 
     const res = await PATCH(

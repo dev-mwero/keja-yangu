@@ -23,7 +23,7 @@ Scale matters (recounted against Git-tracked source on 2026-11-02):
 - 985 `ownerId` references under `src/`;
 - 341 `"owner"` role literals across 127 TypeScript/TSX files;
 - 173 test files and 73 API route handlers;
-- 14 existing migration scripts, including `backfill-management-assignments.ts`.
+- 13 existing migration scripts.
 
 This is a staged data and code migration, not a search-and-replace.
 

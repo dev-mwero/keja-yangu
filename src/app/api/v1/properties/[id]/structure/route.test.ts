@@ -236,7 +236,6 @@ describe("PUT /api/v1/properties/[id]/structure", () => {
         makeUser({
           _id: CARETAKER_ID,
           role: "caretaker",
-          managedByOwnerId: OWNER_ID,
           privileges: ["edit_property"],
         }),
       ),

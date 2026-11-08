@@ -31,7 +31,6 @@ const notifyUnitAvailableMock = vi.mocked(notifyUnitAvailable);
 
 const OWNER_ID = makeObjectId("owner");
 const CUSTODIAN_ID = makeObjectId("custodian");
-const OTHER_OWNER_ID = makeObjectId("other-owner");
 const TENANT_ID = makeObjectId("tenant");
 const CARETAKER_ID = makeObjectId("caretaker");
 const UNIT_ID = makeObjectId("unit");
@@ -128,11 +127,7 @@ describe("GET /api/v1/units/[id]", () => {
   });
 
   it("403 when a custodian reads a foreign owner's unit", async () => {
-    user.findById.mockReturnValue(
-      buildQuery(
-        makeUser({ _id: CUSTODIAN_ID, role: "custodian", managedByOwnerId: OTHER_OWNER_ID }),
-      ),
-    );
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian" })));
     unit.findById.mockReturnValue(buildQuery(unitDoc({ ownerId: OWNER_ID })));
     const res = await GET(
       buildRequest(`/api/v1/units/${UNIT_ID}`, { token: signToken(CUSTODIAN_ID) }),
@@ -159,7 +154,6 @@ describe("GET /api/v1/units/[id]", () => {
         makeUser({
           _id: CARETAKER_ID,
           role: "caretaker",
-          managedByOwnerId: OWNER_ID,
         }),
       ),
     );
@@ -179,7 +173,6 @@ describe("GET /api/v1/units/[id]", () => {
         makeUser({
           _id: CARETAKER_ID,
           role: "caretaker",
-          managedByOwnerId: OWNER_ID,
         }),
       ),
     );
@@ -246,7 +239,6 @@ describe("PATCH /api/v1/units/[id]", () => {
         makeUser({
           _id: CARETAKER_ID,
           role: "caretaker",
-          managedByOwnerId: OWNER_ID,
           privileges: ["manage_units"],
         }),
       ),
@@ -321,11 +313,7 @@ describe("PATCH /api/v1/units/[id]", () => {
   });
 
   it("403 for a custodian managing a foreign owner's unit", async () => {
-    user.findById.mockReturnValue(
-      buildQuery(
-        makeUser({ _id: CUSTODIAN_ID, role: "custodian", managedByOwnerId: OTHER_OWNER_ID }),
-      ),
-    );
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian" })));
     unit.findById.mockReturnValue(buildQuery(unitDoc({ ownerId: OWNER_ID })));
 
     const res = await PATCH(

@@ -54,7 +54,6 @@ function caretakerUser(privileges: CaretakerPrivilege[], overrides: Partial<Test
   return makeUser({
     _id: CARETAKER_ID,
     role: "caretaker",
-    managedByOwnerId: OTHER_OWNER_ID,
     privileges,
     ...overrides,
   });
@@ -68,7 +67,6 @@ function custodianUser(overrides: Partial<TestUser> = {}) {
   return makeUser({
     _id: CUSTODIAN_ID,
     role: "custodian",
-    managedByOwnerId: OTHER_OWNER_ID,
     ...overrides,
   });
 }
@@ -140,7 +138,6 @@ describe("requirePermission — caretaker privilege gating", () => {
         makeUser({
           _id: CARETAKER_ID,
           role: "caretaker",
-          managedByOwnerId: OTHER_OWNER_ID,
           privileges: privileges as ReturnType<typeof makeUser>["privileges"],
         }),
       ),
@@ -322,7 +319,7 @@ describe("requirePermission — caretaker", () => {
   }
 
   it("403 for all actions when the caretaker is orphaned (no assignments)", async () => {
-    const mocker = caretakerUser([], { managedByOwnerId: "" });
+    const mocker = caretakerUser([]);
     for (const action of ALL_ACTIONS) {
       expect((await guard(action, undefined, mocker))?.status).toBe(403);
     }
@@ -638,7 +635,7 @@ describe("getTenantScope", () => {
   });
 
   it("403 for an orphaned caretaker", async () => {
-    user.findById.mockReturnValue(buildQuery(caretakerUser([], { managedByOwnerId: "" })));
+    user.findById.mockReturnValue(buildQuery(caretakerUser([])));
     const res = await getTenantScope(
       buildRequest("/api/v1/tenants", { token: signToken(CARETAKER_ID) }),
     );
@@ -810,7 +807,7 @@ describe("requirePermission — invoicing actions", () => {
   });
 
   it("orphaned caretaker is denied every invoicing action", async () => {
-    const mocker = caretakerUser([], { managedByOwnerId: "" });
+    const mocker = caretakerUser([]);
     for (const action of INVOICE_ACTIONS) {
       expect((await guard(action, undefined, mocker))?.status).toBe(403);
     }
@@ -874,7 +871,7 @@ describe("requirePermission — notification & settings actions", () => {
   });
 
   it("orphaned caretaker is denied every notification/settings action", async () => {
-    const mocker = caretakerUser([], { managedByOwnerId: "" });
+    const mocker = caretakerUser([]);
     for (const action of NOTIFICATION_SETTINGS_ACTIONS) {
       expect((await guard(action, undefined, mocker))?.status).toBe(403);
     }
@@ -1015,7 +1012,7 @@ describe("requirePermission — communication actions", () => {
   });
 
   it("orphaned caretaker is denied every communication action", async () => {
-    const mocker = caretakerUser([], { managedByOwnerId: "" });
+    const mocker = caretakerUser([]);
     for (const action of [...COMMUNICATION_SELF_ACTIONS, ...COMMUNICATION_MANAGE_ACTIONS]) {
       expect((await guard(action, undefined, mocker))?.status).toBe(403);
     }
@@ -1156,7 +1153,7 @@ describe("getTenantScope — custodian", () => {
   });
 
   it("403 for an orphaned custodian", async () => {
-    user.findById.mockReturnValue(buildQuery(custodianUser({ managedByOwnerId: "" })));
+    user.findById.mockReturnValue(buildQuery(custodianUser()));
     const res = await getTenantScope(
       buildRequest("/api/v1/tenants", { token: signToken(CUSTODIAN_ID) }),
     );

@@ -108,9 +108,7 @@ describe("GET /api/v1/units", () => {
 
   it("scopes a custodian to the managing owner's units", async () => {
     const propertyId = makeObjectId("custodian-property");
-    user.findById.mockReturnValue(
-      buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian", managedByOwnerId: "" })),
-    );
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian" })));
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
@@ -133,9 +131,7 @@ describe("GET /api/v1/units", () => {
 
   it("scopes an assignment-backed custodian to assigned properties", async () => {
     const propertyId = makeObjectId("custodian-property");
-    user.findById.mockReturnValue(
-      buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian", managedByOwnerId: "" })),
-    );
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian" })));
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
@@ -157,9 +153,7 @@ describe("GET /api/v1/units", () => {
   });
 
   it("403 for an orphaned custodian", async () => {
-    user.findById.mockReturnValue(
-      buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian", managedByOwnerId: "" })),
-    );
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian" })));
     const res = await GET(buildRequest("/api/v1/units", { token: signToken(CUSTODIAN_ID) }));
     expect(res.status).toBe(200);
     expect(unit.find).not.toHaveBeenCalled();
@@ -168,9 +162,7 @@ describe("GET /api/v1/units", () => {
 
   it("scopes a caretaker to assigned properties of the managing owner", async () => {
     const p1 = makeObjectId("p1");
-    user.findById.mockReturnValue(
-      buildQuery(makeUser({ _id: CARETAKER_ID, role: "caretaker", managedByOwnerId: OWNER_ID })),
-    );
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: CARETAKER_ID, role: "caretaker" })));
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
@@ -194,9 +186,7 @@ describe("GET /api/v1/units", () => {
   it("403 when a caretaker requests units for an unassigned property", async () => {
     const assignedPropertyId = makeObjectId("assigned-property");
     const otherPropertyId = makeObjectId("other-property");
-    user.findById.mockReturnValue(
-      buildQuery(makeUser({ _id: CARETAKER_ID, role: "caretaker", managedByOwnerId: OWNER_ID })),
-    );
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: CARETAKER_ID, role: "caretaker" })));
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {

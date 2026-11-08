@@ -57,7 +57,6 @@ it("owner create assigns an active owner-scoped custodian", async () => {
     makeProperty({
       _id: makeObjectId("p-assigned"),
       ownerId: OWNER_ID,
-      custodianIds: [makeObjectId("custodian")],
     }),
   );
   const custodianId = makeObjectId("custodian");
@@ -113,7 +112,6 @@ it("caretakers cannot submit staff assignments when creating a property", async 
   const caretaker = makeUser({
     _id: CARETAKER_ID,
     role: "caretaker",
-    managedByOwnerId: OTHER_OWNER_ID,
     privileges: ["create_property"],
   });
   user.findById.mockReturnValue(buildQuery(caretaker));
@@ -149,8 +147,6 @@ describe("GET /api/v1/properties", () => {
       publicDocs.map((d) => ({
         ...d,
         ownerId: undefined,
-        caretakerIds: undefined,
-        custodianIds: undefined,
         createdById: undefined,
       })),
     );
@@ -295,7 +291,6 @@ describe("GET /api/v1/properties", () => {
     const caretaker = makeUser({
       _id: CARETAKER_ID,
       role: "caretaker",
-      managedByOwnerId: OTHER_OWNER_ID,
       privileges: ["edit_property"],
     });
     user.findById.mockReturnValue(buildQuery(caretaker));
@@ -352,7 +347,6 @@ describe("GET /api/v1/properties", () => {
     const caretaker = makeUser({
       _id: CARETAKER_ID,
       role: "caretaker",
-      managedByOwnerId: OTHER_OWNER_ID,
       privileges: [],
     });
     user.findById.mockReturnValue(buildQuery(caretaker));
@@ -388,7 +382,6 @@ describe("GET /api/v1/properties", () => {
     const custodian = makeUser({
       _id: custodianId,
       role: "custodian",
-      managedByOwnerId: OWNER_ID,
     });
     user.findById.mockReturnValue(buildQuery(custodian));
     managementAssignment.find.mockReturnValue(
@@ -441,7 +434,6 @@ describe("POST /api/v1/properties", () => {
     const caretaker = makeUser({
       _id: CARETAKER_ID,
       role: "caretaker",
-      managedByOwnerId: OTHER_OWNER_ID,
       privileges: [],
     });
     user.findById.mockReturnValue(buildQuery(caretaker));
@@ -465,7 +457,6 @@ describe("POST /api/v1/properties", () => {
       const caretaker = makeUser({
         _id: CARETAKER_ID,
         role: "caretaker",
-        managedByOwnerId: OTHER_OWNER_ID,
         privileges: [...privileges],
       });
       user.findById.mockReturnValue(buildQuery(caretaker));
@@ -484,7 +475,6 @@ describe("POST /api/v1/properties", () => {
     const caretaker = makeUser({
       _id: CARETAKER_ID,
       role: "caretaker",
-      managedByOwnerId: "",
       privileges: ["create_property"],
     });
     user.findById.mockReturnValue(buildQuery(caretaker));
@@ -544,7 +534,6 @@ describe("POST /api/v1/properties", () => {
     const caretakerLookup = makeUser({
       _id: CARETAKER_ID,
       role: "caretaker",
-      managedByOwnerId: OWNER_ID,
     });
     user.find.mockReturnValue(buildQuery([caretakerLookup]));
 
@@ -555,7 +544,6 @@ describe("POST /api/v1/properties", () => {
         body: {
           ...validPropertyBody,
           ownerId: spoofed,
-          caretakerIds: [CARETAKER_ID],
           published: true,
         },
       }),
@@ -609,7 +597,6 @@ describe("POST /api/v1/properties", () => {
       makeProperty({
         _id: makeObjectId("p1"),
         ownerId: OTHER_OWNER_ID,
-        caretakerIds: [CARETAKER_ID],
       }),
     );
 
