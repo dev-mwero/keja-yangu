@@ -35,6 +35,11 @@ export function defaultUnitName(level: number, index: number): string {
   return `${floorPrefix(level)}${letterLabel(index)}`;
 }
 
+/** Default duplex unit name spanning two floors: `3A-4A`, `GA-1A`, ... */
+export function defaultDuplexUnitName(level: number, nextLevel: number, index: number): string {
+  return `${floorPrefix(level)}${letterLabel(index)}-${floorPrefix(nextLevel)}${letterLabel(index)}`;
+}
+
 /**
  * Build `count` unit names for a floor. `customNames` (if provided) override the
  * generated name at the matching index; blank custom entries fall back to the
@@ -45,6 +50,23 @@ export function buildUnitNames(level: number, count: number, customNames?: strin
   return Array.from({ length: total }, (_, i) => {
     const custom = customNames?.[i]?.trim();
     return custom && custom.length > 0 ? custom : defaultUnitName(level, i);
+  });
+}
+
+/**
+ * Build `count` duplex unit names spanning `level` and `nextLevel`.
+ * `customNames` (if provided) override the generated name at the matching index.
+ */
+export function buildDuplexUnitNames(
+  level: number,
+  nextLevel: number,
+  count: number,
+  customNames?: string[],
+): string[] {
+  const total = Math.max(0, Math.floor(count));
+  return Array.from({ length: total }, (_, i) => {
+    const custom = customNames?.[i]?.trim();
+    return custom && custom.length > 0 ? custom : defaultDuplexUnitName(level, nextLevel, i);
   });
 }
 

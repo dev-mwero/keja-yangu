@@ -17,6 +17,12 @@ const unitSchema = new Schema(
     // Unit name: floor digit + letter, e.g. "3A", "GA". Unique within a block.
     name: { type: String, required: true, trim: true },
     letter: { type: String, trim: true, default: "" },
+    // Number of floors this unit spans (1 = normal, 2 = duplex).
+    spanFloors: { type: Number, min: 1, max: 2, default: 1 },
+    // ID of the secondary floor (empty if single-floor). Only set for duplex units.
+    secondaryFloorId: { type: String, default: "" },
+    // Level of the secondary floor (0 if single-floor). Only set for duplex units.
+    secondaryFloorLevel: { type: Number, default: 0 },
     status: { type: String, enum: [...UNIT_STATUSES], default: "available" },
     // Timestamp of the last status transition; used to key availability
     // notifications so each transition notifies favourites exactly once.
