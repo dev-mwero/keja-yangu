@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { writeAuditEvent } from "@/lib/audit";
+import { getManagedOwnerId } from "@/lib/managed-owner";
 import { connectToDatabase } from "@/lib/mongoose";
 import { authenticate, CUSTODIAN_PRIVILEGES, getAdminAssignmentScope } from "@/lib/permissions";
 import { Property } from "@/models/Property";
@@ -22,7 +23,7 @@ async function loadActorAndCustodian(request: NextRequest, id: string) {
   if (!auth) return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
 
   await connectToDatabase();
-  const actor = await User.findById(auth.userId).select("role isActive managedByOwnerId").lean();
+  const actor = await User.findById(auth.userId).select("role isActive").lean();
   if (!actor?.isActive) {
     return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   }
@@ -42,11 +43,15 @@ async function loadActorAndCustodian(request: NextRequest, id: string) {
           .lean()
       : [];
     const allowedOwners = new Set(assignedProperties.map((property) => String(property.ownerId)));
-    if (!allowedOwners.has(String(custodian.managedByOwnerId ?? ""))) {
+    const custodianManaged = await getManagedOwnerId(String(custodian._id));
+    if (!allowedOwners.has(custodianManaged)) {
       return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
     }
-  } else if (actor.role !== "system-admin" && custodian.managedByOwnerId !== String(actor._id)) {
-    return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+  } else if (actor.role !== "system-admin") {
+    const custodianManaged = await getManagedOwnerId(String(custodian._id));
+    if (custodianManaged !== String(actor._id)) {
+      return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+    }
   }
 
   return { actor, custodian };
@@ -103,7 +108,7 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
       name: custodian.name,
       email: custodian.email,
       phone: custodian.phone ?? "",
-      managedByOwnerId: custodian.managedByOwnerId ?? "",
+      managedByOwnerId: await getManagedOwnerId(String(custodian._id)),
       privileges: custodian.privileges ?? [],
     },
   });
@@ -119,8 +124,7 @@ export async function DELETE(request: NextRequest, ctx: RouteContext) {
   if (result.error) return result.error;
   const { actor, custodian } = result;
 
-  const before = { managedByOwnerId: custodian.managedByOwnerId ?? "", isActive: true };
-  custodian.managedByOwnerId = "";
+  const before = { isActive: true };
   custodian.isActive = false;
   await custodian.save();
 
@@ -130,7 +134,7 @@ export async function DELETE(request: NextRequest, ctx: RouteContext) {
     entityType: "user",
     entityId: id,
     before,
-    after: { managedByOwnerId: "", isActive: false },
+    after: { isActive: false },
     request: {
       ip: request.headers.get("x-forwarded-for"),
       userAgent: request.headers.get("user-agent"),

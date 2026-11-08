@@ -116,14 +116,12 @@ describe("isPrivilegedCustodian", () => {
     role: "custodian" as const,
     privileges: ["assign_privileges"],
     isActive: true,
-    managedByOwnerId: "owner-1",
   };
 
-  it("is true only for active, owner-bound custodians with assign_privileges", () => {
+  it("is true only for active custodians with assign_privileges", () => {
     expect(isPrivilegedCustodian(privileged)).toBe(true);
     expect(isPrivilegedCustodian({ ...privileged, privileges: [] })).toBe(false);
     expect(isPrivilegedCustodian({ ...privileged, isActive: false })).toBe(false);
-    expect(isPrivilegedCustodian({ ...privileged, managedByOwnerId: "" })).toBe(false);
     expect(isPrivilegedCustodian({ ...privileged, role: "owner" })).toBe(false);
     expect(isPrivilegedCustodian({ ...privileged, role: "caretaker" })).toBe(false);
   });
@@ -602,7 +600,7 @@ describe("getTenantScope", () => {
     expect(res.filter).toEqual({});
   });
 
-  it("caretaker scope follows active assignments (no legacy property query)", async () => {
+  it("caretaker scope follows active assignments", async () => {
     const p1 = makeObjectId("p1");
     const p2 = makeObjectId("p2");
     user.findById.mockReturnValue(buildQuery(caretakerUser(["manage_tenants"])));
@@ -635,7 +633,8 @@ describe("getTenantScope", () => {
     if (res instanceof Response) return;
     expect(res.filter).toEqual({ propertyId: { $in: [p1, p2] } });
     expect(res.assignedPropertyIds).toEqual([p1, p2]);
-    expect(property.find).not.toHaveBeenCalled();
+    // Owner binding is derived from the assigned properties.
+    expect(property.find).toHaveBeenCalled();
   });
 
   it("403 for an orphaned caretaker", async () => {

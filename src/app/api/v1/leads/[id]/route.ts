@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { getManagedOwnerId } from "@/lib/managed-owner";
 import { connectToDatabase } from "@/lib/mongoose";
 import { authenticate, getAdminAssignmentScope, requirePermission } from "@/lib/permissions";
 import { Lead } from "@/models/Lead";
@@ -26,19 +27,24 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const user = await User.findById(authUser.userId).select("role isActive managedByOwnerId").lean();
+  const user = await User.findById(authUser.userId).select("role isActive").lean();
   if (!user?.isActive) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const managedOwnerId =
+    user.role === "custodian" || user.role === "caretaker"
+      ? await getManagedOwnerId(String(user._id))
+      : "";
 
   const filter: Record<string, unknown> = { _id: id };
   if (user.role === "owner") {
     filter.ownerId = authUser.userId;
   } else if (user.role === "custodian") {
-    if (!user.managedByOwnerId) {
+    if (!managedOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    filter.ownerId = user.managedByOwnerId;
+    filter.ownerId = managedOwnerId;
   } else if (user.role === "admin") {
     const scope = await getAdminAssignmentScope(authUser.userId, "lead:read");
     const scopes: Record<string, unknown>[] = [];
@@ -90,24 +96,29 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const user = await User.findById(authUser.userId).select("role isActive managedByOwnerId").lean();
+  const user = await User.findById(authUser.userId).select("role isActive").lean();
   if (!user?.isActive) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const managedOwnerId =
+    user.role === "custodian" || user.role === "caretaker"
+      ? await getManagedOwnerId(String(user._id))
+      : "";
 
   const filter: Record<string, unknown> = { _id: id };
   if (user.role === "owner") {
     filter.ownerId = authUser.userId;
   } else if (user.role === "custodian") {
-    if (!user.managedByOwnerId) {
+    if (!managedOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    filter.ownerId = user.managedByOwnerId;
+    filter.ownerId = managedOwnerId;
   } else if (user.role === "caretaker") {
-    if (!user.managedByOwnerId) {
+    if (!managedOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    filter.ownerId = user.managedByOwnerId;
+    filter.ownerId = managedOwnerId;
   } else if (user.role === "admin") {
     const scope = await getAdminAssignmentScope(authUser.userId, "lead:manage");
     const scopes: Record<string, unknown>[] = [];

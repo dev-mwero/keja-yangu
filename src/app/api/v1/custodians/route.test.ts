@@ -11,6 +11,10 @@ vi.mock("@/lib/audit", () => ({
   writeAuditEvent: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
+vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 vi.mock("@/lib/email", () => ({ sendInviteEmail: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("bcryptjs", () => ({ default: { hash: vi.fn().mockResolvedValue("hashed") } }));
 
@@ -18,7 +22,8 @@ import { GET, POST } from "@/app/api/v1/custodians/route";
 import { writeAuditEvent } from "@/lib/audit";
 import { sendInviteEmail } from "@/lib/email";
 
-const { user } = getModelStubs();
+const { user, property, managementAssignment } = getModelStubs();
+const PROP_ID = makeObjectId("prop");
 
 const OWNER_ID = makeObjectId("owner");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
@@ -65,11 +70,33 @@ describe("GET /api/v1/custodians", () => {
   });
 
   it("lists same-owner custodians with limited fields for property assignment", async () => {
-    user.findById.mockReturnValue(
-      buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian", managedByOwnerId: OWNER_ID })),
-    );
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian" })));
     const chain = buildQuery([custodianDoc()]);
     user.find.mockReturnValue(chain);
+    managementAssignment.find
+      .mockReturnValueOnce(
+        buildQuery([
+          {
+            principalUserId: CUSTODIAN_ID,
+            accessRole: "custodian",
+            scopeType: "property",
+            propertyId: PROP_ID,
+            status: "active",
+          },
+        ]),
+      )
+      .mockReturnValue(
+        buildQuery([
+          {
+            principalUserId: CUSTODIAN_ID,
+            accessRole: "custodian",
+            scopeType: "property",
+            propertyId: PROP_ID,
+            status: "active",
+          },
+        ]),
+      );
+    property.find.mockReturnValue(buildQuery([{ _id: PROP_ID, ownerId: OWNER_ID }]));
 
     const res = await GET(
       buildRequest("/api/v1/custodians", {
@@ -83,9 +110,9 @@ describe("GET /api/v1/custodians", () => {
       role: "custodian",
       isActive: { $ne: false },
       isVerified: { $ne: false },
-      managedByOwnerId: OWNER_ID,
+      _id: { $in: [CUSTODIAN_ID] },
     });
-    expect(chain.select).toHaveBeenCalledWith("name managedByOwnerId");
+    expect(chain.select).toHaveBeenCalledWith("name");
     const data = (await json(res)).data as Array<Record<string, unknown>>;
     expect(data[0]).toMatchObject({ id: CUSTODIAN_ID, name: "Custodian One" });
     expect(data[0].email).toBeUndefined();
@@ -96,10 +123,25 @@ describe("GET /api/v1/custodians", () => {
   it("lists an owner's custodians", async () => {
     user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
     user.find.mockReturnValue(buildQuery([custodianDoc()]));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CUSTODIAN_ID,
+          accessRole: "custodian",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          status: "active",
+        },
+      ]),
+    );
+    property.find.mockReturnValue(buildQuery([{ _id: PROP_ID, ownerId: OWNER_ID }]));
 
     const res = await GET(buildRequest("/api/v1/custodians", { token: signToken(OWNER_ID) }));
     expect(res.status).toBe(200);
-    expect(user.find).toHaveBeenCalledWith({ role: "custodian", managedByOwnerId: OWNER_ID });
+    expect(user.find).toHaveBeenCalledWith({
+      role: "custodian",
+      _id: { $in: [CUSTODIAN_ID] },
+    });
     const body = await json(res);
     expect(body.data).toHaveLength(1);
   });
@@ -118,6 +160,18 @@ describe("GET /api/v1/custodians", () => {
   it("lets a system-admin filter by owner", async () => {
     user.findById.mockReturnValue(buildQuery(makeUser({ _id: ADMIN_ID, role: "system-admin" })));
     user.find.mockReturnValue(buildQuery([]));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CUSTODIAN_ID,
+          accessRole: "custodian",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          status: "active",
+        },
+      ]),
+    );
+    property.find.mockReturnValue(buildQuery([{ _id: PROP_ID, ownerId: OWNER_ID }]));
     const res = await GET(
       buildRequest("/api/v1/custodians", {
         token: signToken(ADMIN_ID),
@@ -127,7 +181,7 @@ describe("GET /api/v1/custodians", () => {
     expect(res.status).toBe(200);
     expect(user.find).toHaveBeenCalledWith({
       role: "custodian",
-      managedByOwnerId: OWNER_ID,
+      _id: { $in: [CUSTODIAN_ID] },
     });
   });
 });
@@ -186,7 +240,7 @@ describe("POST /api/v1/custodians", () => {
       expect.objectContaining({ action: "custodian.invited", entityType: "user" }),
     );
     expect(user.create).toHaveBeenCalledWith(
-      expect.objectContaining({ role: "custodian", managedByOwnerId: OWNER_ID, isActive: false }),
+      expect.objectContaining({ role: "custodian", isActive: false }),
     );
     expect(sendInviteEmail).toHaveBeenCalledWith(
       "new@keja.co",
@@ -296,7 +350,6 @@ describe("POST /api/v1/custodians", () => {
       expect.objectContaining({
         phone: "+254712345678",
         role: "custodian",
-        managedByOwnerId: OWNER_ID,
         isActive: true,
         isVerified: true,
         email: undefined,

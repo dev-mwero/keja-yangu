@@ -99,10 +99,84 @@ export function resetModelStubs() {
     }
   }
   // Assignment-backed staff scope defaults to "no assignments" so custodian/
-  // caretaker fixtures exercise the legacy managedByOwnerId fallback unless a
-  // test opts into assignment coverage with its own mock. Previously
-  // undefined, which broke the staff scope resolver.
+  // caretaker fixtures exercise the derived-owner path unless a test opts into
+  // assignment coverage with its own mock.
   stubs.managementAssignment.find.mockReturnValue(buildQuery([]));
+  // `getManagedOwnerId` derives the owner via `Property.find`; default to an
+  // empty portfolio rather than `undefined` so unstubbed staff flows do not
+  // crash on `.select()`.
+  stubs.property.find.mockReturnValue(buildQuery([]));
+}
+
+const ALL_ACTIONS = [
+  "property:create",
+  "property:edit",
+  "property:delete",
+  "property-type:manage",
+  "recycle-bin:manage",
+  "unit:read",
+  "unit:manage",
+  "custodian:manage",
+  "tenant:manage",
+  "move-request:create",
+  "move-request:manage",
+  "application:manage",
+  "lease:manage",
+  "invoice:read",
+  "invoice:manage",
+  "invoice:mark-paid",
+  "invoice:generate",
+  "invoice:read-own",
+  "lead:manage",
+  "lead:read",
+  "notification:read-own",
+  "notification:manage",
+  "settings:read",
+  "settings:write",
+  "complaint:read-own",
+  "complaint:create",
+  "complaint:manage",
+  "chat:read-own",
+  "chat:send",
+  "chat:manage",
+  "announcement:read",
+  "announcement:manage",
+  "document:read-own",
+  "document:manage",
+] as const;
+
+/**
+ * Wires the shared stubs so a custodian/caretaker is assignment-backed across a
+ * portfolio. Must be called after `resetModelStubs()`.
+ */
+export function mockStaffPortfolio(options: {
+  userId: string;
+  role: "caretaker" | "custodian";
+  ownerId: string;
+  propertyIds: string[];
+  permissions?: readonly string[];
+}) {
+  const stubs = getModelStubs();
+  const permissions = options.permissions ?? ALL_ACTIONS;
+  stubs.managementAssignment.find.mockReturnValue(
+    buildQuery(
+      options.propertyIds.map((propertyId) => ({
+        principalUserId: options.userId,
+        accessRole: options.role,
+        scopeType: "property",
+        propertyId,
+        status: "active",
+        permissions: [...permissions],
+        startsAt: new Date("2020-01-01T00:00:00.000Z"),
+        endsAt: null,
+      })),
+    ),
+  );
+  stubs.property.find.mockReturnValue(
+    buildQuery(
+      options.propertyIds.map((propertyId) => ({ _id: propertyId, ownerId: options.ownerId })),
+    ),
+  );
 }
 
 /**

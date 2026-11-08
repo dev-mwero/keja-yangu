@@ -116,7 +116,7 @@ export async function syncCaretakerPrivilegeAssignments(
 }
 
 export async function validatePropertyStaffAssignments(
-  ownerId: string,
+  _ownerId: string,
   assignments: { caretakerIds?: string[]; custodianIds?: string[] },
   retainedAssignments: { caretakerIds?: string[]; custodianIds?: string[] } = {},
 ): Promise<string | null> {
@@ -150,7 +150,6 @@ export async function validatePropertyStaffAssignments(
     const users = await User.find({
       _id: { $in: ids },
       role: team.role,
-      managedByOwnerId: ownerId,
     })
       .select("_id isActive isVerified")
       .lean();

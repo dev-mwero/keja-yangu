@@ -12,6 +12,9 @@ vi.mock("@/lib/audit", () => ({
 }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 vi.mock("@/lib/email", () => ({
   sendInviteEmail: vi.fn(),
 }));
@@ -20,7 +23,8 @@ import { GET, POST } from "@/app/api/v1/caretakers/route";
 import { writeAuditEvent } from "@/lib/audit";
 import { sendInviteEmail } from "@/lib/email";
 
-const { user, property } = getModelStubs();
+const { user, property, managementAssignment } = getModelStubs();
+const PROP_ID = makeObjectId("prop");
 
 const OWNER_ID = makeObjectId("owner");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
@@ -87,13 +91,28 @@ describe("GET /api/v1/caretakers", () => {
     const rows = [caretakerRow(), caretakerRow({ _id: CARE_2, name: "Zena W" })];
     const chain = buildQuery(rows);
     user.find.mockReturnValue(chain);
-    property.aggregate.mockResolvedValue([{ _id: CARE_1, count: 3 }]);
+    property.find.mockReturnValue(buildQuery([{ _id: PROP_ID, ownerId: OWNER_ID }]));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARE_1,
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          status: "active",
+        },
+      ]),
+    );
+    managementAssignment.aggregate.mockResolvedValue([{ _id: CARE_1, count: 3 }]);
 
     const res = await GET(buildRequest("/api/v1/caretakers", { token: signToken(OWNER_ID) }));
     expect(res.status).toBe(200);
-    expect(user.find).toHaveBeenCalledWith({ role: "caretaker", managedByOwnerId: OWNER_ID });
-    expect(chain.select).toHaveBeenCalledWith("name email phone managedByOwnerId privileges");
-    expect(property.aggregate).toHaveBeenCalled();
+    expect(user.find).toHaveBeenCalledWith({
+      role: "caretaker",
+      _id: { $in: [CARE_1] },
+    });
+    expect(chain.select).toHaveBeenCalledWith("name email phone privileges");
+    expect(managementAssignment.aggregate).toHaveBeenCalled();
     const data = (await json(res)).data as Array<Record<string, unknown>>;
     expect(data).toHaveLength(2);
     expect(data[0]).toMatchObject({
@@ -109,7 +128,19 @@ describe("GET /api/v1/caretakers", () => {
   it("returns active caretaker choices without contact details for property assignment", async () => {
     const chain = buildQuery([caretakerRow()]);
     user.find.mockReturnValue(chain);
-    property.aggregate.mockResolvedValue([]);
+    property.find.mockReturnValue(buildQuery([{ _id: PROP_ID, ownerId: OWNER_ID }]));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARE_1,
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          status: "active",
+        },
+      ]),
+    );
+    managementAssignment.aggregate.mockResolvedValue([]);
 
     const res = await GET(
       buildRequest("/api/v1/caretakers", {
@@ -123,9 +154,9 @@ describe("GET /api/v1/caretakers", () => {
       role: "caretaker",
       isActive: { $ne: false },
       isVerified: { $ne: false },
-      managedByOwnerId: OWNER_ID,
+      _id: { $in: [CARE_1] },
     });
-    expect(chain.select).toHaveBeenCalledWith("name managedByOwnerId");
+    expect(chain.select).toHaveBeenCalledWith("name");
     const data = (await json(res)).data as Array<Record<string, unknown>>;
     expect(data[0].email).toBeUndefined();
     expect(data[0].phone).toBe("");
@@ -133,12 +164,13 @@ describe("GET /api/v1/caretakers", () => {
 
   it("owner may pass their own ownerId filter", async () => {
     user.find.mockReturnValue(buildQuery([]));
-    property.aggregate.mockResolvedValue([]);
+    property.find.mockReturnValue(buildQuery([]));
+    managementAssignment.aggregate.mockResolvedValue([]);
     const res = await GET(
       buildRequest(`/api/v1/caretakers?ownerId=${OWNER_ID}`, { token: signToken(OWNER_ID) }),
     );
     expect(res.status).toBe(200);
-    expect(user.find).toHaveBeenCalledWith({ role: "caretaker", managedByOwnerId: OWNER_ID });
+    expect(user.find).toHaveBeenCalledWith({ role: "caretaker", _id: { $in: [] } });
   });
 
   it("403 when an owner asks for a foreign ownerId filter", async () => {
@@ -152,13 +184,25 @@ describe("GET /api/v1/caretakers", () => {
     user.findById.mockReturnValue(buildQuery(adminDoc()));
     const rows = [caretakerRow()];
     user.find.mockReturnValue(buildQuery(rows));
-    property.aggregate.mockResolvedValue([{ _id: CARE_1, count: 1 }]);
+    property.find.mockReturnValue(buildQuery([{ _id: PROP_ID, ownerId: OWNER_ID }]));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARE_1,
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          status: "active",
+        },
+      ]),
+    );
+    managementAssignment.aggregate.mockResolvedValue([{ _id: CARE_1, count: 1 }]);
 
     const res = await GET(
       buildRequest(`/api/v1/caretakers?ownerId=${OWNER_ID}`, { token: signToken(adminDoc()._id) }),
     );
     expect(res.status).toBe(200);
-    expect(user.find).toHaveBeenCalledWith({ role: "caretaker", managedByOwnerId: OWNER_ID });
+    expect(user.find).toHaveBeenCalledWith({ role: "caretaker", _id: { $in: [CARE_1] } });
   });
 
   it("skips the propertyCount aggregate when there are no caretakers", async () => {
@@ -166,7 +210,7 @@ describe("GET /api/v1/caretakers", () => {
     const res = await GET(buildRequest("/api/v1/caretakers", { token: signToken(OWNER_ID) }));
     expect(res.status).toBe(200);
     expect((await json(res)).data).toEqual([]);
-    expect(property.aggregate).not.toHaveBeenCalled();
+    expect(managementAssignment.aggregate).not.toHaveBeenCalled();
   });
 });
 
@@ -202,11 +246,23 @@ describe("POST /api/v1/caretakers", () => {
 
   it("409 when the existing user is bound to another owner", async () => {
     const bound = makeUser({
+      _id: CARE_1,
       role: "caretaker",
-      managedByOwnerId: OTHER_OWNER_ID,
       isActive: true,
     });
     user.findOne.mockReturnValue(buildQuery(bound));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARE_1,
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          status: "active",
+        },
+      ]),
+    );
+    property.find.mockReturnValue(buildQuery([{ _id: PROP_ID, ownerId: OTHER_OWNER_ID }]));
     const res = await POST(
       buildRequest("/api/v1/caretakers", {
         method: "POST",
@@ -222,7 +278,6 @@ describe("POST /api/v1/caretakers", () => {
     const existing = makeUser({
       _id: CARE_1,
       role: "caretaker",
-      managedByOwnerId: "",
       isActive: true,
       name: "Care One",
       email: "care@care.co",
@@ -244,7 +299,6 @@ describe("POST /api/v1/caretakers", () => {
       { _id: CARE_1 },
       {
         $set: {
-          managedByOwnerId: OWNER_ID,
           privileges: ["manage_tenants"],
           name: "Care One",
         },
@@ -287,7 +341,6 @@ describe("POST /api/v1/caretakers", () => {
       expect.objectContaining({
         role: "caretaker",
         email: "new@care.co",
-        managedByOwnerId: OWNER_ID,
         isActive: false,
         isVerified: false,
         privileges: ["manage_tenants"],
@@ -312,24 +365,48 @@ describe("POST /api/v1/caretakers", () => {
     const custodian = makeUser({
       _id: makeObjectId("custodian"),
       role: "custodian",
-      managedByOwnerId: OWNER_ID,
     });
     user.findById.mockReturnValue(buildQuery(custodian));
     user.find.mockReturnValue(buildQuery([]));
+    managementAssignment.find
+      .mockReturnValueOnce(
+        buildQuery([
+          {
+            principalUserId: custodian._id,
+            accessRole: "custodian",
+            scopeType: "property",
+            propertyId: PROP_ID,
+            status: "active",
+          },
+        ]),
+      )
+      .mockReturnValue(buildQuery([]));
+    property.find.mockReturnValue(buildQuery([{ _id: PROP_ID, ownerId: OWNER_ID }]));
 
     const res = await GET(buildRequest("/api/v1/caretakers", { token: signToken(custodian._id) }));
     expect(res.status).toBe(200);
-    expect(user.find).toHaveBeenCalledWith({ role: "caretaker", managedByOwnerId: OWNER_ID });
+    expect(user.find).toHaveBeenCalledWith({ role: "caretaker", _id: { $in: [] } });
   });
 
   it("lets a custodian invite a caretaker under their owner", async () => {
     const custodian = makeUser({
       _id: makeObjectId("custodian"),
       role: "custodian",
-      managedByOwnerId: OWNER_ID,
     });
     user.findById.mockReturnValue(buildQuery(custodian));
     user.findOne.mockReturnValue(buildQuery(null));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: custodian._id,
+          accessRole: "custodian",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          status: "active",
+        },
+      ]),
+    );
+    property.find.mockReturnValue(buildQuery([{ _id: PROP_ID, ownerId: OWNER_ID }]));
     const created = makeUser({
       _id: CARE_2,
       role: "caretaker",
@@ -348,9 +425,7 @@ describe("POST /api/v1/caretakers", () => {
       }),
     );
     expect(res.status).toBe(201);
-    expect(user.create).toHaveBeenCalledWith(
-      expect.objectContaining({ managedByOwnerId: OWNER_ID, role: "caretaker" }),
-    );
+    expect(user.create).toHaveBeenCalledWith(expect.objectContaining({ role: "caretaker" }));
   });
 
   it("creates an active verified phone-only caretaker with a temporary password", async () => {
@@ -384,7 +459,6 @@ describe("POST /api/v1/caretakers", () => {
         role: "caretaker",
         isActive: true,
         isVerified: true,
-        managedByOwnerId: OWNER_ID,
       }),
     );
     expect(sendInviteEmail).not.toHaveBeenCalled();
@@ -416,7 +490,6 @@ describe("POST /api/v1/caretakers", () => {
         $set: expect.objectContaining({
           email: "pending@care.co",
           name: "Pending Care",
-          managedByOwnerId: OWNER_ID,
           privileges: ["manage_tenants"],
           verificationToken: expect.any(String),
           verificationTokenExpiry: expect.any(Date),

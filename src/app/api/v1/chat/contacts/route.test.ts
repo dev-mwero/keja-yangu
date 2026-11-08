@@ -56,8 +56,18 @@ describe("GET /api/v1/chat/contacts", () => {
           _id: PROPERTY_ID,
           title: "Sunset Villa",
           ownerId: OWNER_ID,
-          caretakerIds: [CARETAKER_ID],
         }),
+      ]),
+    );
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          status: "active",
+        },
       ]),
     );
     user.find.mockReturnValue(

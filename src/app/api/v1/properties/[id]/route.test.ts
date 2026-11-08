@@ -122,9 +122,7 @@ describe("GET /api/v1/properties/[id]", () => {
       withParams(PROPERTY_ID),
     );
     expect(res.status).toBe(200);
-    expect(chain.select).toHaveBeenCalledWith(
-      "-ownerId -caretakerIds -custodianIds -createdById -__v",
-    );
+    expect(chain.select).toHaveBeenCalledWith("-ownerId -createdById -__v");
     const body = await json(res);
     expect((body.data as { status?: string }).status).toBe("available");
   });
@@ -265,9 +263,7 @@ describe("GET /api/v1/properties/[id]", () => {
       withParams(PROPERTY_ID),
     );
     expect(res.status).toBe(200);
-    expect(chain.select).toHaveBeenCalledWith(
-      "-ownerId -caretakerIds -custodianIds -createdById -__v",
-    );
+    expect(chain.select).toHaveBeenCalledWith("-ownerId -createdById -__v");
     const body = await json(res);
     expect((body.data as { status?: string }).status).toBe("available");
   });
@@ -530,7 +526,7 @@ describe("PATCH /api/v1/properties/[id]", () => {
     );
     expect(res.status).toBe(200);
     const updateData = property.findOneAndUpdate.mock.calls[0][1] as { caretakerIds?: string[] };
-    expect(updateData.caretakerIds).toEqual([CARETAKER_ID]);
+    expect(updateData.caretakerIds).toBeUndefined();
   });
 
   it("owner can assign a custodian to their property", async () => {
@@ -568,13 +564,9 @@ describe("PATCH /api/v1/properties/[id]", () => {
     expect(user.find).toHaveBeenCalledWith({
       _id: { $in: [CUSTODIAN_ID] },
       role: "custodian",
-      managedByOwnerId: OWNER_ID,
     });
-    expect(property.findOneAndUpdate).toHaveBeenCalledWith(
-      { _id: PROPERTY_ID },
-      { custodianIds: [CUSTODIAN_ID] },
-      expect.objectContaining({ new: true, runValidators: true }),
-    );
+    const updateData = property.findOneAndUpdate.mock.calls[0][1] as { custodianIds?: string[] };
+    expect(updateData.custodianIds).toBeUndefined();
   });
 
   it("rejects assigning a custodian bound to another owner", async () => {
@@ -616,6 +608,16 @@ describe("PATCH /api/v1/properties/[id]", () => {
         {
           principalUserId: OWNER_ID,
           accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["property:edit"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+        {
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
           scopeType: "property",
           propertyId: PROPERTY_ID,
           permissions: ["property:edit"],
@@ -729,7 +731,6 @@ describe("PATCH /api/v1/properties/[id]", () => {
     expect(user.find).toHaveBeenCalledWith({
       _id: { $in: [CARETAKER_ID] },
       role: "caretaker",
-      managedByOwnerId: OWNER_ID,
     });
   });
 

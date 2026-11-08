@@ -431,8 +431,9 @@ describe("POST /api/v1/chat/threads", () => {
       ]),
     );
     property.findById.mockReturnValue(
-      buildQuery(makeProperty({ _id: PROPERTY_ID, ownerId: OWNER_ID, caretakerIds: [] })),
+      buildQuery(makeProperty({ _id: PROPERTY_ID, ownerId: OWNER_ID })),
     );
+    managementAssignment.findOne.mockReturnValue(buildQuery(null));
 
     const res = await POST(
       buildRequest("/api/v1/chat/threads", {

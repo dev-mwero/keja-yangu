@@ -7,6 +7,7 @@ import {
   resolveBillingAccountForUnit,
 } from "@/lib/billing-accounts";
 import { transitionListingState, validateListingPublish } from "@/lib/listings";
+import { getManagedOwnerId } from "@/lib/managed-owner";
 import { connectToDatabase } from "@/lib/mongoose";
 import { authenticate } from "@/lib/permissions";
 import { Lease } from "@/models/Lease";
@@ -18,7 +19,7 @@ import { Unit } from "@/models/Unit";
 import { User } from "@/models/User";
 
 async function verifyListingAccess(
-  user: { _id: unknown; role: string; managedByOwnerId?: string },
+  user: { _id: unknown; role: string },
   propertyId: string,
 ): Promise<boolean> {
   if (user.role === "system-admin") return true;
@@ -43,12 +44,15 @@ async function verifyListingAccess(
   }
 
   if (user.role === "caretaker") {
-    const managedByOwnerId = user.managedByOwnerId ?? "";
-    return (
-      Boolean(managedByOwnerId) &&
-      property.ownerId === managedByOwnerId &&
-      (property.caretakerIds ?? []).includes(userId)
-    );
+    const managedByOwnerId = await getManagedOwnerId(userId);
+    if (!managedByOwnerId || property.ownerId !== managedByOwnerId) return false;
+    const assignment = await ManagementAssignment.findOne({
+      principalUserId: userId,
+      propertyId,
+      accessRole: "caretaker",
+      status: "active",
+    }).lean();
+    return Boolean(assignment);
   }
 
   return false;
@@ -61,7 +65,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   }
 
   await connectToDatabase();
-  const user = await User.findById(auth.userId).select("role isActive managedByOwnerId").lean();
+  const user = await User.findById(auth.userId).select("role isActive").lean();
   if (
     !user?.isActive ||
     (user.role !== "admin" &&
@@ -104,7 +108,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   }
 
   await connectToDatabase();
-  const user = await User.findById(auth.userId).select("role isActive managedByOwnerId").lean();
+  const user = await User.findById(auth.userId).select("role isActive").lean();
   if (
     !user?.isActive ||
     (user.role !== "admin" &&
@@ -297,7 +301,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   }
 
   await connectToDatabase();
-  const user = await User.findById(auth.userId).select("role isActive managedByOwnerId").lean();
+  const user = await User.findById(auth.userId).select("role isActive").lean();
   if (
     !user?.isActive ||
     (user.role !== "admin" &&

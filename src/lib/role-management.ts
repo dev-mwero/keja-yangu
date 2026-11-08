@@ -36,8 +36,3 @@ export function isUserRole(value: string): value is UserRole {
 export function isAssignableRole(value: string): value is AssignableRole {
   return (ASSIGNABLE_ROLES as readonly string[]).includes(value);
 }
-
-/** Roles whose authority is delegated from a specific owner portfolio. */
-export function requiresManagedOwner(role: UserRole): boolean {
-  return role === "caretaker" || role === "custodian";
-}

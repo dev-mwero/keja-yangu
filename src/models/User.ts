@@ -15,7 +15,6 @@ export interface IUser {
   passwordHash: string;
   role: "tenant" | "caretaker" | "custodian" | "owner" | "admin" | "broker" | "system-admin";
   privileges: string[];
-  managedByOwnerId: string;
   isActive: boolean;
   isVerified: boolean;
   phone: string;
@@ -74,7 +73,6 @@ const userSchema = new Schema<IUser>(
       ],
       default: [],
     },
-    managedByOwnerId: { type: String, default: "" },
     isActive: { type: Boolean, default: true },
     isVerified: { type: Boolean, default: false },
     // Mobile number in E.164 form, e.g. "+254712345678" (country code included).
@@ -96,7 +94,6 @@ const userSchema = new Schema<IUser>(
   },
 );
 
-userSchema.index({ role: 1, managedByOwnerId: 1 });
 userSchema.index({ role: 1, isActive: 1 });
 userSchema.index({ phone: 1 }, { unique: true, partialFilterExpression: { phone: { $gt: "" } } });
 userSchema.index({ email: 1 }, { unique: true, sparse: true });

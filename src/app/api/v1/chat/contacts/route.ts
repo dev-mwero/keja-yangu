@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { resolveDashboardActor } from "@/app/api/v1/_helpers";
+import { getPropertyStaffMap } from "@/lib/managed-owner";
 import { connectToDatabase } from "@/lib/mongoose";
 import { requirePermission } from "@/lib/permissions";
 import { Property } from "@/models/Property";
@@ -38,10 +39,15 @@ export async function GET(request: NextRequest) {
   }
 
   const properties = await Property.find({ _id: { $in: propertyIds } })
-    .select("_id title ownerId caretakerIds")
+    .select("_id title ownerId")
     .lean();
+  const staffMap = await getPropertyStaffMap(properties.map((p) => String(p._id)));
   const userIds = [
-    ...new Set(properties.flatMap((p) => [p.ownerId, ...(p.caretakerIds ?? [])]).filter(Boolean)),
+    ...new Set(
+      properties
+        .flatMap((p) => [p.ownerId, ...(staffMap.get(String(p._id))?.caretakerIds ?? [])])
+        .filter(Boolean),
+    ),
   ];
   const users = await User.find({ _id: { $in: userIds } })
     .select("_id name role")
@@ -62,7 +68,7 @@ export async function GET(request: NextRequest) {
         property,
       });
     }
-    for (const caretakerId of p.caretakerIds ?? []) {
+    for (const caretakerId of staffMap.get(propertyId)?.caretakerIds ?? []) {
       const caretaker = usersById.get(String(caretakerId));
       if (caretaker?.role === "caretaker") {
         contacts.push({

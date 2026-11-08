@@ -15,9 +15,7 @@ export async function GET(request: NextRequest) {
   }
 
   await connectToDatabase();
-  const user = await User.findById(auth.userId)
-    .select("role isActive managedByOwnerId email")
-    .lean();
+  const user = await User.findById(auth.userId).select("role isActive email").lean();
   if (!user?.isActive) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

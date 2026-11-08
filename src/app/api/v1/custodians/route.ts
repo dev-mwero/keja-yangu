@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { writeAuditEvent } from "@/lib/audit";
 import { sendInviteEmail } from "@/lib/email";
+import { getManagedOwnerId, getStaffIdsForOwner } from "@/lib/managed-owner";
 import { connectToDatabase } from "@/lib/mongoose";
 import { authenticate, getAdminAssignmentScope } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
@@ -44,14 +45,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const ownerId = request.nextUrl.searchParams.get("ownerId");
+  const ownerIdParam = request.nextUrl.searchParams.get("ownerId");
   const filter: Record<string, unknown> = {
     role: "custodian",
     ...(forPropertyAssignment ? { isActive: { $ne: false }, isVerified: { $ne: false } } : {}),
   };
 
+  let allowedOwnerIds: string[] = [];
   if (user.role === "system-admin") {
-    if (ownerId) filter.managedByOwnerId = ownerId;
+    if (ownerIdParam) allowedOwnerIds = [ownerIdParam];
   } else if (user.role === "admin") {
     const scope = await getAdminAssignmentScope(String(user._id), "custodian:manage" as never);
     const assignedProperties = scope.assignedPropertyIds.length
@@ -62,33 +64,39 @@ export async function GET(request: NextRequest) {
     const allowedOwners = [
       ...new Set(assignedProperties.map((property) => String(property.ownerId))),
     ];
-    if (ownerId) {
-      if (!allowedOwners.includes(ownerId)) {
+    if (ownerIdParam) {
+      if (!allowedOwners.includes(ownerIdParam)) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
-      filter.managedByOwnerId = ownerId;
+      allowedOwnerIds = [ownerIdParam];
     } else {
-      filter.managedByOwnerId = { $in: allowedOwners };
+      allowedOwnerIds = allowedOwners;
     }
   } else if (user.role === "custodian") {
-    const managedByOwnerId = user.managedByOwnerId ?? "";
-    if (!managedByOwnerId || (ownerId && ownerId !== managedByOwnerId)) {
+    const managed = await getManagedOwnerId(String(user._id));
+    if (ownerIdParam && ownerIdParam !== managed) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    filter.managedByOwnerId = managedByOwnerId;
+    allowedOwnerIds = managed ? [managed] : [];
   } else {
-    if (ownerId && ownerId !== String(user._id)) {
+    if (ownerIdParam && ownerIdParam !== String(user._id)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    filter.managedByOwnerId = String(user._id);
+    allowedOwnerIds = [String(user._id)];
+  }
+
+  if (allowedOwnerIds.length > 0) {
+    const ids = await Promise.all(allowedOwnerIds.map((o) => getStaffIdsForOwner(o, "custodian")));
+    const allowedCustodianIds = [...new Set(ids.flat())];
+    if (allowedCustodianIds.length > 0) {
+      filter._id = { $in: allowedCustodianIds };
+    } else {
+      filter._id = { $in: [] };
+    }
   }
 
   const custodians = await User.find(filter)
-    .select(
-      forPropertyAssignment
-        ? "name managedByOwnerId"
-        : "name email phone managedByOwnerId privileges",
-    )
+    .select(forPropertyAssignment ? "name" : "name email phone privileges")
     .sort({ name: 1 })
     .lean();
 
@@ -97,7 +105,7 @@ export async function GET(request: NextRequest) {
     name: c.name,
     email: forPropertyAssignment ? undefined : c.email,
     phone: forPropertyAssignment ? "" : (c.phone ?? ""),
-    managedByOwnerId: forPropertyAssignment ? "" : (c.managedByOwnerId ?? ""),
+    managedByOwnerId: forPropertyAssignment ? "" : (allowedOwnerIds[0] ?? ""),
     privileges: forPropertyAssignment ? [] : (c.privileges ?? []),
   }));
 
@@ -210,12 +218,11 @@ export async function POST(request: NextRequest) {
 
     const active = existing.isActive !== false && existing.isVerified !== false;
     if (active) {
-      const boundOwner = existing.managedByOwnerId ?? "";
+      const boundOwner = (await getManagedOwnerId(String(existing._id))) ?? "";
       if (boundOwner !== "" && boundOwner !== boundOwnerId) {
         return NextResponse.json({ error: "Custodian is bound to another owner" }, { status: 409 });
       }
       const update = {
-        managedByOwnerId: boundOwnerId,
         ...(parsed.data.name ? { name: parsed.data.name } : {}),
         ...(phone && existing.phone !== phone ? { phone } : {}),
       };
@@ -253,7 +260,6 @@ export async function POST(request: NextRequest) {
           email,
           name: displayName,
           phone,
-          managedByOwnerId: boundOwnerId,
           verificationToken,
           verificationTokenExpiry,
         },
@@ -289,10 +295,9 @@ export async function POST(request: NextRequest) {
       role: "custodian",
       name: displayName,
       phone,
-      managedByOwnerId: boundOwnerId,
     });
     await audit("custodian.created", String(created._id), {
-      managedByOwnerId: created.managedByOwnerId ?? "",
+      managedByOwnerId: boundOwnerId,
       name: created.name,
     });
 
@@ -305,7 +310,7 @@ export async function POST(request: NextRequest) {
           name: created.name,
           email: created.email,
           phone: created.phone,
-          managedByOwnerId: created.managedByOwnerId,
+          managedByOwnerId: boundOwnerId,
           privileges: created.privileges ?? [],
         },
       },
@@ -324,7 +329,6 @@ export async function POST(request: NextRequest) {
     phone,
     passwordHash,
     role: "custodian",
-    managedByOwnerId: boundOwnerId,
     isActive: false,
     isVerified: false,
     verificationToken,
@@ -333,7 +337,7 @@ export async function POST(request: NextRequest) {
 
   await sendInviteEmail(email, created.name, "custodian", verificationToken);
   await audit("custodian.invited", String(created._id), {
-    managedByOwnerId: created.managedByOwnerId ?? "",
+    managedByOwnerId: boundOwnerId,
     name: created.name,
   });
 
@@ -345,7 +349,7 @@ export async function POST(request: NextRequest) {
         name: created.name,
         email: created.email,
         phone: created.phone ?? "",
-        managedByOwnerId: created.managedByOwnerId,
+        managedByOwnerId: boundOwnerId,
         privileges: created.privileges ?? [],
       },
     },

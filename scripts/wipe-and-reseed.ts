@@ -1,11 +1,15 @@
+import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
-import bcrypt from "bcryptjs";
+import { roleMaximumActions } from "../src/lib/authorization-policy.ts";
 
 dotenv.config({ path: ".env.local" });
 
-const mongoUri = process.env.MONGODB_URI;
-if (!mongoUri) throw new Error("Missing MONGODB_URI");
+const mongoUri = (() => {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) throw new Error("Missing MONGODB_URI");
+  return uri;
+})();
 
 const softDelete = { deletedAt: { type: Date, default: null } };
 
@@ -16,7 +20,6 @@ const userSchema = new mongoose.Schema(
     passwordHash: { type: String, required: true },
     role: { type: String, required: true },
     privileges: { type: [String], default: [] },
-    managedByOwnerId: { type: String, default: "" },
     isActive: { type: Boolean, default: true },
     isVerified: { type: Boolean, default: true },
     phone: { type: String, default: "" },
@@ -38,8 +41,6 @@ const propertySchema = new mongoose.Schema(
     type: { type: String, default: "apartment" },
     ownerId: { type: String, default: "" },
     createdById: { type: String, default: "" },
-    caretakerIds: { type: [String], default: [] },
-    custodianIds: { type: [String], default: [] },
     published: { type: Boolean, default: false },
     amenities: { type: [String], default: [] },
     blocks: { type: Array, default: [] },
@@ -127,7 +128,7 @@ const propertyTypeSchema = new mongoose.Schema(
 );
 
 async function main() {
-  await mongoose.connect(mongoUri!, {
+  await mongoose.connect(mongoUri, {
     bufferCommands: false,
     maxPoolSize: 10,
     socketTimeoutMS: 45000,
@@ -141,6 +142,20 @@ async function main() {
     await db.collection(c.name).deleteMany({});
   }
   console.log(`✅ Wiped ${collections.length} collections.`);
+
+  // Drop indexes that belonged to removed legacy authorization fields.
+  const obsoleteIndexes = [
+    { collection: "users", index: "role_1_managedByOwnerId_1" },
+    { collection: "properties", index: "caretakerIds_1" },
+    { collection: "properties", index: "custodianIds_1" },
+  ];
+  for (const { collection, index } of obsoleteIndexes) {
+    try {
+      await db.collection(collection).dropIndex(index);
+    } catch (error) {
+      if ((error as { codeName?: string }).codeName !== "IndexNotFound") throw error;
+    }
+  }
 
   const User = mongoose.model("SeedUser", userSchema);
   const Property = mongoose.model("SeedProperty", propertySchema);
@@ -177,7 +192,6 @@ async function main() {
     email: "custodian@keja.test",
     passwordHash: password,
     role: "custodian",
-    managedByOwnerId: adminId,
     isVerified: true,
     isActive: true,
   });
@@ -188,7 +202,6 @@ async function main() {
     email: "caretaker@keja.test",
     passwordHash: password,
     role: "caretaker",
-    managedByOwnerId: adminId,
     privileges: [
       "create_property",
       "edit_property",
@@ -233,8 +246,6 @@ async function main() {
     type: "apartment",
     ownerId: adminId,
     createdById: adminId,
-    caretakerIds: [caretakerId],
-    custodianIds: [custodianId],
     published: true,
     amenities: [],
     blocks: [],
@@ -278,71 +289,9 @@ async function main() {
   });
 
   const now = new Date();
-  const adminPerms = [
-    "property:read",
-    "property:edit",
-    "property:delete",
-    "unit:read",
-    "unit:manage",
-    "tenant:read",
-    "tenant:manage",
-    "invoice:read-own",
-    "invoice:manage",
-    "invoice:mark-paid",
-    "invoice:generate",
-    "complaint:read",
-    "complaint:manage",
-    "announcement:read",
-    "announcement:manage",
-    "document:read-own",
-    "document:manage",
-    "assignment:read",
-    "assignment:manage",
-    "chat:read",
-    "chat:send",
-    "move-request:read",
-    "move-request:manage",
-    "search:read",
-    "dashboard:read",
-  ];
-  const custodianPerms = [
-    "property:read",
-    "unit:read",
-    "tenant:read",
-    "tenant:manage",
-    "invoice:read-own",
-    "invoice:manage",
-    "complaint:read",
-    "complaint:manage",
-    "announcement:read",
-    "announcement:manage",
-    "document:read-own",
-    "document:manage",
-    "assignment:read",
-    "chat:read",
-    "chat:send",
-    "search:read",
-    "dashboard:read",
-  ];
-  const caretakerPerms = [
-    "property:read",
-    "unit:read",
-    "unit:manage",
-    "tenant:read",
-    "tenant:manage",
-    "invoice:read-own",
-    "complaint:read",
-    "complaint:manage",
-    "announcement:read",
-    "announcement:manage",
-    "document:read-own",
-    "document:manage",
-    "assignment:read",
-    "chat:read",
-    "chat:send",
-    "search:read",
-    "dashboard:read",
-  ];
+  const adminPerms = roleMaximumActions("admin");
+  const custodianPerms = roleMaximumActions("custodian");
+  const caretakerPerms = roleMaximumActions("caretaker");
 
   await Assignment.insertMany([
     {

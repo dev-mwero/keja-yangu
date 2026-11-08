@@ -12,6 +12,7 @@ import {
   TENANT_ACTIONS,
 } from "@/lib/authorization-policy";
 import { getJwtSecret } from "@/lib/jwt";
+import { getManagedOwnerId } from "@/lib/managed-owner";
 import { connectToDatabase } from "@/lib/mongoose";
 import { loadUnitResource } from "@/lib/policy-resources";
 import { Lease } from "@/models/Lease";
@@ -55,12 +56,10 @@ export function isPrivilegedCustodian(user: {
   role: Role;
   privileges?: string[] | null;
   isActive?: boolean;
-  managedByOwnerId?: string | null;
 }): boolean {
   return (
     user.role === "custodian" &&
     user.isActive === true &&
-    Boolean(user.managedByOwnerId) &&
     (user.privileges ?? []).includes("assign_privileges")
   );
 }
@@ -155,7 +154,6 @@ export async function requireAuth(
 export interface PermissionResource {
   _id?: unknown;
   ownerId?: string;
-  caretakerIds?: string[];
   propertyId?: string;
   blockId?: string;
   unitId?: string;
@@ -409,10 +407,8 @@ export async function getAdminAssignmentScope(
 }
 
 /**
- * Assignment-backed scope for custodian/caretaker staff. Consumers prefer this
- * over the legacy `managedByOwnerId` / `Property.caretakerIds` fields whenever
- * `hasAssignments` is true; staff without assignments keep the legacy fallback
- * until backfilled.
+ * Assignment-backed scope for custodian/caretaker staff. Staff without an
+ * active assignment have no scope (fail closed).
  */
 export async function getStaffAssignmentScope(
   userId: string,
@@ -474,7 +470,8 @@ export async function getTenantScope(
   }
 
   const userId = String(user._id);
-  const managedByOwnerId = user.managedByOwnerId ?? "";
+  const managedByOwnerId =
+    user.role === "custodian" || user.role === "caretaker" ? await getManagedOwnerId(userId) : "";
 
   if (user.role === "admin") {
     const assignmentScope = await getAdminAssignmentScope(userId, action);

@@ -2,14 +2,13 @@ import { isValidObjectId } from "mongoose";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongoose";
-import { authenticate, requirePermission } from "@/lib/permissions";
+import { requirePermission } from "@/lib/permissions";
 import { Property } from "@/models/Property";
 import { Unit } from "@/models/Unit";
 
 export interface ManagedProperty {
   _id: unknown;
   ownerId: string;
-  caretakerIds?: string[];
 }
 
 export interface ManagedUnit {
@@ -39,11 +38,6 @@ export async function loadManagedProperty(
 
   const authError = await requirePermission(request, "unit:manage", { resource: property });
   if (authError) return authError;
-
-  const actor = authenticate(request);
-  if (actor?.role === "caretaker" && !(property.caretakerIds ?? []).includes(actor.userId)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
 
   return property;
 }

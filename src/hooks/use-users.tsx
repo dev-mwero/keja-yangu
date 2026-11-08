@@ -19,7 +19,6 @@ export interface UserRow {
   phone?: string;
   role: UserRole;
   isActive: boolean;
-  managedByOwnerId?: string;
   privileges?: string[];
 }
 
@@ -54,7 +53,6 @@ function normalizeUser(raw: unknown): UserRow {
     phone: r.phone != null ? String(r.phone) : undefined,
     role: (r.role as UserRole) ?? "tenant",
     isActive: r.isActive !== false,
-    managedByOwnerId: r.managedByOwnerId != null ? String(r.managedByOwnerId) : undefined,
     privileges: Array.isArray(r.privileges) ? (r.privileges as string[]) : [],
   };
 }
@@ -183,31 +181,28 @@ export function useUserRolePromotion() {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const promote = useCallback(
-    async (id: string, role: string, managedByOwnerId?: string): Promise<UserRow> => {
-      setPending(true);
-      setPendingId(id);
-      setError(null);
-      try {
-        const res = await fetch(`/api/v1/admin/users/${id}/role`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(managedByOwnerId ? { role, managedByOwnerId } : { role }),
-        });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          const message = json.error || "Failed to update user role";
-          setError(message);
-          throw new Error(message);
-        }
-        return normalizeUser(json.data ?? json);
-      } finally {
-        setPending(false);
-        setPendingId(null);
+  const promote = useCallback(async (id: string, role: string): Promise<UserRow> => {
+    setPending(true);
+    setPendingId(id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/v1/admin/users/${id}/role`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const message = json.error || "Failed to update user role";
+        setError(message);
+        throw new Error(message);
       }
-    },
-    [],
-  );
+      return normalizeUser(json.data ?? json);
+    } finally {
+      setPending(false);
+      setPendingId(null);
+    }
+  }, []);
 
   return {
     promoteUserRole: promote,

@@ -6,15 +6,13 @@ import { requireRoleManagementActor } from "@/app/api/v1/admin/users/_guard";
 import { writeAuditEvent } from "@/lib/audit";
 import { connectToDatabase } from "@/lib/mongoose";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
-import { ASSIGNABLE_ROLES, requiresManagedOwner } from "@/lib/role-management";
+import { ASSIGNABLE_ROLES } from "@/lib/role-management";
 import { BrokerProfile } from "@/models/BrokerProfile";
 import { ManagementAssignment } from "@/models/ManagementAssignment";
-import { Property } from "@/models/Property";
 import { User } from "@/models/User";
 
 const roleChangeInput = z.object({
   role: z.enum(ASSIGNABLE_ROLES),
-  managedByOwnerId: z.string().trim().min(1).optional(),
   reason: z.string().trim().max(500).optional(),
 });
 
@@ -25,7 +23,6 @@ interface UserDoc {
   phone?: string;
   role?: string;
   isActive?: boolean;
-  managedByOwnerId?: string;
   privileges?: string[];
   tokenVersion?: number;
   createdAt?: Date;
@@ -39,7 +36,6 @@ function serialize(user: UserDoc) {
     phone: user.phone ?? "",
     role: user.role ?? "",
     isActive: user.isActive !== false,
-    managedByOwnerId: user.managedByOwnerId ?? "",
     privileges: user.privileges ?? [],
     createdAt: user.createdAt ?? null,
   };
@@ -54,8 +50,8 @@ function serialize(user: UserDoc) {
  * - Actors cannot change their own role.
  * - The role change and its audit event are one unit: the audit is written
  *   before the mutation, so a failed audit aborts the change (fail closed).
- * - Delegated authority is revoked on every transition, the session token is
- *   invalidated via `tokenVersion`, and property staff arrays are cleaned up.
+ * - Delegated authority is revoked on every transition and the session token
+ *   is invalidated via `tokenVersion`.
  */
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const limit = await rateLimit(request, { windowMs: 60_000, limit: 30 });
@@ -88,7 +84,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
   await connectToDatabase();
   const target = (await User.findById(id)
-    .select("name email phone role isActive managedByOwnerId privileges tokenVersion createdAt")
+    .select("name email phone role isActive privileges tokenVersion createdAt")
     .lean()) as UserDoc | null;
   if (!target) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -100,28 +96,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     );
   }
 
-  let nextOwnerId = "";
-  if (requiresManagedOwner(nextRole)) {
-    nextOwnerId = parsed.data.managedByOwnerId ?? target.managedByOwnerId ?? "";
-    if (!nextOwnerId) {
-      return NextResponse.json(
-        { error: "managedByOwnerId is required for caretaker or custodian roles" },
-        { status: 400 },
-      );
-    }
-    const owner = await User.findOne({ _id: nextOwnerId, role: "owner", isActive: true })
-      .select("_id")
-      .lean();
-    if (!owner) {
-      return NextResponse.json(
-        { error: "managedByOwnerId must reference an active owner" },
-        { status: 400 },
-      );
-    }
-  }
-
-  const currentOwnerId = target.managedByOwnerId ?? "";
-  const alreadySameRole = target.role === nextRole && currentOwnerId === nextOwnerId;
+  const alreadySameRole = target.role === nextRole;
   if (alreadySameRole) {
     return NextResponse.json({ data: serialize(target) });
   }
@@ -138,12 +113,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       entityId: id,
       before: {
         role: target.role,
-        managedByOwnerId: currentOwnerId,
         privileges: target.privileges ?? [],
       },
       after: {
         role: nextRole,
-        managedByOwnerId: nextOwnerId,
         privileges: [],
         reason,
       },
@@ -162,7 +135,6 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     {
       $set: {
         role: nextRole,
-        managedByOwnerId: nextOwnerId,
         privileges: [],
         tokenVersion: nextTokenVersion,
       },
@@ -182,12 +154,6 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     },
   );
 
-  // Remove stale staff links from property documents.
-  await Property.updateMany(
-    { $or: [{ caretakerIds: id }, { custodianIds: id }] },
-    { $pull: { caretakerIds: id, custodianIds: id } },
-  );
-
   if (target.role === "broker" && nextRole !== "broker") {
     await BrokerProfile.updateOne(
       { userId: id },
@@ -203,7 +169,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   }
 
   const updated = (await User.findById(id)
-    .select("name email phone role isActive managedByOwnerId privileges tokenVersion createdAt")
+    .select("name email phone role isActive privileges tokenVersion createdAt")
     .lean()) as UserDoc | null;
 
   return NextResponse.json({ data: serialize(updated ?? target) });

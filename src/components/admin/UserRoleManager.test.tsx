@@ -120,7 +120,7 @@ describe("UserRoleManager", () => {
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Confirm" }));
-    expect(mocks.promoteUserRole).toHaveBeenCalledWith("u1", "admin", undefined);
+    expect(mocks.promoteUserRole).toHaveBeenCalledWith("u1", "admin");
     expect(mocks.toast.success).toHaveBeenCalled();
     expect(mocks.refetch).toHaveBeenCalled();
   });

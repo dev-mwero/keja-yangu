@@ -9,6 +9,7 @@ import {
 } from "@/lib/email";
 import { formatKES, formatPeriod } from "@/lib/format";
 import { Invoice } from "@/models/Invoice";
+import { ManagementAssignment } from "@/models/ManagementAssignment";
 import {
   Notification,
   type NotificationChannel,
@@ -165,8 +166,14 @@ async function resolveTenantUserId(tenantId: string): Promise<string> {
 async function resolveCaretakerIds(propertyId: string): Promise<string[]> {
   if (!propertyId) return [];
   try {
-    const property = await Property.findById(propertyId).select("caretakerIds").lean();
-    return property?.caretakerIds ?? [];
+    const assignments = await ManagementAssignment.find({
+      propertyId,
+      accessRole: "caretaker",
+      status: "active",
+    })
+      .select("principalUserId")
+      .lean();
+    return [...new Set(assignments.map((a) => String(a.principalUserId)))];
   } catch (_error) {
     console.warn(`[notifications] property lookup failed propertyId=${propertyId}`);
     return [];
@@ -177,10 +184,17 @@ async function resolveCaretakerIds(propertyId: string): Promise<string[]> {
 async function resolveCustodianIds(ownerId: string): Promise<string[]> {
   if (!ownerId) return [];
   try {
-    const custodians = await User.find({ role: "custodian", managedByOwnerId: ownerId })
-      .select("_id")
+    const properties = await Property.find({ ownerId }).select("_id").lean();
+    const propertyIds = properties.map((p) => String(p._id));
+    if (propertyIds.length === 0) return [];
+    const assignments = await ManagementAssignment.find({
+      propertyId: { $in: propertyIds },
+      accessRole: "custodian",
+      status: "active",
+    })
+      .select("principalUserId")
       .lean();
-    return custodians.map((custodian) => String(custodian._id));
+    return [...new Set(assignments.map((a) => String(a.principalUserId)))];
   } catch (_error) {
     console.warn(`[notifications] custodian lookup failed ownerId=${ownerId}`);
     return [];
@@ -218,13 +232,13 @@ export async function resolveStaffRecipients(scope: {
   } else {
     try {
       if (scope.propertyId) {
-        const property = await Property.findById(scope.propertyId).select("caretakerIds").lean();
-        caretakerIds = property?.caretakerIds ?? [];
+        caretakerIds = await resolveCaretakerIds(scope.propertyId);
       } else {
-        const properties = await Property.find({ ownerId: scope.ownerId })
-          .select("caretakerIds")
-          .lean();
-        caretakerIds = properties.flatMap((property) => property.caretakerIds ?? []);
+        const properties = await Property.find({ ownerId: scope.ownerId }).select("_id").lean();
+        const perProperty = await Promise.all(
+          properties.map((property) => resolveCaretakerIds(String(property._id))),
+        );
+        caretakerIds = [...new Set(perProperty.flat())];
       }
     } catch (_error) {
       console.warn(`[notifications] caretaker lookup failed ownerId=${scope.ownerId}`);
@@ -627,11 +641,9 @@ export async function notifyComplaintCreated(complaint: ComplaintLike): Promise<
     const title = "New complaint";
     const body = `New ${complaint.priority ?? "medium"} priority complaint: ${complaint.subject}`;
 
-    let property: { ownerId?: string; caretakerIds?: string[] } | null = null;
+    let property: { ownerId?: string } | null = null;
     try {
-      property = await Property.findById(complaint.propertyId)
-        .select("ownerId caretakerIds")
-        .lean();
+      property = await Property.findById(complaint.propertyId).select("ownerId").lean();
     } catch (_error) {
       console.warn(`[notifications] property lookup failed propertyId=${complaint.propertyId}`);
     }
@@ -640,7 +652,6 @@ export async function notifyComplaintCreated(complaint: ComplaintLike): Promise<
     const recipients = await resolveStaffRecipients({
       ownerId: property.ownerId,
       propertyId: complaint.propertyId,
-      caretakerIds: property.caretakerIds ?? [],
     });
 
     let ok = true;
