@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { bindApplicationAttribution } from "@/lib/attributions";
+import { getAssignedPropertyIds, getManagedOwnerId } from "@/lib/managed-owner";
 import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
 import { authenticate, getAdminAssignmentScope } from "@/lib/permissions";
@@ -15,7 +16,7 @@ export async function GET(request: NextRequest) {
   if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   await connectToDatabase();
-  const user = await User.findById(auth.userId).select("role isActive managedByOwnerId").lean();
+  const user = await User.findById(auth.userId).select("role isActive").lean();
   if (!user?.isActive) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { page, limit } = parsePagination({
@@ -31,18 +32,16 @@ export async function GET(request: NextRequest) {
   } else if (role === "owner") {
     filter.ownerId = String(user._id);
   } else if (role === "custodian") {
-    if (!user.managedByOwnerId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    filter.ownerId = user.managedByOwnerId;
+    const managedOwnerId = await getManagedOwnerId(String(user._id));
+    if (!managedOwnerId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    filter.ownerId = managedOwnerId;
   } else if (role === "caretaker") {
-    if (!user.managedByOwnerId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    const assigned = await Property.find({
-      caretakerIds: String(user._id),
-      ownerId: user.managedByOwnerId,
-    })
-      .select("_id")
-      .lean();
-    filter.ownerId = user.managedByOwnerId;
-    filter.propertyId = { $in: assigned.map((p) => String(p._id)) };
+    const managedOwnerId = await getManagedOwnerId(String(user._id));
+    if (!managedOwnerId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    filter.ownerId = managedOwnerId;
+    filter.propertyId = {
+      $in: await getAssignedPropertyIds(String(user._id), "caretaker"),
+    };
   } else if (role === "admin") {
     const scope = await getAdminAssignmentScope(String(user._id), "application:manage");
     const scopes: Record<string, unknown>[] = [];

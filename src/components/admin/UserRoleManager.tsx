@@ -85,9 +85,7 @@ export const UserRoleManager = () => {
     role: UserRow["role"];
   } | null>(null);
 
-  const visible = users.filter((u) =>
-    matchesQuery(search, u.name, u.email, u.phone, u.role, u.managedByOwnerId),
-  );
+  const visible = users.filter((u) => matchesQuery(search, u.name, u.email, u.phone, u.role));
 
   const requestChange = (u: UserRow, nextRole: UserRow["role"]) => {
     if (nextRole === u.role) return;
@@ -98,10 +96,7 @@ export const UserRoleManager = () => {
     if (!confirmTarget) return;
     const target = confirmTarget;
     try {
-      // Re-send the existing owner binding so caretaker <-> custodian switches
-      // keep the portfolio link. New caretakers/custodians of a different owner
-      // are bound through the caretaker/custodian invite flows instead.
-      await promoteUserRole(target.user.id, target.role, target.user.managedByOwnerId || undefined);
+      await promoteUserRole(target.user.id, target.role);
       toast.success(`${target.user.name}'s role updated to ${target.role}`);
       setConfirmTarget(null);
       refetch();
@@ -189,14 +184,13 @@ export const UserRoleManager = () => {
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Managed by</TableHead>
                 <TableHead className="text-right">Change role</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {visible.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
                     No users match your search.
                   </TableCell>
                 </TableRow>
@@ -224,9 +218,6 @@ export const UserRoleManager = () => {
                         <Badge variant={u.isActive ? "default" : "outline"}>
                           {u.isActive ? "Active" : "Inactive"}
                         </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {u.managedByOwnerId || "—"}
                       </TableCell>
                       <TableCell className="text-right">
                         {u.role === "system-admin" ? (

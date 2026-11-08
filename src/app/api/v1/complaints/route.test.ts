@@ -168,7 +168,6 @@ describe("GET /api/v1/complaints", () => {
     const caretaker = makeUser({
       _id: caretakerId,
       role: "caretaker",
-      managedByOwnerId: OWNER_ID,
     });
     user.findById.mockReturnValue(buildQuery(caretaker));
     managementAssignment.find.mockReturnValue(
@@ -185,6 +184,7 @@ describe("GET /api/v1/complaints", () => {
         },
       ]),
     );
+    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, ownerId: OWNER_ID }]));
     complaint.find.mockReturnValue(buildQuery([]).sort({ createdAt: -1 }).skip(0).limit(20));
     complaint.countDocuments.mockResolvedValue(0);
 
@@ -212,10 +212,9 @@ describe("GET /api/v1/complaints", () => {
       ]),
     );
     user.findById.mockReturnValue(
-      buildQuery(
-        makeUser({ _id: makeObjectId("custodian"), role: "custodian", managedByOwnerId: OWNER_ID }),
-      ),
+      buildQuery(makeUser({ _id: makeObjectId("custodian"), role: "custodian" })),
     );
+    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, ownerId: OWNER_ID }]));
     complaint.find.mockReturnValue(buildQuery([]).sort({ createdAt: -1 }).skip(0).limit(20));
     complaint.countDocuments.mockResolvedValue(0);
 

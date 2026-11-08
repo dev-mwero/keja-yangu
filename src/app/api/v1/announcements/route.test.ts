@@ -142,7 +142,9 @@ describe("GET /api/v1/announcements", () => {
       buildQuery([row]).sort({ pinned: -1, createdAt: -1 }).skip(0).limit(20),
     );
     announcement.countDocuments.mockResolvedValue(1);
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, title: "Sunlit Studio" }]));
+    property.find.mockReturnValue(
+      buildQuery([{ _id: PROPERTY_ID, ownerId: OWNER_ID, title: "Sunlit Studio" }]),
+    );
 
     const res = await GET(buildRequest("/api/v1/announcements", { token: signToken(USER_ID) }));
     const body = await json(res);
@@ -247,6 +249,7 @@ describe("GET /api/v1/announcements", () => {
       buildQuery([]).sort({ pinned: -1, createdAt: -1 }).skip(0).limit(20),
     );
     announcement.countDocuments.mockResolvedValue(0);
+    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, ownerId: OWNER_ID }]));
 
     const res = await GET(
       buildRequest("/api/v1/announcements", { token: signToken(CARETAKER_ID) }),
@@ -277,7 +280,7 @@ describe("GET /api/v1/announcements", () => {
       buildQuery([]).sort({ pinned: -1, createdAt: -1 }).skip(0).limit(20),
     );
     announcement.countDocuments.mockResolvedValue(0);
-    property.find.mockReturnValue(buildQuery([]));
+    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, ownerId: OWNER_ID }]));
 
     const res = await GET(
       buildRequest("/api/v1/announcements", { token: signToken(CUSTODIAN_ID) }),
@@ -463,7 +466,9 @@ describe("POST /api/v1/announcements", () => {
         }),
       ]),
     );
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, title: "Sunlit Studio" }]));
+    property.find.mockReturnValue(
+      buildQuery([{ _id: PROPERTY_ID, ownerId: OWNER_ID, title: "Sunlit Studio" }]),
+    );
     const created = makeAnnouncement({
       _id: ANNOUNCEMENT_ID,
       authorId: CARETAKER_ID,
@@ -553,7 +558,7 @@ describe("POST /api/v1/announcements", () => {
         }),
       ]),
     );
-    property.find.mockReturnValue(buildQuery([]));
+    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, ownerId: OWNER_ID }]));
     const created = makeAnnouncement({
       _id: ANNOUNCEMENT_ID,
       authorId: CUSTODIAN_ID,

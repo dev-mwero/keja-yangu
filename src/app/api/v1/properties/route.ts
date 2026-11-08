@@ -3,6 +3,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { normalizeAmenities } from "@/lib/amenities";
 import { DEFAULT_PROPERTY_PURPOSE, PROPERTY_PURPOSES } from "@/lib/domain-enums";
+import {
+  getAssignedPropertyIds,
+  getManagedOwnerId,
+  getPropertyStaffMap,
+} from "@/lib/managed-owner";
 import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
 import {
@@ -12,7 +17,10 @@ import {
   requirePermission,
 } from "@/lib/permissions";
 import { computeIdentityHash, findDuplicateCandidates } from "@/lib/property-identity";
-import { syncPropertyStaffAssignments, validatePropertyStaffAssignments } from "@/lib/property-staff";
+import {
+  syncPropertyStaffAssignments,
+  validatePropertyStaffAssignments,
+} from "@/lib/property-staff";
 import { isActivePropertyTypeKey } from "@/lib/property-type-store";
 import { blockInput, MAX_UNITS_PER_PROPERTY } from "@/lib/schemas/structure";
 import { buildUnitInserts, countRequestedUnits } from "@/lib/units";
@@ -102,7 +110,7 @@ export async function GET(request: NextRequest) {
   const publicListing = async () => {
     const available = await Promise.all([
       Property.find({ status: "available", published: true })
-        .select("-ownerId -caretakerIds -custodianIds -createdById -__v")
+        .select("-ownerId -createdById -__v")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -116,9 +124,7 @@ export async function GET(request: NextRequest) {
     return publicListing();
   }
 
-  const actorDoc = await User.findById(authUser.userId)
-    .select("role isActive managedByOwnerId")
-    .lean();
+  const actorDoc = await User.findById(authUser.userId).select("role isActive").lean();
   if (!actorDoc?.isActive) {
     return publicListing();
   }
@@ -178,7 +184,14 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json(buildPaginationResult(scopedProperties, total, page, limit));
+    const staffMap = await getPropertyStaffMap(
+      scopedProperties.map((property) => String(property._id)),
+    );
+    const withStaff = scopedProperties.map((property) => ({
+      ...property,
+      ...(staffMap.get(String(property._id)) ?? { caretakerIds: [], custodianIds: [] }),
+    }));
+    return NextResponse.json(buildPaginationResult(withStaff, total, page, limit));
   } else if (actorDoc.role === "custodian" || actorDoc.role === "caretaker") {
     // Assignment-only scoping: staff without an active assignment see nothing.
     const staffScope = await getStaffAssignmentScope(
@@ -187,11 +200,20 @@ export async function GET(request: NextRequest) {
       "property:read" as unknown as Action,
     );
     filter._id = { $in: staffScope.hasAssignments ? staffScope.assignedPropertyIds : [] };
-    if (actorDoc.role === "custodian" && caretakerId) filter.caretakerIds = caretakerId;
+    if (actorDoc.role === "custodian" && caretakerId) {
+      const caretakerPropertyIds = await getAssignedPropertyIds(caretakerId, "caretaker");
+      filter._id = {
+        $in: (filter._id as { $in: string[] }).$in.filter((id) =>
+          caretakerPropertyIds.includes(id),
+        ),
+      };
+    }
     if (status) filter.status = status;
   } else {
     if (ownerId) filter.ownerId = ownerId;
-    if (caretakerId) filter.caretakerIds = caretakerId;
+    if (caretakerId) {
+      filter._id = { $in: await getAssignedPropertyIds(caretakerId, "caretaker") };
+    }
     if (status) filter.status = status;
   }
 
@@ -200,7 +222,13 @@ export async function GET(request: NextRequest) {
     Property.countDocuments(filter),
   ]);
 
-  return NextResponse.json(buildPaginationResult(properties, total, page, limit));
+  const staffMap = await getPropertyStaffMap(properties.map((property) => String(property._id)));
+  const withStaff = properties.map((property) => ({
+    ...property,
+    ...(staffMap.get(String(property._id)) ?? { caretakerIds: [], custodianIds: [] }),
+  }));
+
+  return NextResponse.json(buildPaginationResult(withStaff, total, page, limit));
 }
 
 export async function POST(request: NextRequest) {
@@ -283,7 +311,7 @@ export async function POST(request: NextRequest) {
         { status: 403 },
       );
     }
-    const managingOwnerId = user.managedByOwnerId ?? "";
+    const managingOwnerId = await getManagedOwnerId(String(user._id));
     if (!managingOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -300,7 +328,7 @@ export async function POST(request: NextRequest) {
     ownerId = managingOwnerId;
     caretakerIds.push(actorId);
   } else if (user.role === "custodian") {
-    const managingOwnerId = user.managedByOwnerId ?? "";
+    const managingOwnerId = await getManagedOwnerId(String(user._id));
     if (!managingOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -350,8 +378,6 @@ export async function POST(request: NextRequest) {
     ...createData,
     ownerId,
     createdById: actorId,
-    caretakerIds: uniqueCaretakerIds,
-    custodianIds: uniqueCustodianIds,
     published: false,
     identityHash,
     blocks: inputBlocks.map((block, order) => ({

@@ -11,6 +11,7 @@ vi.mock("@/lib/audit", () => ({
   writeAuditEvent: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
+vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/ManagementAssignment", () => ({
   ManagementAssignment: getModelStubs().managementAssignment,
 }));
@@ -18,7 +19,8 @@ vi.mock("@/models/ManagementAssignment", () => ({
 import { PUT } from "@/app/api/v1/caretakers/[id]/privileges/route";
 import { writeAuditEvent } from "@/lib/audit";
 
-const { user } = getModelStubs();
+const { user, property, managementAssignment } = getModelStubs();
+const PROP_ID = makeObjectId("prop");
 
 const OWNER_ID = makeObjectId("owner");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
@@ -176,7 +178,7 @@ describe("PUT /api/v1/caretakers/[id]/privileges", () => {
     expect(user.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
-  it("owner grants privileges and binds an unbound caretaker", async () => {
+  it("owner grants privileges to an unbound caretaker", async () => {
     mockActorAndTarget(ownerDoc(), caretakerDoc(TARGET_ID));
     const updated = caretakerDoc(TARGET_ID, {
       managedByOwnerId: OWNER_ID,
@@ -193,11 +195,11 @@ describe("PUT /api/v1/caretakers/[id]/privileges", () => {
     expect(res.status).toBe(200);
     expect(user.findOneAndUpdate).toHaveBeenCalledWith(
       { _id: TARGET_ID },
-      { privileges: ["manage_tenants", "manage_invoices"], managedByOwnerId: OWNER_ID },
+      { privileges: ["manage_tenants", "manage_invoices"] },
       { new: true, runValidators: true },
     );
     const data = (await json(res)).data as { managedByOwnerId?: string; privileges?: string[] };
-    expect(data.managedByOwnerId).toBe(OWNER_ID);
+    expect(data.managedByOwnerId).toBe("");
     expect(data.privileges).toEqual(["manage_tenants", "manage_invoices"]);
     expect(writeAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -212,7 +214,19 @@ describe("PUT /api/v1/caretakers/[id]/privileges", () => {
   });
 
   it("409 when the caretaker is bound to another owner", async () => {
-    mockActorAndTarget(ownerDoc(), caretakerDoc(TARGET_ID, { managedByOwnerId: OTHER_OWNER_ID }));
+    mockActorAndTarget(ownerDoc(), caretakerDoc(TARGET_ID));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: TARGET_ID,
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          status: "active",
+        },
+      ]),
+    );
+    property.find.mockReturnValue(buildQuery([{ _id: PROP_ID, ownerId: OTHER_OWNER_ID }]));
     const res = await PUT(
       putRequest(signToken(OWNER_ID), TARGET_ID, { privileges: ["manage_tenants"] }),
       withParams(TARGET_ID),
@@ -286,10 +300,21 @@ describe("PUT /api/v1/caretakers/[id]/privileges", () => {
     const custodian = makeUser({
       _id: CARE_ID,
       role: "custodian",
-      managedByOwnerId: OWNER_ID,
       privileges: ["assign_privileges"],
     });
-    mockActorAndTarget(custodian, caretakerDoc(TARGET_ID, { managedByOwnerId: OWNER_ID }));
+    mockActorAndTarget(custodian, caretakerDoc(TARGET_ID));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARE_ID,
+          accessRole: "custodian",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          status: "active",
+        },
+      ]),
+    );
+    property.find.mockReturnValue(buildQuery([{ _id: PROP_ID, ownerId: OWNER_ID }]));
     user.findOneAndUpdate.mockReturnValue(
       buildQuery(
         caretakerDoc(TARGET_ID, {

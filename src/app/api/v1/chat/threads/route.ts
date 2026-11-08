@@ -15,6 +15,7 @@ import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { chatThreadInput } from "@/lib/schemas";
 import { ChatMessage } from "@/models/ChatMessage";
 import { ChatThread } from "@/models/ChatThread";
+import { ManagementAssignment } from "@/models/ManagementAssignment";
 import { Property } from "@/models/Property";
 import { Tenant } from "@/models/Tenant";
 import { User } from "@/models/User";
@@ -177,14 +178,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const property = await Property.findById(propertyId).select("ownerId caretakerIds").lean();
+  const property = await Property.findById(propertyId).select("ownerId").lean();
   if (!property) {
     return NextResponse.json({ error: "Property not found" }, { status: 404 });
   }
   const recipientId = parsed.data.recipientId;
-  const agentMatchesRole =
-    (parsed.data.role === "owner" && property.ownerId === recipientId) ||
-    (parsed.data.role === "caretaker" && (property.caretakerIds ?? []).includes(recipientId));
+  let agentMatchesRole = parsed.data.role === "owner" && property.ownerId === recipientId;
+  if (!agentMatchesRole && parsed.data.role === "caretaker") {
+    const caretakerAssignment = await ManagementAssignment.findOne({
+      principalUserId: recipientId,
+      propertyId,
+      accessRole: "caretaker",
+      status: "active",
+    }).lean();
+    agentMatchesRole = Boolean(caretakerAssignment);
+  }
   if (!agentMatchesRole) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

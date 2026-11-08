@@ -136,6 +136,7 @@ describe("DELETE /api/v1/announcements/[id]", () => {
         }),
       ]),
     );
+    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, ownerId: OWNER_ID }]));
     announcement.findById.mockReturnValue(
       buildQuery(
         makeAnnouncement({

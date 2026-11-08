@@ -2,7 +2,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildRequest, signToken } from "@/test/utils/api-request";
 import { makeObjectId, makeUser } from "@/test/utils/factories";
-import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-mocks";
+import {
+  buildQuery,
+  getModelStubs,
+  mockStaffPortfolio,
+  resetModelStubs,
+} from "@/test/utils/model-mocks";
 
 vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
@@ -80,9 +85,13 @@ describe("GET /api/v1/move-requests", () => {
   });
 
   it("scopes a custodian to their managing owner", async () => {
-    user.findById.mockReturnValue(
-      buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian", managedByOwnerId: OWNER_ID })),
-    );
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian" })));
+    mockStaffPortfolio({
+      userId: CUSTODIAN_ID,
+      role: "custodian",
+      ownerId: OWNER_ID,
+      propertyIds: [PROP_ID],
+    });
     listResult([]);
     const res = await GET(
       buildRequest("/api/v1/move-requests", { token: signToken(CUSTODIAN_ID) }),
@@ -92,20 +101,19 @@ describe("GET /api/v1/move-requests", () => {
   });
 
   it("scopes a caretaker to assigned properties of the managing owner", async () => {
-    user.findById.mockReturnValue(
-      buildQuery(makeUser({ _id: CARETAKER_ID, role: "caretaker", managedByOwnerId: OWNER_ID })),
-    );
-    property.find.mockReturnValue(buildQuery([{ _id: PROP_ID }]));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: CARETAKER_ID, role: "caretaker" })));
+    mockStaffPortfolio({
+      userId: CARETAKER_ID,
+      role: "caretaker",
+      ownerId: OWNER_ID,
+      propertyIds: [PROP_ID],
+    });
     listResult([]);
 
     const res = await GET(
       buildRequest("/api/v1/move-requests", { token: signToken(CARETAKER_ID) }),
     );
     expect(res.status).toBe(200);
-    expect(property.find).toHaveBeenCalledWith({
-      caretakerIds: CARETAKER_ID,
-      ownerId: OWNER_ID,
-    });
     expect(moverrequest.find).toHaveBeenCalledWith({
       ownerId: OWNER_ID,
       propertyId: { $in: [PROP_ID] },
@@ -374,9 +382,13 @@ describe("POST /api/v1/move-requests", () => {
   });
 
   it("lets a custodian file against their managing owner's property", async () => {
-    user.findById.mockReturnValue(
-      buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian", managedByOwnerId: OWNER_ID })),
-    );
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian" })));
+    mockStaffPortfolio({
+      userId: CUSTODIAN_ID,
+      role: "custodian",
+      ownerId: OWNER_ID,
+      propertyIds: [PROP_ID],
+    });
     property.findById.mockReturnValue(buildQuery({ _id: PROP_ID, ownerId: OWNER_ID }));
     moverrequest.create.mockResolvedValue({ _id: makeObjectId("mr") });
 

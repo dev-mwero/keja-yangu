@@ -27,7 +27,6 @@ const userSchema = new mongoose.Schema(
     role: String,
     isActive: { type: Boolean, default: true },
     isVerified: { type: Boolean, default: false },
-    managedByOwnerId: { type: String, default: "" },
     privileges: { type: [String], default: [] },
     tokenVersion: { type: Number, default: 0 },
   },
@@ -60,7 +59,6 @@ interface CliOptions {
   email: string;
   operatorEmail: string;
   toRole: string;
-  ownerId: string;
   reason: string;
   apply: boolean;
   revoke: boolean;
@@ -82,7 +80,6 @@ function parseArgs(argv: string[]): CliOptions {
     email,
     operatorEmail: get("--operator-email")?.trim().toLowerCase() ?? "",
     toRole: get("--to-role")?.trim() ?? "admin",
-    ownerId: get("--owner-id")?.trim() ?? "",
     reason: get("--reason")?.trim() ?? "",
     apply: argv.includes("--apply"),
     revoke: argv.includes("--revoke"),
@@ -128,9 +125,6 @@ async function main() {
     if (!ASSIGNABLE_ROLES.includes(options.toRole)) {
       throw new Error(`--to-role must be one of: ${ASSIGNABLE_ROLES.join(", ")}`);
     }
-    if ((options.toRole === "caretaker" || options.toRole === "custodian") && !options.ownerId) {
-      throw new Error(`--owner-id is required when demoting to ${options.toRole}`);
-    }
     const operator = await User.findOne({
       email: options.operatorEmail,
       role: "system-admin",
@@ -146,7 +140,6 @@ async function main() {
     const before = { role: target.role, tokenVersion: target.tokenVersion ?? 0 };
     const after = {
       role: options.toRole,
-      managedByOwnerId: options.ownerId,
       privileges: [],
       tokenVersion: (target.tokenVersion ?? 0) + 1,
       reason: options.reason || "CLI revocation",
@@ -177,7 +170,6 @@ async function main() {
       {
         $set: {
           role: after.role,
-          managedByOwnerId: after.managedByOwnerId,
           privileges: [],
           tokenVersion: after.tokenVersion,
         },
@@ -229,7 +221,6 @@ async function main() {
   const before = { role: target.role, tokenVersion: target.tokenVersion ?? 0 };
   const after = {
     role: "system-admin",
-    managedByOwnerId: "",
     privileges: [],
     tokenVersion: (target.tokenVersion ?? 0) + 1,
     reason: options.reason || (options.bootstrap ? "Bootstrap" : "CLI grant"),
@@ -260,7 +251,6 @@ async function main() {
     {
       $set: {
         role: "system-admin",
-        managedByOwnerId: "",
         privileges: [],
         tokenVersion: after.tokenVersion,
         isActive: true,

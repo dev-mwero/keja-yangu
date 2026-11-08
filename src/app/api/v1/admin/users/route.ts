@@ -14,7 +14,6 @@ interface UserListDoc {
   phone?: string;
   role?: string;
   isActive?: boolean;
-  managedByOwnerId?: string;
   createdAt?: Date;
 }
 
@@ -26,7 +25,6 @@ function serialize(user: UserListDoc) {
     phone: user.phone ?? "",
     role: user.role ?? "",
     isActive: user.isActive !== false,
-    managedByOwnerId: user.managedByOwnerId ?? "",
     createdAt: user.createdAt ?? null,
   };
 }
@@ -58,7 +56,7 @@ export async function GET(request: NextRequest) {
 
   const [items, total] = await Promise.all([
     User.find(filter)
-      .select("name email phone role isActive managedByOwnerId createdAt")
+      .select("name email phone role isActive createdAt")
       .sort({ createdAt: -1, _id: -1 })
       .skip((page - 1) * limit)
       .limit(limit)

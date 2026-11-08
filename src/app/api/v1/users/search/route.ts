@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { getManagedOwnerId } from "@/lib/managed-owner";
 import { connectToDatabase } from "@/lib/mongoose";
 import { authenticate, getAdminAssignmentScope } from "@/lib/permissions";
 import { resolveUserByContact } from "@/lib/user-identity";
@@ -22,7 +23,9 @@ export async function GET(request: NextRequest) {
 
   const isOwnerOrAdmin =
     actor.role === "owner" || actor.role === "admin" || actor.role === "system-admin";
-  const isCustodian = actor.role === "custodian" && Boolean(actor.managedByOwnerId);
+  const actorManagedOwnerId =
+    actor.role === "custodian" ? await getManagedOwnerId(String(actor._id)) : "";
+  const isCustodian = actor.role === "custodian" && Boolean(actorManagedOwnerId);
   const isCaretakerWithTenants =
     actor.role === "caretaker" && (actor.privileges ?? []).includes("manage_tenants");
   if (!isOwnerOrAdmin && !isCustodian && !isCaretakerWithTenants) {
@@ -57,7 +60,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
   } else if (actor.role === "custodian") {
-    portfolioOwnerId = actor.managedByOwnerId ?? "";
+    portfolioOwnerId = actorManagedOwnerId ?? "";
     if (ownerId && ownerId !== portfolioOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -105,6 +108,7 @@ export async function GET(request: NextRequest) {
     );
   }
   const found = identity.user;
+  const foundManagedOwnerId = found ? await getManagedOwnerId(String(found._id)) : "";
 
   const data = found
     ? [
@@ -120,15 +124,15 @@ export async function GET(request: NextRequest) {
                 canLink:
                   found.role === requestedRole &&
                   (!portfolioOwnerId ||
-                    !found.managedByOwnerId ||
-                    found.managedByOwnerId === portfolioOwnerId) &&
+                    !foundManagedOwnerId ||
+                    foundManagedOwnerId === portfolioOwnerId) &&
                   ((found.isActive !== false && found.isVerified !== false) || Boolean(email)),
                 linkReason:
                   found.role !== requestedRole
                     ? "This contact is already registered to a different role."
                     : portfolioOwnerId &&
-                        found.managedByOwnerId &&
-                        found.managedByOwnerId !== portfolioOwnerId
+                        foundManagedOwnerId &&
+                        foundManagedOwnerId !== portfolioOwnerId
                       ? "This account cannot be linked to this portfolio."
                       : (found.isActive === false || found.isVerified === false) && !email
                         ? "An email address is required to reactivate this account."

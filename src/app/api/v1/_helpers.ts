@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { getManagedOwnerId } from "@/lib/managed-owner";
 import { connectToDatabase } from "@/lib/mongoose";
 import {
   type Action,
@@ -42,7 +43,8 @@ export async function resolveInvoiceActor(
   }
 
   const userId = String(user._id);
-  const managedByOwnerId = user.managedByOwnerId ?? "";
+  const managedByOwnerId =
+    user.role === "custodian" || user.role === "caretaker" ? await getManagedOwnerId(userId) : "";
   let assignedPropertyIds: string[] = [];
   let propertyScopeIds: string[] = [];
   let assignedBlockIds: string[] = [];
@@ -116,8 +118,8 @@ export interface DashboardActor {
 /**
  * Resolves the authenticated user plus the scoping ids the communications
  * routes need. Tenants get their bound Tenant row ids, property ids and owner
- * ids; caretakers get their assigned property ids (properties of the managing
- * owner that list them in `caretakerIds`). Owners and system-admins get none.
+ * ids; staff get their assigned property ids from active assignments. Owners,
+ * admins and system-admins derive no managed owner.
  */
 export async function resolveDashboardActor(
   request: NextRequest,
@@ -135,7 +137,8 @@ export async function resolveDashboardActor(
   }
 
   const userId = String(user._id);
-  const managedByOwnerId = user.managedByOwnerId ?? "";
+  const managedByOwnerId =
+    user.role === "custodian" || user.role === "caretaker" ? await getManagedOwnerId(userId) : "";
   let assignedPropertyIds: string[] = [];
   let tenantIds: string[] = [];
   let tenantPropertyIds: string[] = [];

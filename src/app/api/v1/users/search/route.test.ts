@@ -8,10 +8,15 @@ vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
+vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 
 import { GET } from "@/app/api/v1/users/search/route";
 
-const { user } = getModelStubs();
+const { user, property, managementAssignment } = getModelStubs();
+const PROP_ID = makeObjectId("prop");
 
 const OWNER_ID = makeObjectId("owner");
 const ADMIN_ID = makeObjectId("admin");
@@ -134,6 +139,18 @@ describe("GET /api/v1/users/search", () => {
     });
     user.findById.mockReturnValue(buildQuery(custodian));
     user.findOne.mockReturnValue(buildQuery(found));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: custodian._id,
+          accessRole: "custodian",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          status: "active",
+        },
+      ]),
+    );
+    property.find.mockReturnValue(buildQuery([{ _id: PROP_ID, ownerId: OWNER_ID }]));
 
     const res = await GET(
       buildRequest("/api/v1/users/search", {
@@ -202,6 +219,18 @@ describe("GET /api/v1/users/search", () => {
       managedByOwnerId: OWNER_ID,
     });
     user.findById.mockReturnValue(buildQuery(custodian));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: custodian._id,
+          accessRole: "custodian",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          status: "active",
+        },
+      ]),
+    );
+    property.find.mockReturnValue(buildQuery([{ _id: PROP_ID, ownerId: OWNER_ID }]));
 
     const res = await GET(
       buildRequest("/api/v1/users/search", {

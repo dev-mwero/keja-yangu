@@ -8,6 +8,7 @@ vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
+vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Lead", () => ({ Lead: getModelStubs().lead }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/ManagementAssignment", () => ({
@@ -18,7 +19,7 @@ vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
 
 import { GET, POST } from "@/app/api/v1/leads/route";
 
-const { user, lead, managementAssignment } = getModelStubs();
+const { user, lead, property, managementAssignment } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const CUSTODIAN_ID = makeObjectId("custodian");
@@ -117,9 +118,9 @@ describe("GET /api/v1/leads", () => {
     const custodian = makeUser({
       _id: CUSTODIAN_ID,
       role: "custodian",
-      managedByOwnerId: OWNER_ID,
     });
     user.findById.mockReturnValue(buildQuery(custodian));
+    property.find.mockReturnValue(buildQuery([{ _id: makeObjectId("p1"), ownerId: OWNER_ID }]));
     lead.find.mockReturnValue(buildQuery([]));
     lead.countDocuments.mockResolvedValue(0);
 
@@ -339,10 +340,10 @@ describe("POST /api/v1/leads", () => {
     const caretaker = makeUser({
       _id: CARETAKER_ID,
       role: "caretaker",
-      managedByOwnerId: OWNER_ID,
       privileges: ["manage_tenants"],
     });
     user.findById.mockReturnValue(buildQuery(caretaker));
+    property.find.mockReturnValue(buildQuery([{ _id: makeObjectId("p1"), ownerId: OWNER_ID }]));
     lead.create.mockResolvedValue(createdLead);
 
     const res = await POST(

@@ -32,10 +32,8 @@ export async function auditLegacyReadiness(now = new Date()) {
   await connectToDatabase();
 
   const [properties, users, assignments, units, blocks, billingAccounts] = await Promise.all([
-    Property.find({ deletedAt: null })
-      .select("_id ownerId caretakerIds custodianIds deletedAt")
-      .lean(),
-    User.find({ isActive: true }).select("_id role isActive managedByOwnerId").lean(),
+    Property.find({ deletedAt: null }).select("_id ownerId deletedAt").lean(),
+    User.find({ isActive: true }).select("_id role isActive").lean(),
     ManagementAssignment.find({ status: "active" })
       .select("_id principalUserId accessRole scopeType propertyId blockId unitId")
       .lean(),

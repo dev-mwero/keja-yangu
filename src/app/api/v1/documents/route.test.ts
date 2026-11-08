@@ -87,7 +87,9 @@ describe("GET /api/v1/documents", () => {
       buildQuery([row]).sort({ createdAt: -1 }).skip(0).limit(20),
     );
     propertydocument.countDocuments.mockResolvedValue(1);
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, title: "Sunlit Studio" }]));
+    property.find.mockReturnValue(
+      buildQuery([{ _id: PROPERTY_ID, ownerId: OWNER_ID, title: "Sunlit Studio" }]),
+    );
 
     const res = await GET(buildRequest("/api/v1/documents", { token: signToken(USER_ID) }));
     expect(res.status).toBe(200);
@@ -151,9 +153,7 @@ describe("GET /api/v1/documents", () => {
 
   it("custodian scopes to the managed owner's records", async () => {
     const CUSTODIAN_ID = makeObjectId("document-custodian");
-    user.findById.mockReturnValue(
-      buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian", managedByOwnerId: OWNER_ID })),
-    );
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian" })));
     managementAssignment.find.mockReturnValue(
       buildQuery([
         activeAssignment({
@@ -166,7 +166,7 @@ describe("GET /api/v1/documents", () => {
     );
     propertydocument.find.mockReturnValue(buildQuery([]).sort({ createdAt: -1 }).skip(0).limit(20));
     propertydocument.countDocuments.mockResolvedValue(0);
-    property.find.mockReturnValue(buildQuery([]));
+    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, ownerId: OWNER_ID }]));
 
     const res = await GET(buildRequest("/api/v1/documents", { token: signToken(CUSTODIAN_ID) }));
     expect(res.status).toBe(200);
@@ -175,9 +175,7 @@ describe("GET /api/v1/documents", () => {
 
   it("caretaker scopes to the managed owner's assigned properties", async () => {
     const CARETAKER_ID = makeObjectId("document-caretaker");
-    user.findById.mockReturnValue(
-      buildQuery(makeUser({ _id: CARETAKER_ID, role: "caretaker", managedByOwnerId: OWNER_ID })),
-    );
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: CARETAKER_ID, role: "caretaker" })));
     managementAssignment.find.mockReturnValue(
       buildQuery([
         activeAssignment({
@@ -188,7 +186,9 @@ describe("GET /api/v1/documents", () => {
         }),
       ]),
     );
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, title: "Sunlit Studio" }]));
+    property.find.mockReturnValue(
+      buildQuery([{ _id: PROPERTY_ID, ownerId: OWNER_ID, title: "Sunlit Studio" }]),
+    );
     propertydocument.find.mockReturnValue(buildQuery([]).sort({ createdAt: -1 }).skip(0).limit(20));
     propertydocument.countDocuments.mockResolvedValue(0);
 

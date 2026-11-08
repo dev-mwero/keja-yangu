@@ -47,8 +47,6 @@ const propertySchema = new Schema(
     amenities: { type: [String], default: [] },
     status: { type: String, enum: ["available", "occupied", "maintenance"], default: "available" },
     ownerId: { type: String, default: "" },
-    caretakerIds: { type: [String], default: [] },
-    custodianIds: { type: [String], default: [] },
     createdById: { type: String, default: "" },
     beds: { type: Number, required: true, min: 0 },
     baths: { type: Number, required: true, min: 0 },
@@ -88,8 +86,6 @@ const propertySchema = new Schema(
 propertySchema.index({ status: 1, published: 1 });
 propertySchema.index({ identityHash: 1 }, { sparse: true });
 propertySchema.index({ ownerId: 1 });
-propertySchema.index({ caretakerIds: 1 });
-propertySchema.index({ custodianIds: 1 });
 propertySchema.index({ createdById: 1 });
 propertySchema.index({ ownerId: 1, status: 1 });
 softDeletePlugin(propertySchema);

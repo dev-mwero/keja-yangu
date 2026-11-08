@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { normalizeAmenities } from "@/lib/amenities";
 import { PROPERTY_PURPOSES } from "@/lib/domain-enums";
+import { getPropertyStaffIds } from "@/lib/managed-owner";
 import { connectToDatabase } from "@/lib/mongoose";
 import { asSoftDeleteModel } from "@/lib/mongoose-soft-delete";
 import {
@@ -14,7 +15,10 @@ import {
   isFullControlRole,
   requirePermission,
 } from "@/lib/permissions";
-import { syncPropertyStaffAssignments, validatePropertyStaffAssignments } from "@/lib/property-staff";
+import {
+  syncPropertyStaffAssignments,
+  validatePropertyStaffAssignments,
+} from "@/lib/property-staff";
 import { isActivePropertyTypeKey } from "@/lib/property-type-store";
 import { Property } from "@/models/Property";
 import { Tenant } from "@/models/Tenant";
@@ -48,17 +52,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
   await connectToDatabase();
   const authUser = authenticate(request);
-  let actor: { _id: string; role: string; managedByOwnerId?: string } | null = null;
+  let actor: { _id: string; role: string } | null = null;
   if (authUser) {
-    const doc = await User.findById(authUser.userId)
-      .select("_id role isActive managedByOwnerId")
-      .lean();
-    actor = doc?.isActive
-      ? { _id: String(doc._id), role: doc.role, managedByOwnerId: doc.managedByOwnerId }
-      : null;
+    const doc = await User.findById(authUser.userId).select("_id role isActive").lean();
+    actor = doc?.isActive ? { _id: String(doc._id), role: doc.role } : null;
   }
 
-  const PUBLIC_PROJECTION = "-ownerId -caretakerIds -custodianIds -createdById -__v";
+  const PUBLIC_PROJECTION = "-ownerId -createdById -__v";
 
   let property: { status?: string; _id?: unknown } | null = null;
   if (!actor) {
@@ -112,7 +112,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
           .sort({ floorLevel: 1, name: 1 })
           .lean();
 
-  return NextResponse.json({ data: { ...property, units } });
+  const staff = await getPropertyStaffIds(id);
+  return NextResponse.json({ data: { ...property, ...staff, units } });
 }
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -177,16 +178,16 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     );
   }
   if (updateData.caretakerIds !== undefined || updateData.custodianIds !== undefined) {
+    // Staff already assigned to this property stay eligible even if their
+    // account has since been deactivated.
+    const retainedStaff = await getPropertyStaffIds(id);
     const assignmentError = await validatePropertyStaffAssignments(
       property.ownerId,
       {
         caretakerIds: updateData.caretakerIds,
         custodianIds: updateData.custodianIds,
       },
-      {
-        caretakerIds: property.caretakerIds ?? [],
-        custodianIds: property.custodianIds ?? [],
-      },
+      retainedStaff,
     );
     if (assignmentError) {
       return NextResponse.json({ error: assignmentError }, { status: 400 });
@@ -196,6 +197,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     updateData.amenities = normalizeAmenities(updateData.amenities);
   }
 
+  const requestedCaretakerIds = updateData.caretakerIds;
+  const requestedCustodianIds = updateData.custodianIds;
+  delete updateData.caretakerIds;
+  delete updateData.custodianIds;
+
   const updated = await Property.findOneAndUpdate({ _id: id }, updateData, {
     new: true,
     runValidators: true,
@@ -204,11 +210,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     return NextResponse.json({ error: "Property not found" }, { status: 404 });
   }
 
-  if (updateData.caretakerIds !== undefined || updateData.custodianIds !== undefined) {
+  if (requestedCaretakerIds !== undefined || requestedCustodianIds !== undefined) {
     await syncPropertyStaffAssignments({
       propertyId: id,
-      caretakerIds: updated.caretakerIds ?? [],
-      custodianIds: updated.custodianIds ?? [],
+      caretakerIds: requestedCaretakerIds ?? [],
+      custodianIds: requestedCustodianIds ?? [],
       grantedByUserId: actor.userId,
     });
   }

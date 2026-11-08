@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
           published: true,
           deletedAt: null,
         })
-          .select("-ownerId -caretakerIds -custodianIds -createdById -__v")
+          .select("-ownerId -createdById -__v")
           .lean()
       : [];
   const propertyById = new Map(properties.map((property) => [String(property._id), property]));

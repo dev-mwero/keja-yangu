@@ -118,7 +118,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     }
     if (
       scope.role === "caretaker" &&
-      (!newProperty.caretakerIds?.includes(scope.userId) ||
+      (!scope.assignedPropertyIds?.includes(parsed.data.propertyId) ||
         newProperty.ownerId !== scope.managedByOwnerId)
     ) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });

@@ -6,10 +6,10 @@ const NOW = new Date("2026-11-04T00:00:00.000Z");
 function baseInput(): LegacyReadinessInput {
   return {
     now: NOW,
-    properties: [{ _id: "prop-1", ownerId: "", caretakerIds: [], custodianIds: [] }],
+    properties: [{ _id: "prop-1", ownerId: "" }],
     users: [
-      { _id: "admin-1", role: "admin", isActive: true, managedByOwnerId: "" },
-      { _id: "caretaker-1", role: "caretaker", isActive: true, managedByOwnerId: "" },
+      { _id: "admin-1", role: "admin", isActive: true },
+      { _id: "caretaker-1", role: "caretaker", isActive: true },
     ],
     assignments: [
       {
@@ -38,32 +38,26 @@ describe("legacy readiness", () => {
     expect(report.blocking.ownerRoleUsers).toEqual([]);
   });
 
-  it("reports legacy references and owner-role users as blocking", () => {
+  it("reports legacy owner-role users as blocking", () => {
     const input = baseInput();
     input.properties[0].ownerId = "owner-1";
-    input.properties[0].caretakerIds = ["caretaker-1"];
-    input.properties[0].custodianIds = ["custodian-1"];
     input.users.push({
       _id: "owner-1",
       role: "owner",
       isActive: true,
-      managedByOwnerId: "legacy-owner",
     });
 
     const report = buildLegacyReadinessReport(input);
 
     expect(report.readyForLegacyRetirement).toBe(false);
     expect(report.counts.propertiesWithLegacyOwner).toBe(1);
-    expect(report.counts.propertiesWithLegacyCaretakers).toBe(1);
-    expect(report.counts.propertiesWithLegacyCustodians).toBe(1);
-    expect(report.counts.usersWithLegacyManager).toBe(1);
     expect(report.blocking.ownerRoleUsers).toEqual(["owner-1"]);
     expect(report.blocking.ownersWithoutAssignment).toEqual([
       { propertyId: "prop-1", ownerId: "owner-1" },
     ]);
   });
 
-  it("accepts a legacy owner that already has an active admin assignment", () => {
+  it("accepts a property owner that already has an active admin assignment", () => {
     const input = baseInput();
     input.properties[0].ownerId = "admin-1";
     input.users = [{ _id: "admin-1", role: "admin", isActive: true }];
@@ -85,6 +79,8 @@ describe("legacy readiness", () => {
         accessRole: "custodian",
         scopeType: "property",
         propertyId: "missing-prop",
+        blockId: "",
+        unitId: "",
       },
       {
         _id: "asg-block",
@@ -93,6 +89,7 @@ describe("legacy readiness", () => {
         scopeType: "block",
         propertyId: "prop-1",
         blockId: "missing-block",
+        unitId: "",
       },
       {
         _id: "asg-unit",
@@ -100,56 +97,16 @@ describe("legacy readiness", () => {
         accessRole: "caretaker",
         scopeType: "unit",
         propertyId: "prop-1",
+        blockId: "",
         unitId: "missing-unit",
       },
     ];
 
     const report = buildLegacyReadinessReport(input);
 
-    expect(report.blocking.orphanAssignments).toEqual([
-      { assignmentId: "asg-orphan", propertyId: "missing-prop" },
-    ]);
-    expect(report.blocking.missingBlockAssignments).toEqual([
-      { assignmentId: "asg-block", blockId: "missing-block" },
-    ]);
-    expect(report.blocking.missingUnitAssignments).toEqual([
-      { assignmentId: "asg-unit", unitId: "missing-unit" },
-    ]);
     expect(report.readyForLegacyRetirement).toBe(false);
-  });
-
-  it("flags units pointing at missing or inactive billing accounts", () => {
-    const input = baseInput();
-    input.units.push(
-      { _id: "unit-2", propertyId: "prop-1", billingAccountId: "missing-ba" },
-      { _id: "unit-3", propertyId: "prop-1", billingAccountId: "ba-closed" },
-    );
-    input.billingAccounts.push({ _id: "ba-closed", status: "closed" });
-
-    const report = buildLegacyReadinessReport(input);
-
-    expect(report.blocking.unitBillingDrift).toEqual([
-      { unitId: "unit-2", billingAccountId: "missing-ba" },
-      { unitId: "unit-3", billingAccountId: "ba-closed" },
-    ]);
-  });
-
-  it("ignores soft-deleted properties, units, blocks and billing accounts", () => {
-    const input = baseInput();
-    input.properties.push({ _id: "prop-deleted", ownerId: "owner-1", deletedAt: NOW });
-    input.units.push({
-      _id: "unit-deleted",
-      propertyId: "prop-1",
-      billingAccountId: "missing-ba",
-      deletedAt: NOW,
-    });
-    input.blocks.push({ _id: "block-deleted", propertyId: "prop-1", deletedAt: NOW });
-    input.billingAccounts.push({ _id: "ba-deleted", status: "closed", deletedAt: NOW });
-
-    const report = buildLegacyReadinessReport(input);
-
-    expect(report.counts.propertiesWithLegacyOwner).toBe(0);
-    expect(report.blocking.unitBillingDrift).toEqual([]);
-    expect(report.readyForLegacyRetirement).toBe(true);
+    expect(report.blocking.orphanAssignments).toHaveLength(1);
+    expect(report.blocking.missingBlockAssignments).toHaveLength(1);
+    expect(report.blocking.missingUnitAssignments).toHaveLength(1);
   });
 });

@@ -22,7 +22,6 @@ import { PATCH } from "@/app/api/v1/admin/users/[id]/role/route";
 const models = getModelStubs();
 const SYS_ADMIN_ID = makeObjectId("sysadmin");
 const TARGET_ID = makeObjectId("target");
-const OWNER_ID = makeObjectId("owner");
 
 function sysAdminDoc() {
   return makeUser({ _id: SYS_ADMIN_ID, role: "system-admin" });
@@ -183,7 +182,7 @@ describe("PATCH /api/v1/admin/users/[id]/role", () => {
     expect(models.user.updateOne).not.toHaveBeenCalled();
   });
 
-  it("400 when a caretaker role lacks managedByOwnerId", async () => {
+  it("allows assigning a staff role without an owner binding", async () => {
     const res = await PATCH(
       buildRequest(`/api/v1/admin/users/${TARGET_ID}/role`, {
         method: "PATCH",
@@ -192,22 +191,11 @@ describe("PATCH /api/v1/admin/users/[id]/role", () => {
       }),
       withParams(TARGET_ID),
     );
-    expect(res.status).toBe(400);
-    expect(models.user.updateOne).not.toHaveBeenCalled();
-  });
-
-  it("400 when managedByOwnerId is not an active owner", async () => {
-    models.user.findOne.mockReturnValue(buildQuery(null));
-    const res = await PATCH(
-      buildRequest(`/api/v1/admin/users/${TARGET_ID}/role`, {
-        method: "PATCH",
-        token: signToken(SYS_ADMIN_ID),
-        body: { role: "custodian", managedByOwnerId: OWNER_ID },
-      }),
-      withParams(TARGET_ID),
+    expect(res.status).toBe(200);
+    expect(models.user.updateOne).toHaveBeenCalledWith(
+      { _id: TARGET_ID },
+      { $set: { role: "caretaker", privileges: [], tokenVersion: 3 } },
     );
-    expect(res.status).toBe(400);
-    expect(models.user.updateOne).not.toHaveBeenCalled();
   });
 
   it("returns the user unchanged when the role is already set (idempotent)", async () => {
@@ -254,17 +242,13 @@ describe("PATCH /api/v1/admin/users/[id]/role", () => {
     expect(models.auditEvent.create).toHaveBeenCalledTimes(1);
     expect(models.user.updateOne).toHaveBeenCalledWith(
       { _id: TARGET_ID },
-      { $set: { role: "broker", managedByOwnerId: "", privileges: [], tokenVersion: 3 } },
+      { $set: { role: "broker", privileges: [], tokenVersion: 3 } },
     );
     expect(models.managementAssignment.updateMany).toHaveBeenCalledWith(
       { principalUserId: TARGET_ID, status: { $in: ["active", "pending", "suspended"] } },
       expect.objectContaining({
         $set: expect.objectContaining({ status: "revoked" }),
       }),
-    );
-    expect(models.property.updateMany).toHaveBeenCalledWith(
-      { $or: [{ caretakerIds: TARGET_ID }, { custodianIds: TARGET_ID }] },
-      { $pull: { caretakerIds: TARGET_ID, custodianIds: TARGET_ID } },
     );
   });
 

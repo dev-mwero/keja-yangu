@@ -11,8 +11,6 @@
 export interface ReadinessProperty {
   _id: unknown;
   ownerId?: string;
-  caretakerIds?: string[];
-  custodianIds?: string[];
   deletedAt?: Date | null;
 }
 
@@ -20,7 +18,6 @@ export interface ReadinessUser {
   _id: unknown;
   role: string;
   isActive?: boolean;
-  managedByOwnerId?: string;
 }
 
 export interface ReadinessAssignment {
@@ -68,9 +65,6 @@ export interface LegacyReadinessReport {
   counts: {
     activeOwnerRoleUsers: number;
     propertiesWithLegacyOwner: number;
-    propertiesWithLegacyCaretakers: number;
-    propertiesWithLegacyCustodians: number;
-    usersWithLegacyManager: number;
     activeAssignments: number;
   };
   blocking: {
@@ -82,10 +76,6 @@ export interface LegacyReadinessReport {
     unitBillingDrift: Array<{ unitId: string; billingAccountId: string }>;
   };
   readyForLegacyRetirement: boolean;
-}
-
-function hasLegacyValues(values?: string[]): boolean {
-  return (values ?? []).some((value) => String(value ?? "").trim() !== "");
 }
 
 /**
@@ -117,8 +107,6 @@ export function buildLegacyReadinessReport(input: LegacyReadinessInput): LegacyR
     .map((user) => String(user._id));
 
   let propertiesWithLegacyOwner = 0;
-  let propertiesWithLegacyCaretakers = 0;
-  let propertiesWithLegacyCustodians = 0;
   const ownersWithoutAssignment: Array<{ propertyId: string; ownerId: string }> = [];
 
   for (const property of properties) {
@@ -131,13 +119,7 @@ export function buildLegacyReadinessReport(input: LegacyReadinessInput): LegacyR
         ownersWithoutAssignment.push({ propertyId, ownerId });
       }
     }
-    if (hasLegacyValues(property.caretakerIds)) propertiesWithLegacyCaretakers += 1;
-    if (hasLegacyValues(property.custodianIds)) propertiesWithLegacyCustodians += 1;
   }
-
-  const usersWithLegacyManager = input.users.filter(
-    (user) => user.isActive !== false && String(user.managedByOwnerId ?? "").trim() !== "",
-  ).length;
 
   const orphanAssignments: Array<{ assignmentId: string; propertyId: string }> = [];
   const missingBlockAssignments: Array<{ assignmentId: string; blockId: string }> = [];
@@ -197,9 +179,6 @@ export function buildLegacyReadinessReport(input: LegacyReadinessInput): LegacyR
     counts: {
       activeOwnerRoleUsers: ownerRoleUsers.length,
       propertiesWithLegacyOwner,
-      propertiesWithLegacyCaretakers,
-      propertiesWithLegacyCustodians,
-      usersWithLegacyManager,
       activeAssignments: input.assignments.length,
     },
     blocking: {

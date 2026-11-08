@@ -11,15 +11,20 @@ vi.mock("@/lib/audit", () => ({
   writeAuditEvent: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
+vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 
 import { DELETE, PATCH } from "@/app/api/v1/custodians/[id]/route";
 import { writeAuditEvent } from "@/lib/audit";
 
-const { user } = getModelStubs();
+const { user, property, managementAssignment } = getModelStubs();
 
 const OWNER_ID = makeObjectId("owner");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
 const CUSTODIAN_ID = makeObjectId("custodian");
+const PROP_ID = makeObjectId("prop");
 
 function custodianDoc(overrides: Record<string, unknown> = {}) {
   const doc = {
@@ -42,8 +47,24 @@ async function json(res: Response) {
   return (await res.json()) as Record<string, unknown>;
 }
 
+function mockCustodianOwner(ownerId = OWNER_ID) {
+  managementAssignment.find.mockReturnValue(
+    buildQuery([
+      {
+        principalUserId: CUSTODIAN_ID,
+        accessRole: "custodian",
+        scopeType: "property",
+        propertyId: PROP_ID,
+        status: "active",
+      },
+    ]),
+  );
+  property.find.mockReturnValue(buildQuery([{ _id: PROP_ID, ownerId }]));
+}
+
 function authOwner(id = OWNER_ID) {
   user.findById.mockReturnValue(buildQuery(makeUser({ _id: id, role: "owner" })));
+  mockCustodianOwner();
 }
 
 describe("PATCH /api/v1/custodians/[id]", () => {
@@ -68,7 +89,8 @@ describe("PATCH /api/v1/custodians/[id]", () => {
 
   it("403 when the custodian is managed by another owner", async () => {
     authOwner();
-    user.findOne.mockResolvedValue(custodianDoc({ managedByOwnerId: OTHER_OWNER_ID }));
+    mockCustodianOwner(OTHER_OWNER_ID);
+    user.findOne.mockResolvedValue(custodianDoc());
     const res = await PATCH(
       buildRequest(`/api/v1/custodians/${CUSTODIAN_ID}`, {
         method: "PATCH",
@@ -163,7 +185,6 @@ describe("DELETE /api/v1/custodians/[id]", () => {
       withParams(CUSTODIAN_ID),
     );
     expect(res.status).toBe(200);
-    expect(doc.managedByOwnerId).toBe("");
     expect(doc.isActive).toBe(false);
     expect(doc.save).toHaveBeenCalled();
     expect(writeAuditEvent).toHaveBeenCalledWith(

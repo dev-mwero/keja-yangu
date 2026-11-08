@@ -31,6 +31,9 @@ vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Invoice", () => ({ Invoice: getModelStubs().invoice }));
 vi.mock("@/models/Notification", () => ({ Notification: getModelStubs().notification }));
 vi.mock("@/models/UnitFavorite", () => ({ UnitFavorite: getModelStubs().unitFavorite }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 
 import {
   notifyAnnouncement,
@@ -50,7 +53,8 @@ import {
   wantsEmailNotifications,
 } from "@/lib/notifications";
 
-const { user, tenant, property, invoice, notification, unitFavorite } = getModelStubs();
+const { user, tenant, property, invoice, notification, unitFavorite, managementAssignment } =
+  getModelStubs();
 const isEmailConfiguredMock = vi.mocked(isEmailConfigured);
 const sendNotificationEmailMock = vi.mocked(sendNotificationEmail);
 const createInvoicePaidContentMock = vi.mocked(createInvoicePaidContent);
@@ -69,6 +73,26 @@ const COMPLAINT_ID = makeObjectId("complaint");
 const CUSTODIAN_ID = makeObjectId("custodian");
 const MOVE_REQUEST_ID = makeObjectId("moverequest");
 const UNIT_ID = makeObjectId("unit");
+
+/** Mock assignment-backed staff resolution used by the notification seams. */
+function mockStaffAssignments(options: { custodians?: string[]; caretakers?: string[] } = {}) {
+  const custodians = options.custodians ?? [];
+  const caretakers = options.caretakers ?? [];
+  managementAssignment.find.mockImplementation((filter: Record<string, unknown>) => {
+    if (filter?.accessRole === "custodian") {
+      return buildQuery(custodians.map((id) => ({ principalUserId: id })));
+    }
+    if (filter?.accessRole === "caretaker") {
+      return buildQuery(caretakers.map((id) => ({ principalUserId: id })));
+    }
+    return buildQuery([]);
+  });
+}
+
+/** Owner portfolio lookup used by custodian resolution. */
+function mockOwnerProperties(propertyIds: string[] = [PROPERTY_ID]) {
+  property.find.mockReturnValue(buildQuery(propertyIds.map((id) => ({ _id: id }))));
+}
 
 describe("notifyUser", () => {
   beforeEach(() => {
@@ -276,9 +300,7 @@ describe("notifyInvoicePaid", () => {
   it("fans out to tenant (email), owner and caretakers with role-aware links", async () => {
     user.findById.mockReturnValue(buildQuery({ _id: USER_ID, role: "tenant", email: "t@keja.co" }));
     tenant.findById.mockReturnValue(buildQuery({ _id: TENANT_ID, userId: USER_ID }));
-    property.findById.mockReturnValue(
-      buildQuery({ _id: PROPERTY_ID, caretakerIds: [CARETAKER_ID] }),
-    );
+    mockStaffAssignments({ caretakers: [CARETAKER_ID] });
 
     const ok = await notifyInvoicePaid({
       _id: INVOICE_ID,
@@ -292,7 +314,9 @@ describe("notifyInvoicePaid", () => {
     expect(ok).toBe(true);
     expect(notification.create).toHaveBeenCalledTimes(3);
     expect(tenant.findById).toHaveBeenCalledWith(TENANT_ID);
-    expect(property.findById).toHaveBeenCalledWith(PROPERTY_ID);
+    expect(managementAssignment.find).toHaveBeenCalledWith(
+      expect.objectContaining({ accessRole: "caretaker", propertyId: PROPERTY_ID }),
+    );
 
     const tenantRow = notification.create.mock.calls[0][0] as Record<string, unknown>;
     expect(tenantRow.recipientUserId).toBe(USER_ID);
@@ -314,10 +338,8 @@ describe("notifyInvoicePaid", () => {
   it("also notifies the owner's custodians", async () => {
     user.findById.mockReturnValue(buildQuery({ _id: USER_ID, role: "tenant", email: "t@keja.co" }));
     tenant.findById.mockReturnValue(buildQuery({ _id: TENANT_ID, userId: USER_ID }));
-    property.findById.mockReturnValue(
-      buildQuery({ _id: PROPERTY_ID, caretakerIds: [CARETAKER_ID] }),
-    );
-    user.find.mockReturnValue(buildQuery([{ _id: CUSTODIAN_ID, role: "custodian" }]));
+    mockOwnerProperties();
+    mockStaffAssignments({ custodians: [CUSTODIAN_ID], caretakers: [CARETAKER_ID] });
 
     const ok = await notifyInvoicePaid({
       _id: INVOICE_ID,
@@ -449,9 +471,7 @@ describe("notifyLeaseExpiry", () => {
 
   it("emails tenant and owner, keeping caretakers in-app", async () => {
     tenant.findById.mockReturnValue(buildQuery({ _id: TENANT_ID, userId: USER_ID }));
-    property.findById.mockReturnValue(
-      buildQuery({ _id: PROPERTY_ID, caretakerIds: [CARETAKER_ID] }),
-    );
+    mockStaffAssignments({ caretakers: [CARETAKER_ID] });
 
     const ok = await notifyLeaseExpiry(
       {
@@ -478,10 +498,8 @@ describe("notifyLeaseExpiry", () => {
   it("also notifies the owner's custodians", async () => {
     user.findById.mockReturnValue(buildQuery({ _id: USER_ID, role: "tenant", email: "t@keja.co" }));
     tenant.findById.mockReturnValue(buildQuery({ _id: TENANT_ID, userId: USER_ID }));
-    property.findById.mockReturnValue(
-      buildQuery({ _id: PROPERTY_ID, caretakerIds: [CARETAKER_ID] }),
-    );
-    user.find.mockReturnValue(buildQuery([{ _id: CUSTODIAN_ID, role: "custodian" }]));
+    mockOwnerProperties();
+    mockStaffAssignments({ custodians: [CUSTODIAN_ID], caretakers: [CARETAKER_ID] });
 
     const ok = await notifyLeaseExpiry(
       {
@@ -513,10 +531,9 @@ describe("complaint, message and announcement seams", () => {
   });
 
   it("notifies complaint-created to the property owner, custodians and caretakers", async () => {
-    property.findById.mockReturnValue(
-      buildQuery({ _id: PROPERTY_ID, ownerId: OWNER_ID, caretakerIds: [CARETAKER_ID] }),
-    );
-    user.find.mockReturnValue(buildQuery([{ _id: CUSTODIAN_ID, role: "custodian" }]));
+    property.findById.mockReturnValue(buildQuery({ _id: PROPERTY_ID, ownerId: OWNER_ID }));
+    mockOwnerProperties();
+    mockStaffAssignments({ custodians: [CUSTODIAN_ID], caretakers: [CARETAKER_ID] });
     const ok = await notifyComplaintCreated({
       _id: COMPLAINT_ID,
       tenantId: TENANT_ID,
@@ -540,10 +557,9 @@ describe("complaint, message and announcement seams", () => {
   });
 
   it("notifies complaint-created to staff only (no caretakers)", async () => {
-    property.findById.mockReturnValue(
-      buildQuery({ _id: PROPERTY_ID, ownerId: OWNER_ID, caretakerIds: [] }),
-    );
-    user.find.mockReturnValue(buildQuery([{ _id: CUSTODIAN_ID, role: "custodian" }]));
+    property.findById.mockReturnValue(buildQuery({ _id: PROPERTY_ID, ownerId: OWNER_ID }));
+    mockOwnerProperties();
+    mockStaffAssignments({ custodians: [CUSTODIAN_ID] });
     await notifyComplaintCreated({
       _id: COMPLAINT_ID,
       tenantId: TENANT_ID,
@@ -678,10 +694,8 @@ describe("resolveStaffRecipients", () => {
   });
 
   it("resolves the owner, custodians and the property's caretakers", async () => {
-    property.findById.mockReturnValue(
-      buildQuery({ _id: PROPERTY_ID, caretakerIds: [CARETAKER_ID] }),
-    );
-    user.find.mockReturnValue(buildQuery([{ _id: CUSTODIAN_ID, role: "custodian" }]));
+    mockOwnerProperties();
+    mockStaffAssignments({ custodians: [CUSTODIAN_ID], caretakers: [CARETAKER_ID] });
 
     const staff = await resolveStaffRecipients({
       ownerId: OWNER_ID,
@@ -693,12 +707,14 @@ describe("resolveStaffRecipients", () => {
       { userId: CUSTODIAN_ID, role: "custodian" },
       { userId: CARETAKER_ID, role: "caretaker" },
     ]);
-    expect(property.findById).toHaveBeenCalledWith(PROPERTY_ID);
+    expect(managementAssignment.find).toHaveBeenCalledWith(
+      expect.objectContaining({ accessRole: "caretaker", propertyId: PROPERTY_ID }),
+    );
   });
 
   it("resolves portfolio-wide caretakers when propertyId is omitted", async () => {
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, caretakerIds: [CARETAKER_ID] }]));
-    user.find.mockReturnValue(buildQuery([]));
+    mockOwnerProperties();
+    mockStaffAssignments({ caretakers: [CARETAKER_ID] });
 
     const staff = await resolveStaffRecipients({ ownerId: OWNER_ID });
 
@@ -710,10 +726,7 @@ describe("resolveStaffRecipients", () => {
   });
 
   it("deduplicates the owner when they also appear as a caretaker", async () => {
-    property.findById.mockReturnValue(
-      buildQuery({ _id: PROPERTY_ID, caretakerIds: [OWNER_ID, CARETAKER_ID] }),
-    );
-    user.find.mockReturnValue(buildQuery([]));
+    mockStaffAssignments({ caretakers: [OWNER_ID, CARETAKER_ID] });
 
     const staff = await resolveStaffRecipients({ ownerId: OWNER_ID, propertyId: PROPERTY_ID });
 
@@ -732,8 +745,8 @@ describe("resolveStaffRecipients", () => {
   });
 
   it("keeps the owner even when custodian/caretaker lookups fail", async () => {
-    user.find.mockRejectedValue(new Error("db down"));
-    property.findById.mockRejectedValue(new Error("db down"));
+    property.find.mockRejectedValue(new Error("db down"));
+    managementAssignment.find.mockRejectedValue(new Error("db down"));
 
     const staff = await resolveStaffRecipients({ ownerId: OWNER_ID, propertyId: PROPERTY_ID });
 
@@ -785,10 +798,8 @@ describe("resolveAnnouncementRecipients", () => {
   });
 
   it("audience staff returns owner, custodians and caretakers", async () => {
-    property.findById.mockReturnValue(
-      buildQuery({ _id: PROPERTY_ID, caretakerIds: [CARETAKER_ID] }),
-    );
-    user.find.mockReturnValue(buildQuery([{ _id: CUSTODIAN_ID, role: "custodian" }]));
+    mockOwnerProperties();
+    mockStaffAssignments({ custodians: [CUSTODIAN_ID], caretakers: [CARETAKER_ID] });
 
     const recipients = await resolveAnnouncementRecipients({
       ownerId: OWNER_ID,
@@ -802,8 +813,7 @@ describe("resolveAnnouncementRecipients", () => {
 
   it("audience all merges both sides and excludes the author", async () => {
     tenant.find.mockReturnValue(buildQuery([{ _id: TENANT_ID, userId: USER_ID }]));
-    property.findById.mockReturnValue(buildQuery({ _id: PROPERTY_ID, caretakerIds: [] }));
-    user.find.mockReturnValue(buildQuery([]));
+    mockStaffAssignments();
 
     const recipients = await resolveAnnouncementRecipients({
       ownerId: OWNER_ID,
@@ -836,10 +846,8 @@ describe("notifyMoveRequestCreated", () => {
   });
 
   it("fans out to staff minus the requester with move-request links", async () => {
-    property.findById.mockReturnValue(
-      buildQuery({ _id: PROPERTY_ID, caretakerIds: [CARETAKER_ID] }),
-    );
-    user.find.mockReturnValue(buildQuery([{ _id: CUSTODIAN_ID, role: "custodian" }]));
+    mockOwnerProperties();
+    mockStaffAssignments({ custodians: [CUSTODIAN_ID], caretakers: [CARETAKER_ID] });
 
     const ok = await notifyMoveRequestCreated({
       _id: MOVE_REQUEST_ID,
@@ -866,10 +874,7 @@ describe("notifyMoveRequestCreated", () => {
   });
 
   it("skips the requester when they are the owner", async () => {
-    property.findById.mockReturnValue(
-      buildQuery({ _id: PROPERTY_ID, caretakerIds: [CARETAKER_ID] }),
-    );
-    user.find.mockReturnValue(buildQuery([]));
+    mockStaffAssignments({ caretakers: [CARETAKER_ID] });
 
     await notifyMoveRequestCreated({
       _id: MOVE_REQUEST_ID,

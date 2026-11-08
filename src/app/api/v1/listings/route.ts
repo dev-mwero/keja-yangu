@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { generateListingShareCode } from "@/lib/listings";
+import { getManagedOwnerId } from "@/lib/managed-owner";
 import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
 import { authenticate } from "@/lib/permissions";
@@ -14,7 +15,6 @@ import { User } from "@/models/User";
 async function getAuthorizedPropertyIds(user: {
   _id: unknown;
   role: string;
-  managedByOwnerId?: string;
 }): Promise<string[] | null> {
   const role = user.role;
   if (role === "system-admin") return null;
@@ -37,15 +37,18 @@ async function getAuthorizedPropertyIds(user: {
   }
 
   if (role === "caretaker") {
-    const managedByOwnerId = user.managedByOwnerId ?? "";
+    const managedByOwnerId = await getManagedOwnerId(userId);
     if (!managedByOwnerId) return [];
-    const assignedProps = await Property.find({
-      caretakerIds: userId,
-      ownerId: managedByOwnerId,
+    const caretakerAssignments = await ManagementAssignment.find({
+      principalUserId: userId,
+      accessRole: "caretaker",
+      status: "active",
     })
-      .select("_id")
+      .select("propertyId")
       .lean();
-    for (const p of assignedProps) propIds.add(String(p._id));
+    for (const a of caretakerAssignments) {
+      if (a.propertyId) propIds.add(String(a.propertyId));
+    }
   }
 
   return [...propIds];
@@ -58,7 +61,7 @@ export async function GET(request: NextRequest) {
   }
 
   await connectToDatabase();
-  const user = await User.findById(auth.userId).select("role isActive managedByOwnerId").lean();
+  const user = await User.findById(auth.userId).select("role isActive").lean();
   if (
     !user?.isActive ||
     (user.role !== "admin" &&
@@ -121,7 +124,7 @@ export async function POST(request: NextRequest) {
   }
 
   await connectToDatabase();
-  const user = await User.findById(auth.userId).select("role isActive managedByOwnerId").lean();
+  const user = await User.findById(auth.userId).select("role isActive").lean();
   if (
     !user?.isActive ||
     (user.role !== "admin" &&

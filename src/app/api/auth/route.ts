@@ -195,7 +195,6 @@ export async function POST(request: Request) {
         const adoptable =
           !existing.isActive &&
           !existing.isVerified &&
-          existing.managedByOwnerId &&
           (existing.role === "caretaker" ||
             existing.role === "tenant" ||
             existing.role === "custodian");
@@ -299,7 +298,7 @@ export async function POST(request: Request) {
       }
 
       // Activate pending invited accounts (created inactive)
-      const isPendingInvite = !user.isActive || Boolean(user.managedByOwnerId);
+      const isPendingInvite = !user.isActive;
       if (isPendingInvite) {
         user.isActive = true;
       }

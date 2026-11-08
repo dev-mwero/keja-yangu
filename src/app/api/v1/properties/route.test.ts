@@ -2,7 +2,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildRequest, signToken } from "@/test/utils/api-request";
 import { makeObjectId, makeProperty, makeUser } from "@/test/utils/factories";
-import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-mocks";
+import {
+  buildQuery,
+  getModelStubs,
+  mockStaffPortfolio,
+  resetModelStubs,
+} from "@/test/utils/model-mocks";
 
 vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
@@ -69,11 +74,7 @@ it("owner create assigns an active owner-scoped custodian", async () => {
   expect(user.find).toHaveBeenCalledWith({
     _id: { $in: [custodianId] },
     role: "custodian",
-    managedByOwnerId: OWNER_ID,
   });
-  expect(property.create).toHaveBeenCalledWith(
-    expect.objectContaining({ custodianIds: [custodianId] }),
-  );
 });
 
 it("rejects duplicate staff IDs when creating a property", async () => {
@@ -162,9 +163,7 @@ describe("GET /api/v1/properties", () => {
 
     expect(property.find).toHaveBeenCalledWith({ status: "available", published: true });
     expect(property.countDocuments).toHaveBeenCalledWith({ status: "available", published: true });
-    expect(chain.select).toHaveBeenCalledWith(
-      "-ownerId -caretakerIds -custodianIds -createdById -__v",
-    );
+    expect(chain.select).toHaveBeenCalledWith("-ownerId -createdById -__v");
     expect(chain.sort).toHaveBeenCalledWith({ createdAt: -1 });
     expect(chain.skip).toHaveBeenCalledWith(0);
     expect(chain.limit).toHaveBeenCalledWith(10);
@@ -422,7 +421,6 @@ describe("GET /api/v1/properties", () => {
     });
     expect(property.find).toHaveBeenCalledWith({
       _id: { $in: [PROPERTY_ID] },
-      caretakerIds: CARETAKER_ID,
     });
   });
 });
@@ -530,8 +528,6 @@ describe("POST /api/v1/properties", () => {
       expect.objectContaining({
         ownerId: OWNER_ID,
         createdById: OWNER_ID,
-        caretakerIds: [],
-        custodianIds: [],
         published: false,
       }),
     );
@@ -594,10 +590,15 @@ describe("POST /api/v1/properties", () => {
     const caretaker = makeUser({
       _id: CARETAKER_ID,
       role: "caretaker",
-      managedByOwnerId: OTHER_OWNER_ID,
       privileges: ["create_property"],
     });
     user.findById.mockReturnValue(buildQuery(caretaker));
+    mockStaffPortfolio({
+      userId: CARETAKER_ID,
+      role: "caretaker",
+      ownerId: OTHER_OWNER_ID,
+      propertyIds: [PROPERTY_ID],
+    });
     user.findOne.mockReturnValue(
       buildQuery({ _id: OTHER_OWNER_ID, role: "owner", isActive: true }),
     );
@@ -629,7 +630,6 @@ describe("POST /api/v1/properties", () => {
       expect.objectContaining({
         ownerId: OTHER_OWNER_ID,
         createdById: CARETAKER_ID,
-        caretakerIds: [CARETAKER_ID],
       }),
     );
   });
@@ -638,10 +638,15 @@ describe("POST /api/v1/properties", () => {
     const caretaker = makeUser({
       _id: CARETAKER_ID,
       role: "caretaker",
-      managedByOwnerId: OTHER_OWNER_ID,
       privileges: ["create_property"],
     });
     user.findById.mockReturnValue(buildQuery(caretaker));
+    mockStaffPortfolio({
+      userId: CARETAKER_ID,
+      role: "caretaker",
+      ownerId: OTHER_OWNER_ID,
+      propertyIds: [PROPERTY_ID],
+    });
     user.findOne.mockReturnValue(buildQuery(null));
 
     const res = await POST(
