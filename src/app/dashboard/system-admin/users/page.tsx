@@ -1,11 +1,16 @@
 "use client";
 
+"use client";
+
+import { useState } from "react";
+
 import { UserRoleManager } from "@/components/admin/UserRoleManager";
 import { UserInviteCard } from "@/components/admin/UserInviteCard";
 import { DashboardShell } from "@/components/DashboardShell";
 import { systemAdminNav } from "@/config/dashboardNav";
 
 const SystemAdminUsersPage = () => {
+  const [refreshKey, setRefreshKey] = useState(0);
   return (
     <DashboardShell
       roleName="System Administrator"
@@ -13,8 +18,8 @@ const SystemAdminUsersPage = () => {
       title="Users & Roles"
       subtitle="Manage platform users and their roles."
     >
-      <UserInviteCard />
-      <UserRoleManager />
+      <UserInviteCard onCreated={() => setRefreshKey((k) => k + 1)} />
+      <UserRoleManager refreshKey={refreshKey} />
     </DashboardShell>
   );
 };

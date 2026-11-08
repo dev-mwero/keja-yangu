@@ -37,7 +37,7 @@ const ROLE_LABELS: Record<string, string> = {
 
 const ALL_ROLES = ["tenant", "caretaker", "custodian", "owner", "admin", "broker"];
 
-export const UserInviteCard = () => {
+export const UserInviteCard = ({ onCreated }: { onCreated?: () => void } = {}) => {
   const { inviteUser, pending } = useUserInvites();
   const [role, setRole] = useState("tenant");
   const [name, setName] = useState("");
@@ -96,6 +96,7 @@ export const UserInviteCard = () => {
       setNationalPhone("");
       setOwnerId("");
       setErrors({});
+      onCreated?.();
     } catch (err) {
       toast.error("Could not create user", {
         description: err instanceof Error ? err.message : undefined,
