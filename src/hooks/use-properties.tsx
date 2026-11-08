@@ -13,6 +13,7 @@ export interface PropertyFloor {
   unitsPerFloor: number;
   rentOverride: number | null;
   purpose?: PropertyPurpose | null;
+  duplex?: boolean | null;
 }
 
 export interface PropertyBlock {
@@ -21,6 +22,7 @@ export interface PropertyBlock {
   order: number;
   rentOverride: number | null;
   purpose?: PropertyPurpose | null;
+  duplex?: boolean;
   floors: PropertyFloor[];
 }
 
@@ -33,6 +35,8 @@ export interface FloorInputPayload {
   purpose?: PropertyPurpose | null;
   unitsPerFloor: number;
   unitNames?: string[];
+  /** Duplex override: null/undefined inherits from the block-level setting. */
+  duplex?: boolean | null;
 }
 
 export interface BlockInputPayload {
@@ -41,6 +45,7 @@ export interface BlockInputPayload {
   name: string;
   rentOverride?: number | null;
   purpose?: PropertyPurpose | null;
+  duplex?: boolean;
   floors: FloorInputPayload[];
 }
 
@@ -55,6 +60,7 @@ export function toBlockPayloads(property: Pick<Property, "blocks">): BlockInputP
     name: block.name,
     rentOverride: block.rentOverride,
     purpose: block.purpose,
+    duplex: block.duplex ?? false,
     floors: block.floors.map((floor) => ({
       id: floor._id,
       level: floor.level,
@@ -62,6 +68,7 @@ export function toBlockPayloads(property: Pick<Property, "blocks">): BlockInputP
       rentOverride: floor.rentOverride,
       purpose: floor.purpose,
       unitsPerFloor: floor.unitsPerFloor,
+      duplex: floor.duplex ?? null,
     })),
   }));
 }

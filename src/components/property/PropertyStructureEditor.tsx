@@ -1,10 +1,14 @@
 "use client";
 
-import { DoorOpen, Plus, Trash2 } from "lucide-react";
+import { DoorOpen, Plus, Trash2, Wand2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { useState } from "react";
+
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
+import { BulkGenerateDialog } from "@/components/property/BulkGenerateDialog";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -133,10 +137,23 @@ export const PropertyStructureEditor = ({
   baseRent = 0,
   disabled = false,
 }: PropertyStructureEditorProps) => {
+  const [bulkOpen, setBulkOpen] = useState(false);
   const update = (next: BlockInputPayload[]) => onChange(next);
 
   const updateBlock = (blockIndex: number, patch: Partial<BlockInputPayload>) => {
     update(blocks.map((b, i) => (i === blockIndex ? { ...b, ...patch } : b)));
+  };
+
+  const toggleBlockDuplex = (blockIndex: number) => {
+    const current = blocks[blockIndex].duplex ?? false;
+    updateBlock(blockIndex, { duplex: !current });
+  };
+
+  const toggleFloorDuplex = (blockIndex: number, floorIndex: number) => {
+    const current = blocks[blockIndex].floors[floorIndex].duplex;
+    // null/undefined inherits from block; toggle to explicit true/false
+    const next = current === true ? false : true;
+    updateFloor(blockIndex, floorIndex, { duplex: next });
   };
 
   const updateFloor = (
@@ -233,6 +250,14 @@ export const PropertyStructureEditor = ({
                 </SelectContent>
               </Select>
             </div>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Switch
+                checked={block.duplex ?? false}
+                disabled={disabled}
+                onCheckedChange={() => toggleBlockDuplex(blockIndex)}
+              />
+              Duplex
+            </label>
             <Button
               type="button"
               variant="ghost"
@@ -251,7 +276,7 @@ export const PropertyStructureEditor = ({
               return (
                 <div
                   key={floorIndex}
-                  className="grid grid-cols-[1fr_1fr_1fr_110px_auto_auto] items-end gap-2"
+                  className="grid grid-cols-[1fr_1fr_1fr_110px_70px_auto_auto] items-end gap-2"
                 >
                   <div className="space-y-1">
                     <Label htmlFor={`floor-level-${blockIndex}-${floorIndex}`}>Floor</Label>
@@ -317,6 +342,14 @@ export const PropertyStructureEditor = ({
                       </SelectContent>
                     </Select>
                   </div>
+                  <label className="flex items-center gap-1 pb-2 text-xs text-muted-foreground">
+                    <Switch
+                      checked={floor.duplex === true}
+                      disabled={disabled}
+                      onCheckedChange={() => toggleFloorDuplex(blockIndex, floorIndex)}
+                    />
+                    Duplex
+                  </label>
                   <span className="pb-2 text-xs text-muted-foreground" title={preview.join(", ")}>
                     {preview.length > 0
                       ? preview.length > 4
@@ -353,6 +386,24 @@ export const PropertyStructureEditor = ({
       <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={addBlock}>
         <Plus className="mr-1 h-3.5 w-3.5" /> Add block
       </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={disabled}
+        onClick={() => setBulkOpen(true)}
+        data-testid="bulk-generate-button"
+      >
+        <Wand2 className="mr-1 h-3.5 w-3.5" /> Bulk generate
+      </Button>
+
+      <BulkGenerateDialog
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        blocks={blocks}
+        onChange={update}
+        disabled={disabled}
+      />
 
       {errors.length > 0 && (
         <ul className="list-inside list-disc text-xs text-destructive">

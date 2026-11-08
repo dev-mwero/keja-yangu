@@ -385,12 +385,14 @@ export async function POST(request: NextRequest) {
       order,
       rentOverride: block.rentOverride ?? null,
       purpose: block.purpose ?? null,
+      duplex: block.duplex ?? false,
       floors: block.floors.map((floor) => ({
         level: floor.level,
         label: floor.label ?? "",
         unitsPerFloor: floor.unitsPerFloor ?? 0,
         rentOverride: floor.rentOverride ?? null,
         purpose: floor.purpose ?? null,
+        duplex: floor.duplex ?? null,
       })),
     })),
   });
@@ -412,6 +414,7 @@ export async function POST(request: NextRequest) {
       order: block.order,
       rentOverride: block.rentOverride ?? null,
       purpose: block.purpose ?? null,
+      duplex: (block as { duplex?: boolean }).duplex ?? false,
       legacyEmbeddedId: String(block._id),
     }));
     await Block.insertMany(blockDocs, { ordered: false });

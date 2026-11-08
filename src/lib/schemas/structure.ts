@@ -13,6 +13,8 @@ export const floorInput = z.object({
   unitsPerFloor: z.coerce.number().int().min(0).max(200).default(0),
   // Optional custom unit names for this floor (overrides generated GA/GB/3A).
   unitNames: z.array(z.string().trim().min(1).max(24)).optional(),
+  // Duplex override: null/undefined inherits from the block-level setting.
+  duplex: z.boolean().nullable().optional(),
 });
 
 export const blockInput = z.object({
@@ -20,6 +22,9 @@ export const blockInput = z.object({
   rentOverride: z.coerce.number().nonnegative().nullable().optional(),
   purpose: z.enum(PROPERTY_PURPOSES).nullable().optional(),
   floors: z.array(floorInput).min(1).max(200),
+  // Block-level duplex default: when true, every unit on every floor spans
+  // to the floor above. Individual floors can override via floor.duplex.
+  duplex: z.boolean().optional(),
 });
 
 export const propertyBlocksInput = z.array(blockInput).max(50);
@@ -61,6 +66,7 @@ export interface PersistedFloor {
   unitsPerFloor?: number;
   rentOverride?: number | null;
   purpose?: PropertyPurpose | null;
+  duplex?: boolean | null;
 }
 
 export interface PersistedBlock {
@@ -68,6 +74,7 @@ export interface PersistedBlock {
   name: string;
   rentOverride?: number | null;
   purpose?: PropertyPurpose | null;
+  duplex?: boolean;
   floors: PersistedFloor[];
 }
 
@@ -84,6 +91,12 @@ export interface UnitInsert {
   status: "available";
   rent: number | null;
   purpose?: PropertyPurpose | null;
+  /** Number of floors this unit spans (1 = normal, 2 = duplex). */
+  spanFloors: number;
+  /** ID of the secondary floor (empty if single-floor). */
+  secondaryFloorId: string;
+  /** Level of the secondary floor (0 if single-floor). */
+  secondaryFloorLevel: number;
   /** Array of occupant user ids. Empty = vacant. */
   tenantId: string[];
 }

@@ -1,6 +1,11 @@
 import type { BlockInput, PersistedBlock, UnitInsert } from "@/lib/schemas/structure";
 import { MAX_UNITS_PER_PROPERTY } from "@/lib/schemas/structure";
-import { assertUniqueUnitNames, buildUnitNames, letterLabel } from "@/lib/unit-naming";
+import {
+  assertUniqueUnitNames,
+  buildDuplexUnitNames,
+  buildUnitNames,
+  letterLabel,
+} from "@/lib/unit-naming";
 
 /**
  * Build the `Unit` documents for a newly created property. `persisted` is the
@@ -22,7 +27,19 @@ export function buildUnitInserts(
     block.floors.forEach((floor, floorIndex) => {
       const floorSpec = spec.floors[floorIndex];
       const count = floorSpec?.unitsPerFloor ?? floor.unitsPerFloor ?? 0;
-      const names = buildUnitNames(floor.level, count, floorSpec?.unitNames);
+
+      // Duplex: block-level default, floor-level override.
+      const blockDuplex = spec.duplex ?? (block as { duplex?: boolean }).duplex ?? false;
+      const floorDuplex =
+        floorSpec?.duplex != null ? floorSpec.duplex : floor.duplex != null ? floor.duplex : blockDuplex;
+
+      // Secondary floor for duplex units (the floor above).
+      const nextFloor = floorIndex + 1 < block.floors.length ? block.floors[floorIndex + 1] : null;
+      const isDuplex = floorDuplex && nextFloor != null;
+
+      const names = isDuplex
+        ? buildDuplexUnitNames(floor.level, nextFloor!.level, count, floorSpec?.unitNames)
+        : buildUnitNames(floor.level, count, floorSpec?.unitNames);
       assertUniqueUnitNames(names);
 
       names.forEach((name, unitIndex) => {
@@ -39,6 +56,9 @@ export function buildUnitInserts(
           status: "available",
           rent: null,
           purpose: null,
+          spanFloors: isDuplex ? 2 : 1,
+          secondaryFloorId: isDuplex ? String(nextFloor!._id) : "",
+          secondaryFloorLevel: isDuplex ? nextFloor!.level : 0,
           tenantId: [],
         });
       });

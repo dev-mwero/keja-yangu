@@ -17,6 +17,8 @@ const floorSchema = new Schema(
     rentOverride: { type: Number, min: 0, default: null },
     // Optional purpose override for every unit on this floor.
     purpose: { type: String, enum: [...PROPERTY_PURPOSES, null], default: null },
+    // Duplex override: null/undefined inherits from the block-level setting.
+    duplex: { type: Boolean, default: null },
   },
   { _id: true },
 );
@@ -29,6 +31,8 @@ const blockSchema = new Schema(
     rentOverride: { type: Number, min: 0, default: null },
     // Optional purpose override for every unit in this block.
     purpose: { type: String, enum: [...PROPERTY_PURPOSES, null], default: null },
+    // When true, every unit on every floor of this block spans to the floor above (duplex).
+    duplex: { type: Boolean, default: false },
     floors: { type: [floorSchema], default: [] },
   },
   { _id: true },

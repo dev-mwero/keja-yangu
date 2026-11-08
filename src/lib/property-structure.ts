@@ -6,7 +6,13 @@ import {
   type StructureBlockInput,
   type UnitInsert,
 } from "@/lib/schemas/structure";
-import { buildUnitNames, defaultUnitName, letterLabel } from "@/lib/unit-naming";
+import {
+  buildDuplexUnitNames,
+  buildUnitNames,
+  defaultDuplexUnitName,
+  defaultUnitName,
+  letterLabel,
+} from "@/lib/unit-naming";
 
 /**
  * Reconciles a property's persisted `blocks` structure with an edited payload,
@@ -31,6 +37,8 @@ export interface ExistingUnit {
   name: string;
   letter: string;
   status: string;
+  /** ID of the secondary floor for duplex units (empty if single-floor). */
+  secondaryFloorId?: string;
   /** Array of occupant user ids. Empty = vacant. */
   tenantId?: string[];
 }
@@ -42,6 +50,7 @@ export interface NextFloor {
   unitsPerFloor: number;
   rentOverride: number | null;
   purpose: PropertyPurpose | null;
+  duplex: boolean;
 }
 
 export interface NextBlock {
@@ -50,6 +59,7 @@ export interface NextBlock {
   order: number;
   rentOverride: number | null;
   purpose: PropertyPurpose | null;
+  duplex: boolean;
   floors: NextFloor[];
 }
 
@@ -60,6 +70,9 @@ export interface UnitUpdate {
   floorId: string;
   floorLevel: number;
   floorLabel: string;
+  spanFloors: number;
+  secondaryFloorId: string;
+  secondaryFloorLevel: number;
 }
 
 export interface StructurePlanInput {
@@ -159,7 +172,27 @@ export function planStructureUpdate(input: StructurePlanInput): StructurePlan {
           `Floor ${floor.level} in block "${block.name}" has occupied units and cannot be removed.`,
         );
       }
+      // Duplex: a unit on an adjacent floor may span into this floor.
+      const spanningUnits = existingUnits.filter(
+        (unit) =>
+          !deletedUnitIds.has(String(unit._id)) &&
+          unit.secondaryFloorId === floorId &&
+          isOccupied(unit),
+      );
+      if (spanningUnits.length > 0) {
+        throw new StructureError(
+          `Floor ${floor.level} in block "${block.name}" is occupied by a duplex unit spanning from an adjacent floor and cannot be removed.`,
+        );
+      }
+      // Delete units directly on this floor.
       for (const unit of units) {
+        unitDeletes.push(String(unit._id));
+        deletedUnitIds.add(String(unit._id));
+      }
+      // Delete duplex units that span into this floor (from adjacent floor).
+      for (const unit of existingUnits) {
+        if (deletedUnitIds.has(String(unit._id))) continue;
+        if (unit.secondaryFloorId !== floorId) continue;
         unitDeletes.push(String(unit._id));
         deletedUnitIds.add(String(unit._id));
       }
@@ -170,6 +203,17 @@ export function planStructureUpdate(input: StructurePlanInput): StructurePlan {
   const blocks: NextBlock[] = specs.map((spec, order) => {
     const existingBlock = spec.id ? blockById.get(spec.id) : undefined;
     const blockId = existingBlock ? String(existingBlock._id) : String(new Types.ObjectId());
+
+    const blockDuplex = spec.duplex ?? existingBlock?.duplex ?? false;
+
+    // Pre-resolve floor IDs so duplex units can reference their secondary floor.
+    const floorIds = spec.floors.map((floorSpec) => {
+      const existingFloor =
+        existingBlock && floorSpec.id
+          ? existingBlock.floors.find((floor) => String(floor._id) === floorSpec.id)
+          : undefined;
+      return existingFloor ? String(existingFloor._id) : String(new Types.ObjectId());
+    });
 
     const usedNames = new Set<string>();
     for (const unit of unitsByBlock.get(blockId) ?? []) {
@@ -187,18 +231,44 @@ export function planStructureUpdate(input: StructurePlanInput): StructurePlan {
       return candidate;
     };
 
-    const floors: NextFloor[] = spec.floors.map((floorSpec) => {
+    const floors: NextFloor[] = spec.floors.map((floorSpec, floorIndex) => {
       const existingFloor =
         existingBlock && floorSpec.id
           ? existingBlock.floors.find((floor) => String(floor._id) === floorSpec.id)
           : undefined;
-      const floorId = existingFloor ? String(existingFloor._id) : String(new Types.ObjectId());
+      const floorId = floorIds[floorIndex];
       const label = floorSpec.label ?? existingFloor?.label ?? "";
       const desired = floorSpec.unitsPerFloor ?? 0;
+
+      // Duplex: block-level default, floor-level override.
+      const floorDuplex =
+        floorSpec.duplex != null
+          ? floorSpec.duplex
+          : existingFloor?.duplex != null
+            ? existingFloor.duplex
+            : blockDuplex;
+
+      // Secondary floor for duplex units (the floor above in the same block).
+      const nextFloorIndex = floorIndex + 1;
+      const nextFloorId = nextFloorIndex < floorIds.length ? floorIds[nextFloorIndex] : null;
+      const nextFloorLevel =
+        nextFloorIndex < spec.floors.length ? spec.floors[nextFloorIndex].level : null;
+      const isDuplex = floorDuplex && nextFloorId != null && nextFloorLevel != null;
+
+      // Warn if duplex requested on the top floor (no floor above to span into).
+      if (floorDuplex && !isDuplex) {
+        throw new StructureError(
+          `Floor ${floorSpec.level} in block "${spec.name}" is marked duplex but has no floor above to span into.`,
+        );
+      }
 
       const liveUnits = (unitsByFloor.get(floorId) ?? []).filter(
         (unit) => !deletedUnitIds.has(String(unit._id)),
       );
+
+      const spanFloors = isDuplex ? 2 : 1;
+      const secondaryFloorId = isDuplex ? nextFloorId! : "";
+      const secondaryFloorLevel = isDuplex ? nextFloorLevel! : 0;
 
       const insertsFor = (names: string[], startIndex: number): UnitInsert[] =>
         names.map((name, offset) => {
@@ -215,6 +285,10 @@ export function planStructureUpdate(input: StructurePlanInput): StructurePlan {
             letter: letterLabel(index),
             status: "available",
             rent: null,
+            purpose: null,
+            spanFloors,
+            secondaryFloorId,
+            secondaryFloorLevel,
             tenantId: [],
           };
         });
@@ -248,15 +322,21 @@ export function planStructureUpdate(input: StructurePlanInput): StructurePlan {
             floorId,
             floorLevel: floorSpec.level,
             floorLabel: label,
+            spanFloors,
+            secondaryFloorId,
+            secondaryFloorLevel,
           });
         }
 
         if (desired > surviving.length) {
           const names = Array.from({ length: desired - surviving.length }, (_, i) => {
             const index = surviving.length + i;
-            return reserveName(
-              floorSpec.unitNames?.[index]?.trim() || defaultUnitName(floorSpec.level, index),
-            );
+            const custom = floorSpec.unitNames?.[index]?.trim();
+            if (custom && custom.length > 0) return reserveName(custom);
+            const generated = isDuplex
+              ? defaultDuplexUnitName(floorSpec.level, nextFloorLevel!, index)
+              : defaultUnitName(floorSpec.level, index);
+            return reserveName(generated);
           });
           unitCreates.push(...insertsFor(names, surviving.length));
         }
@@ -268,13 +348,16 @@ export function planStructureUpdate(input: StructurePlanInput): StructurePlan {
           unitsPerFloor: desired,
           rentOverride: floorSpec.rentOverride ?? null,
           purpose: floorSpec.purpose ?? null,
+          duplex: floorDuplex,
         };
       }
 
       // Brand-new floor.
-      const names = buildUnitNames(floorSpec.level, desired, floorSpec.unitNames).map((name) =>
-        reserveName(name),
-      );
+      const names = isDuplex
+        ? buildDuplexUnitNames(floorSpec.level, nextFloorLevel!, desired, floorSpec.unitNames).map((name) =>
+            reserveName(name),
+          )
+        : buildUnitNames(floorSpec.level, desired, floorSpec.unitNames).map((name) => reserveName(name));
       unitCreates.push(...insertsFor(names, 0));
 
       return {
@@ -284,6 +367,7 @@ export function planStructureUpdate(input: StructurePlanInput): StructurePlan {
         unitsPerFloor: desired,
         rentOverride: floorSpec.rentOverride ?? null,
         purpose: floorSpec.purpose ?? null,
+        duplex: floorDuplex,
       };
     });
 
@@ -293,6 +377,7 @@ export function planStructureUpdate(input: StructurePlanInput): StructurePlan {
       order,
       rentOverride: spec.rentOverride ?? null,
       purpose: spec.purpose ?? null,
+      duplex: blockDuplex,
       floors,
     };
   });
