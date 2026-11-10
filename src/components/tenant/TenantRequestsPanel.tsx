@@ -2,7 +2,7 @@
 
 import { CheckCircle2, Clock, FileText, LogIn, LogOut, Plus, XCircle } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { SearchInput } from "@/components/SearchInput";
 import { StatCard } from "@/components/StatCard";
@@ -29,7 +29,7 @@ import { useApplicationMutations, useTenantApplications } from "@/hooks/use-appl
 import { useAuth } from "@/hooks/use-auth";
 import { useMoveRequestMutations, useMoveRequests } from "@/hooks/use-move-requests";
 import { useMyTenancy } from "@/hooks/use-my-tenancy";
-import { useUnits } from "@/hooks/use-units";
+import type { Unit } from "@/hooks/use-units";
 import { formatDate } from "@/lib/format";
 import { matchesQuery } from "@/lib/search";
 
@@ -71,10 +71,38 @@ export function TenantRequestsPanel() {
   const { withdraw, pending: withdrawPending } = useApplicationMutations();
   const { moveRequests, loading, refetch } = useMoveRequests();
   const { create, pending: createPending } = useMoveRequestMutations();
-  const { tenancy } = useMyTenancy();
+  const { tenancies: tenanciesRaw, tenancy: primaryTenancy } = useMyTenancy();
+  const tenancies = tenanciesRaw ?? (primaryTenancy ? [primaryTenancy] : []);
 
-  const propertyId = tenancy?.propertyId ?? "";
-  const { units } = useUnits(propertyId ? { propertyId } : undefined);
+  const propertyIds = useMemo(
+    () => [...new Set(tenancies.map((t) => t.propertyId).filter(Boolean))],
+    [tenancies],
+  );
+  const primaryPropertyId = propertyIds[0] ?? "";
+
+  const [units, setUnits] = useState<Unit[]>([]);
+  useEffect(() => {
+    if (propertyIds.length === 0) {
+      setUnits([]);
+      return;
+    }
+    let cancelled = false;
+    Promise.all(
+      propertyIds.map((pid) =>
+        fetch(`/api/v1/units?propertyId=${encodeURIComponent(pid)}`)
+          .then((r) => r.json())
+          .then((j) => (Array.isArray(j?.data) ? (j.data as Unit[]) : []))
+          .catch(() => [] as Unit[]),
+      ),
+    ).then((results) => {
+      if (!cancelled) setUnits(results.flat());
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [propertyIds.join(",")]);
+
+  const propertyId = primaryPropertyId;
 
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
@@ -86,7 +114,7 @@ export function TenantRequestsPanel() {
   const occupiedUnit = units.find(
     (u) =>
       u.status === "occupied" &&
-      (u.tenantId.length === 0 || u.tenantId.includes(tenancy?.userId ?? "")),
+      (u.tenantId.length === 0 || u.tenantId.includes(primaryTenancy?.userId ?? "")),
   );
   const availableUnits = units.filter((u) => u.status === "available");
 
@@ -167,14 +195,15 @@ export function TenantRequestsPanel() {
   };
 
   const requestMoveOut = async () => {
-    if (!propertyId) {
+    const moveOutPropertyId = occupiedUnit?.propertyId || propertyId;
+    if (!moveOutPropertyId) {
       toast.error("You have no tenancy on record.");
       return;
     }
     const ok = await submitMoveRequest(
       {
         type: "move-out",
-        propertyId,
+        propertyId: moveOutPropertyId,
         unitId: occupiedUnit?._id,
         note: moveOutNote.trim() || undefined,
       },
@@ -193,10 +222,16 @@ export function TenantRequestsPanel() {
       toast.error("Choose a unit to move into.");
       return;
     }
+    const selectedUnit = units.find((u) => u._id === moveInUnitId);
+    const moveInPropertyId = selectedUnit?.propertyId || propertyId;
+    if (!moveInPropertyId) {
+      toast.error("You have no tenancy on record.");
+      return;
+    }
     const ok = await submitMoveRequest(
       {
         type: "move-in",
-        propertyId,
+        propertyId: moveInPropertyId,
         unitId: moveInUnitId,
         note: moveInNote.trim() || undefined,
       },

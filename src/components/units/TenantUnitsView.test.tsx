@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => {
     create,
     useMyTenancy: () => ({
       tenancy: tenancy.value,
+      tenancies: tenancy.value ? [tenancy.value] : [],
       loading: false,
       error: null,
       refetch: vi.fn(),
@@ -75,7 +76,7 @@ describe("TenantUnitsView", () => {
   });
 
   it("offers a request action for each vacant unit", () => {
-    mocks.units.push(makeUnit({ _id: UNIT_ID, name: "3A", blockName: "D" }));
+    mocks.units.push(makeUnit({ _id: UNIT_ID, name: "3A", blockName: "D", propertyId: PROP_ID }));
     render(<TenantUnitsView />);
 
     expect(screen.getByText("3A")).toBeInTheDocument();
@@ -84,7 +85,7 @@ describe("TenantUnitsView", () => {
   });
 
   it("submits a move-in request for the chosen unit", async () => {
-    mocks.units.push(makeUnit({ _id: UNIT_ID, name: "3A", blockName: "D" }));
+    mocks.units.push(makeUnit({ _id: UNIT_ID, name: "3A", blockName: "D", propertyId: PROP_ID }));
     mocks.create.mockResolvedValue({});
     render(<TenantUnitsView />);
 
@@ -98,7 +99,7 @@ describe("TenantUnitsView", () => {
   });
 
   it("marks a unit that is already under request and disables it", () => {
-    mocks.units.push(makeUnit({ _id: UNIT_ID, name: "3A", blockName: "D" }));
+    mocks.units.push(makeUnit({ _id: UNIT_ID, name: "3A", blockName: "D", propertyId: PROP_ID }));
     mocks.moveRequests.push({
       _id: "mr-1",
       type: "move-in",
@@ -113,7 +114,7 @@ describe("TenantUnitsView", () => {
 
   it("prompts to apply when there is no tenancy on record", () => {
     mocks.tenancy.value = null;
-    mocks.units.push(makeUnit({ _id: UNIT_ID, name: "3A", blockName: "D" }));
+    mocks.units.push(makeUnit({ _id: UNIT_ID, name: "3A", blockName: "D", propertyId: PROP_ID }));
     render(<TenantUnitsView />);
 
     expect(screen.getByText("No tenancy on record")).toBeInTheDocument();
