@@ -46,13 +46,14 @@ leaseSchema.index({ unitId: 1, status: 1 });
 leaseSchema.index({ ownerId: 1, status: 1 });
 leaseSchema.index({ propertyId: 1, status: 1 });
 leaseSchema.index({ ownerId: 1, propertyId: 1 });
-// One active lease per tenant among live leases; ended/deleted leases remain as
+// One active lease per tenant per unit among live leases; a tenant may hold
+// multiple active leases on different units. Ended/deleted leases remain as
 // history.
 leaseSchema.index(
-  { tenantId: 1 },
+  { tenantId: 1, unitId: 1 },
   {
     unique: true,
-    name: "lease_active_tenant_unique",
+    name: "lease_active_tenant_unit_unique",
     partialFilterExpression: { status: "active", deletedAt: null },
   },
 );

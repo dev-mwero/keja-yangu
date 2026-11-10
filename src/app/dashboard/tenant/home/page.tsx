@@ -2,20 +2,42 @@
 
 import { Building2, DoorOpen, Layers, Wallet } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { TenantComplaintsPanel } from "@/components/tenant/TenantComplaintsPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { tenantNav } from "@/config/dashboardNav";
 import { useMyTenancy } from "@/hooks/use-my-tenancy";
 import { useUnits } from "@/hooks/use-units";
 import { formatKES } from "@/lib/format";
 
 const TenantHomePage = () => {
-  const { tenancy } = useMyTenancy();
-  const { units } = useUnits(tenancy?.propertyId ? { propertyId: tenancy.propertyId } : undefined, {
-    enabled: Boolean(tenancy?.propertyId),
-  });
+  const {
+    tenancies: tenanciesRaw,
+    tenancy: primaryTenancy,
+    loading: tenancyLoading,
+  } = useMyTenancy();
+  const tenancies = tenanciesRaw ?? (primaryTenancy ? [primaryTenancy] : []);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const activeTenancy =
+    (selectedId && tenancies.find((t) => t._id === selectedId)) ||
+    primaryTenancy ||
+    tenancies[0] ||
+    null;
+
+  const { units } = useUnits(
+    activeTenancy?.propertyId ? { propertyId: activeTenancy.propertyId } : undefined,
+    { enabled: Boolean(activeTenancy?.propertyId) },
+  );
 
   // The occupant's unit: bound to their userId (array includes their userId), or
   // their tenant record id / an unlinked legacy unit.
@@ -23,8 +45,8 @@ const TenantHomePage = () => {
     (u) =>
       u.status === "occupied" &&
       (!u.tenantId.length ||
-        u.tenantId.includes(tenancy?.userId ?? "") ||
-        u.tenantId.includes(tenancy?._id ?? "")),
+        u.tenantId.includes(activeTenancy?.userId ?? "") ||
+        u.tenantId.includes(activeTenancy?._id ?? "")),
   );
 
   return (
@@ -34,7 +56,29 @@ const TenantHomePage = () => {
       title="My Home"
       subtitle="Your unit at a glance and the requests you've raised."
     >
-      {unit ? (
+      {tenancies.length > 1 && (
+        <div className="mb-6 flex items-center gap-3">
+          <span className="text-sm text-muted-foreground">Active tenancy</span>
+          <Select value={activeTenancy?._id ?? ""} onValueChange={setSelectedId}>
+            <SelectTrigger className="w-64">
+              <SelectValue placeholder="Select tenancy" />
+            </SelectTrigger>
+            <SelectContent>
+              {tenancies.map((t) => (
+                <SelectItem key={t._id} value={t._id}>
+                  {t.name} · {t.propertyId}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {tenancyLoading ? (
+        <div className="rounded-2xl border border-dashed border-border bg-card/50 p-10 text-center text-muted-foreground">
+          Loading your home…
+        </div>
+      ) : unit ? (
         <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -46,7 +90,7 @@ const TenantHomePage = () => {
                   Unit {unit.name}
                 </h2>
                 <p className="text-sm text-muted-foreground">
-                  {unit.blockName ? `Block ${unit.blockName}` : tenancy?.name}
+                  {unit.blockName ? `Block ${unit.blockName}` : activeTenancy?.name}
                 </p>
               </div>
             </div>
@@ -90,9 +134,9 @@ const TenantHomePage = () => {
             </div>
           </dl>
 
-          {tenancy?.joinedAt && (
+          {activeTenancy?.joinedAt && (
             <p className="mt-4 text-xs text-muted-foreground">
-              Moved in {new Date(tenancy.joinedAt).toLocaleDateString()}
+              Moved in {new Date(activeTenancy.joinedAt).toLocaleDateString()}
             </p>
           )}
         </div>
