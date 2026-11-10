@@ -84,7 +84,7 @@ const brokerSections = [
   { slug: "/listings", label: "Market Listings", icon: Building2 },
   { slug: "/authorizations", label: "Authorizations", icon: UserCog },
   { slug: "/prospects", label: "Prospects", icon: Users },
-  { slug: "#commissions", label: "Commissions", icon: Calculator },
+  { slug: "/commissions", label: "Commissions", icon: Calculator },
   { slug: "/profile", label: "Broker Profile", icon: Settings },
 ] satisfies readonly Section[];
 
