@@ -16,7 +16,7 @@ import { invalidatePropertyTypeCache } from "@/lib/property-type-store";
 const { user, propertytype } = getModelStubs();
 
 const ADMIN_ID = makeObjectId("admin");
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 
 const seedDocs = [
   { _id: "1", key: "apartment", label: "Apartment", order: 0, active: true },
@@ -51,7 +51,7 @@ describe("GET /api/v1/property-types", () => {
   });
 
   it("rejects non-admins requesting the full list", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
     const res = await GET(
       buildRequest("/api/v1/property-types?all=1", { token: signToken(OWNER_ID) }),
     );
@@ -84,7 +84,7 @@ describe("POST /api/v1/property-types", () => {
     );
     expect(anon.status).toBe(401);
 
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
     const owner = await POST(
       buildRequest("/api/v1/property-types", {
         method: "POST",

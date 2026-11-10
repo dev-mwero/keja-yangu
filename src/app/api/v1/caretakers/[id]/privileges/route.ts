@@ -44,12 +44,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const privilegedCustodian = isPrivilegedCustodian(actor);
-  if (
-    actor.role !== "owner" &&
-    actor.role !== "system-admin" &&
-    actor.role !== "admin" &&
-    !privilegedCustodian
-  ) {
+  if (actor.role !== "system-admin" && actor.role !== "admin" && !privilegedCustodian) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -84,13 +79,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     }
   }
 
-  if (actor.role === "owner") {
-    const ownerId = String(actor._id);
-    const boundOwnerId = await getManagedOwnerId(id);
-    if (boundOwnerId !== "" && boundOwnerId !== ownerId) {
-      return NextResponse.json({ error: "Caretaker is bound to another owner" }, { status: 409 });
-    }
-  } else if (actor.role === "custodian") {
+  if (actor.role === "custodian") {
     const ownerId = await getManagedOwnerId(String(actor._id));
     const targetManaged = await getManagedOwnerId(id);
     if (!ownerId || targetManaged !== ownerId) {

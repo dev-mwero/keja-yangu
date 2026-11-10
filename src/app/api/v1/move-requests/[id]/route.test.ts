@@ -30,7 +30,7 @@ import { notifyMoveRequestDecided } from "@/lib/notifications";
 const { user, moverrequest, unit, lease, tenant, property, managementAssignment } = getModelStubs();
 const notifyMoveRequestDecidedMock = vi.mocked(notifyMoveRequestDecided);
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const CUSTODIAN_ID = makeObjectId("custodian");
 const CARETAKER_ID = makeObjectId("caretaker");
 const TENANT_ID = makeObjectId("tenant");

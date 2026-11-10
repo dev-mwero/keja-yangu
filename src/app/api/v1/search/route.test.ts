@@ -20,7 +20,7 @@ import { GET } from "@/app/api/v1/search/route";
 
 const { user, property, unit, tenant, invoice } = getModelStubs();
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const TENANT_ID = makeObjectId("tenant");
 const TENANT_DOC_ID = makeObjectId("tenantdoc");
 

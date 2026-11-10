@@ -28,7 +28,7 @@ const getOwnerPaymentConfigMock = vi.mocked(getOwnerPaymentConfig);
 const resolveDarajaConfigMock = vi.mocked(resolveDarajaConfig);
 
 const INVOICE_ID = makeObjectId("invoice");
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const TENANT_A = makeObjectId("tenant-a");
 const INVALID_ID = "not-an-objectid";
 const CHECKOUT_ID = "ws_CO_20092026120000123";
@@ -138,7 +138,7 @@ describe("POST /api/v1/tenant/me/invoices/[id]/pay-mpesa", () => {
 
   it("403 for a non-tenant role", async () => {
     user.findById.mockReturnValue(
-      buildQuery(makeUser({ _id: makeObjectId("pm-owner"), role: "owner" })),
+      buildQuery(makeUser({ _id: makeObjectId("pm-owner"), role: "admin" })),
     );
     const res = await post({ phone: "+254712345678" }, signToken(makeObjectId("pm-owner")));
     expect(res.status).toBe(403);

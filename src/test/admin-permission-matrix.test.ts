@@ -242,7 +242,7 @@ describe("admin permission matrix — amounts assignment dimensions", () => {
 
 describe("platform actions — system-admin only", () => {
   const SYSTEM_ADMIN_ID = makeObjectId("sysadmin");
-  const OWNER_ID = makeObjectId("owner");
+  const OWNER_ID = makeObjectId("admin");
 
   function signInAs(role: string, id: string) {
     user.findById.mockReturnValue(buildQuery(makeUser({ _id: id, role: role as never })));
@@ -291,7 +291,7 @@ describe("platform actions — system-admin only", () => {
   });
 
   it("owner cannot manage property types", async () => {
-    const token = signInAs("owner", OWNER_ID);
+    const token = signInAs("admin", OWNER_ID);
     mockPropertyTypes();
 
     const res = await getPropertyTypes(
@@ -301,7 +301,7 @@ describe("platform actions — system-admin only", () => {
   });
 
   it("owner cannot read the recycle bin", async () => {
-    const token = signInAs("owner", OWNER_ID);
+    const token = signInAs("admin", OWNER_ID);
 
     const res = await getRecycleBin(buildRequest("/api/v1/recycle-bin", { token }));
     expect(res.status).toBe(403);

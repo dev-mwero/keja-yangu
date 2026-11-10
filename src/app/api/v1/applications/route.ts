@@ -29,8 +29,6 @@ export async function GET(request: NextRequest) {
   const role = user.role;
   if (role === "tenant") {
     filter.applicantUserId = String(user._id);
-  } else if (role === "owner") {
-    filter.ownerId = String(user._id);
   } else if (role === "custodian") {
     const managedOwnerId = await getManagedOwnerId(String(user._id));
     if (!managedOwnerId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });

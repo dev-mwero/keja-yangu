@@ -40,7 +40,6 @@ const FILTER_ROLES: UserRow["role"][] = [
   "tenant",
   "caretaker",
   "custodian",
-  "owner",
   "admin",
   "broker",
   "system-admin",

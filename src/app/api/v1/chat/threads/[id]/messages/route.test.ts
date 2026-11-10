@@ -32,7 +32,7 @@ import { notifyMessageReply } from "@/lib/notifications";
 const { user, tenant, property, chatthread, chatmessage, managementAssignment } = getModelStubs();
 
 const USER_ID = makeObjectId("user");
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const CUSTODIAN_ID = makeObjectId("custodian");
 const AGENT_ID = makeObjectId("agent");
 const TENANT_ID = makeObjectId("tenant");

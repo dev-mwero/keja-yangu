@@ -25,7 +25,7 @@ import { GET, POST } from "@/app/api/v1/properties/[id]/service-fees/route";
 const { user, property, unit, serviceFeeItem, unitServiceFeeOverride, managementAssignment } =
   getModelStubs();
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
 const PROPERTY_ID = makeObjectId("p1");
 const ITEM_ID = makeObjectId("item1");

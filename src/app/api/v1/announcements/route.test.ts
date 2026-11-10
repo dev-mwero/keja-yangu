@@ -26,7 +26,7 @@ import { notifyAnnouncement, resolveAnnouncementRecipients } from "@/lib/notific
 const { user, property, tenant, announcement, managementAssignment } = getModelStubs();
 
 const USER_ID = makeObjectId("user");
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const CARETAKER_ID = makeObjectId("caretaker");
 const CUSTODIAN_ID = makeObjectId("custodian");
 const AGENT_ID = makeObjectId("agent");

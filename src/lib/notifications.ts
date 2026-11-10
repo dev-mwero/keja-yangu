@@ -258,7 +258,7 @@ export async function resolveStaffRecipients(scope: {
 
 /** Server-composed role-aware deep link for a notification recipient. */
 function communicationLink(role: string | undefined): string {
-  if (role === "owner" || role === "caretaker" || role === "custodian") {
+  if (role === "caretaker" || role === "custodian") {
     return `/dashboard/${role}/communications`;
   }
   if (role === "system-admin") return "/dashboard/system-admin";
@@ -831,7 +831,7 @@ export async function notifyMoveRequestDecided(request: MoveRequestLike): Promis
     const typeLabel = moveTypeLabel(request.type);
     const role = request.requestedByRole;
     const link =
-      role === "owner" || role === "caretaker" || role === "custodian"
+      role === "caretaker" || role === "custodian"
         ? `/dashboard/${role}/move-requests`
         : role === "tenant"
           ? "/dashboard/tenant/requests"

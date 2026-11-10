@@ -30,7 +30,7 @@ import { notifyMoveRequestCreated } from "@/lib/notifications";
 
 const { user, property, tenant, unit, moverrequest, managementAssignment } = getModelStubs();
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const CUSTODIAN_ID = makeObjectId("custodian");
 const CARETAKER_ID = makeObjectId("caretaker");
 const TENANT_ID = makeObjectId("tenant");

@@ -27,7 +27,7 @@ async function loadActorAndCustodian(request: NextRequest, id: string) {
   if (!actor?.isActive) {
     return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   }
-  if (actor.role !== "owner" && actor.role !== "system-admin" && actor.role !== "admin") {
+  if (actor.role !== "system-admin" && actor.role !== "admin") {
     return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   }
 

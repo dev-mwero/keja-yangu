@@ -131,12 +131,7 @@ export async function POST(request: NextRequest) {
   if (!actor?.isActive) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (
-    actor.role !== "owner" &&
-    actor.role !== "custodian" &&
-    actor.role !== "system-admin" &&
-    actor.role !== "admin"
-  ) {
+  if (actor.role !== "custodian" && actor.role !== "system-admin" && actor.role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -150,9 +145,7 @@ export async function POST(request: NextRequest) {
   }
 
   let boundOwnerId = "";
-  if (actor.role === "owner") {
-    boundOwnerId = String(actor._id);
-  } else if (actor.role === "custodian") {
+  if (actor.role === "custodian") {
     boundOwnerId = (await getManagedOwnerId(String(actor._id))) ?? "";
     if (!boundOwnerId) {
       return NextResponse.json({ error: "Custodian is not assigned to an owner" }, { status: 403 });
@@ -165,12 +158,12 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
-    const owner = await User.findOne({ _id: boundOwnerId, role: "owner", isActive: true })
+    const owner = await User.findOne({ _id: boundOwnerId, role: "admin", isActive: true })
       .select("_id")
       .lean();
     if (!owner) {
       return NextResponse.json(
-        { error: "ownerId must reference an active owner" },
+        { error: "ownerId must reference an active admin" },
         { status: 400 },
       );
     }

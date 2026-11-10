@@ -23,7 +23,7 @@ import { GET, POST } from "@/app/api/v1/documents/route";
 const { user, property, tenant, propertydocument, managementAssignment } = getModelStubs();
 
 const USER_ID = makeObjectId("user");
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const TENANT_ID = makeObjectId("tenant");
 const PROPERTY_ID = makeObjectId("p1");
 const DOC_ID = makeObjectId("document");

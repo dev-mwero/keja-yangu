@@ -28,7 +28,7 @@ function tenancyDoc(overrides: Record<string, unknown> = {}) {
     name: "Amina",
     email: "amina@keja.co",
     propertyId: PROP_ID,
-    ownerId: makeObjectId("owner"),
+    ownerId: makeObjectId("admin"),
     status: "active",
     ...overrides,
   };
@@ -51,7 +51,7 @@ describe("GET /api/v1/tenant/me", () => {
   });
 
   it("403 for a non-tenant role", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ role: "admin" })));
     const res = await GET(buildRequest("/api/v1/tenant/me", { token: signToken(TENANT_ID) }));
     expect(res.status).toBe(403);
   });

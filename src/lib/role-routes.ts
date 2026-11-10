@@ -1,17 +1,9 @@
-export type Role =
-  | "tenant"
-  | "caretaker"
-  | "custodian"
-  | "owner"
-  | "admin"
-  | "broker"
-  | "system-admin";
+export type Role = "tenant" | "caretaker" | "custodian" | "admin" | "broker" | "system-admin";
 
 export const roleRoute: Record<Role, string> = {
   tenant: "/dashboard/tenant",
   caretaker: "/dashboard/caretaker",
   custodian: "/dashboard/custodian",
-  owner: "/dashboard/owner",
   admin: "/dashboard/admin",
   broker: "/dashboard/broker",
   "system-admin": "/dashboard/system-admin",
@@ -20,9 +12,9 @@ export const roleRoute: Record<Role, string> = {
 export const getRoleRoute = (role: Role): string => roleRoute[role] ?? "/dashboard";
 
 const dashboardRoles: Array<[string, Role[]]> = [
-  ["/dashboard/admin", ["admin", "owner", "system-admin"]],
-  ["/dashboard/owner", ["owner", "admin", "system-admin"]],
-  ["/dashboard/custodian", ["custodian", "owner", "admin", "system-admin"]],
+  ["/dashboard/admin", ["admin", "system-admin"]],
+  ["/dashboard/owner", ["admin", "system-admin"]],
+  ["/dashboard/custodian", ["custodian", "admin", "system-admin"]],
   ["/dashboard/broker", ["broker", "system-admin"]],
   ["/dashboard/tenant", ["tenant"]],
   ["/dashboard/caretaker", ["caretaker", "system-admin"]],

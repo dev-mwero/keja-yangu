@@ -2,14 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-export type UserRole =
-  | "tenant"
-  | "caretaker"
-  | "custodian"
-  | "owner"
-  | "admin"
-  | "broker"
-  | "system-admin";
+export type UserRole = "tenant" | "caretaker" | "custodian" | "admin" | "broker" | "system-admin";
 
 export interface UserRow {
   id: string;

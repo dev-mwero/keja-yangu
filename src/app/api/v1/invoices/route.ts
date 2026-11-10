@@ -52,7 +52,6 @@ export async function GET(request: NextRequest) {
   }
 
   const filter: Record<string, unknown> = {};
-  if (actor.role === "owner") filter.ownerId = actor.userId;
   if (actor.role === "custodian" && actor.staffAssignmentBacked) {
     const scopes: Record<string, unknown>[] = [];
     if (actor.propertyScopeIds.length > 0) {
@@ -116,8 +115,6 @@ export async function GET(request: NextRequest) {
             propertyId: { $in: actor.assignedPropertyIds },
             ownerId: actor.managedByOwnerId,
           };
-    } else if (actor.role === "owner") {
-      sweepScope = { ownerId: actor.userId };
     } else if (actor.role === "custodian") {
       sweepScope = actor.staffAssignmentBacked
         ? { propertyId: { $in: actor.propertyScopeIds } }
@@ -190,9 +187,6 @@ export async function POST(request: NextRequest) {
     if (!lease) {
       return NextResponse.json({ error: "Lease not found" }, { status: 404 });
     }
-    if (actor.role === "owner" && lease.ownerId !== actor.userId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
     if (actor.role === "custodian") {
       if (actor.staffAssignmentBacked) {
         const coversProperty = actor.propertyScopeIds.includes(lease.propertyId);
@@ -258,9 +252,6 @@ export async function POST(request: NextRequest) {
     const tenant = await Tenant.findById(tenantId).lean();
     if (!tenant) {
       return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
-    }
-    if (actor.role === "owner" && tenant.ownerId !== actor.userId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     if (actor.role === "custodian") {
       if (actor.staffAssignmentBacked) {

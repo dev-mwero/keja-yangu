@@ -167,7 +167,7 @@ async function ensureTargetUser(input: GrantAssignmentInput): Promise<void> {
   if (!principal) throw new AssignmentError("not-found", "Target user not found");
   if (!principal.isActive) invalid("Target user is inactive");
 
-  const role = principal.role === "owner" ? "admin" : principal.role;
+  const role = principal.role;
   if (role !== input.accessRole) {
     invalid("Target user role does not match the assignment access role");
   }

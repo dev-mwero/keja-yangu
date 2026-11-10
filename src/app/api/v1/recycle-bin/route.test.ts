@@ -20,7 +20,7 @@ import { GET } from "@/app/api/v1/recycle-bin/route";
 const { user, property, unit, tenant, lease, invoice, propertytype } = getModelStubs();
 
 const ADMIN_ID = makeObjectId("admin");
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 
 function asAdmin() {
   user.findById.mockReturnValue(buildQuery(makeUser({ _id: ADMIN_ID, role: "system-admin" })));
@@ -45,7 +45,7 @@ describe("GET /api/v1/recycle-bin", () => {
   });
 
   it("403 for non-admins", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
     const res = await GET(buildRequest("/api/v1/recycle-bin", { token: signToken(OWNER_ID) }));
     expect(res.status).toBe(403);
   });

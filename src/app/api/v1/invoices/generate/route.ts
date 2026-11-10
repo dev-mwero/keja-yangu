@@ -49,7 +49,6 @@ export async function POST(request: NextRequest) {
   }
 
   const filter: Record<string, unknown> = { status: "active" };
-  if (actor.role === "owner") filter.ownerId = actor.userId;
   if (actor.role === "custodian") {
     if (actor.staffAssignmentBacked) {
       const scopes: Record<string, unknown>[] = [];

@@ -88,7 +88,7 @@ describe("PATCH /api/v1/admin/users/[id]/role", () => {
 
   it("403 for a non-system-admin actor", async () => {
     mockDocs(
-      makeUser({ _id: SYS_ADMIN_ID, role: "owner" }) as unknown as Record<string, unknown>,
+      makeUser({ _id: SYS_ADMIN_ID, role: "admin" }) as unknown as Record<string, unknown>,
       targetDoc() as unknown as Record<string, unknown>,
     );
     const res = await PATCH(

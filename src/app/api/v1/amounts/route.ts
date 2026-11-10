@@ -53,9 +53,6 @@ export async function GET(request: NextRequest) {
   let assignedPropertyIds: string[] | null = null;
 
   switch (actor.role) {
-    case "owner":
-      ownerScope = actor.userId;
-      break;
     case "custodian":
       if (!actor.managedByOwnerId) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });

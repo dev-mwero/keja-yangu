@@ -3,20 +3,11 @@ import { getDashboardAllowedRoles, getRoleRoute } from "@/lib/role-routes";
 
 describe("getDashboardAllowedRoles", () => {
   it("matches dashboard roots", () => {
-    expect(getDashboardAllowedRoles("/dashboard/admin")).toEqual([
-      "admin",
-      "owner",
-      "system-admin",
-    ]);
-    expect(getDashboardAllowedRoles("/dashboard/owner")).toEqual([
-      "owner",
-      "admin",
-      "system-admin",
-    ]);
+    expect(getDashboardAllowedRoles("/dashboard/admin")).toEqual(["admin", "system-admin"]);
+    expect(getDashboardAllowedRoles("/dashboard/owner")).toEqual(["admin", "system-admin"]);
     expect(getDashboardAllowedRoles("/dashboard/tenant")).toEqual(["tenant"]);
     expect(getDashboardAllowedRoles("/dashboard/custodian")).toEqual([
       "custodian",
-      "owner",
       "admin",
       "system-admin",
     ]);
@@ -27,11 +18,9 @@ describe("getDashboardAllowedRoles", () => {
   it("matches nested dashboard paths", () => {
     expect(getDashboardAllowedRoles("/dashboard/admin/portfolio/123")).toEqual([
       "admin",
-      "owner",
       "system-admin",
     ]);
     expect(getDashboardAllowedRoles("/dashboard/owner/portfolio/123")).toEqual([
-      "owner",
       "admin",
       "system-admin",
     ]);
@@ -52,10 +41,6 @@ describe("getDashboardAllowedRoles", () => {
 describe("getRoleRoute", () => {
   it("routes admin to /dashboard/admin", () => {
     expect(getRoleRoute("admin")).toBe("/dashboard/admin");
-  });
-
-  it("routes owner to /dashboard/owner", () => {
-    expect(getRoleRoute("owner")).toBe("/dashboard/owner");
   });
 
   it("routes broker to /dashboard/broker", () => {

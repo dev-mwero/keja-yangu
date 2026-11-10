@@ -43,8 +43,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(buildPaginationResult([], 0, page, limit));
     }
     filter.tenantId = { $in: actor.tenantIds };
-  } else if (actor.role === "owner") {
-    filter.ownerId = actor.userId;
   } else if (actor.role === "caretaker") {
     filter.ownerId = actor.managedByOwnerId;
     filter.propertyId = { $in: actor.assignedPropertyIds };

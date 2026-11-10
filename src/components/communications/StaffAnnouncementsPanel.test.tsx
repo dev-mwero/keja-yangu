@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => {
     createAnnouncement,
     deleteAnnouncement,
     toast,
-    user: { current: { id: "owner-1", role: "owner" } as { id: string; role: string } },
+    user: { current: { id: "owner-1", role: "admin" } as { id: string; role: string } },
     useAnnouncements: vi.fn(() => ({ items, loading: false, error: null, refetch })),
     useAnnouncementMutations: vi.fn(() => ({
       createAnnouncement,
@@ -67,7 +67,7 @@ describe("StaffAnnouncementsPanel", () => {
     mocks.toast.success.mockClear();
     mocks.toast.error.mockClear();
     mocks.toast.info.mockClear();
-    mocks.user.current = { id: "owner-1", role: "owner" };
+    mocks.user.current = { id: "owner-1", role: "admin" };
   });
 
   it("publishes to all properties by default", async () => {

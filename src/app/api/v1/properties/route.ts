@@ -280,7 +280,7 @@ export async function POST(request: NextRequest) {
   const custodianIds = parsed.data.custodianIds ? [...parsed.data.custodianIds] : [];
   let ownerId = "";
 
-  if (user.role === "owner" || user.role === "admin") {
+  if (user.role === "admin") {
     ownerId = actorId;
   } else if (user.role === "system-admin") {
     const targetOwnerId = parsed.data.targetOwnerId;
@@ -292,7 +292,7 @@ export async function POST(request: NextRequest) {
     }
     const targetOwner = await User.findOne({
       _id: targetOwnerId,
-      role: "owner",
+      role: "admin",
       isActive: true,
     })
       .select("_id")
@@ -317,7 +317,7 @@ export async function POST(request: NextRequest) {
     }
     const managingOwner = await User.findOne({
       _id: managingOwnerId,
-      role: "owner",
+      role: "admin",
       isActive: true,
     })
       .select("_id")
@@ -334,7 +334,7 @@ export async function POST(request: NextRequest) {
     }
     const managingOwner = await User.findOne({
       _id: managingOwnerId,
-      role: "owner",
+      role: "admin",
       isActive: true,
     })
       .select("_id")

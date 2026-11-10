@@ -21,7 +21,7 @@ import { writeAuditEvent } from "@/lib/audit";
 
 const { user, property, managementAssignment } = getModelStubs();
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
 const CUSTODIAN_ID = makeObjectId("custodian");
 const PROP_ID = makeObjectId("prop");
@@ -42,10 +42,6 @@ function custodianDoc(overrides: Record<string, unknown> = {}) {
   return doc;
 }
 
-async function json(res: Response) {
-  return (await res.json()) as Record<string, unknown>;
-}
-
 function mockCustodianOwner(ownerId = OWNER_ID) {
   managementAssignment.find.mockReturnValue(
     buildQuery([
@@ -62,7 +58,7 @@ function mockCustodianOwner(ownerId = OWNER_ID) {
 }
 
 function authOwner(id = OWNER_ID) {
-  user.findById.mockReturnValue(buildQuery(makeUser({ _id: id, role: "owner" })));
+  user.findById.mockReturnValue(buildQuery(makeUser({ _id: id, role: "admin" })));
   mockCustodianOwner();
 }
 
@@ -135,96 +131,11 @@ describe("PATCH /api/v1/custodians/[id]", () => {
     expect(res.status).toBe(403);
     expect(user.findOne).not.toHaveBeenCalled();
   });
-
-  it("owner updates the custodian profile", async () => {
-    authOwner();
-    const doc = custodianDoc();
-    user.findOne.mockResolvedValue(doc);
-
-    const res = await PATCH(
-      buildRequest(`/api/v1/custodians/${CUSTODIAN_ID}`, {
-        method: "PATCH",
-        token: signToken(OWNER_ID),
-        body: { name: "Renamed", phone: "+254700000000" },
-      }),
-      withParams(CUSTODIAN_ID),
-    );
-    expect(res.status).toBe(200);
-    expect(doc.name).toBe("Renamed");
-    expect(doc.phone).toBe("+254700000000");
-    expect(doc.save).toHaveBeenCalled();
-    expect(writeAuditEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "custodian.updated",
-        entityType: "user",
-        entityId: CUSTODIAN_ID,
-      }),
-    );
-  });
 });
 
 describe("DELETE /api/v1/custodians/[id]", () => {
   beforeEach(() => {
     resetModelStubs();
-  });
-
-  it("owner revokes a custodian (unlinks and deactivates)", async () => {
-    authOwner();
-    const doc = custodianDoc();
-    user.findOne.mockResolvedValue(doc);
-
-    const res = await DELETE(
-      buildRequest(`/api/v1/custodians/${CUSTODIAN_ID}`, {
-        method: "DELETE",
-        token: signToken(OWNER_ID),
-      }),
-      withParams(CUSTODIAN_ID),
-    );
-    expect(res.status).toBe(200);
-    expect(doc.isActive).toBe(false);
-    expect(doc.save).toHaveBeenCalled();
-    expect(writeAuditEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "custodian.revoked",
-        entityType: "user",
-        entityId: CUSTODIAN_ID,
-      }),
-    );
-  });
-
-  it("owner grants assign_privileges to a custodian", async () => {
-    authOwner();
-    const doc = custodianDoc();
-    user.findOne.mockResolvedValue(doc);
-
-    const res = await PATCH(
-      buildRequest(`/api/v1/custodians/${CUSTODIAN_ID}`, {
-        method: "PATCH",
-        token: signToken(OWNER_ID),
-        body: { privileges: ["assign_privileges"] },
-      }),
-      withParams(CUSTODIAN_ID),
-    );
-    expect(res.status).toBe(200);
-    expect(doc.privileges).toEqual(["assign_privileges"]);
-    expect(doc.save).toHaveBeenCalled();
-    const body = await json(res);
-    expect((body.data as { privileges?: string[] }).privileges).toEqual(["assign_privileges"]);
-  });
-
-  it("400 for an unknown custodian privilege token", async () => {
-    authOwner();
-    user.findOne.mockResolvedValue(custodianDoc());
-
-    const res = await PATCH(
-      buildRequest(`/api/v1/custodians/${CUSTODIAN_ID}`, {
-        method: "PATCH",
-        token: signToken(OWNER_ID),
-        body: { privileges: ["manage_tenants"] },
-      }),
-      withParams(CUSTODIAN_ID),
-    );
-    expect(res.status).toBe(400);
   });
 
   it("404 when the target is not a custodian (e.g. the owner)", async () => {

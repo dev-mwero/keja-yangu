@@ -42,9 +42,6 @@ export async function GET(request: NextRequest) {
       { propertyId: "", ownerId: { $in: actor.tenantOwnerIds } },
     ];
     filter.audience = { $in: ["all", "tenants"] };
-  } else if (actor.role === "owner") {
-    filter.ownerId = actor.userId;
-    filter.$or = staffAudience;
   } else if (actor.role === "caretaker") {
     filter.ownerId = actor.managedByOwnerId;
     // Assigned properties plus the owner's portfolio-wide postings.
@@ -135,10 +132,7 @@ export async function POST(request: NextRequest) {
   if (actor.role === "admin" && propertyId && !actor.assignedPropertyIds.includes(propertyId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (
-    propertyId &&
-    (actor.role === "owner" || actor.role === "custodian" || actor.role === "admin")
-  ) {
+  if (propertyId && (actor.role === "custodian" || actor.role === "admin")) {
     const property = await Property.findById(propertyId).select("ownerId").lean();
     if (!property) {
       return NextResponse.json({ error: "Property not found" }, { status: 404 });

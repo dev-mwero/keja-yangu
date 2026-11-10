@@ -27,7 +27,7 @@ import { GET, POST } from "@/app/api/v1/properties/route";
 
 const { user, property, unit, managementAssignment, block } = getModelStubs();
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const CARETAKER_ID = makeObjectId("caretaker");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
 const PROPERTY_ID = makeObjectId("property");
@@ -588,7 +588,7 @@ describe("POST /api/v1/properties", () => {
       propertyIds: [PROPERTY_ID],
     });
     user.findOne.mockReturnValue(
-      buildQuery({ _id: OTHER_OWNER_ID, role: "owner", isActive: true }),
+      buildQuery({ _id: OTHER_OWNER_ID, role: "admin", isActive: true }),
     );
     // the creator is auto-appended to caretakerIds, so the caretaker-id
     // validation lookup sees the actor's own doc
@@ -610,7 +610,7 @@ describe("POST /api/v1/properties", () => {
     expect(res.status).toBe(201);
     expect(user.findOne).toHaveBeenCalledWith({
       _id: OTHER_OWNER_ID,
-      role: "owner",
+      role: "admin",
       isActive: true,
     });
     expect(property.create).toHaveBeenCalledWith(
@@ -659,7 +659,7 @@ describe("POST /api/v1/properties", () => {
     );
     expect(missing.status).toBe(400);
 
-    user.findOne.mockReturnValue(buildQuery({ _id: OWNER_ID, role: "owner", isActive: true }));
+    user.findOne.mockReturnValue(buildQuery({ _id: OWNER_ID, role: "admin", isActive: true }));
     property.create.mockResolvedValue(validCreatedProperty);
 
     const ok = await POST(

@@ -24,7 +24,7 @@ const { user, tenant: tenantStub, invoice: invoiceStub } = getModelStubs();
 const notifyInvoicePaidMock = vi.mocked(notifyInvoicePaid);
 
 const TENANT_USER_ID = makeObjectId("tenant-user");
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const TENANT_A = makeObjectId("tenant-a");
 const INVOICE_ID = makeObjectId("invoice");
 const INVALID_ID = "not-an-objectid";
@@ -34,7 +34,7 @@ function tenantDoc() {
 }
 
 function ownerDoc() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  return makeUser({ _id: OWNER_ID, role: "admin" });
 }
 
 function pendingInvoice() {

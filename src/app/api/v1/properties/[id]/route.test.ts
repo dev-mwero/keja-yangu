@@ -19,7 +19,7 @@ import { DELETE, GET, PATCH } from "@/app/api/v1/properties/[id]/route";
 
 const { user, property, tenant, unit, managementAssignment } = getModelStubs();
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const CARETAKER_ID = makeObjectId("caretaker");
 const CUSTODIAN_ID = makeObjectId("custodian");
 const OTHER_OWNER_ID = makeObjectId("other-owner");

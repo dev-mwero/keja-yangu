@@ -30,8 +30,6 @@ export async function GET(request: NextRequest) {
   const role = user.role;
   if (role === "tenant") {
     filter.requestedById = String(user._id);
-  } else if (role === "owner") {
-    filter.ownerId = String(user._id);
   } else if (role === "custodian") {
     const managedOwnerId = await getManagedOwnerId(String(user._id));
     if (!managedOwnerId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -171,8 +169,6 @@ export async function POST(request: NextRequest) {
   let scopeOwnerId: string | undefined;
   if (role === "system-admin") {
     scopeOwnerId = property.ownerId;
-  } else if (role === "owner") {
-    scopeOwnerId = actorId;
   } else if (role === "admin") {
     const adminScope = await getAdminAssignmentScope(actorId, "move-request:manage");
     if (

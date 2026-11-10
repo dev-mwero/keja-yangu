@@ -18,7 +18,7 @@ vi.mock("@/models/User", async () => {
 
 const { user } = getModelStubs();
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 
 describe("formatInvoiceNumber", () => {
   it("formats as INV-YYYYMM-NNNN zero-padded to four digits", () => {
