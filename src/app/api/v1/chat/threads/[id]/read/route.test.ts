@@ -20,7 +20,7 @@ import { POST } from "@/app/api/v1/chat/threads/[id]/read/route";
 const { user, tenant, chatthread, managementAssignment } = getModelStubs();
 
 const USER_ID = makeObjectId("user");
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const AGENT_ID = makeObjectId("agent");
 const TENANT_ID = makeObjectId("tenant");
 const PROPERTY_ID = makeObjectId("p1");

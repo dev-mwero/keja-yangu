@@ -29,7 +29,7 @@ import { notifyUnitAvailable } from "@/lib/notifications";
 const { user, unit, property, managementAssignment } = getModelStubs();
 const notifyUnitAvailableMock = vi.mocked(notifyUnitAvailable);
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const CUSTODIAN_ID = makeObjectId("custodian");
 const TENANT_ID = makeObjectId("tenant");
 const CARETAKER_ID = makeObjectId("caretaker");

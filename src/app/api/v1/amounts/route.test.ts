@@ -30,7 +30,7 @@ import { GET } from "@/app/api/v1/amounts/route";
 const { user, property, unit, invoice, lease, managementAssignment } = getModelStubs();
 
 const SELF_ID = makeObjectId("self");
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const OTHER_OWNER_ID = makeObjectId("otherowner");
 const PROP_ID = makeObjectId("prop1");
 const BLOCK_ID = makeObjectId("block1");

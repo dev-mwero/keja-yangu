@@ -23,7 +23,7 @@ import { GET } from "@/app/api/v1/units/[id]/service-fees/route";
 const { user, property, unit, serviceFeeItem, unitServiceFeeOverride, managementAssignment } =
   getModelStubs();
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const PROPERTY_ID = makeObjectId("p1");
 const UNIT_ID = makeObjectId("unit1");
 

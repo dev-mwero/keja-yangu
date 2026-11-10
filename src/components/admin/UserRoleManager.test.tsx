@@ -59,7 +59,7 @@ beforeEach(resetState);
 function seedUsers() {
   mocks.users.push(
     { id: "u1", name: "Amina Otieno", email: "amina@keja.co", role: "tenant", isActive: true },
-    { id: "u2", name: "Brian Mwangi", email: "brian@keja.co", role: "owner", isActive: true },
+    { id: "u2", name: "Brian Mwangi", email: "brian@keja.co", role: "admin", isActive: true },
     { id: "u3", name: "Root Admin", email: "root@keja.co", role: "system-admin", isActive: true },
   );
 }

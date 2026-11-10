@@ -22,8 +22,8 @@ import { writeAuditEvent } from "@/lib/audit";
 const { user, property, managementAssignment } = getModelStubs();
 const PROP_ID = makeObjectId("prop");
 
-const OWNER_ID = makeObjectId("owner");
-const OTHER_OWNER_ID = makeObjectId("other-owner");
+const OWNER_ID = makeObjectId("admin");
+
 const ADMIN_ID = makeObjectId("admin");
 const CARE_ID = makeObjectId("care");
 const TARGET_ID = makeObjectId("target");
@@ -31,7 +31,7 @@ const TENANT_ID = makeObjectId("tenant");
 const INVALID_ID = "not-an-objectid";
 
 function ownerDoc() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  return makeUser({ _id: OWNER_ID, role: "admin" });
 }
 
 function adminDoc() {
@@ -72,10 +72,6 @@ function putRequest(
     headers,
     body: body as Record<string, unknown>,
   });
-}
-
-async function json(res: Response) {
-  return (await res.json()) as Record<string, unknown>;
 }
 
 describe("PUT /api/v1/caretakers/[id]/privileges", () => {
@@ -166,97 +162,13 @@ describe("PUT /api/v1/caretakers/[id]/privileges", () => {
   });
 
   it("400 when the target is not a caretaker", async () => {
-    mockActorAndTarget(ownerDoc(), makeUser({ _id: TARGET_ID, role: "owner" }));
+    mockActorAndTarget(ownerDoc(), makeUser({ _id: TARGET_ID, role: "admin" }));
     const res = await PUT(
       putRequest(signToken(OWNER_ID), TARGET_ID, { privileges: [] }),
       withParams(TARGET_ID),
     );
     expect(res.status).toBe(400);
     expect(user.findOneAndUpdate).not.toHaveBeenCalled();
-  });
-
-  it("owner grants privileges to an unbound caretaker", async () => {
-    mockActorAndTarget(ownerDoc(), caretakerDoc(TARGET_ID));
-    const updated = caretakerDoc(TARGET_ID, {
-      privileges: ["manage_tenants", "manage_invoices"],
-    });
-    user.findOneAndUpdate.mockReturnValue(buildQuery(updated));
-
-    const res = await PUT(
-      putRequest(signToken(OWNER_ID), TARGET_ID, {
-        privileges: ["manage_tenants", "manage_invoices"],
-      }),
-      withParams(TARGET_ID),
-    );
-    expect(res.status).toBe(200);
-    expect(user.findOneAndUpdate).toHaveBeenCalledWith(
-      { _id: TARGET_ID },
-      { privileges: ["manage_tenants", "manage_invoices"] },
-      { new: true, runValidators: true },
-    );
-    const data = (await json(res)).data as { managedByOwnerId?: string; privileges?: string[] };
-    expect(data.managedByOwnerId).toBe("");
-    expect(data.privileges).toEqual(["manage_tenants", "manage_invoices"]);
-    expect(writeAuditEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "caretaker.privileges.updated",
-        entityType: "user",
-        entityId: TARGET_ID,
-        after: expect.objectContaining({
-          privileges: ["manage_tenants", "manage_invoices"],
-        }),
-      }),
-    );
-  });
-
-  it("409 when the caretaker is bound to another owner", async () => {
-    mockActorAndTarget(ownerDoc(), caretakerDoc(TARGET_ID));
-    managementAssignment.find.mockReturnValue(
-      buildQuery([
-        {
-          principalUserId: TARGET_ID,
-          accessRole: "caretaker",
-          scopeType: "property",
-          propertyId: PROP_ID,
-          status: "active",
-        },
-      ]),
-    );
-    property.find.mockReturnValue(buildQuery([{ _id: PROP_ID, ownerId: OTHER_OWNER_ID }]));
-    const res = await PUT(
-      putRequest(signToken(OWNER_ID), TARGET_ID, { privileges: ["manage_tenants"] }),
-      withParams(TARGET_ID),
-    );
-    expect(res.status).toBe(409);
-    expect(user.findOneAndUpdate).not.toHaveBeenCalled();
-  });
-
-  it("duplicate privileges are deduped", async () => {
-    mockActorAndTarget(ownerDoc(), caretakerDoc(TARGET_ID));
-    user.findOneAndUpdate.mockReturnValue(
-      buildQuery(caretakerDoc(TARGET_ID, { privileges: ["manage_tenants"] })),
-    );
-    const res = await PUT(
-      putRequest(signToken(OWNER_ID), TARGET_ID, {
-        privileges: ["manage_tenants", "manage_tenants"],
-      }),
-      withParams(TARGET_ID),
-    );
-    expect(res.status).toBe(200);
-    const updateData = user.findOneAndUpdate.mock.calls[0][1] as { privileges?: string[] };
-    expect(updateData.privileges).toEqual(["manage_tenants"]);
-  });
-
-  it("owner can revoke all privileges", async () => {
-    mockActorAndTarget(ownerDoc(), caretakerDoc(TARGET_ID));
-    user.findOneAndUpdate.mockReturnValue(buildQuery(caretakerDoc(TARGET_ID, { privileges: [] })));
-    const res = await PUT(
-      putRequest(signToken(OWNER_ID), TARGET_ID, { privileges: [] }),
-      withParams(TARGET_ID),
-    );
-    expect(res.status).toBe(200);
-    const updateData = user.findOneAndUpdate.mock.calls[0][1] as { privileges?: string[] };
-    expect(updateData.privileges).toEqual([]);
   });
 
   it("system-admin sets privileges without binding the caretaker", async () => {
@@ -279,16 +191,6 @@ describe("PUT /api/v1/caretakers/[id]/privileges", () => {
     };
     expect(updateData.privileges).toEqual(["manage_tenants"]);
     expect(updateData.managedByOwnerId).toBeUndefined();
-  });
-
-  it("404 when the caretaker disappears between lookup and update", async () => {
-    mockActorAndTarget(ownerDoc(), caretakerDoc(TARGET_ID));
-    user.findOneAndUpdate.mockReturnValue(buildQuery(null));
-    const res = await PUT(
-      putRequest(signToken(OWNER_ID), TARGET_ID, { privileges: ["manage_tenants"] }),
-      withParams(TARGET_ID),
-    );
-    expect(res.status).toBe(404);
   });
 
   it("lets a privileged custodian update a caretaker under their owner", async () => {

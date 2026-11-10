@@ -42,7 +42,7 @@ describe("PropertyCardWithActions structure link", () => {
   });
 
   it("builds the correct href for each role dashboard", () => {
-    for (const role of ["owner", "custodian", "system-admin"]) {
+    for (const role of ["admin", "custodian", "system-admin"]) {
       pathname.value = `/dashboard/${role}/portfolio`;
       const { unmount } = render(<PropertyCardWithActions property={property} canEdit />);
       expect(screen.getByRole("link", { name: /manage structure/i })).toHaveAttribute(

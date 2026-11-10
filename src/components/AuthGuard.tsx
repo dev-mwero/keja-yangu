@@ -20,8 +20,7 @@ export const AuthGuard = ({
     user &&
       allowedRoles &&
       (allowedRoles.includes(user.role) ||
-        (user.role === "admin" && allowedRoles.includes("owner")) ||
-        (user.role === "owner" && allowedRoles.includes("admin"))),
+        (user.role === "admin" && allowedRoles.includes("owner"))),
   );
 
   useEffect(() => {

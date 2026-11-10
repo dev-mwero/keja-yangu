@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
     const propertyId = String(p._id);
     const property = p.title ?? "";
     const owner = p.ownerId ? usersById.get(String(p.ownerId)) : undefined;
-    if (owner?.role === "owner" || owner?.role === "admin") {
+    if (owner?.role === "admin") {
       contacts.push({
         userId: String(p.ownerId),
         name: owner.name,

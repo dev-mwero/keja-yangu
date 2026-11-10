@@ -37,8 +37,6 @@ export async function GET(request: NextRequest) {
       { scope: "tenant", tenantId: { $in: actor.tenantIds } },
       { scope: "property", propertyId: { $in: actor.tenantPropertyIds } },
     ];
-  } else if (actor.role === "owner") {
-    filter.ownerId = actor.userId;
   } else if (actor.role === "custodian") {
     filter.ownerId = actor.managedByOwnerId;
   } else if (actor.role === "caretaker") {

@@ -27,9 +27,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   const actor = await resolveDashboardActor(request, "task:read-own");
   if (actor instanceof NextResponse) return actor;
 
-  if (actor.role === "owner" && task.ownerId !== actor.userId) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
   if (actor.role === "caretaker" && !actor.assignedPropertyIds.includes(task.propertyId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -65,9 +62,6 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   const actor = await resolveDashboardActor(request, "task:manage");
   if (actor instanceof NextResponse) return actor;
 
-  if (actor.role === "owner" && task.ownerId !== actor.userId) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
   if (actor.role === "caretaker" && !actor.assignedPropertyIds.includes(task.propertyId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -139,9 +133,6 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   const actor = await resolveDashboardActor(request, "task:manage");
   if (actor instanceof NextResponse) return actor;
 
-  if (actor.role === "owner" && task.ownerId !== actor.userId) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
   if (actor.role === "caretaker" && !actor.assignedPropertyIds.includes(task.propertyId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

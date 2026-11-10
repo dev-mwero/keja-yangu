@@ -198,9 +198,7 @@ export async function POST(request: NextRequest) {
   }
   const agent = await User.findById(recipientId).select("role").lean();
   const roleMatches =
-    parsed.data.role === "owner"
-      ? agent?.role === "owner" || agent?.role === "admin"
-      : agent?.role === "caretaker";
+    parsed.data.role === "owner" ? agent?.role === "admin" : agent?.role === "caretaker";
   if (!agent || !roleMatches) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

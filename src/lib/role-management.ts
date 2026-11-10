@@ -5,7 +5,6 @@ export const USER_ROLES = [
   "tenant",
   "caretaker",
   "custodian",
-  "owner",
   "admin",
   "broker",
   "system-admin",

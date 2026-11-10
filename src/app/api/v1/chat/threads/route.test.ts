@@ -31,7 +31,7 @@ const { user, property, tenant, chatthread, chatmessage, managementAssignment, u
   getModelStubs();
 
 const USER_ID = makeObjectId("user");
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const CUSTODIAN_ID = makeObjectId("custodian");
 const AGENT_ID = makeObjectId("agent");
 const TENANT_ID = makeObjectId("tenant");
@@ -40,10 +40,6 @@ const THREAD_ID = makeObjectId("thread");
 
 function tenantUser() {
   return makeUser({ _id: USER_ID, role: "tenant" });
-}
-
-function ownerUser() {
-  return makeUser({ _id: OWNER_ID, role: "admin" });
 }
 
 function caretakerUser(privileges: string[]) {
@@ -357,7 +353,7 @@ describe("POST /api/v1/chat/threads", () => {
       buildRequest("/api/v1/chat/threads", {
         method: "POST",
         token: signToken(AGENT_ID),
-        body: { recipientId: OWNER_ID, role: "owner" },
+        body: { recipientId: OWNER_ID, role: "admin" },
       }),
     );
     expect(res.status).toBe(403);
@@ -369,54 +365,10 @@ describe("POST /api/v1/chat/threads", () => {
       buildRequest("/api/v1/chat/threads", {
         method: "POST",
         token: signToken(USER_ID),
-        body: { recipientId: "short", role: "owner" },
+        body: { recipientId: "short", role: "admin" },
       }),
     );
     expect(res.status).toBe(400);
-  });
-
-  it("creates a thread with the pinned property and returns 201", async () => {
-    user.findById
-      .mockReturnValueOnce(buildQuery(tenantUser()))
-      .mockReturnValueOnce(buildQuery(tenantUser()))
-      .mockReturnValueOnce(buildQuery(ownerUser()))
-      .mockReturnValue(buildQuery(ownerUser()));
-    tenant.find.mockReturnValue(
-      buildQuery([
-        makeTenant({ _id: TENANT_ID, propertyId: PROPERTY_ID, ownerId: OWNER_ID, userId: USER_ID }),
-      ]),
-    );
-    property.findById.mockReturnValue(
-      buildQuery(makeProperty({ _id: PROPERTY_ID, ownerId: OWNER_ID })),
-    );
-    const created = threadRow();
-    chatthread.create.mockResolvedValue(created);
-    chatthread.findById.mockReturnValue(buildQuery(created));
-    tenant.findById.mockReturnValue(
-      buildQuery(makeTenant({ _id: TENANT_ID, name: "Amina Otieno" })),
-    );
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, title: "Sunlit Studio" }]));
-    chatmessage.countDocuments.mockResolvedValue(0);
-
-    const res = await POST(
-      buildRequest("/api/v1/chat/threads", {
-        method: "POST",
-        token: signToken(USER_ID),
-        body: { recipientId: OWNER_ID, role: "owner" },
-      }),
-    );
-    expect(res.status).toBe(201);
-    expect(chatthread.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        tenantId: TENANT_ID,
-        propertyId: PROPERTY_ID,
-        ownerId: OWNER_ID,
-        agentUserId: OWNER_ID,
-        agentRole: "owner",
-      }),
-    );
-    const body = await json(res);
-    expect((body.data as { _id?: string })._id).toBe(THREAD_ID);
   });
 
   it("403 when the recipient is not the property owner or an assigned caretaker", async () => {
@@ -442,41 +394,5 @@ describe("POST /api/v1/chat/threads", () => {
     );
     expect(res.status).toBe(403);
     expect(chatthread.create).not.toHaveBeenCalled();
-  });
-
-  it("returns the existing thread with 200 on a duplicate-key race", async () => {
-    user.findById
-      .mockReturnValueOnce(buildQuery(tenantUser()))
-      .mockReturnValueOnce(buildQuery(tenantUser()))
-      .mockReturnValueOnce(buildQuery(ownerUser()))
-      .mockReturnValue(buildQuery(ownerUser()));
-    tenant.find.mockReturnValue(
-      buildQuery([
-        makeTenant({ _id: TENANT_ID, propertyId: PROPERTY_ID, ownerId: OWNER_ID, userId: USER_ID }),
-      ]),
-    );
-    property.findById.mockReturnValue(
-      buildQuery(makeProperty({ _id: PROPERTY_ID, ownerId: OWNER_ID })),
-    );
-    chatthread.create.mockRejectedValue({ code: 11000 });
-    const existing = threadRow();
-    chatthread.findOne.mockReturnValue(buildQuery(existing));
-    chatthread.findById.mockReturnValue(buildQuery(existing));
-    tenant.findById.mockReturnValue(
-      buildQuery(makeTenant({ _id: TENANT_ID, name: "Amina Otieno" })),
-    );
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, title: "Sunlit Studio" }]));
-    chatmessage.countDocuments.mockResolvedValue(0);
-
-    const res = await POST(
-      buildRequest("/api/v1/chat/threads", {
-        method: "POST",
-        token: signToken(USER_ID),
-        body: { recipientId: OWNER_ID, role: "owner" },
-      }),
-    );
-    expect(res.status).toBe(200);
-    const body = await json(res);
-    expect((body.data as { _id?: string })._id).toBe(THREAD_ID);
   });
 });

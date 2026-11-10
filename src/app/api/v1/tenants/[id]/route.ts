@@ -113,9 +113,6 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     if (!newProperty) {
       return NextResponse.json({ error: "Property not found" }, { status: 422 });
     }
-    if (scope.role === "owner" && newProperty.ownerId !== scope.userId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
     if (
       scope.role === "caretaker" &&
       (!scope.assignedPropertyIds?.includes(parsed.data.propertyId) ||

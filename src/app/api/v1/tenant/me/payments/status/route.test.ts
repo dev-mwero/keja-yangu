@@ -62,7 +62,7 @@ function tenantDoc() {
 }
 
 function ownerDoc() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  return makeUser({ _id: OWNER_ID, role: "admin" });
 }
 
 function pendingPayment() {

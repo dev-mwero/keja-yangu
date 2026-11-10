@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
   let scopeOwnerId: string | null = null;
   let assignedPropertyIds: string[] | null = null;
 
-  if (role === "owner" || role === "admin") {
+  if (role === "admin") {
     scopeOwnerId = String(user._id);
   } else if (role === "custodian") {
     const managedOwnerId = await getManagedOwnerId(String(user._id));

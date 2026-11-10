@@ -79,7 +79,7 @@ export interface MaintenanceTask {
   priority: TaskPriority;
   status: TaskStatus;
   assignedTo?: string;
-  createdBy: "caretaker" | "owner" | "admin";
+  createdBy: "caretaker" | "admin";
   dueDate: string;
   createdAt: string;
   completedAt?: string;
@@ -288,7 +288,7 @@ const taskSeed: MaintenanceTask[] = [
     priority: "high",
     status: "open",
     assignedTo: "Mercy Atieno",
-    createdBy: "owner",
+    createdBy: "admin",
     dueDate: fromNow(1, 7),
     createdAt: fromNow(-3),
     notes: "Use the approved vendor; notify tenants two days before.",
@@ -314,7 +314,7 @@ const taskSeed: MaintenanceTask[] = [
     priority: "high",
     status: "open",
     assignedTo: "John Kiprono",
-    createdBy: "owner",
+    createdBy: "admin",
     dueDate: fromNow(3),
     createdAt: fromNow(-1),
   },
@@ -326,7 +326,7 @@ const taskSeed: MaintenanceTask[] = [
     priority: "medium",
     status: "done",
     assignedTo: "Mercy Atieno",
-    createdBy: "owner",
+    createdBy: "admin",
     dueDate: fromNow(-8),
     createdAt: fromNow(-12),
     completedAt: fromNow(-9, 15),

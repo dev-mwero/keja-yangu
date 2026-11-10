@@ -16,7 +16,7 @@ import { ownerPaymentConfigInput } from "@/lib/schemas";
 async function resolveOwner(request: NextRequest) {
   const actor = await resolveInvoiceActor(request);
   if (actor instanceof NextResponse) return actor;
-  if (actor.role !== "owner" && actor.role !== "admin") {
+  if (actor.role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   return actor;

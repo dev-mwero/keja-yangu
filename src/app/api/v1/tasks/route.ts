@@ -33,9 +33,7 @@ export async function GET(request: NextRequest) {
   if (actor instanceof NextResponse) return actor;
 
   const filter: Record<string, unknown> = {};
-  if (actor.role === "owner") {
-    filter.ownerId = actor.userId;
-  } else if (actor.role === "caretaker") {
+  if (actor.role === "caretaker") {
     filter.ownerId = actor.managedByOwnerId;
     if (actor.assignedPropertyIds.length > 0) {
       filter.propertyId = { $in: actor.assignedPropertyIds };
@@ -92,7 +90,7 @@ export async function POST(request: NextRequest) {
   const actor = await resolveDashboardActor(request, "task:create");
   if (actor instanceof NextResponse) return actor;
 
-  const ownerId = actor.role === "owner" ? actor.userId : (actor.managedByOwnerId ?? actor.userId);
+  const ownerId = actor.managedByOwnerId ?? actor.userId;
 
   const creator = await User.findById(actor.userId).select("name").lean();
 

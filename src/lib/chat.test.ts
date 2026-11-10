@@ -34,7 +34,7 @@ describe("serializeThread", () => {
   });
 
   it("shows an owner the tenant as the contact", () => {
-    const view = serializeThread(thread, enrichment, "owner");
+    const view = serializeThread(thread, enrichment, "admin");
     expect(view.contact).toBe("Amina Otieno");
     expect(view.role).toBe("Tenant");
   });
@@ -101,7 +101,7 @@ describe("countUnreadByThread", () => {
       { threadId: "t1", createdAt: new Date("2026-09-02T08:15:00.000Z") }, // t1 has no agent watermark
       { threadId: "t2", createdAt: new Date("2026-09-02T10:00:00.000Z") }, // after t2 agent watermark
     ];
-    const counts = countUnreadByThread(staffThreads, "owner", messages);
+    const counts = countUnreadByThread(staffThreads, "admin", messages);
     expect(counts.get("t1")).toBe(1);
     expect(counts.get("t2")).toBe(1);
   });

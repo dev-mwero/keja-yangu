@@ -34,7 +34,7 @@ const ROLE_LABELS: Record<string, string> = {
   broker: "Broker",
 };
 
-const ALL_ROLES = ["tenant", "caretaker", "custodian", "owner", "admin", "broker"];
+const ALL_ROLES = ["tenant", "caretaker", "custodian", "admin", "broker"];
 
 export const UserInviteCard = ({ onCreated }: { onCreated?: () => void } = {}) => {
   const { inviteUser, pending } = useUserInvites();

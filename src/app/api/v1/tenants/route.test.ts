@@ -39,7 +39,7 @@ const {
   managementAssignment,
 } = getModelStubs();
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const CARETAKER_ID = makeObjectId("caretaker");
 const ADMIN_ID = makeObjectId("admin");
 const PROPERTY_ID = makeObjectId("p1");
@@ -830,7 +830,7 @@ describe("POST /api/v1/tenants", () => {
     property.findById.mockReturnValue(buildQuery(ownedProperty()));
     tenantStub.findOne.mockReturnValue(buildQuery(null));
     user.findOne.mockReturnValue(
-      buildQuery({ _id: makeObjectId("owner-account"), role: "owner", isActive: true }),
+      buildQuery({ _id: makeObjectId("owner-account"), role: "admin", isActive: true }),
     );
 
     const res = await POST(

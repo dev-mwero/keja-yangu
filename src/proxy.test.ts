@@ -34,10 +34,10 @@ describe("proxy middleware", () => {
   });
 
   it("redirects root /dashboard to the role default route", async () => {
-    const req = buildDashboardRequest("/dashboard", makeToken("owner"));
+    const req = buildDashboardRequest("/dashboard", makeToken("admin"));
     const res = await proxy(req);
     expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe("http://localhost:3000/dashboard/owner");
+    expect(res.headers.get("location")).toBe("http://localhost:3000/dashboard/admin");
 
     const adminReq = buildDashboardRequest("/dashboard", makeToken("admin"));
     const adminRes = await proxy(adminReq);
@@ -46,7 +46,7 @@ describe("proxy middleware", () => {
   });
 
   it("allows owner accessing /dashboard/owner", async () => {
-    const req = buildDashboardRequest("/dashboard/owner", makeToken("owner"));
+    const req = buildDashboardRequest("/dashboard/owner", makeToken("admin"));
     const res = await proxy(req);
     expect(res.status).toBe(200);
   });
@@ -64,7 +64,7 @@ describe("proxy middleware", () => {
   });
 
   it("allows owner accessing /dashboard/admin during migration window", async () => {
-    const req = buildDashboardRequest("/dashboard/admin", makeToken("owner"));
+    const req = buildDashboardRequest("/dashboard/admin", makeToken("admin"));
     const res = await proxy(req);
     expect(res.status).toBe(200);
   });

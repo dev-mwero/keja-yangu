@@ -25,7 +25,6 @@ function invoiceInScope(
   actor: InvoiceActor,
 ): boolean {
   if (actor.role === "system-admin") return true;
-  if (actor.role === "owner") return doc.ownerId === actor.userId;
   if (actor.role === "custodian") {
     if (actor.staffAssignmentBacked) {
       return adminScopeMatches(doc, actor);

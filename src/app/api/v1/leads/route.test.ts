@@ -21,7 +21,7 @@ import { GET, POST } from "@/app/api/v1/leads/route";
 
 const { user, lead, property, managementAssignment } = getModelStubs();
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const CUSTODIAN_ID = makeObjectId("custodian");
 const ADMIN_ID = makeObjectId("admin");
 const CARETAKER_ID = makeObjectId("caretaker");

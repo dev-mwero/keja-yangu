@@ -26,7 +26,7 @@ import { writeAuditEvent } from "@/lib/audit";
 
 const { user, property, tenant: tenantStub, managementAssignment } = getModelStubs();
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const CARETAKER_ID = makeObjectId("caretaker");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
 const PROPERTY_ID = makeObjectId("p1");

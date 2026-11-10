@@ -13,7 +13,7 @@ import { GET } from "@/app/api/v1/admin/users/route";
 
 const models = getModelStubs();
 const SYS_ADMIN_ID = makeObjectId("sysadmin");
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 
 function sysAdminDoc() {
   return makeUser({ _id: SYS_ADMIN_ID, role: "system-admin" });
@@ -42,7 +42,7 @@ describe("GET /api/v1/admin/users", () => {
   });
 
   it("403 for a non-system-admin actor", async () => {
-    models.user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    models.user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
     const res = await GET(buildRequest("/api/v1/admin/users", { token: signToken(OWNER_ID) }));
     expect(res.status).toBe(403);
   });
@@ -59,7 +59,7 @@ describe("GET /api/v1/admin/users", () => {
   it("lists users with pagination", async () => {
     const users = [
       makeUser({ _id: makeObjectId("u1"), name: "User One", role: "tenant" }),
-      makeUser({ _id: makeObjectId("u2"), name: "User Two", role: "owner" }),
+      makeUser({ _id: makeObjectId("u2"), name: "User Two", role: "admin" }),
     ];
     models.user.find.mockReturnValue(buildQuery(users));
     models.user.countDocuments.mockResolvedValue(2);

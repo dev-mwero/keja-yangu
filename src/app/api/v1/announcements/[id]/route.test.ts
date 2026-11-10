@@ -20,7 +20,7 @@ import { DELETE } from "@/app/api/v1/announcements/[id]/route";
 
 const { user, property, announcement, managementAssignment } = getModelStubs();
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const CARETAKER_ID = makeObjectId("caretaker");
 const OTHER_OWNER_ID = makeObjectId("owner2");
 const PROPERTY_ID = makeObjectId("p1");

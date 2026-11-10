@@ -18,7 +18,7 @@ import { GET } from "@/app/api/v1/users/search/route";
 const { user, property, managementAssignment } = getModelStubs();
 const PROP_ID = makeObjectId("prop");
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const ADMIN_ID = makeObjectId("admin");
 const CARE_ID = makeObjectId("care");
 const TENANT_USER_ID = makeObjectId("tenant-user");

@@ -99,7 +99,7 @@ describe("POST /api/v1/tenant/me/invoices/[id]/pay-initiate", () => {
 
   it("403 for a non-tenant role", async () => {
     user.findById.mockReturnValue(
-      buildQuery(makeUser({ _id: makeObjectId("pi-owner"), role: "owner" })),
+      buildQuery(makeUser({ _id: makeObjectId("pi-owner"), role: "admin" })),
     );
     const res = await POST(
       buildRequest(`/api/v1/tenant/me/invoices/${INVOICE_ID}/pay-initiate`, {

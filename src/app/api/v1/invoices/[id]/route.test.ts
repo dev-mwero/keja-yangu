@@ -21,7 +21,7 @@ import { DELETE, GET, PATCH } from "@/app/api/v1/invoices/[id]/route";
 
 const { user, invoice: invoiceStub, managementAssignment } = getModelStubs();
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const CARETAKER_ID = makeObjectId("caretaker");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
 const PROPERTY_ID = makeObjectId("p1");

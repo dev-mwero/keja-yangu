@@ -56,7 +56,6 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   const canDelete =
     actor.role === "system-admin" ||
     adminCanDelete ||
-    (actor.role === "owner" && announcement.ownerId === actor.userId) ||
     (actor.role === "custodian" && announcement.ownerId === actor.managedByOwnerId) ||
     (actor.role === "caretaker" &&
       announcement.ownerId === actor.managedByOwnerId &&

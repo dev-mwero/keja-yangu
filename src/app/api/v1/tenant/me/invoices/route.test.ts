@@ -32,7 +32,7 @@ const {
 const notifyOverdueInvoicesMock = vi.mocked(notifyOverdueInvoices);
 
 const TENANT_USER_ID = makeObjectId("tenant-user");
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const TENANT_A = makeObjectId("tenant-a");
 const TENANT_B = makeObjectId("tenant-b");
 
@@ -41,7 +41,7 @@ function tenantDoc() {
 }
 
 function ownerDoc() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  return makeUser({ _id: OWNER_ID, role: "admin" });
 }
 
 async function json(res: Response) {

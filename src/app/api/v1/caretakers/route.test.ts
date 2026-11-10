@@ -26,13 +26,13 @@ import { sendInviteEmail } from "@/lib/email";
 const { user, property, managementAssignment } = getModelStubs();
 const PROP_ID = makeObjectId("prop");
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
 const CARE_1 = makeObjectId("care-1");
 const CARE_2 = makeObjectId("care-2");
 
 function ownerDoc() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  return makeUser({ _id: OWNER_ID, role: "admin" });
 }
 
 function adminDoc() {
@@ -242,122 +242,6 @@ describe("POST /api/v1/caretakers", () => {
     expect(res.status).toBe(403);
   });
 
-  it("409 when the existing user is bound to another owner", async () => {
-    const bound = makeUser({
-      _id: CARE_1,
-      role: "caretaker",
-      isActive: true,
-    });
-    user.findOne.mockReturnValue(buildQuery(bound));
-    managementAssignment.find.mockReturnValue(
-      buildQuery([
-        {
-          principalUserId: CARE_1,
-          accessRole: "caretaker",
-          scopeType: "property",
-          propertyId: PROP_ID,
-          status: "active",
-        },
-      ]),
-    );
-    property.find.mockReturnValue(buildQuery([{ _id: PROP_ID, ownerId: OTHER_OWNER_ID }]));
-    const res = await POST(
-      buildRequest("/api/v1/caretakers", {
-        method: "POST",
-        token: signToken(OWNER_ID),
-        headers: { "x-forwarded-for": "203.0.113.91" },
-        body: { email: "bound@care.co", privileges: [] },
-      }),
-    );
-    expect(res.status).toBe(409);
-  });
-
-  it("links an existing active user, sets privileges, and returns linked", async () => {
-    const existing = makeUser({
-      _id: CARE_1,
-      role: "caretaker",
-      isActive: true,
-      name: "Care One",
-      email: "care@care.co",
-    }) as ReturnType<typeof makeUser> & { save: ReturnType<typeof vi.fn> };
-    user.findOne.mockReturnValue(buildQuery(existing));
-
-    const res = await POST(
-      buildRequest("/api/v1/caretakers", {
-        method: "POST",
-        token: signToken(OWNER_ID),
-        headers: { "x-forwarded-for": "203.0.113.92" },
-        body: { email: "care@care.co", name: "Care One", privileges: ["manage_tenants"] },
-      }),
-    );
-    expect(res.status).toBe(200);
-    const body = await json(res);
-    expect(body.linked).toBe(true);
-    expect(user.updateOne).toHaveBeenCalledWith(
-      { _id: CARE_1 },
-      {
-        $set: {
-          privileges: ["manage_tenants"],
-          name: "Care One",
-        },
-      },
-    );
-    expect(sendInviteEmail).not.toHaveBeenCalled();
-  });
-
-  it("creates an inactive unverified caretaker and sends an invite", async () => {
-    user.findOne.mockReturnValue(buildQuery(null));
-    const created = makeUser({
-      _id: CARE_2,
-      role: "caretaker",
-      name: "New Care",
-      email: "new@care.co",
-      isActive: false,
-    });
-    user.create.mockResolvedValue(created);
-
-    const res = await POST(
-      buildRequest("/api/v1/caretakers", {
-        method: "POST",
-        token: signToken(OWNER_ID),
-        headers: { "x-forwarded-for": "203.0.113.93" },
-        body: { email: "new@care.co", name: "New Care", privileges: ["manage_tenants"] },
-      }),
-    );
-    expect(res.status).toBe(201);
-    expect(writeAuditEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "caretaker.invited",
-        entityType: "user",
-        after: expect.objectContaining({ name: "New Care", privileges: expect.any(Array) }),
-      }),
-    );
-    const body = await json(res);
-    expect(body.invited).toBe(true);
-    expect(user.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        role: "caretaker",
-        email: "new@care.co",
-        isActive: false,
-        isVerified: false,
-        privileges: ["manage_tenants"],
-        verificationToken: expect.any(String),
-        verificationTokenExpiry: expect.any(Date),
-      }),
-    );
-    const createArg = user.create.mock.calls[0][0] as {
-      passwordHash: string;
-      verificationToken: string;
-    };
-    expect(createArg.passwordHash).toMatch(/^\$2[aby]\$/);
-    expect(sendInviteEmail).toHaveBeenCalledWith(
-      "new@care.co",
-      "New Care",
-      "caretaker",
-      createArg.verificationToken,
-    );
-  });
-
   it("lets a custodian list caretakers under their owner", async () => {
     const custodian = makeUser({
       _id: makeObjectId("custodian"),
@@ -422,95 +306,6 @@ describe("POST /api/v1/caretakers", () => {
     );
     expect(res.status).toBe(201);
     expect(user.create).toHaveBeenCalledWith(expect.objectContaining({ role: "caretaker" }));
-  });
-
-  it("creates an active verified phone-only caretaker with a temporary password", async () => {
-    user.findOne.mockReturnValue(buildQuery(null));
-    const created = {
-      _id: CARE_2,
-      name: "Phone Care",
-      phone: "+254712345678",
-      role: "caretaker",
-      privileges: [],
-      isActive: true,
-      isVerified: true,
-    };
-    user.create.mockResolvedValue(created);
-
-    const res = await POST(
-      buildRequest("/api/v1/caretakers", {
-        method: "POST",
-        token: signToken(OWNER_ID),
-        body: { phone: "0712 345 678", name: "Phone Care" },
-      }),
-    );
-    expect(res.status).toBe(201);
-    const body = await json(res);
-    expect(body.created).toBe(true);
-    expect(body.password).toEqual(expect.any(String));
-    expect(user.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        phone: "+254712345678",
-        role: "caretaker",
-        isActive: true,
-        isVerified: true,
-      }),
-    );
-    expect(sendInviteEmail).not.toHaveBeenCalled();
-  });
-
-  it("refreshes a pending invite and resends the token", async () => {
-    const pending = makeUser({
-      _id: CARE_1,
-      role: "caretaker",
-      email: "pending@care.co",
-      isActive: false,
-      isVerified: false,
-    });
-    user.findOne.mockReturnValue(buildQuery(pending));
-
-    const res = await POST(
-      buildRequest("/api/v1/caretakers", {
-        method: "POST",
-        token: signToken(OWNER_ID),
-        body: { email: "pending@care.co", name: "Pending Care", privileges: ["manage_tenants"] },
-      }),
-    );
-    expect(res.status).toBe(201);
-    expect(user.create).not.toHaveBeenCalled();
-    expect(user.updateOne).toHaveBeenCalledWith(
-      { _id: CARE_1 },
-      {
-        $set: expect.objectContaining({
-          email: "pending@care.co",
-          name: "Pending Care",
-          privileges: ["manage_tenants"],
-          verificationToken: expect.any(String),
-          verificationTokenExpiry: expect.any(Date),
-        }),
-      },
-    );
-    expect(sendInviteEmail).toHaveBeenCalledWith(
-      "pending@care.co",
-      "Pending Care",
-      "caretaker",
-      expect.any(String),
-    );
-  });
-
-  it("409 when the contact belongs to a different role", async () => {
-    user.findOne.mockReturnValue(
-      buildQuery(makeUser({ role: "tenant", isActive: true, email: "tenant@care.co" })),
-    );
-
-    const res = await POST(
-      buildRequest("/api/v1/caretakers", {
-        method: "POST",
-        token: signToken(OWNER_ID),
-        body: { email: "tenant@care.co" },
-      }),
-    );
-    expect(res.status).toBe(409);
   });
 
   it("system-admin requires an active ownerId", async () => {

@@ -23,7 +23,7 @@ import { notifyComplaintStatusChange } from "@/lib/notifications";
 const { user, property, complaint, managementAssignment } = getModelStubs();
 const notifyComplaintStatusChangeMock = vi.mocked(notifyComplaintStatusChange);
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const CARETAKER_ID = makeObjectId("caretaker");
 const PROPERTY_ID = makeObjectId("p1");
 const OTHER_PROPERTY_ID = makeObjectId("p2");

@@ -21,8 +21,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const isOwnerOrAdmin =
-    actor.role === "owner" || actor.role === "admin" || actor.role === "system-admin";
+  const isOwnerOrAdmin = actor.role === "admin" || actor.role === "system-admin";
   const actorManagedOwnerId =
     actor.role === "custodian" ? await getManagedOwnerId(String(actor._id)) : "";
   const isCustodian = actor.role === "custodian" && Boolean(actorManagedOwnerId);
@@ -54,12 +53,7 @@ export async function GET(request: NextRequest) {
   }
 
   let portfolioOwnerId: string | undefined;
-  if (actor.role === "owner") {
-    portfolioOwnerId = String(actor._id);
-    if (ownerId && ownerId !== portfolioOwnerId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-  } else if (actor.role === "custodian") {
+  if (actor.role === "custodian") {
     portfolioOwnerId = actorManagedOwnerId ?? "";
     if (ownerId && ownerId !== portfolioOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -83,7 +77,7 @@ export async function GET(request: NextRequest) {
       portfolioOwnerId = String(actor._id);
     }
   } else if (actor.role === "system-admin" && ownerId) {
-    const owner = await User.findOne({ _id: ownerId, role: "owner", isActive: true })
+    const owner = await User.findOne({ _id: ownerId, role: "admin", isActive: true })
       .select("_id")
       .lean();
     if (!owner) {

@@ -40,14 +40,14 @@ vi.mock("@/models/Lease", async () => {
 
 const { user, property, managementAssignment, unit, lease } = getModelStubs();
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const CARETAKER_ID = makeObjectId("caretaker");
 const CUSTODIAN_ID = makeObjectId("custodian");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
 const PROPERTY_ID = makeObjectId("property");
 
 function ownerUser(overrides: Partial<TestUser> = {}) {
-  return makeUser({ _id: OWNER_ID, role: "owner", ...overrides });
+  return makeUser({ _id: OWNER_ID, role: "admin", ...overrides });
 }
 
 function caretakerUser(privileges: CaretakerPrivilege[], overrides: Partial<TestUser> = {}) {
@@ -99,10 +99,6 @@ describe("isFullControlRole", () => {
     expect(isFullControlRole("system-admin")).toBe(true);
   });
 
-  it("returns false for owner", () => {
-    expect(isFullControlRole("owner")).toBe(false);
-  });
-
   it("returns false for caretaker and tenant", () => {
     expect(isFullControlRole("caretaker")).toBe(false);
     expect(isFullControlRole("tenant")).toBe(false);
@@ -120,7 +116,7 @@ describe("isPrivilegedCustodian", () => {
     expect(isPrivilegedCustodian(privileged)).toBe(true);
     expect(isPrivilegedCustodian({ ...privileged, privileges: [] })).toBe(false);
     expect(isPrivilegedCustodian({ ...privileged, isActive: false })).toBe(false);
-    expect(isPrivilegedCustodian({ ...privileged, role: "owner" })).toBe(false);
+    expect(isPrivilegedCustodian({ ...privileged, role: "admin" })).toBe(false);
     expect(isPrivilegedCustodian({ ...privileged, role: "caretaker" })).toBe(false);
   });
 });
@@ -241,12 +237,6 @@ describe("requirePermission — authentication failure modes", () => {
 describe("requirePermission — owner", () => {
   beforeEach(() => {
     resetModelStubs();
-  });
-
-  it("denies every action (unsupported role)", async () => {
-    for (const action of ALL_ACTIONS) {
-      expect((await guard(action, undefined, ownerUser()))?.status).toBe(403);
-    }
   });
 
   it("403 for edit/delete of own property", async () => {
@@ -507,14 +497,6 @@ describe("getTenantScope", () => {
     expect((res as Response).status).toBe(401);
   });
 
-  it("owner role has no legacy scope (denied)", async () => {
-    user.findById.mockReturnValue(buildQuery(ownerUser()));
-    const res = await getTenantScope(
-      buildRequest("/api/v1/tenants", { token: signToken(OWNER_ID) }),
-    );
-    expect((res as Response).status).toBe(403);
-  });
-
   it("scopes an admin to property assignments rather than its own user id", async () => {
     const adminId = makeObjectId("assigned-admin");
     const assignedPropertyId = makeObjectId("admin-property");
@@ -655,7 +637,7 @@ describe("tenantMatchesScope", () => {
     const scope = {
       filter: { ownerId: OWNER_ID },
       userId: OWNER_ID,
-      role: "owner" as Role,
+      role: "admin" as Role,
       managedByOwnerId: "",
     };
     expect(tenantMatchesScope({ ownerId: OWNER_ID, propertyId: makeObjectId("p1") }, scope)).toBe(

@@ -23,13 +23,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     return NextResponse.json({ error: "Property not found" }, { status: 404 });
   }
 
-  const authError = await requireAuth(request, [
-    "owner",
-    "caretaker",
-    "custodian",
-    "system-admin",
-    "admin",
-  ]);
+  const authError = await requireAuth(request, ["caretaker", "custodian", "system-admin", "admin"]);
   if (authError) return authError;
 
   // Tenants are permitted `unit:read` (to browse vacancies at their own

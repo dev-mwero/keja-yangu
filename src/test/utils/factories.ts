@@ -69,7 +69,7 @@ export function makeUser(overrides: Partial<TestUser> = {}): TestUser {
     _id: makeObjectId("user"),
     name: "Test Owner",
     email: "owner@keja.co",
-    role: "owner",
+    role: "admin",
     isActive: true,
     privileges: [],
     ...overrides,

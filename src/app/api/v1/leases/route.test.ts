@@ -33,7 +33,7 @@ const {
   unit: unitStub,
   managementAssignment,
 } = getModelStubs();
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const CARETAKER_ID = makeObjectId("caretaker");
 const ADMIN_ID = makeObjectId("admin");
 const TENANT_ID = makeObjectId("tenant");
