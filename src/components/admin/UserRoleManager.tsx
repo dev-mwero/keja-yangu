@@ -50,14 +50,7 @@ const FILTER_ROLES: UserRow["role"][] = [
  * Roles assignable from the dashboard. `system-admin` is intentionally absent:
  * it is granted/revoked only through the audited CLI (scripts/grant-system-admin.ts).
  */
-const ASSIGNABLE_ROLES: UserRow["role"][] = [
-  "tenant",
-  "caretaker",
-  "custodian",
-  "owner",
-  "admin",
-  "broker",
-];
+const ASSIGNABLE_ROLES: UserRow["role"][] = ["tenant", "caretaker", "custodian", "admin", "broker"];
 
 export const UserRoleManager = ({ refreshKey = 0 }: { refreshKey?: number }) => {
   const { user: currentUser } = useAuth();
