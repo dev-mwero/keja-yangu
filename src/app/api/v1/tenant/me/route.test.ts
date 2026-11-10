@@ -70,9 +70,7 @@ describe("GET /api/v1/tenant/me", () => {
 
   it("falls back to an email match and heals the link", async () => {
     tenantUser();
-    tenant.find
-      .mockReturnValueOnce(buildQuery([]))
-      .mockReturnValueOnce(buildQuery([tenancyDoc()]));
+    tenant.find.mockReturnValueOnce(buildQuery([])).mockReturnValueOnce(buildQuery([tenancyDoc()]));
 
     const res = await GET(buildRequest("/api/v1/tenant/me", { token: signToken(TENANT_ID) }));
     expect(res.status).toBe(200);
