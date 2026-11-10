@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, ClipboardList, Clock, Plus, Wrench } from "lucide-react";
+import { CheckCircle2, ClipboardList, Clock, Loader2, Plus, Wrench } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { DashboardShell } from "@/components/DashboardShell";
@@ -27,15 +27,10 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { adminNav as nav } from "@/config/dashboardNav";
-import {
-  type MaintenanceTask,
-  type TaskPriority,
-  type TaskStatus,
-  tasksStore,
-} from "@/data/dashboard";
+import type { TaskPriority, TaskStatus } from "@/data/dashboard";
 import { caretakers } from "@/data/properties";
-import { useLocalStore } from "@/hooks/use-local-store";
 import { useProperties } from "@/hooks/use-properties";
+import { useTaskMutations, useTasks } from "@/hooks/use-tasks";
 import { formatDate } from "@/lib/format";
 import { matchesQuery } from "@/lib/search";
 
@@ -55,7 +50,8 @@ type Filter = "open" | "in-progress" | "done";
 
 const AdminTasksPage = () => {
   const { properties } = useProperties();
-  const { items, addItem, updateItem } = useLocalStore<MaintenanceTask>(tasksStore);
+  const { items, loading, error, refetch } = useTasks();
+  const { createTask, updateTask, pending } = useTaskMutations();
 
   const [filter, setFilter] = useState<Filter>("open");
   const [query, setQuery] = useState("");
@@ -76,41 +72,48 @@ const AdminTasksPage = () => {
       matchesQuery(query, t.title, t.property, t.assignedTo, t.notes, t.priority, t.status),
     );
 
-  const submit = () => {
+  const submit = async () => {
     if (!title.trim()) {
       toast.error("Task title is required");
       return;
     }
     const assigned = caretakers.find((c) => c.id === assignee);
-    addItem({
-      id: `task-${Date.now()}`,
-      title: title.trim(),
-      property: properties.find((p) => p._id === property)?.title ?? "All properties",
-      propertyId: property || undefined,
-      priority,
-      status: "open",
-      assignedTo: assigned?.name ?? "Caretaker",
-      createdBy: "admin",
-      dueDate: dueDate ? `${dueDate}T23:59:59` : new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-      notes: notes.trim() || undefined,
-    });
-    toast.success("Task created", {
-      description: assigned ? `Assigned to ${assigned.name}.` : "Task added.",
-    });
-    setTitle("");
-    setProperty("");
-    setAssignee("");
-    setDueDate("");
-    setNotes("");
-    setOpen(false);
+    try {
+      await createTask({
+        title: title.trim(),
+        propertyId: property || undefined,
+        priority,
+        status: "open",
+        assignedTo: assigned?.name ?? "Caretaker",
+        assignedToName: assigned?.name ?? "",
+        dueDate: dueDate ? `${dueDate}T23:59:59` : new Date().toISOString(),
+        notes: notes.trim() || undefined,
+      });
+      toast.success("Task created", {
+        description: assigned ? `Assigned to ${assigned.name}.` : "Task added.",
+      });
+      setTitle("");
+      setProperty("");
+      setAssignee("");
+      setDueDate("");
+      setNotes("");
+      setOpen(false);
+      refetch();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create task");
+    }
   };
 
-  const advance = (t: MaintenanceTask) => {
+  const advance = async (t: { _id: string; status: TaskStatus }) => {
     const next: TaskStatus =
       t.status === "open" ? "in-progress" : t.status === "in-progress" ? "done" : "open";
-    updateItem(t.id, { status: next });
-    toast.success(`Task moved to ${next}`);
+    try {
+      await updateTask(t._id, { status: next });
+      toast.success(`Task moved to ${next}`);
+      refetch();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update task");
+    }
   };
 
   return (
@@ -150,29 +153,41 @@ const AdminTasksPage = () => {
         </div>
       </div>
 
+      {loading && (
+        <div className="mt-6 flex items-center gap-2 text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading tasks…
+        </div>
+      )}
+      {error && (
+        <div className="mt-6 rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
       <div className="mt-6 space-y-3">
-        {visible.length === 0 ? (
+        {!loading && visible.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border p-12 text-center text-muted-foreground">
             No {filter} tasks match your query.
           </div>
         ) : (
           visible.map((t) => (
             <div
-              key={t.id}
+              key={t._id}
               className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-soft transition-all hover:border-primary/40 md:flex-row md:items-center md:justify-between"
             >
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <h4 className="font-medium text-foreground">{t.title}</h4>
-                  <Badge variant="outline" className={priorityClass[t.priority]}>
+                  <Badge variant="outline" className={priorityClass[t.priority as TaskPriority]}>
                     {t.priority}
                   </Badge>
-                  <Badge variant="outline" className={statusClass[t.status]}>
+                  <Badge variant="outline" className={statusClass[t.status as TaskStatus]}>
                     {t.status}
                   </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {t.property} · Assigned to {t.assignedTo} · Due {formatDate(t.dueDate)}
+                  {t.property || "—"} · Assigned to {t.assignedTo || "—"} · Due{" "}
+                  {formatDate(t.dueDate)}
                 </p>
                 {t.notes && <p className="text-xs text-muted-foreground/80 italic">{t.notes}</p>}
               </div>
@@ -182,7 +197,8 @@ const AdminTasksPage = () => {
                   variant="outline"
                   size="sm"
                   className="rounded-full"
-                  onClick={() => advance(t)}
+                  disabled={pending}
+                  onClick={() => advance({ _id: t._id, status: t.status as TaskStatus })}
                 >
                   <Wrench className="mr-1.5 h-3.5 w-3.5" />
                   {t.status === "open"
@@ -279,7 +295,12 @@ const AdminTasksPage = () => {
             <Button variant="outline" className="rounded-full" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button className="rounded-full" onClick={submit}>
+            <Button className="rounded-full" disabled={pending} onClick={submit}>
+              {pending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="mr-2 h-4 w-4" />
+              )}
               Assign task
             </Button>
           </DialogFooter>
