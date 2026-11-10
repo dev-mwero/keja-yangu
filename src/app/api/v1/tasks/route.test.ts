@@ -18,7 +18,6 @@ import { GET, POST } from "@/app/api/v1/tasks/route";
 
 const { user, property, task, managementAssignment } = getModelStubs();
 
-const USER_ID = makeObjectId("user");
 const ADMIN_ID = makeObjectId("admin");
 const TASK_ID = makeObjectId("task");
 const PROPERTY_ID = makeObjectId("prop");
