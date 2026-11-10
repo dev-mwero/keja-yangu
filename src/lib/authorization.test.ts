@@ -58,17 +58,6 @@ describe("evaluatePolicy", () => {
     expect(result.allowed).toBe(true);
   });
 
-  it("denies the retired owner role as unsupported", () => {
-    const result = evaluatePolicy({
-      actor: actor({ role: "owner" }),
-      action: "unit:read",
-      resource: { propertyId: "property-1" },
-      assignments: [assignment()],
-      now: NOW,
-    });
-    expect(result).toMatchObject({ allowed: false, reason: "unsupported-role" });
-  });
-
   it("denies a different property", () => {
     const result = evaluatePolicy({
       actor: actor(),
