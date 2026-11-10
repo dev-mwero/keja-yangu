@@ -38,7 +38,8 @@ const stubs: Record<
   | "commissionAgreement"
   | "attribution"
   | "commissionAccrual"
-  | "commissionPayout",
+  | "commissionPayout"
+  | "task",
   ModelStub
 > = {
   user: createModelStub(),
@@ -79,6 +80,7 @@ const stubs: Record<
   attribution: createModelStub(),
   commissionAccrual: createModelStub(),
   commissionPayout: createModelStub(),
+  task: createModelStub(),
 };
 
 /**
