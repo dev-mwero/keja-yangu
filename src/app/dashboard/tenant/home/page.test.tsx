@@ -8,7 +8,13 @@ const mocks = vi.hoisted(() => {
   } = { tenancy: null, units: [] };
   return {
     state,
-    useMyTenancy: () => ({ tenancy: state.tenancy, loading: false, error: null, refetch: vi.fn() }),
+    useMyTenancy: () => ({
+      tenancy: state.tenancy,
+      tenancies: state.tenancy ? [state.tenancy] : [],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    }),
     useUnits: () => ({
       units: state.units,
       loading: false,
