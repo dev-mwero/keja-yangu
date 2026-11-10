@@ -94,7 +94,7 @@ describe("broker navigation", () => {
       "/dashboard/broker/listings",
       "/dashboard/broker/authorizations",
       "/dashboard/broker/prospects",
-      "/dashboard/broker#commissions",
+      "/dashboard/broker/commissions",
       "/dashboard/broker/profile",
     ]);
   });
