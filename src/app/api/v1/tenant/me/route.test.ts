@@ -58,36 +58,37 @@ describe("GET /api/v1/tenant/me", () => {
 
   it("returns the tenancy bound to the userId", async () => {
     tenantUser();
-    tenant.findOne.mockReturnValue(buildQuery(tenancyDoc()));
+    tenant.find.mockReturnValue(buildQuery([tenancyDoc()]));
 
     const res = await GET(buildRequest("/api/v1/tenant/me", { token: signToken(TENANT_ID) }));
     expect(res.status).toBe(200);
-    expect(tenant.findOne).toHaveBeenCalledWith({ userId: TENANT_ID, deletedAt: null });
+    expect(tenant.find).toHaveBeenCalledWith({ userId: TENANT_ID, deletedAt: null });
     const json = await res.json();
-    expect(json.data).toMatchObject({ _id: TENANT_DOC_ID, propertyId: PROP_ID });
+    expect(Array.isArray(json.data)).toBe(true);
+    expect(json.data[0]).toMatchObject({ _id: TENANT_DOC_ID, propertyId: PROP_ID });
   });
 
   it("falls back to an email match and heals the link", async () => {
     tenantUser();
-    tenant.findOne
-      .mockReturnValueOnce(buildQuery(null))
-      .mockReturnValueOnce(buildQuery(tenancyDoc()));
+    tenant.find
+      .mockReturnValueOnce(buildQuery([]))
+      .mockReturnValueOnce(buildQuery([tenancyDoc()]));
 
     const res = await GET(buildRequest("/api/v1/tenant/me", { token: signToken(TENANT_ID) }));
     expect(res.status).toBe(200);
-    expect(tenant.findOne).toHaveBeenNthCalledWith(2, {
+    expect(tenant.find).toHaveBeenNthCalledWith(2, {
       email: "amina@keja.co",
       deletedAt: null,
     });
-    expect(tenant.updateOne).toHaveBeenCalledWith(
-      { _id: TENANT_DOC_ID },
+    expect(tenant.updateMany).toHaveBeenCalledWith(
+      { _id: { $in: [TENANT_DOC_ID] } },
       { $set: { userId: TENANT_ID } },
     );
   });
 
   it("404 when the tenant has no tenancy", async () => {
     tenantUser();
-    tenant.findOne.mockReturnValue(buildQuery(null));
+    tenant.find.mockReturnValue(buildQuery([]));
 
     const res = await GET(buildRequest("/api/v1/tenant/me", { token: signToken(TENANT_ID) }));
     expect(res.status).toBe(404);
