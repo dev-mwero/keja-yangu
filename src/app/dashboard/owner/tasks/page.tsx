@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, ClipboardList, Clock, Plus, Wrench } from "lucide-react";
+import { CheckCircle2, ClipboardList, Clock, Loader2, Plus, Wrench } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { DashboardShell } from "@/components/DashboardShell";
@@ -27,15 +27,10 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { ownerNav as nav } from "@/config/dashboardNav";
-import {
-  type MaintenanceTask,
-  type TaskPriority,
-  type TaskStatus,
-  tasksStore,
-} from "@/data/dashboard";
+import type { TaskPriority, TaskStatus } from "@/data/dashboard";
 import { caretakers } from "@/data/properties";
-import { useLocalStore } from "@/hooks/use-local-store";
 import { useProperties } from "@/hooks/use-properties";
+import { useTaskMutations, useTasks } from "@/hooks/use-tasks";
 import { formatDate } from "@/lib/format";
 import { matchesQuery } from "@/lib/search";
 
@@ -55,7 +50,8 @@ type Filter = "open" | "in-progress" | "done";
 
 const OwnerTasksPage = () => {
   const { properties } = useProperties();
-  const { items, addItem, updateItem } = useLocalStore<MaintenanceTask>(tasksStore);
+  const { items, loading, error, refetch } = useTasks();
+  const { createTask, updateTask, pending } = useTaskMutations();
 
   const [filter, setFilter] = useState<Filter>("open");
   const [query, setQuery] = useState("");
@@ -76,40 +72,49 @@ const OwnerTasksPage = () => {
       matchesQuery(query, t.title, t.property, t.assignedTo, t.notes, t.priority, t.status),
     );
 
-  const submit = () => {
+  const submit = async () => {
     if (!title.trim()) {
       toast.error("Task title is required");
       return;
     }
     const assigned = caretakers.find((c) => c.id === assignee);
-    addItem({
-      id: `task-${Date.now()}`,
-      title: title.trim(),
-      property: properties.find((p) => p._id === property)?.title ?? "All properties",
-      propertyId: property || undefined,
-      priority,
-      status: "open",
-      assignedTo: assigned?.name ?? "Care taker",
-      createdBy: "owner",
-      dueDate: dueDate ? `${dueDate}T23:59:59` : new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-      notes: notes.trim() || undefined,
-    });
-    toast.success("Task created", {
-      description: assigned ? `Assigned to ${assigned.name}.` : "Task added.",
-    });
-    setTitle("");
-    setNotes("");
-    setOpen(false);
+    try {
+      await createTask({
+        title: title.trim(),
+        propertyId: property || undefined,
+        priority,
+        status: "open",
+        assignedTo: assigned?.name ?? "Caretaker",
+        assignedToName: assigned?.name ?? "",
+        dueDate: dueDate ? `${dueDate}T23:59:59` : new Date().toISOString(),
+        notes: notes.trim() || undefined,
+      });
+      toast.success("Task created", {
+        description: assigned ? `Assigned to ${assigned.name}.` : "Task added.",
+      });
+      setTitle("");
+      setProperty("");
+      setAssignee("");
+      setDueDate("");
+      setNotes("");
+      setOpen(false);
+      refetch();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create task");
+    }
   };
 
-  const setStatus = (id: string, status: TaskStatus) => {
-    updateItem(id, (task) => ({
-      ...task,
-      status,
-      completedAt: status === "done" ? new Date().toISOString() : undefined,
-    }));
-    toast.success(status === "done" ? "Task completed" : `Task moved to ${status}`);
+  const setStatus = async (id: string, status: TaskStatus) => {
+    try {
+      await updateTask(id, {
+        status,
+        completedAt: status === "done" ? new Date().toISOString() : "",
+      });
+      toast.success(status === "done" ? "Task completed" : `Task moved to ${status}`);
+      refetch();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update task");
+    }
   };
 
   const counts: Record<Filter, number> = {
@@ -156,8 +161,19 @@ const OwnerTasksPage = () => {
         </div>
       </div>
 
+      {loading && (
+        <div className="mt-6 flex items-center gap-2 text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading tasks…
+        </div>
+      )}
+      {error && (
+        <div className="mt-6 rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
       <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {visible.length === 0 ? (
+        {!loading && visible.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border bg-card/50 p-10 text-center md:col-span-3">
             <ClipboardList className="mx-auto h-8 w-8 text-muted-foreground" />
             <h3 className="mt-3 font-display text-xl">Nothing in this view</h3>
@@ -172,19 +188,23 @@ const OwnerTasksPage = () => {
         ) : (
           visible.map((task) => (
             <div
-              key={task.id}
+              key={task._id}
               className="flex flex-col rounded-2xl border border-border bg-card p-5 shadow-soft"
             >
               <div className="flex items-start justify-between gap-3">
-                <Badge className={`${priorityClass[task.priority]} capitalize hover:opacity-100`}>
+                <Badge
+                  className={`${priorityClass[task.priority as TaskPriority]} capitalize hover:opacity-100`}
+                >
                   {task.priority} priority
                 </Badge>
-                <Badge className={`${statusClass[task.status]} capitalize hover:opacity-100`}>
+                <Badge
+                  className={`${statusClass[task.status as TaskStatus]} capitalize hover:opacity-100`}
+                >
                   {task.status}
                 </Badge>
               </div>
               <h3 className="mt-3 font-display text-lg font-semibold leading-snug">{task.title}</h3>
-              <p className="mt-1 text-xs text-muted-foreground">{task.property}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{task.property || "—"}</p>
               {task.notes && <p className="mt-3 text-sm text-muted-foreground">{task.notes}</p>}
               <div className="mt-4 flex items-center justify-between border-t border-border pt-3 text-xs text-muted-foreground">
                 <span>
@@ -192,7 +212,8 @@ const OwnerTasksPage = () => {
                   {task.completedAt ? ` · done ${formatDate(task.completedAt)}` : ""}
                 </span>
                 <span>
-                  Assigned to <span className="font-medium text-foreground">{task.assignedTo}</span>
+                  Assigned to{" "}
+                  <span className="font-medium text-foreground">{task.assignedTo || "—"}</span>
                 </span>
               </div>
               <div className="mt-4 flex gap-2">
@@ -200,7 +221,8 @@ const OwnerTasksPage = () => {
                   <Button
                     size="sm"
                     className="flex-1 rounded-full"
-                    onClick={() => setStatus(task.id, "done")}
+                    disabled={pending}
+                    onClick={() => setStatus(task._id, "done")}
                   >
                     <CheckCircle2 className="h-4 w-4" />
                     Mark done
@@ -210,7 +232,8 @@ const OwnerTasksPage = () => {
                     variant="outline"
                     size="sm"
                     className="flex-1 rounded-full"
-                    onClick={() => setStatus(task.id, "open")}
+                    disabled={pending}
+                    onClick={() => setStatus(task._id, "open")}
                   >
                     Reopen
                   </Button>
@@ -303,7 +326,12 @@ const OwnerTasksPage = () => {
             <Button variant="outline" className="rounded-full" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button className="rounded-full" onClick={submit}>
+            <Button className="rounded-full" disabled={pending} onClick={submit}>
+              {pending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="mr-2 h-4 w-4" />
+              )}
               Assign task
             </Button>
           </DialogFooter>

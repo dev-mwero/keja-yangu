@@ -38,6 +38,7 @@ export const CARETAKER_PRIVILEGES = [
   "process_move_requests",
   "manage_invoices",
   "manage_complaints",
+  "manage_tasks",
   "manage_announcements",
   "send_messages",
   "manage_documents",
@@ -92,6 +93,9 @@ export type Action =
   | "complaint:read-own"
   | "complaint:create"
   | "complaint:manage"
+  | "task:read-own"
+  | "task:create"
+  | "task:manage"
   | "chat:read-own"
   | "chat:send"
   | "chat:manage"
