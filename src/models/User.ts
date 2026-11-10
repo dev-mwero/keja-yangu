@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 
 export interface IUserSettings {
   emailNotifications: boolean;
@@ -100,4 +100,4 @@ userSchema.index({ email: 1 }, { unique: true, sparse: true });
 
 export type UserDocument = InferSchemaType<IUser>;
 
-export const User = models.User || model<IUser>("User", userSchema);
+export const User = mongoose.models.User || model<IUser>("User", userSchema);

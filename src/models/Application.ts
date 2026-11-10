@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import { APPLICATION_STATUSES } from "@/lib/domain-enums";
 import { softDeletePlugin } from "@/lib/mongoose-soft-delete";
 
@@ -42,4 +42,4 @@ softDeletePlugin(applicationSchema);
 
 export type ApplicationDocument = InferSchemaType<typeof applicationSchema>;
 
-export const Application = models.Application || model("Application", applicationSchema);
+export const Application = mongoose.models.Application || model("Application", applicationSchema);

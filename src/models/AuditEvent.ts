@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 
 const auditScopeSchema = new Schema(
   {
@@ -35,4 +35,4 @@ auditEventSchema.index({ "scope.propertyId": 1, createdAt: -1 });
 export type AuditEventDocument = InferSchemaType<typeof auditEventSchema>;
 
 export const AuditEvent =
-  models.AuditEvent || model<AuditEventDocument>("AuditEvent", auditEventSchema);
+  mongoose.models.AuditEvent || model<AuditEventDocument>("AuditEvent", auditEventSchema);

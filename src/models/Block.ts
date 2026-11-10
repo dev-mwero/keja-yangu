@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import { PROPERTY_PURPOSES } from "@/lib/domain-enums";
 
 /**
@@ -50,4 +50,4 @@ blockSchema.index(
 
 export type BlockDocument = InferSchemaType<typeof blockSchema>;
 
-export const Block = models.Block || model<BlockDocument>("Block", blockSchema);
+export const Block = mongoose.models.Block || model<BlockDocument>("Block", blockSchema);

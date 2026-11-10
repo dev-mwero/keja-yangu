@@ -267,8 +267,8 @@ export function planStructureUpdate(input: StructurePlanInput): StructurePlan {
       );
 
       const spanFloors = isDuplex ? 2 : 1;
-      const secondaryFloorId = isDuplex ? nextFloorId! : "";
-      const secondaryFloorLevel = isDuplex ? nextFloorLevel! : 0;
+      const secondaryFloorId = isDuplex ? (nextFloorId ?? "") : "";
+      const secondaryFloorLevel = isDuplex ? (nextFloorLevel ?? 0) : 0;
 
       const insertsFor = (names: string[], startIndex: number): UnitInsert[] =>
         names.map((name, offset) => {
@@ -334,7 +334,7 @@ export function planStructureUpdate(input: StructurePlanInput): StructurePlan {
             const custom = floorSpec.unitNames?.[index]?.trim();
             if (custom && custom.length > 0) return reserveName(custom);
             const generated = isDuplex
-              ? defaultDuplexUnitName(floorSpec.level, nextFloorLevel!, index)
+              ? defaultDuplexUnitName(floorSpec.level, nextFloorLevel ?? 0, index)
               : defaultUnitName(floorSpec.level, index);
             return reserveName(generated);
           });
@@ -354,10 +354,15 @@ export function planStructureUpdate(input: StructurePlanInput): StructurePlan {
 
       // Brand-new floor.
       const names = isDuplex
-        ? buildDuplexUnitNames(floorSpec.level, nextFloorLevel!, desired, floorSpec.unitNames).map((name) =>
+        ? buildDuplexUnitNames(
+            floorSpec.level,
+            nextFloorLevel ?? 0,
+            desired,
+            floorSpec.unitNames,
+          ).map((name) => reserveName(name))
+        : buildUnitNames(floorSpec.level, desired, floorSpec.unitNames).map((name) =>
             reserveName(name),
-          )
-        : buildUnitNames(floorSpec.level, desired, floorSpec.unitNames).map((name) => reserveName(name));
+          );
       unitCreates.push(...insertsFor(names, 0));
 
       return {

@@ -4,7 +4,6 @@ import { useState } from "react";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -15,7 +14,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { type BlockInputPayload } from "@/hooks/use-properties";
+import { Switch } from "@/components/ui/switch";
+import type { BlockInputPayload } from "@/hooks/use-properties";
 import { generateBulkStructure, validateBulkGeneration } from "@/lib/bulk-structure";
 
 const bulkSchema = z.object({
@@ -67,9 +67,7 @@ export function BulkGenerateDialog({
     }
 
     const rentOverride =
-      form.rentOverride && form.rentOverride.trim() !== ""
-        ? Number(form.rentOverride)
-        : null;
+      form.rentOverride && form.rentOverride.trim() !== "" ? Number(form.rentOverride) : null;
 
     const spec = {
       name: form.blockName,

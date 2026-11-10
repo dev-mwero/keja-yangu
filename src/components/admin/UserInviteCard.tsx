@@ -3,7 +3,7 @@
 import { Copy, Loader2, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-
+import { CountryCodeSelect } from "@/components/account/CountryCodeSelect";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,7 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CountryCodeSelect } from "@/components/account/CountryCodeSelect";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -78,7 +77,7 @@ export const UserInviteCard = ({ onCreated }: { onCreated?: () => void } = {}) =
         name: name.trim() || undefined,
         email: trimmedEmail || undefined,
         phone: phone || undefined,
-        ownerId: (role === "caretaker" || role === "custodian") ? ownerId.trim() : undefined,
+        ownerId: role === "caretaker" || role === "custodian" ? ownerId.trim() : undefined,
       });
 
       if (result.created && result.temporaryPassword) {
@@ -191,7 +190,11 @@ export const UserInviteCard = ({ onCreated }: { onCreated?: () => void } = {}) =
 
         <div className="flex justify-end">
           <Button type="submit" className="rounded-full" disabled={pending}>
-            {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />}
+            {pending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <UserPlus className="mr-2 h-4 w-4" />
+            )}
             {pending ? "Creating…" : "Add user"}
           </Button>
         </div>

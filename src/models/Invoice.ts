@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import {
   INVOICE_METHODS,
   INVOICE_STATUSES,
@@ -130,4 +130,4 @@ softDeletePlugin(invoiceSchema);
 
 export type InvoiceDocument = InferSchemaType<IInvoice>;
 
-export const Invoice = models.Invoice || model<IInvoice>("Invoice", invoiceSchema);
+export const Invoice = mongoose.models.Invoice || model<IInvoice>("Invoice", invoiceSchema);

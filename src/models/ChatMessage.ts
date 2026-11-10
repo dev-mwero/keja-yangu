@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import { MESSAGE_SENDER_ROLES, type MessageSenderRole } from "@/lib/domain-enums";
 
 export type { MessageSenderRole };
@@ -31,4 +31,4 @@ chatMessageSchema.index({ threadId: 1, senderUserId: 1, createdAt: 1 });
 export type ChatMessageDocument = InferSchemaType<IChatMessage>;
 
 export const ChatMessage =
-  models.ChatMessage || model<IChatMessage>("ChatMessage", chatMessageSchema);
+  mongoose.models.ChatMessage || model<IChatMessage>("ChatMessage", chatMessageSchema);

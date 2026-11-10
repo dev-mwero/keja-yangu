@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import { BROKER_AUTH_STATUSES, BROKER_SCOPE_TYPES } from "@/lib/domain-enums";
 
 export type { BrokerAuthStatus, BrokerScopeType } from "@/lib/domain-enums";
@@ -45,5 +45,5 @@ brokerAuthorizationSchema.index({ propertyId: 1, status: 1 });
 export type BrokerAuthorizationDocument = InferSchemaType<typeof brokerAuthorizationSchema>;
 
 export const BrokerAuthorization =
-  models.BrokerAuthorization ||
+  mongoose.models.BrokerAuthorization ||
   model<BrokerAuthorizationDocument>("BrokerAuthorization", brokerAuthorizationSchema);

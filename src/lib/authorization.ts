@@ -1,26 +1,26 @@
-import type { Action, Role } from "@/lib/permissions";
-import { connectToDatabase } from "@/lib/mongoose";
 import {
   type ActorContext,
+  ADMIN_ACTIONS,
   type AssignmentLike,
-  type CapabilityAssignment,
+  type AuthorizationResult,
+  CARETAKER_ACTIONS,
   type Capabilities,
+  type CapabilityAssignment,
+  CUSTODIAN_ACTIONS,
+  effectiveActions,
+  evaluateActorPolicy,
+  isActiveAssignment,
+  normalizeAccessRole,
+  PLATFORM_ACTIONS,
   type PolicyAction,
   type PolicyActor,
   type PolicyResource,
-  ADMIN_ACTIONS,
-  CARETAKER_ACTIONS,
-  CUSTODIAN_ACTIONS,
-  effectiveActions,
-  isActiveAssignment,
-  type AuthorizationResult,
-  evaluateActorPolicy,
-  normalizeAccessRole,
-  PLATFORM_ACTIONS,
   ROLE_MAXIMUM,
   TENANT_ACTIONS,
   toIso,
 } from "@/lib/authorization-policy";
+import { connectToDatabase } from "@/lib/mongoose";
+import type { Action, Role } from "@/lib/permissions";
 import { ManagementAssignment } from "@/models/ManagementAssignment";
 import { User } from "@/models/User";
 

@@ -58,7 +58,7 @@ const CaretakerPortfolioPage = () => {
   const canEdit = user?.privileges?.includes("edit_property") ?? false;
   const canDelete = user?.privileges?.includes("delete_assigned_property") ?? false;
 
-  const mine = properties.filter((p) =>  (p.caretakerIds ?? []).includes(selfId));
+  const mine = properties.filter((p) => (p.caretakerIds ?? []).includes(selfId));
   const visibleProperties = mine.filter((p) => matchesQuery(query, p.title, p.location));
 
   const occupied = mine.filter((p) => p.status === "occupied").length;
@@ -133,7 +133,7 @@ const CaretakerPortfolioPage = () => {
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {visibleProperties.map((p) => {
               const showEdit = canEdit;
-              const showDelete = canDelete &&  (p.caretakerIds ?? []).includes(selfId);
+              const showDelete = canDelete && (p.caretakerIds ?? []).includes(selfId);
               const showActions = showEdit || showDelete;
               return (
                 <div key={p._id} className="relative">

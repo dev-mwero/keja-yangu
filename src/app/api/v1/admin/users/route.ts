@@ -4,14 +4,14 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { escapeRegex, requireRoleManagementActor } from "@/app/api/v1/admin/users/_guard";
 import { writeAuditEvent } from "@/lib/audit";
-import { connectToDatabase } from "@/lib/mongoose";
-import { rateLimit, checkSameOrigin } from "@/lib/rate-limit";
-import { ASSIGNABLE_ROLES, isUserRole } from "@/lib/role-management";
-import type { Role } from "@/lib/permissions";
-import { resolveUserByContact, createPhoneOnlyAccount } from "@/lib/user-identity";
-import { User } from "@/models/User";
 import { sendInviteEmail } from "@/lib/email";
+import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
+import type { Role } from "@/lib/permissions";
+import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
+import { ASSIGNABLE_ROLES, isUserRole } from "@/lib/role-management";
+import { createPhoneOnlyAccount, resolveUserByContact } from "@/lib/user-identity";
+import { User } from "@/models/User";
 
 export const dynamic = "force-dynamic";
 
@@ -235,14 +235,16 @@ export async function POST(request: NextRequest) {
     phone: phone ?? "",
     passwordHash: crypto.randomBytes(32).toString("hex"),
     role,
-    privileges: role === "caretaker" ? privileges ?? [] : [],
+    privileges: role === "caretaker" ? (privileges ?? []) : [],
     isActive: false,
     isVerified: false,
     verificationToken,
     verificationTokenExpiry,
   });
 
-  await sendInviteEmail(email!, created.name, role, verificationToken);
+  if (email) {
+    await sendInviteEmail(email, created.name, role, verificationToken);
+  }
 
   await writeAuditEvent({
     actor: { userId: actor.userId, role: "system-admin" },

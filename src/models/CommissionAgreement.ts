@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import {
   BROKER_SCOPE_TYPES,
   COMMISSION_AGREEMENT_STATUSES,
@@ -59,5 +59,5 @@ commissionAgreementSchema.index({ propertyId: 1, status: 1 });
 export type CommissionAgreementDocument = InferSchemaType<typeof commissionAgreementSchema>;
 
 export const CommissionAgreement =
-  models.CommissionAgreement ||
+  mongoose.models.CommissionAgreement ||
   model<CommissionAgreementDocument>("CommissionAgreement", commissionAgreementSchema);

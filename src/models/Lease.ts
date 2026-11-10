@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import { softDeletePlugin } from "@/lib/mongoose-soft-delete";
 
 export interface ILease {
@@ -60,4 +60,4 @@ softDeletePlugin(leaseSchema);
 
 export type LeaseDocument = InferSchemaType<ILease>;
 
-export const Lease = models.Lease || model<ILease>("Lease", leaseSchema);
+export const Lease = mongoose.models.Lease || model<ILease>("Lease", leaseSchema);

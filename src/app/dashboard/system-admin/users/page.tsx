@@ -3,9 +3,8 @@
 "use client";
 
 import { useState } from "react";
-
-import { UserRoleManager } from "@/components/admin/UserRoleManager";
 import { UserInviteCard } from "@/components/admin/UserInviteCard";
+import { UserRoleManager } from "@/components/admin/UserRoleManager";
 import { DashboardShell } from "@/components/DashboardShell";
 import { systemAdminNav } from "@/config/dashboardNav";
 

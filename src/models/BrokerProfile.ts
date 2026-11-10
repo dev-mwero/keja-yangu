@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import { BROKER_PROFILE_STATUSES } from "@/lib/domain-enums";
 
 export type { BrokerProfileStatus } from "@/lib/domain-enums";
@@ -45,4 +45,5 @@ brokerProfileSchema.index({ licenseNumber: 1 });
 export type BrokerProfileDocument = InferSchemaType<typeof brokerProfileSchema>;
 
 export const BrokerProfile =
-  models.BrokerProfile || model<BrokerProfileDocument>("BrokerProfile", brokerProfileSchema);
+  mongoose.models.BrokerProfile ||
+  model<BrokerProfileDocument>("BrokerProfile", brokerProfileSchema);

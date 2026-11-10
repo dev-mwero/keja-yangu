@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import { softDeletePlugin } from "@/lib/mongoose-soft-delete";
 
 export type TenantType = "residential" | "commercial" | "owning";
@@ -67,4 +67,4 @@ export type TenantDocument = InferSchemaType<ITenant>;
 export const TENANT_SAFE_FIELDS =
   "name email phone type propertyId ownerId status joinedAt notes createdAt updatedAt";
 
-export const Tenant = models.Tenant || model<ITenant>("Tenant", tenantSchema);
+export const Tenant = mongoose.models.Tenant || model<ITenant>("Tenant", tenantSchema);

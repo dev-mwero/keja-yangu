@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import { PERIOD_REGEX } from "@/lib/invoicing";
 
 export interface IPaymentSplit {
@@ -39,4 +39,4 @@ paymentSplitSchema.index({ ownerId: 1, period: 1 });
 export type PaymentSplitDocument = InferSchemaType<IPaymentSplit>;
 
 export const PaymentSplit =
-  models.PaymentSplit || model<IPaymentSplit>("PaymentSplit", paymentSplitSchema);
+  mongoose.models.PaymentSplit || model<IPaymentSplit>("PaymentSplit", paymentSplitSchema);

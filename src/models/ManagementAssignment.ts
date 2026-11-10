@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import {
   ASSIGNMENT_ACCESS_ROLES,
   ASSIGNMENT_SCOPE_TYPES,
@@ -57,5 +57,5 @@ managementAssignmentSchema.index({ unitId: 1, status: 1 });
 export type ManagementAssignmentDocument = InferSchemaType<typeof managementAssignmentSchema>;
 
 export const ManagementAssignment =
-  models.ManagementAssignment ||
+  mongoose.models.ManagementAssignment ||
   model<ManagementAssignmentDocument>("ManagementAssignment", managementAssignmentSchema);

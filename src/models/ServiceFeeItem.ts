@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 
 export const SERVICE_FEE_APPLIES_TO = ["all", "selected"] as const;
 export type ServiceFeeAppliesTo = (typeof SERVICE_FEE_APPLIES_TO)[number];
@@ -30,4 +30,5 @@ serviceFeeItemSchema.index({ unitIds: 1 });
 export type ServiceFeeItemDocument = InferSchemaType<typeof serviceFeeItemSchema>;
 
 export const ServiceFeeItem =
-  models.ServiceFeeItem || model<ServiceFeeItemDocument>("ServiceFeeItem", serviceFeeItemSchema);
+  mongoose.models.ServiceFeeItem ||
+  model<ServiceFeeItemDocument>("ServiceFeeItem", serviceFeeItemSchema);
