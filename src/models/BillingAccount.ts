@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import { BILLING_ACCOUNT_STATUSES } from "@/lib/domain-enums";
 import { softDeletePlugin } from "@/lib/mongoose-soft-delete";
 
@@ -45,4 +45,5 @@ softDeletePlugin(billingAccountSchema);
 export type BillingAccountDocument = InferSchemaType<typeof billingAccountSchema>;
 
 export const BillingAccount =
-  models.BillingAccount || model<BillingAccountDocument>("BillingAccount", billingAccountSchema);
+  mongoose.models.BillingAccount ||
+  model<BillingAccountDocument>("BillingAccount", billingAccountSchema);

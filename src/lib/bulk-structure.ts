@@ -1,9 +1,6 @@
-import { MAX_UNITS_PER_PROPERTY } from "@/lib/schemas/structure";
 import type { BlockInputPayload, FloorInputPayload } from "@/hooks/use-properties";
-import {
-  buildDuplexUnitNames,
-  buildUnitNames,
-} from "@/lib/unit-naming";
+import { MAX_UNITS_PER_PROPERTY } from "@/lib/schemas/structure";
+import { buildDuplexUnitNames, buildUnitNames } from "@/lib/unit-naming";
 
 export interface BulkFloorSpec {
   floorCount: number;

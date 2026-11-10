@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import { UNIT_BILLING_ASSIGNMENT_STATUSES } from "@/lib/domain-enums";
 
 export type { UnitBillingAssignmentStatus } from "@/lib/domain-enums";
@@ -43,5 +43,5 @@ unitBillingAssignmentSchema.index({ unitId: 1, effectiveFrom: -1 });
 export type UnitBillingAssignmentDocument = InferSchemaType<typeof unitBillingAssignmentSchema>;
 
 export const UnitBillingAssignment =
-  models.UnitBillingAssignment ||
+  mongoose.models.UnitBillingAssignment ||
   model<UnitBillingAssignmentDocument>("UnitBillingAssignment", unitBillingAssignmentSchema);

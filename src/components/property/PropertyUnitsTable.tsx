@@ -1,7 +1,7 @@
 "use client";
 
-import { DoorOpen, Loader2, Pencil, Trash2, UserMinus, UserPlus } from "lucide-react";
 import { measureElement, useVirtualizer } from "@tanstack/react-virtual";
+import { DoorOpen, Loader2, Pencil, Trash2, UserMinus, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -292,7 +292,10 @@ export function PropertyUnitsTable({
                 <>
                   {firstVirtualItem && (
                     <tr aria-hidden>
-                      <td colSpan={colSpan} style={{ height: firstVirtualItem.start, padding: 0, border: 0 }} />
+                      <td
+                        colSpan={colSpan}
+                        style={{ height: firstVirtualItem.start, padding: 0, border: 0 }}
+                      />
                     </tr>
                   )}
                   {virtualItems.map((virtualRow) => {
@@ -324,7 +327,9 @@ export function PropertyUnitsTable({
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right tabular-nums">{seat(unit.beds)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{seat(unit.baths)}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {seat(unit.baths)}
+                        </TableCell>
                         <TableCell>{formatKES(effectiveFor(unit))}</TableCell>
                         {canManage && (
                           <TableCell className="text-right">

@@ -34,7 +34,9 @@ const CaretakerDocumentsPage = () => {
 
   const allowedPropertyIds = useMemo(
     () =>
-      new Set(properties.filter((p) =>  (p.caretakerIds ?? []).includes(user?.id ?? "")).map((p) => p._id)),
+      new Set(
+        properties.filter((p) => (p.caretakerIds ?? []).includes(user?.id ?? "")).map((p) => p._id),
+      ),
     [properties, user?.id],
   );
 

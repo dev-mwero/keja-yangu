@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import {
   DOCUMENT_CATEGORIES,
   DOCUMENT_SCOPES,
@@ -46,4 +46,5 @@ propertyDocumentSchema.index({ ownerId: 1, createdAt: -1 });
 export type PropertyDocumentDocument = InferSchemaType<IPropertyDocument>;
 
 export const PropertyDocument =
-  models.PropertyDocument || model<IPropertyDocument>("PropertyDocument", propertyDocumentSchema);
+  mongoose.models.PropertyDocument ||
+  model<IPropertyDocument>("PropertyDocument", propertyDocumentSchema);

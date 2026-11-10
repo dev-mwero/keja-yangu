@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import { PROPERTY_PURPOSES, UNIT_STATUSES } from "@/lib/domain-enums";
 import { softDeletePlugin } from "@/lib/mongoose-soft-delete";
 
@@ -96,4 +96,4 @@ softDeletePlugin(unitSchema);
 
 export type UnitDocument = InferSchemaType<typeof unitSchema>;
 
-export const Unit = models.Unit || model("Unit", unitSchema);
+export const Unit = mongoose.models.Unit || model("Unit", unitSchema);

@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import {
   COMPLAINT_CATEGORIES,
   COMPLAINT_PRIORITIES,
@@ -53,4 +53,5 @@ complaintSchema.index({ unitId: 1, createdAt: -1 });
 
 export type ComplaintDocument = InferSchemaType<IComplaint>;
 
-export const Complaint = models.Complaint || model<IComplaint>("Complaint", complaintSchema);
+export const Complaint =
+  mongoose.models.Complaint || model<IComplaint>("Complaint", complaintSchema);

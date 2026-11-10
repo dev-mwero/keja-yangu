@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import { MESSAGE_SENDER_ROLES, type MessageSenderRole } from "@/lib/domain-enums";
 
 export type { MessageSenderRole };
@@ -42,4 +42,5 @@ chatThreadSchema.index({ agentUserId: 1, lastMessageAt: -1 });
 
 export type ChatThreadDocument = InferSchemaType<IChatThread>;
 
-export const ChatThread = models.ChatThread || model<IChatThread>("ChatThread", chatThreadSchema);
+export const ChatThread =
+  mongoose.models.ChatThread || model<IChatThread>("ChatThread", chatThreadSchema);

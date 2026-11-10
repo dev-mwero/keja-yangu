@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import { COMMISSION_ACCRUAL_KINDS, COMMISSION_ACCRUAL_STATUSES } from "@/lib/domain-enums";
 
 export type {
@@ -75,5 +75,5 @@ commissionAccrualSchema.index({ leaseId: 1, kind: 1 });
 export type CommissionAccrualDocument = InferSchemaType<typeof commissionAccrualSchema>;
 
 export const CommissionAccrual =
-  models.CommissionAccrual ||
+  mongoose.models.CommissionAccrual ||
   model<CommissionAccrualDocument>("CommissionAccrual", commissionAccrualSchema);

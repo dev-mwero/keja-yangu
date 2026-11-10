@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 
 /**
  * A user's favourited (saved) unit. One row per (user, unit); the unique index
@@ -24,4 +24,4 @@ unitFavoriteSchema.index({ unitId: 1 });
 export type UnitFavoriteDocument = InferSchemaType<typeof unitFavoriteSchema>;
 
 export const UnitFavorite =
-  models.UnitFavorite || model<UnitFavoriteDocument>("UnitFavorite", unitFavoriteSchema);
+  mongoose.models.UnitFavorite || model<UnitFavoriteDocument>("UnitFavorite", unitFavoriteSchema);

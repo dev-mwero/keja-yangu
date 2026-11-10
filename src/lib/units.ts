@@ -31,14 +31,18 @@ export function buildUnitInserts(
       // Duplex: block-level default, floor-level override.
       const blockDuplex = spec.duplex ?? (block as { duplex?: boolean }).duplex ?? false;
       const floorDuplex =
-        floorSpec?.duplex != null ? floorSpec.duplex : floor.duplex != null ? floor.duplex : blockDuplex;
+        floorSpec?.duplex != null
+          ? floorSpec.duplex
+          : floor.duplex != null
+            ? floor.duplex
+            : blockDuplex;
 
       // Secondary floor for duplex units (the floor above).
       const nextFloor = floorIndex + 1 < block.floors.length ? block.floors[floorIndex + 1] : null;
       const isDuplex = floorDuplex && nextFloor != null;
 
       const names = isDuplex
-        ? buildDuplexUnitNames(floor.level, nextFloor!.level, count, floorSpec?.unitNames)
+        ? buildDuplexUnitNames(floor.level, nextFloor?.level ?? 0, count, floorSpec?.unitNames)
         : buildUnitNames(floor.level, count, floorSpec?.unitNames);
       assertUniqueUnitNames(names);
 
@@ -57,8 +61,8 @@ export function buildUnitInserts(
           rent: null,
           purpose: null,
           spanFloors: isDuplex ? 2 : 1,
-          secondaryFloorId: isDuplex ? String(nextFloor!._id) : "",
-          secondaryFloorLevel: isDuplex ? nextFloor!.level : 0,
+          secondaryFloorId: isDuplex ? String(nextFloor?._id ?? "") : "",
+          secondaryFloorLevel: isDuplex ? (nextFloor?.level ?? 0) : 0,
           tenantId: [],
         });
       });

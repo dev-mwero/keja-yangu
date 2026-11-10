@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import {
   DEFAULT_PROPERTY_PURPOSE,
   PROPERTY_LIFECYCLE_STATES,
@@ -96,4 +96,5 @@ softDeletePlugin(propertySchema);
 
 export type PropertyDocument = InferSchemaType<typeof propertySchema>;
 
-export const Property = models.Property || model<PropertyDocument>("Property", propertySchema);
+export const Property =
+  mongoose.models.Property || model<PropertyDocument>("Property", propertySchema);

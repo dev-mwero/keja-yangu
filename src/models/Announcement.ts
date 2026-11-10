@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import { ANNOUNCEMENT_AUDIENCES, type AnnouncementAudience } from "@/lib/domain-enums";
 
 export type { AnnouncementAudience };
@@ -38,4 +38,4 @@ announcementSchema.index({ propertyId: 1, pinned: -1, createdAt: -1 });
 export type AnnouncementDocument = InferSchemaType<IAnnouncement>;
 
 export const Announcement =
-  models.Announcement || model<IAnnouncement>("Announcement", announcementSchema);
+  mongoose.models.Announcement || model<IAnnouncement>("Announcement", announcementSchema);
