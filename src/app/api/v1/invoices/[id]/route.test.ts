@@ -257,6 +257,59 @@ describe("PATCH /api/v1/invoices/[id]", () => {
     expect(res.status).toBe(404);
   });
 
+  it("403 when staff with no assignments PATCH an existing invoice", async () => {
+    user.findById.mockReturnValue(buildQuery(caretakerDoc()));
+    invoiceStub.findById.mockReturnValue(buildQuery(draftInvoice()));
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}`, {
+        method: "PATCH",
+        token: signToken(CARETAKER_ID),
+        body: { notes: "x" },
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(403);
+    const body = await json(res);
+    expect(body.error).toBe("Forbidden");
+    expect(invoiceStub.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it("404 when an assigned staff member PATCHes an invoice outside their scope", async () => {
+    const FOREIGN_PROPERTY_ID = makeObjectId("foreign");
+    user.findById.mockReturnValue(buildQuery(caretakerDoc()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          propertyId: PROPERTY_ID,
+          permissions: ["invoice:manage", "invoice:read"],
+        }),
+      ]),
+    );
+    invoiceStub.findById.mockReturnValue(
+      buildQuery(
+        makeInvoice({
+          _id: INVOICE_ID,
+          ownerId: OWNER_ID,
+          propertyId: FOREIGN_PROPERTY_ID,
+        }),
+      ),
+    );
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}`, {
+        method: "PATCH",
+        token: signToken(CARETAKER_ID),
+        body: { notes: "x" },
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(404);
+    expect(invoiceStub.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
   it("403 for another owner's invoice", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     invoiceStub.findById.mockReturnValue(
@@ -443,6 +496,57 @@ describe("DELETE /api/v1/invoices/[id]", () => {
       withParams(INVOICE_ID),
     );
     expect(res.status).toBe(404);
+  });
+
+  it("403 when staff with no assignments DELETE an existing invoice", async () => {
+    user.findById.mockReturnValue(buildQuery(caretakerDoc()));
+    invoiceStub.findById.mockReturnValue(buildQuery(draftInvoice()));
+
+    const res = await DELETE(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}`, {
+        method: "DELETE",
+        token: signToken(CARETAKER_ID),
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(403);
+    const body = await json(res);
+    expect(body.error).toBe("Forbidden");
+    expect(invoiceStub.softDeleteById).not.toHaveBeenCalled();
+  });
+
+  it("404 when an assigned staff member DELETEs an invoice outside their scope", async () => {
+    const FOREIGN_PROPERTY_ID = makeObjectId("foreign");
+    user.findById.mockReturnValue(buildQuery(caretakerDoc()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          propertyId: PROPERTY_ID,
+          permissions: ["invoice:manage", "invoice:read"],
+        }),
+      ]),
+    );
+    invoiceStub.findById.mockReturnValue(
+      buildQuery(
+        makeInvoice({
+          _id: INVOICE_ID,
+          ownerId: OWNER_ID,
+          propertyId: FOREIGN_PROPERTY_ID,
+        }),
+      ),
+    );
+
+    const res = await DELETE(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}`, {
+        method: "DELETE",
+        token: signToken(CARETAKER_ID),
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(404);
+    expect(invoiceStub.softDeleteById).not.toHaveBeenCalled();
   });
 
   it("409 for a non-draft invoice", async () => {

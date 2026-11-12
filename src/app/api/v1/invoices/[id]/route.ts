@@ -81,6 +81,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     return NextResponse.json({ error: "Invalid invoice id" }, { status: 400 });
   }
 
+  const authError = await requirePermission(request, "invoice:manage");
+  if (authError) return authError;
+
   await connectToDatabase();
   const actor = await resolveInvoiceActor(request, "invoice:manage");
   if (actor instanceof NextResponse) return actor;
@@ -90,8 +93,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
   }
 
-  const authError = await requirePermission(request, "invoice:manage", { resource: invoice });
-  if (authError) return authError;
+  const resourceAuthError = await requirePermission(request, "invoice:manage", {
+    resource: invoice,
+  });
+  if (resourceAuthError) return resourceAuthError;
 
   if (invoice.status === "paid" || invoice.status === "void") {
     return NextResponse.json({ error: "Paid or void invoices cannot be edited" }, { status: 409 });
@@ -137,6 +142,9 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     return NextResponse.json({ error: "Invalid invoice id" }, { status: 400 });
   }
 
+  const authError = await requirePermission(request, "invoice:manage");
+  if (authError) return authError;
+
   await connectToDatabase();
   const actor = await resolveInvoiceActor(request, "invoice:manage");
   if (actor instanceof NextResponse) return actor;
@@ -146,8 +154,10 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
   }
 
-  const authError = await requirePermission(request, "invoice:manage", { resource: invoice });
-  if (authError) return authError;
+  const resourceAuthError = await requirePermission(request, "invoice:manage", {
+    resource: invoice,
+  });
+  if (resourceAuthError) return resourceAuthError;
 
   if (!canDelete(invoice.status)) {
     return NextResponse.json({ error: "Only draft invoices can be deleted" }, { status: 409 });
