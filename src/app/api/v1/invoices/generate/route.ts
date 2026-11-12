@@ -70,8 +70,20 @@ export async function POST(request: NextRequest) {
     }
   }
   if (actor.role === "caretaker") {
-    filter.propertyId = { $in: actor.assignedPropertyIds };
-    if (!actor.staffAssignmentBacked) filter.ownerId = actor.managedByOwnerId;
+    const scopes: Record<string, unknown>[] = [];
+    if (actor.propertyScopeIds.length > 0) {
+      scopes.push({ propertyId: { $in: actor.propertyScopeIds } });
+    }
+    if (actor.assignedUnitIds.length > 0) {
+      scopes.push({ unitId: { $in: actor.assignedUnitIds } });
+    }
+    if (actor.assignedTenantIds.length > 0) {
+      scopes.push({ tenantId: { $in: actor.assignedTenantIds } });
+    }
+    if (scopes.length === 0) {
+      return NextResponse.json({ data: { generatedCount: 0, invoices: [] } }, { status: 201 });
+    }
+    filter.$or = scopes;
   }
   if (actor.role === "admin") {
     const scopes: Record<string, unknown>[] = [];

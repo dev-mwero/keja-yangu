@@ -74,8 +74,20 @@ export async function GET(request: NextRequest) {
     filter.ownerId = actor.managedByOwnerId;
   }
   if (actor.role === "caretaker") {
-    filter.propertyId = { $in: actor.assignedPropertyIds };
-    if (!actor.staffAssignmentBacked) filter.ownerId = actor.managedByOwnerId;
+    const scopes: Record<string, unknown>[] = [];
+    if (actor.propertyScopeIds.length > 0) {
+      scopes.push({ propertyId: { $in: actor.propertyScopeIds } });
+    }
+    if (actor.assignedUnitIds.length > 0) {
+      scopes.push({ unitId: { $in: actor.assignedUnitIds } });
+    }
+    if (actor.assignedTenantIds.length > 0) {
+      scopes.push({ tenantId: { $in: actor.assignedTenantIds } });
+    }
+    if (scopes.length === 0) {
+      return NextResponse.json(buildPaginationResult([], 0, page, limit));
+    }
+    filter.$or = scopes;
   }
   if (actor.role === "admin") {
     const scopes: Record<string, unknown>[] = [];
@@ -199,11 +211,9 @@ export async function POST(request: NextRequest) {
       }
     }
     if (actor.role === "caretaker") {
-      const covered = actor.staffAssignmentBacked
-        ? actor.assignedPropertyIds.includes(lease.propertyId)
-        : lease.ownerId === actor.managedByOwnerId &&
-          actor.assignedPropertyIds.includes(lease.propertyId);
-      if (!covered) {
+      const coversProperty = actor.propertyScopeIds.includes(lease.propertyId);
+      const coversUnit = lease.unitId && actor.assignedUnitIds.includes(String(lease.unitId));
+      if (!coversProperty && !coversUnit) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
     }
@@ -265,11 +275,9 @@ export async function POST(request: NextRequest) {
       }
     }
     if (actor.role === "caretaker") {
-      const covered = actor.staffAssignmentBacked
-        ? actor.assignedPropertyIds.includes(propertyId)
-        : tenant.ownerId === actor.managedByOwnerId &&
-          actor.assignedPropertyIds.includes(propertyId);
-      if (!covered) {
+      const coversProperty = actor.propertyScopeIds.includes(propertyId);
+      const coversTenant = actor.assignedTenantIds.includes(tenantId);
+      if (!coversProperty && !coversTenant) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
     }
