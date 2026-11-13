@@ -71,6 +71,8 @@ const TENANT_ID = makeObjectId("tenant");
 const PROPERTY_ID = makeObjectId("p1");
 const OTHER_PROPERTY_ID = makeObjectId("p2");
 const LEASE_ID = makeObjectId("lease");
+const UNIT_ID = makeObjectId("unit-scoped");
+const OTHER_UNIT_ID = makeObjectId("other-unit");
 
 const ADMIN_ASSIGNMENT = {
   principalUserId: ADMIN_ID,
@@ -105,6 +107,30 @@ function mockScopedAdmin() {
 
 function mockCaretakerAssignment() {
   managementAssignment.find.mockReturnValue(buildQuery([CARETAKER_ASSIGNMENT]));
+}
+
+/**
+ * A caretaker whose assignment covers a single unit, so the resolved scope is
+ * units + tenants only — the parent property must not widen the filter.
+ */
+function mockUnitScopedCaretakerAssignment(permissions: string[] = ["invoice:read"]) {
+  managementAssignment.find.mockReturnValue(
+    buildQuery([
+      {
+        principalUserId: CARETAKER_ID,
+        accessRole: "caretaker",
+        scopeType: "unit",
+        propertyId: PROPERTY_ID,
+        unitId: UNIT_ID,
+        permissions,
+        status: "active",
+        startsAt: new Date("2026-01-01T00:00:00.000Z"),
+        endsAt: null,
+      },
+    ]),
+  );
+  unitStub.find.mockReturnValue(buildQuery([{ _id: UNIT_ID, propertyId: PROPERTY_ID }]));
+  leaseStub.find.mockReturnValue(buildQuery([{ tenantId: TENANT_ID }]));
 }
 
 function adminDoc() {
@@ -147,6 +173,15 @@ describe("GET /api/v1/invoices", () => {
     user.findById.mockReturnValue(buildQuery(caretakerDoc([])));
     const res = await GET(buildRequest("/api/v1/invoices", { token: signToken(CARETAKER_ID) }));
     expect(res.status).toBe(403);
+    expect(invoiceStub.find).not.toHaveBeenCalled();
+  });
+
+  it("403 for a caretaker with no active assignments", async () => {
+    user.findById.mockReturnValue(buildQuery(caretakerDoc()));
+    const res = await GET(buildRequest("/api/v1/invoices", { token: signToken(CARETAKER_ID) }));
+    expect(res.status).toBe(403);
+    const body = await json(res);
+    expect(body.error).toBe("Forbidden");
     expect(invoiceStub.find).not.toHaveBeenCalled();
   });
 
@@ -194,7 +229,60 @@ describe("GET /api/v1/invoices", () => {
     const res = await GET(buildRequest("/api/v1/invoices", { token: signToken(CARETAKER_ID) }));
     expect(res.status).toBe(200);
     expect(invoiceStub.find).toHaveBeenCalledWith({
-      propertyId: { $in: [PROPERTY_ID] },
+      $or: [{ propertyId: { $in: [PROPERTY_ID] } }],
+    });
+  });
+
+  it("scopes a unit-assigned caretaker by resolved units and tenants, not parent property", async () => {
+    user.findById.mockReturnValue(buildQuery(caretakerDoc()));
+    mockUnitScopedCaretakerAssignment();
+    invoiceStub.find.mockReturnValue(buildQuery([]).sort({ issuedAt: -1 }).skip(0).limit(10));
+    invoiceStub.countDocuments.mockResolvedValue(0);
+
+    const res = await GET(buildRequest("/api/v1/invoices", { token: signToken(CARETAKER_ID) }));
+    expect(res.status).toBe(200);
+    const filter = invoiceStub.find.mock.calls[0][0] as Record<string, unknown>;
+    expect(filter.$or).toEqual([
+      { unitId: { $in: [UNIT_ID] } },
+      { tenantId: { $in: [TENANT_ID] } },
+    ]);
+    expect(filter).not.toHaveProperty("propertyId");
+    expect(filter).not.toHaveProperty("ownerId");
+  });
+
+  it("returns an empty page for a caretaker with no resolved assignment clauses", async () => {
+    user.findById.mockReturnValue(buildQuery(caretakerDoc()));
+    // A block-scoped assignment whose block holds no units resolves to no
+    // property (block scopes never grant one), unit or tenant clauses.
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          scopeType: "block",
+          propertyId: PROPERTY_ID,
+          blockId: makeObjectId("empty-block"),
+          permissions: ["invoice:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    unitStub.find.mockReturnValue(buildQuery([]));
+
+    const res = await GET(buildRequest("/api/v1/invoices", { token: signToken(CARETAKER_ID) }));
+    expect(res.status).toBe(200);
+    expect(invoiceStub.find).not.toHaveBeenCalled();
+    const body = await json(res);
+    expect(body.data).toEqual([]);
+    expect(body.pagination).toEqual({
+      page: 1,
+      limit: 10,
+      total: 0,
+      totalPages: 0,
+      hasNextPage: false,
+      hasPrevPage: false,
     });
   });
 
@@ -372,6 +460,22 @@ describe("POST /api/v1/invoices", () => {
     expect(res.status).toBe(401);
   });
 
+  it("403 for a caretaker with no active assignments", async () => {
+    user.findById.mockReturnValue(buildQuery(caretakerDoc()));
+    const res = await POST(
+      buildRequest("/api/v1/invoices", {
+        method: "POST",
+        token: signToken(CARETAKER_ID),
+        body: { leaseId: LEASE_ID },
+      }),
+    );
+    expect(res.status).toBe(403);
+    const body = await json(res);
+    expect(body.error).toBe("Forbidden");
+    expect(leaseStub.findById).not.toHaveBeenCalled();
+    expect(invoiceStub.create).not.toHaveBeenCalled();
+  });
+
   it("400 for an uninspectable payload", async () => {
     mockScopedAdmin();
     const res = await POST(
@@ -462,6 +566,22 @@ describe("POST /api/v1/invoices", () => {
     expect(res.status).toBe(403);
     const body = await json(res);
     expect(body.error).toBe("Forbidden");
+  });
+
+  it("403 when a unit-scoped caretaker creates an invoice for another unit in the parent property", async () => {
+    user.findById.mockReturnValue(buildQuery(caretakerDoc()));
+    mockUnitScopedCaretakerAssignment(["invoice:manage"]);
+    leaseStub.findById.mockReturnValue(buildQuery({ ...inScopeLease(), unitId: OTHER_UNIT_ID }));
+
+    const res = await POST(
+      buildRequest("/api/v1/invoices", {
+        method: "POST",
+        token: signToken(CARETAKER_ID),
+        body: { leaseId: LEASE_ID },
+      }),
+    );
+    expect(res.status).toBe(403);
+    expect(invoiceStub.create).not.toHaveBeenCalled();
   });
 
   it("409 when an invoice already exists for the lease and period", async () => {

@@ -100,9 +100,8 @@ export function resetModelStubs() {
       fn.mockReset();
     }
   }
-  // Assignment-backed staff scope defaults to "no assignments" so custodian/
-  // caretaker fixtures exercise the derived-owner path unless a test opts into
-  // assignment coverage with its own mock.
+  // Assignment-backed staff scope defaults to "no assignments" so staff flows
+  // fail closed unless a test opts into assignment coverage with its own mock.
   stubs.managementAssignment.find.mockReturnValue(buildQuery([]));
   // `getManagedOwnerId` derives the owner via `Property.find`; default to an
   // empty portfolio rather than `undefined` so unstubbed staff flows do not

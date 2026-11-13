@@ -141,7 +141,7 @@ export async function GET(request: NextRequest) {
       href:
         role === "system-admin"
           ? "/dashboard/system-admin/portfolio"
-          : "/dashboard/owner/portfolio",
+          : "/dashboard/admin/portfolio",
     });
   }
   for (const u of units) {
@@ -150,7 +150,7 @@ export async function GET(request: NextRequest) {
       type: "unit",
       title: `Unit ${u.name}`,
       subtitle: u.blockName,
-      href: role === "caretaker" ? "/dashboard/caretaker/units" : "/dashboard/owner/units",
+      href: role === "caretaker" ? "/dashboard/caretaker/units" : "/dashboard/admin/units",
     });
   }
   for (const t of tenants) {
@@ -159,7 +159,7 @@ export async function GET(request: NextRequest) {
       type: "tenant",
       title: t.name,
       subtitle: t.email,
-      href: role === "caretaker" ? "/dashboard/caretaker/tenants" : "/dashboard/owner/tenants",
+      href: role === "caretaker" ? "/dashboard/caretaker/tenants" : "/dashboard/admin/tenants",
     });
   }
   for (const inv of invoices) {
@@ -169,7 +169,7 @@ export async function GET(request: NextRequest) {
       title: inv.invoiceNumber,
       subtitle: `Invoice · ${inv.period}`,
       href:
-        role === "caretaker" ? "/dashboard/caretaker/accounting" : "/dashboard/owner/accounting",
+        role === "caretaker" ? "/dashboard/caretaker/accounting" : "/dashboard/admin/accounting",
     });
   }
   for (const s of staff) {

@@ -155,6 +155,22 @@ describe("POST /api/v1/invoices/generate", () => {
     expect(leaseStub.find).not.toHaveBeenCalled();
   });
 
+  it("403 for a caretaker with no active assignments", async () => {
+    user.findById.mockReturnValue(buildQuery(caretakerDoc()));
+    const res = await POST(
+      buildRequest("/api/v1/invoices/generate", {
+        method: "POST",
+        token: signToken(CARETAKER_ID),
+        body: {},
+      }),
+    );
+    expect(res.status).toBe(403);
+    const body = await json(res);
+    expect(body.error).toBe("Forbidden");
+    expect(leaseStub.find).not.toHaveBeenCalled();
+    expect(invoiceStub.insertMany).not.toHaveBeenCalled();
+  });
+
   it("400 for an invalid generate payload", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     const res = await POST(
@@ -410,7 +426,45 @@ describe("POST /api/v1/invoices/generate", () => {
     expect(res.status).toBe(200);
     expect(leaseStub.find).toHaveBeenCalledWith({
       status: "active",
-      propertyId: { $in: [PROPERTY_ID] },
+      $or: [{ propertyId: { $in: [PROPERTY_ID] } }],
+    });
+    const body = await json(res);
+    expect(body.data).toEqual({ created: 0, skipped: 0 });
+  });
+
+  it("scopes unit-assigned caretaker generation to resolved units", async () => {
+    const UNIT_ID = makeObjectId("assigned-unit");
+    const TENANT_ID = makeObjectId("unit-tenant");
+    user.findById.mockReturnValue(buildQuery(caretakerDoc()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          propertyId: PROPERTY_ID,
+          scopeType: "unit",
+          unitId: UNIT_ID,
+          permissions: ["invoice:generate"],
+        }),
+      ]),
+    );
+    unitStub.find.mockReturnValue(buildQuery([{ _id: UNIT_ID, propertyId: PROPERTY_ID }]));
+    leaseStub.find
+      .mockReturnValueOnce(buildQuery([{ tenantId: TENANT_ID }]))
+      .mockReturnValueOnce(buildQuery([]));
+    invoiceStub.find.mockReturnValue(buildQuery([]).select("leaseId"));
+
+    const res = await POST(
+      buildRequest("/api/v1/invoices/generate", {
+        method: "POST",
+        token: signToken(CARETAKER_ID),
+        body: {},
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(leaseStub.find).toHaveBeenCalledWith({
+      status: "active",
+      $or: [{ unitId: { $in: [UNIT_ID] } }, { tenantId: { $in: [TENANT_ID] } }],
     });
     const body = await json(res);
     expect(body.data).toEqual({ created: 0, skipped: 0 });

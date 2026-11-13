@@ -4,7 +4,6 @@ import {
   brokerNav,
   caretakerNav,
   custodianNav,
-  ownerNav,
   tenantNav,
   tenantSubRoutes,
 } from "@/config/dashboardNav";
@@ -67,9 +66,9 @@ describe("admin navigation", () => {
 });
 
 describe("manager navigation is unaffected", () => {
-  it("keeps the full owner sections", () => {
-    expect(ownerNav.some((item) => item.to === "/dashboard/owner/applications")).toBe(true);
-    expect(ownerNav.some((item) => item.to === "/dashboard/owner/move-requests")).toBe(true);
+  it("keeps applications and move requests on the manager dashboard", () => {
+    expect(adminNav.some((item) => item.to === "/dashboard/admin/applications")).toBe(true);
+    expect(adminNav.some((item) => item.to === "/dashboard/admin/move-requests")).toBe(true);
   });
 
   it("still hides applications from caretakers", () => {

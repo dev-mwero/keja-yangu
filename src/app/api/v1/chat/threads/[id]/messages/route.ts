@@ -130,7 +130,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     recipientUserId = thread.agentUserId;
     link =
       thread.agentRole === "owner"
-        ? "/dashboard/owner/communications"
+        ? "/dashboard/admin/communications"
         : "/dashboard/caretaker/communications";
   } else {
     try {

@@ -27,7 +27,7 @@ export interface DashNavItem {
   icon: LucideIcon;
 }
 
-type Role = "tenant" | "caretaker" | "custodian" | "owner" | "admin" | "broker" | "system-admin";
+type Role = "tenant" | "caretaker" | "custodian" | "admin" | "broker" | "system-admin";
 
 interface Section {
   slug: string;
@@ -110,7 +110,6 @@ export const adminNav: DashNavItem[] = [
     icon: Calculator,
   },
 ];
-export const ownerNav = buildDashboardNav("owner");
 export const caretakerNav = buildDashboardNav("caretaker");
 export const custodianNav = buildDashboardNav("custodian");
 export const brokerNav = buildDashboardNav("broker");

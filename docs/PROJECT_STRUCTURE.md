@@ -908,7 +908,7 @@ All routes live under `src/app/api/v1` unless noted. Responses use
 
 | Role | Base | Sections |
 | --- | --- | --- |
-| Owner | `/dashboard/owner` | Overview, Portfolio, Units, Tenants, Applications, Move Requests, Team, Tasks, Accounting, Reports, Communications, Tenant Documents, Notifications, Settings |
+| Admin | `/dashboard/admin` | Overview, Portfolio, Units, Tenants, Applications, Move Requests, Team, Tasks, Commissions, Brokers, Accounting, Reports, Communications, Documents, Notifications, Settings |
 | Custodian | `/dashboard/custodian` | Overview, Portfolio, Units, Tenants, Applications, Move Requests, Team, Accounting, Communications, Notifications, Settings |
 | Caretaker | `/dashboard/caretaker` | Overview, Portfolio, Units, Move Requests, Tasks, Accounting, Reports, Communications, Tenant Documents, Notifications, Settings (+ hidden tenants/applications routes gated by privileges) |
 | System admin | `/dashboard/system-admin` | Overview, Portfolio, Tenants, Caretakers, Accounting, Notifications, Property Types, Recycle Bin |
