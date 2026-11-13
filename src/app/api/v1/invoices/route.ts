@@ -118,7 +118,7 @@ export async function GET(request: NextRequest) {
 
   if (status === "overdue") {
     // Lazy catch-up sweep: scope follows the actor (not the query filters, so
-    // an owner's `tenantId=` read can't sweep outside their portfolio).
+    // a staff actor's `tenantId=` read can't sweep outside their portfolio).
     let sweepScope: Record<string, unknown> = {};
     if (actor.role === "caretaker") {
       sweepScope = actor.staffAssignmentBacked

@@ -155,6 +155,22 @@ describe("POST /api/v1/invoices/generate", () => {
     expect(leaseStub.find).not.toHaveBeenCalled();
   });
 
+  it("403 for a caretaker with no active assignments", async () => {
+    user.findById.mockReturnValue(buildQuery(caretakerDoc()));
+    const res = await POST(
+      buildRequest("/api/v1/invoices/generate", {
+        method: "POST",
+        token: signToken(CARETAKER_ID),
+        body: {},
+      }),
+    );
+    expect(res.status).toBe(403);
+    const body = await json(res);
+    expect(body.error).toBe("Forbidden");
+    expect(leaseStub.find).not.toHaveBeenCalled();
+    expect(invoiceStub.insertMany).not.toHaveBeenCalled();
+  });
+
   it("400 for an invalid generate payload", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     const res = await POST(

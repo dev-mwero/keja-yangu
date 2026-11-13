@@ -175,7 +175,7 @@ describe("requirePermission — caretaker privilege gating", () => {
 describe("requirePermission — authentication failure modes", () => {
   beforeEach(() => {
     resetModelStubs();
-    // Staff without assignments fall back to the legacy managedByOwnerId rules.
+    // No assignments means denial.
     managementAssignment.find.mockReturnValue(buildQuery([]));
   });
 

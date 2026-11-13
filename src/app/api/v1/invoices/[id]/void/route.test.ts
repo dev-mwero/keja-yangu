@@ -120,6 +120,38 @@ describe("POST /api/v1/invoices/[id]/void", () => {
     expect(res.status).toBe(404);
   });
 
+  it("403 for a caretaker with no active assignments", async () => {
+    user.findById.mockReturnValue(buildQuery(caretakerDoc()));
+    invoiceStub.findById.mockReturnValue(buildQuery(pendingInvoice()));
+    const res = await POST(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}/void`, {
+        method: "POST",
+        token: signToken(CARETAKER_ID),
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(403);
+    const body = await json(res);
+    expect(body.error).toBe("Forbidden");
+    expect(invoiceStub.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it("403 for staff with no active assignments even when the invoice does not exist", async () => {
+    user.findById.mockReturnValue(buildQuery(caretakerDoc()));
+    invoiceStub.findById.mockReturnValue(buildQuery(null));
+    const res = await POST(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}/void`, {
+        method: "POST",
+        token: signToken(CARETAKER_ID),
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(403);
+    const body = await json(res);
+    expect(body.error).toBe("Forbidden");
+    expect(invoiceStub.findById).not.toHaveBeenCalled();
+  });
+
   it("409 when the invoice is already paid", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     invoiceStub.findById.mockReturnValue(

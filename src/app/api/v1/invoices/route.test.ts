@@ -176,6 +176,15 @@ describe("GET /api/v1/invoices", () => {
     expect(invoiceStub.find).not.toHaveBeenCalled();
   });
 
+  it("403 for a caretaker with no active assignments", async () => {
+    user.findById.mockReturnValue(buildQuery(caretakerDoc()));
+    const res = await GET(buildRequest("/api/v1/invoices", { token: signToken(CARETAKER_ID) }));
+    expect(res.status).toBe(403);
+    const body = await json(res);
+    expect(body.error).toBe("Forbidden");
+    expect(invoiceStub.find).not.toHaveBeenCalled();
+  });
+
   it("scopes an admin to assigned invoices", async () => {
     mockScopedAdmin();
     const invoice = makeInvoice({ _id: makeObjectId("inv"), ownerId: OWNER_ID, status: "paid" });
@@ -449,6 +458,22 @@ describe("POST /api/v1/invoices", () => {
   it("401 when unauthenticated", async () => {
     const res = await POST(buildRequest("/api/v1/invoices", { method: "POST", body: {} }));
     expect(res.status).toBe(401);
+  });
+
+  it("403 for a caretaker with no active assignments", async () => {
+    user.findById.mockReturnValue(buildQuery(caretakerDoc()));
+    const res = await POST(
+      buildRequest("/api/v1/invoices", {
+        method: "POST",
+        token: signToken(CARETAKER_ID),
+        body: { leaseId: LEASE_ID },
+      }),
+    );
+    expect(res.status).toBe(403);
+    const body = await json(res);
+    expect(body.error).toBe("Forbidden");
+    expect(leaseStub.findById).not.toHaveBeenCalled();
+    expect(invoiceStub.create).not.toHaveBeenCalled();
   });
 
   it("400 for an uninspectable payload", async () => {
