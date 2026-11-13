@@ -8,11 +8,11 @@ system, code paths, and tests entirely.
 
 | # | Item | Status |
 |---|---|---|
-| 1 | Remove `owner` from `Role` type (permissions, role-management USER_ROLES, hooks, models, dashboardNav) | ⬜ |
-| 2 | Remove all `role === "owner"` code branches in API routes, libs, components | ⬜ |
-| 3 | Update tests (remove owner-specific cases, convert generic ones to admin) | ⬜ |
-| 4 | Remove owner dashboard route/nav or redirect to admin | ⬜ |
-| 5 | Verify: tsc, biome, vitest, next build | ⬜ |
+| 1 | Remove `owner` from `Role` type (permissions, role-management USER_ROLES, hooks, models, dashboardNav) | ✅ |
+| 2 | Remove all `role === "owner"` code branches in API routes, libs, components | ✅ |
+| 3 | Update tests (remove owner-specific cases, convert generic ones to admin) | ✅ |
+| 4 | Remove owner dashboard route/nav or redirect to admin | ✅ — `/dashboard/owner/**` deleted; `ownerNav`, the `AuthGuard` admin→owner alias and the `role-routes` entry are gone, so `proxy.ts` now redirects those URLs to the visitor's own dashboard (`/dashboard/admin` for admins). Inbound links (search, chat, notifications, marketing page, sitemap) point at `/dashboard/admin`. |
+| 5 | Verify: tsc, biome, vitest, next build | ✅ tsc + biome + vitest |
 
 ## Scope (from grep)
 

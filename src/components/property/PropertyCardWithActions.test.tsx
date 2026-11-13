@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-const pathname = vi.hoisted(() => ({ value: "/dashboard/owner/portfolio" }));
+const pathname = vi.hoisted(() => ({ value: "/dashboard/admin/portfolio" }));
 
 vi.mock("next/navigation", () => ({ usePathname: () => pathname.value }));
 vi.mock("@/components/PropertyCard", () => ({ PropertyCard: () => null }));
@@ -32,12 +32,12 @@ const property = {
 
 describe("PropertyCardWithActions structure link", () => {
   it("does not duplicate the portfolio segment in the role dashboard path", () => {
-    pathname.value = "/dashboard/owner/portfolio";
+    pathname.value = "/dashboard/admin/portfolio";
     render(<PropertyCardWithActions property={property} canEdit />);
 
     expect(screen.getByRole("link", { name: /manage structure/i })).toHaveAttribute(
       "href",
-      "/dashboard/owner/portfolio/prop-1/structure",
+      "/dashboard/admin/portfolio/prop-1/structure",
     );
   });
 

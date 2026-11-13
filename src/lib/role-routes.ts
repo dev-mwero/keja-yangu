@@ -13,7 +13,6 @@ export const getRoleRoute = (role: Role): string => roleRoute[role] ?? "/dashboa
 
 const dashboardRoles: Array<[string, Role[]]> = [
   ["/dashboard/admin", ["admin", "system-admin"]],
-  ["/dashboard/owner", ["admin", "system-admin"]],
   ["/dashboard/custodian", ["custodian", "admin", "system-admin"]],
   ["/dashboard/broker", ["broker", "system-admin"]],
   ["/dashboard/tenant", ["tenant"]],
@@ -23,7 +22,7 @@ const dashboardRoles: Array<[string, Role[]]> = [
 
 /**
  * Returns the roles allowed to render a dashboard route, matching the full
- * prefix so nested paths (e.g. `/dashboard/owner/portfolio/123`) cannot fall
+ * prefix so nested paths (e.g. `/dashboard/admin/portfolio/123`) cannot fall
  * through to an unrestricted guard.
  */
 export const getDashboardAllowedRoles = (pathname: string): Role[] | undefined => {

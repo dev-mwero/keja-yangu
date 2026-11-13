@@ -4,7 +4,6 @@ import { getDashboardAllowedRoles, getRoleRoute } from "@/lib/role-routes";
 describe("getDashboardAllowedRoles", () => {
   it("matches dashboard roots", () => {
     expect(getDashboardAllowedRoles("/dashboard/admin")).toEqual(["admin", "system-admin"]);
-    expect(getDashboardAllowedRoles("/dashboard/owner")).toEqual(["admin", "system-admin"]);
     expect(getDashboardAllowedRoles("/dashboard/tenant")).toEqual(["tenant"]);
     expect(getDashboardAllowedRoles("/dashboard/custodian")).toEqual([
       "custodian",
@@ -20,10 +19,6 @@ describe("getDashboardAllowedRoles", () => {
       "admin",
       "system-admin",
     ]);
-    expect(getDashboardAllowedRoles("/dashboard/owner/portfolio/123")).toEqual([
-      "admin",
-      "system-admin",
-    ]);
     expect(getDashboardAllowedRoles("/dashboard/tenant/invoices/abc/pay")).toEqual(["tenant"]);
     expect(getDashboardAllowedRoles("/dashboard/caretaker/portfolio/123/structure")).toEqual([
       "caretaker",
@@ -33,8 +28,12 @@ describe("getDashboardAllowedRoles", () => {
 
   it("does not match lookalike prefixes", () => {
     expect(getDashboardAllowedRoles("/dashboard/adminfoo")).toBeUndefined();
-    expect(getDashboardAllowedRoles("/dashboard/ownerfoo")).toBeUndefined();
     expect(getDashboardAllowedRoles("/dashboard/tenantx/1")).toBeUndefined();
+  });
+
+  it("retires the owner dashboard so bookmarks fall back to the role route", () => {
+    expect(getDashboardAllowedRoles("/dashboard/owner")).toBeUndefined();
+    expect(getDashboardAllowedRoles("/dashboard/owner/portfolio/123")).toBeUndefined();
   });
 });
 

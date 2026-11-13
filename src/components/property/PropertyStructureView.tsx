@@ -38,7 +38,7 @@ interface Props {
   propertyId: string;
   nav: DashNavItem[];
   roleName: string;
-  /** Dashboard path to return to (e.g. `/dashboard/owner/portfolio`). */
+  /** Dashboard path to return to (e.g. `/dashboard/admin/portfolio`). */
   backHref: string;
 }
 

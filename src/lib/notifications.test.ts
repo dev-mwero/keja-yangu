@@ -327,7 +327,7 @@ describe("notifyInvoicePaid", () => {
     const ownerRow = notification.create.mock.calls[1][0] as Record<string, unknown>;
     expect(ownerRow.recipientUserId).toBe(OWNER_ID);
     expect(ownerRow.channels).toEqual(["in-app"]);
-    expect(ownerRow.link).toBe("/dashboard/owner/accounting");
+    expect(ownerRow.link).toBe("/dashboard/admin/accounting");
 
     const caretakerRow = notification.create.mock.calls[2][0] as Record<string, unknown>;
     expect(caretakerRow.recipientUserId).toBe(CARETAKER_ID);
@@ -763,7 +763,7 @@ describe("notifyMoveRequestCreated", () => {
     const ownerRow = notification.create.mock.calls[0][0] as Record<string, unknown>;
     expect(ownerRow.recipientUserId).toBe(OWNER_ID);
     expect(ownerRow.type).toBe("move-request:created");
-    expect(ownerRow.link).toBe("/dashboard/owner/move-requests");
+    expect(ownerRow.link).toBe("/dashboard/admin/move-requests");
     expect(ownerRow.dedupeKey).toBe(`move-request:created:${MOVE_REQUEST_ID}`);
     expect(ownerRow.data).toEqual({ moveRequestId: MOVE_REQUEST_ID, propertyId: PROPERTY_ID });
     expect(ownerRow.body).toContain("2026-11-01");

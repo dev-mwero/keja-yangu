@@ -65,28 +65,6 @@ describe("AuthGuard", () => {
     expect(mocks.router.push).not.toHaveBeenCalled();
   });
 
-  it("allows admin user when allowedRoles specifies owner as legacy alias", () => {
-    mocks.container.authState = { user: { role: "admin" }, loading: false };
-    render(
-      <AuthGuard allowedRoles={["admin"]}>
-        <div>Owner Only Area</div>
-      </AuthGuard>,
-    );
-    expect(screen.getByText("Owner Only Area")).not.toBeNull();
-    expect(mocks.router.push).not.toHaveBeenCalled();
-  });
-
-  it("allows owner user when allowedRoles specifies admin", () => {
-    mocks.container.authState = { user: { role: "admin" }, loading: false };
-    render(
-      <AuthGuard allowedRoles={["admin"]}>
-        <div>Admin Area</div>
-      </AuthGuard>,
-    );
-    expect(screen.getByText("Admin Area")).not.toBeNull();
-    expect(mocks.router.push).not.toHaveBeenCalled();
-  });
-
   it("redirects to role route when user role is not allowed", () => {
     mocks.container.authState = { user: { role: "tenant" }, loading: false };
     render(

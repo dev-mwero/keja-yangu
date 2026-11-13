@@ -261,10 +261,22 @@ function communicationLink(role: string | undefined): string {
   if (role === "caretaker" || role === "custodian") {
     return `/dashboard/${role}/communications`;
   }
+  // `owner` is the retained display label for the landlord side; that account
+  // is an admin now and reads announcements under /dashboard/admin.
+  if (role === "owner" || role === "admin") return "/dashboard/admin/communications";
   if (role === "system-admin") return "/dashboard/system-admin";
   // Tenants read announcements/messages under their Messages tab; unknown or
   // missing roles fall back to the historical tenant link.
   return "/dashboard/tenant/messages";
+}
+
+/**
+ * Dashboard root for a notification recipient. Legacy `owner` recipients are
+ * admins now, so links must never point at the retired /dashboard/owner tree.
+ */
+function dashboardBase(role: string | undefined): string {
+  if (role === "owner") return "/dashboard/admin";
+  return role ? `/dashboard/${role}` : "/dashboard/tenant";
 }
 
 /** One batched role lookup so per-recipient links stay server-composed. */
@@ -384,7 +396,7 @@ export async function notifyInvoicePaid(invoice: InvoiceLike): Promise<boolean> 
         title: "Payment received",
         body: `A payment of ${amount} was recorded for invoice ${invoiceNumber} (${periodLabel})`,
         data,
-        link: "/dashboard/owner/accounting",
+        link: "/dashboard/admin/accounting",
         channels: ["in-app"],
       })) && ok;
 
@@ -462,7 +474,7 @@ export async function notifyInvoiceOverdue(invoice: InvoiceLike): Promise<boolea
         title: staffTitle,
         body: staffBody,
         data,
-        link: "/dashboard/owner/accounting",
+        link: "/dashboard/admin/accounting",
         channels: ["in-app"],
       })) && ok;
 
@@ -578,7 +590,7 @@ export async function notifyLeaseExpiry(lease: LeaseLike, daysUntil: number): Pr
         title,
         body: staffBody,
         data,
-        link: "/dashboard/owner/accounting",
+        link: "/dashboard/admin/accounting",
         channels: ["in-app", "email"],
         email: {
           subjectPrefix: "Lease expiring soon - Keja Yangu",
@@ -587,8 +599,8 @@ export async function notifyLeaseExpiry(lease: LeaseLike, daysUntil: number): Pr
             endDate: lease.endDate ?? undefined,
             rentAmount: lease.rentAmount,
           }),
-          text: `A lease ends in ${daysUntil} ${unit}.\n\nView your leases: ${base}/dashboard/owner/accounting`,
-          linkUrl: `${base}/dashboard/owner/accounting`,
+          text: `A lease ends in ${daysUntil} ${unit}.\n\nView your leases: ${base}/dashboard/admin/accounting`,
+          linkUrl: `${base}/dashboard/admin/accounting`,
           preheader: "A lease is ending soon",
         },
       })) && ok;
@@ -809,7 +821,7 @@ export async function notifyMoveRequestCreated(request: MoveRequestLike): Promis
           title,
           body,
           data,
-          link: `/dashboard/${recipient.role}/move-requests`,
+          link: `${dashboardBase(recipient.role)}/move-requests`,
           channels: ["in-app"],
         })) && ok;
     }

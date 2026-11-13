@@ -44,7 +44,7 @@ const Index = () => {
                 </Link>
               </Button>
               <Button asChild variant="outline" size="lg" className="rounded-full px-6">
-                <Link href="/dashboard/owner">For Owners</Link>
+                <Link href="/dashboard/admin">For Owners</Link>
               </Button>
             </div>
 
@@ -149,7 +149,7 @@ const Index = () => {
                 icon: ShieldCheck,
                 role: "Owner",
                 desc: "Full hierarchy control, analytics and assignment.",
-                href: "/dashboard/owner",
+                href: "/dashboard/admin",
               },
             ].map((c) => (
               <div
