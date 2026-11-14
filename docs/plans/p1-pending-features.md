@@ -8,8 +8,8 @@ Companion to the P0 fixes (CI green, ops scripts, Playwright browser). This docu
 |---|---|---|---|
 | 1 | Broker dashboard nav dead links | ✅ Done (this pass) | — |
 | 2 | Tasks & Maintenance persistence (localStorage → API) | Planned | TBD |
-| 3 | Multi-unit tenancy (tenant sees/holds multiple units) | Planned (needs design) | TBD |
-| 4 | Legacy `owner` role retirement (Phase 9 exit criteria) | Planned (needs design) | TBD |
+| 3 | Multi-unit tenancy (tenant sees/holds multiple units) | ✅ Done (`71a7cc1`) | — |
+| 4 | Legacy `owner` role retirement (Phase 9 exit criteria) | ✅ Done (`2afb68a`, `ae42be1`) | — |
 
 ---
 
@@ -51,7 +51,12 @@ Companion to the P0 fixes (CI green, ops scripts, Playwright browser). This docu
 
 ---
 
-## 3. Multi-unit tenancy (tenant holds/sees multiple units)
+## 3. Multi-unit tenancy (tenant holds/sees multiple units) — ✅ DONE
+
+Delivered: `Lease` uniqueness relaxed to `{ tenantId, unitId }` (partial,
+active-only), tenant home renders a tenancy selector, and `/api/v1/tenant/me`
+aggregates units/requests across all tenancies (`71a7cc1`). Kept below for the
+design rationale.
 
 **Current state:** `Lease` has a unique active-lease-per-tenant index (`src/models/Lease.ts`); `tenant/home/page.tsx` does `units.find(...)` and renders a single unit. `docs/plans/tenant-types-multiunit-prospect.md` covers part of this.
 
@@ -74,7 +79,13 @@ Companion to the P0 fixes (CI green, ops scripts, Playwright browser). This docu
 
 ---
 
-## 4. Legacy `owner` role retirement (Phase 9 exit criteria)
+## 4. Legacy `owner` role retirement (Phase 9 exit criteria) — ✅ DONE (code)
+
+Delivered: `owner` removed from the `Role` type, `User` enum, `ASSIGNABLE_ROLES`
+and the admin CLI (`2afb68a`, `42c517c`), and the `/dashboard/owner/**`
+surface retired with redirects (`ae42be1`). Remaining work is data-only — see
+the dead `role === "owner"` comparisons noted in
+`docs/runbooks/role-management.md` §8.
 
 **Current state:** `docs/plans/multi-admin-revamp-17-phase9-stabilisation.md` defines exit criteria. `audit:phase9` reports: 0 owner users, 1 legacy-owner property, 3 assignments. So data migration is mostly done; remaining work is code-level retirement of the `owner` role path.
 
