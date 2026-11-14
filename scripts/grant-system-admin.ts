@@ -18,7 +18,7 @@ dotenv.config({ path: ".env.local" });
  *   npm run admin:grant -- --email admin@example.com --revoke --operator-email root@example.com --apply
  */
 
-const ASSIGNABLE_ROLES = ["tenant", "caretaker", "custodian", "owner", "admin", "broker"];
+const ASSIGNABLE_ROLES = ["tenant", "caretaker", "custodian", "admin", "broker"];
 
 const userSchema = new mongoose.Schema(
   {

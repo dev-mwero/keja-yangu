@@ -25,10 +25,6 @@ export const ASSIGNABLE_ROLES = [
   "broker",
 ] as const satisfies readonly Role[];
 
-// `owner` is retained in USER_ROLES for backward compatibility with legacy
-// accounts but is no longer assignable (Phase 9 retirement). Existing owner
-// users keep their role; new assignments are blocked at the API boundary.
-
 export type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
 
 export function isUserRole(value: string): value is UserRole {

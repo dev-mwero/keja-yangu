@@ -191,11 +191,12 @@ Alert-worthy:
 - **No deactivation path.** `isActive` is filterable in the UI but not editable;
   offboarding currently means a database write. Prefer adding an endpoint over
   ad-hoc edits.
-- **CLI still lists `owner` as an assignable target role**
-  (`ASSIGNABLE_ROLES` in `scripts/grant-system-admin.ts`), left over from the
-  owner retirement. Granting it would set a role the app no longer recognises.
-- **Stale comment** in `src/lib/role-management.ts` claims `owner` is retained
-  in `USER_ROLES`; it is not.
 - **The CLI reads `.env.local`**, so operating on production requires
   temporarily pointing a local file at the production cluster — a footgun worth
   replacing with an explicit `--env-file`/`MONGODB_URI` override.
+- **Dead `role === "owner"` comparisons** remain in several API routes
+  (listings, leads, brokers, custodians, properties). They can never fire now
+  that `owner` is out of the `Role` type and the `User` enum, but they still
+  imply legacy support. Confirm no documents still carry `role: "owner"` before
+  deleting them — until then they are the only thing granting such a document
+  any access.
