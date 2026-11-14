@@ -1,6 +1,6 @@
 "use client";
 
-import { ShieldCheck, Users } from "lucide-react";
+import { Power, ShieldCheck, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { SearchInput } from "@/components/SearchInput";
@@ -33,7 +33,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAuth } from "@/hooks/use-auth";
-import { type UserRow, useUserRolePromotion, useUsers } from "@/hooks/use-users";
+import { type UserRow, useUserActivation, useUserRolePromotion, useUsers } from "@/hooks/use-users";
 import { matchesQuery } from "@/lib/search";
 
 const FILTER_ROLES: UserRow["role"][] = [
@@ -76,10 +76,15 @@ export const UserRoleManager = ({ refreshKey = 0 }: { refreshKey?: number }) => 
     if (refreshKey > 0) refetch();
   }, [refreshKey, refetch]);
   const { promoteUserRole, pending, pendingId } = useUserRolePromotion();
+  const { setUserStatus, pending: statusPending, pendingId: statusPendingId } = useUserActivation();
 
   const [confirmTarget, setConfirmTarget] = useState<{
     user: UserRow;
     role: UserRow["role"];
+  } | null>(null);
+  const [confirmStatus, setConfirmStatus] = useState<{
+    user: UserRow;
+    isActive: boolean;
   } | null>(null);
 
   const visible = users.filter((u) => matchesQuery(search, u.name, u.email, u.phone, u.role));
@@ -104,6 +109,25 @@ export const UserRoleManager = ({ refreshKey = 0 }: { refreshKey?: number }) => 
     }
   };
 
+  const handleStatusConfirm = async () => {
+    if (!confirmStatus) return;
+    const target = confirmStatus;
+    try {
+      await setUserStatus(target.user.id, target.isActive);
+      toast.success(
+        target.isActive
+          ? `${target.user.name} can sign in again`
+          : `${target.user.name} deactivated`,
+      );
+      setConfirmStatus(null);
+      refetch();
+    } catch (err) {
+      toast.error("Could not update account status", {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
+  };
+
   const isDisabledMessage = !!error && /disabled|unavailable|not found|404|503/i.test(error);
 
   return (
@@ -121,7 +145,8 @@ export const UserRoleManager = ({ refreshKey = 0 }: { refreshKey?: number }) => 
         <div>
           <h3 className="font-display text-lg">Users & Roles</h3>
           <p className="text-sm text-muted-foreground">
-            Promote or change a user's role. System-admin accounts are managed via the audited CLI.
+            Change a user's role or suspend their account. System-admin accounts are managed via the
+            audited CLI.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -182,12 +207,13 @@ export const UserRoleManager = ({ refreshKey = 0 }: { refreshKey?: number }) => 
                 <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Change role</TableHead>
+                <TableHead className="text-right">Account</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {visible.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                     No users match your search.
                   </TableCell>
                 </TableRow>
@@ -195,6 +221,7 @@ export const UserRoleManager = ({ refreshKey = 0 }: { refreshKey?: number }) => 
                 visible.map((u) => {
                   const isSelf = currentUser?.id === u.id;
                   const busy = pending && pendingId === u.id;
+                  const statusBusy = statusPending && statusPendingId === u.id;
                   return (
                     <TableRow key={u.id}>
                       <TableCell className="font-medium">
@@ -240,6 +267,25 @@ export const UserRoleManager = ({ refreshKey = 0 }: { refreshKey?: number }) => 
                           </Select>
                         )}
                         {busy && <ShieldCheck className="ml-2 inline h-4 w-4 animate-pulse" />}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {u.role === "system-admin" ? (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        ) : (
+                          <Button
+                            variant={u.isActive ? "outline" : "secondary"}
+                            size="sm"
+                            className="rounded-full"
+                            disabled={isSelf || pending || statusPending}
+                            onClick={() => setConfirmStatus({ user: u, isActive: !u.isActive })}
+                          >
+                            <Power className="mr-1 h-3.5 w-3.5" />
+                            {u.isActive ? "Deactivate" : "Reactivate"}
+                            {statusBusy && (
+                              <ShieldCheck className="ml-1 inline h-3.5 w-3.5 animate-pulse" />
+                            )}
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
@@ -297,6 +343,34 @@ export const UserRoleManager = ({ refreshKey = 0 }: { refreshKey?: number }) => 
             <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
             <AlertDialogAction disabled={pending} onClick={handleConfirm}>
               Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!confirmStatus}
+        onOpenChange={(open) => {
+          if (!statusPending && !open) setConfirmStatus(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmStatus?.isActive ? "Reactivate this account?" : "Deactivate this account?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmStatus
+                ? confirmStatus.isActive
+                  ? `${confirmStatus.user.name} will be able to sign in again. Their portfolio assignments are not restored — re-grant access explicitly.`
+                  : `${confirmStatus.user.name} will be signed out immediately and their portfolio assignments revoked. Access must be re-granted after reactivation.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={statusPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction disabled={statusPending} onClick={handleStatusConfirm}>
+              {confirmStatus?.isActive ? "Yes, reactivate" : "Yes, deactivate"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
