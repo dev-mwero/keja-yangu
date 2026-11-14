@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { AccountDetailsForm } from "@/components/account/AccountDetailsForm";
 import { DashboardShell } from "@/components/DashboardShell";
 import { PaymentMethodsSettings } from "@/components/settings/PaymentMethodsSettings";
+import { SupportEmailNote } from "@/components/settings/SupportEmailNote";
 import {
   Select,
   SelectContent,
@@ -43,7 +44,7 @@ const notificationItems: SettingsItem[] = [
   {
     key: "marketingEmails",
     label: "Marketing emails",
-    description: "Offers and product updates from Keja Yangu.",
+    description: "Offers and product updates from Custodian Homes.",
   },
   {
     key: "moderationReminders",
@@ -140,6 +141,8 @@ const AdminSettingsPage = () => {
           Manage your listings, caretakers and tenants from the Portfolio page.
         </div>
       </Link>
+
+      <SupportEmailNote />
     </DashboardShell>
   );
 };

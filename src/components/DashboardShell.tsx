@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/use-auth";
+import { BRAND } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 import { Logo } from "./Logo";
 import { NotificationsBell } from "./NotificationsBell";
@@ -96,7 +97,16 @@ export const DashboardShell = ({ roleName, nav, title, subtitle, children }: Pro
           {navList()}
           <div className="mt-auto rounded-xl bg-muted/60 p-3 text-xs text-muted-foreground">
             <p className="mb-2 font-medium text-foreground">Need help?</p>
-            <p>Reach our support team — typically reply in under an hour.</p>
+            <p>
+              Email{" "}
+              <a
+                href={`mailto:${BRAND.emails.support}`}
+                className="font-medium text-foreground underline-offset-4 hover:underline"
+              >
+                {BRAND.emails.support}
+              </a>{" "}
+              — typically reply in under an hour.
+            </p>
           </div>
         </aside>
 
