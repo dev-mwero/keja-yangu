@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
-import { BRAND } from "@/lib/brand";
+import { getAppUrl } from "@/lib/brand";
 
-const baseUrl = process.env.NEXT_PUBLIC_APP_URL || BRAND.url;
+const baseUrl = getAppUrl();
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   return [

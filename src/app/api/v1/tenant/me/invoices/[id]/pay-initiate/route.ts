@@ -7,6 +7,7 @@ import {
   resolveTenantActor,
   resolveTenantIds,
 } from "@/app/api/v1/_helpers";
+import { getAppUrl } from "@/lib/brand";
 import { canPayOnline } from "@/lib/invoicing";
 import { connectToDatabase } from "@/lib/mongoose";
 import { createCheckout, getPaystackSecret } from "@/lib/payments/paystack";
@@ -179,7 +180,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     return NextResponse.json({ error: "Could not create payment" }, { status: 409 });
   }
 
-  const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/dashboard/tenant/payments`;
+  const callbackUrl = `${getAppUrl()}/dashboard/tenant/payments`;
   const email = auth?.email || `tenant-${userId}@keja.local`;
 
   let checkout: CreateCheckoutResult;

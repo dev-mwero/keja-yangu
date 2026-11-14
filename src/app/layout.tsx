@@ -3,19 +3,17 @@ import { Toaster } from "@/components/ui/sonner";
 import "@/app/globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/hooks/use-auth";
-import { BRAND, BRAND_TITLE, BRAND_TITLE_TEMPLATE } from "@/lib/brand";
+import { BRAND, BRAND_TITLE, BRAND_TITLE_TEMPLATE, getAppUrl } from "@/lib/brand";
 
 const DESCRIPTION =
   "Find homes, manage properties, and connect tenants, caretakers, and owners on one platform.";
 
-const configuredUrl = process.env.NEXT_PUBLIC_APP_URL ?? BRAND.url;
+const appOrigin = getAppUrl();
 
 export const metadata: Metadata = {
   // Without this every canonical/OG URL resolves against localhost in
   // production. Accept a host-only value in case the env var omits the scheme.
-  metadataBase: new URL(
-    configuredUrl.startsWith("http") ? configuredUrl : `https://${configuredUrl}`,
-  ),
+  metadataBase: new URL(/^https?:\/\//.test(appOrigin) ? appOrigin : `https://${appOrigin}`),
   title: {
     default: BRAND_TITLE,
     template: BRAND_TITLE_TEMPLATE,

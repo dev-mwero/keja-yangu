@@ -16,6 +16,7 @@ current domain; Phase 4 is the domain cutover and is the only irreversible step.
 | 1 | Dashboards | ✅ Done (`e8dffd1`) | No |
 | 2 | Auth screens + transactional email | ✅ Done (`597ca59`) | No |
 | 3 | Public pages + SEO/OG/manifest | ✅ Done (`2cf29e9`) | No |
+| 4 | Infra + domain cutover | 📋 Runbook delivered (`docs/runbooks/domain-cutover-custodian-homes.md`) | Yes |
 | 4 | Infrastructure, DNS, mailboxes | Planned | **Yes** |
 | 5 | Docs, package, repo cleanup | Planned | No |
 
@@ -194,6 +195,9 @@ Phase 1 automatically. No copy changes needed there today.
 ---
 
 ## 7. Phase 4 — Infrastructure and cutover (irreversible)
+
+Detailed, ordered steps live in `docs/runbooks/domain-cutover-custodian-homes.md`.
+This section is the short form.
 
 Order matters. Do not start sending from the new domain before step 3 completes.
 

@@ -1,5 +1,5 @@
 import nodemailer from "nodemailer";
-import { BRAND } from "@/lib/brand";
+import { BRAND, getAppUrl } from "@/lib/brand";
 import { formatKES, formatPeriod } from "./format";
 
 /**
@@ -388,7 +388,7 @@ export async function sendVerificationEmail(
   token: string,
   name: string,
 ): Promise<boolean> {
-  const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/verify?token=${token}`;
+  const verifyUrl = `${getAppUrl()}/auth/verify?token=${token}`;
   const content = createVerificationContent(name);
   const html = renderTemplate(
     content,
@@ -410,7 +410,7 @@ export async function sendPasswordResetEmail(
   token: string,
   name: string,
 ): Promise<boolean> {
-  const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/reset-password?token=${token}`;
+  const resetUrl = `${getAppUrl()}/auth/reset-password?token=${token}`;
   const content = createPasswordResetContent(name);
   const html = renderTemplate(content, resetUrl, `Reset your ${BRAND.name} password`);
   const text = `Hi ${name},\n\nWe received a request to reset your password. Click this link to reset: ${resetUrl}\n\nThis link expires in 1 hour.\n\nIf you didn't request this, please ignore this email.`;
@@ -447,7 +447,7 @@ export async function sendInviteEmail(
   role: string,
   token?: string,
 ): Promise<boolean> {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = getAppUrl();
   // Magic-link style invite: a single-use verification token takes the invitee
   // straight to the verify page, which activates the account and signs them in.
   const verifyUrl = token
@@ -471,7 +471,7 @@ export async function sendWelcomeEmail(
   name: string,
   role: string,
 ): Promise<boolean> {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = getAppUrl();
   const content = createWelcomeContent(name, role);
   const html = renderTemplate(
     content,

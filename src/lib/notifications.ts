@@ -1,4 +1,4 @@
-import { BRAND } from "@/lib/brand";
+import { BRAND, getAppUrl } from "@/lib/brand";
 import {
   createComplaintStatusContent,
   createInvoicePaidContent,
@@ -31,10 +31,6 @@ function isDuplicateKeyError(error: unknown): boolean {
 }
 
 const DAY_IN_MS = 86_400_000;
-
-function appUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL ?? "";
-}
 
 /**
  * Extracts the first event id from notification `data`; the dedupe key is the
@@ -367,7 +363,7 @@ export async function notifyInvoicePaid(invoice: InvoiceLike): Promise<boolean> 
     const periodLabel = formatPeriod(period);
     const amount = formatKES(amountPaid);
     const data = { invoiceId, period, amountDue, amountPaid };
-    const base = appUrl();
+    const base = getAppUrl();
 
     let ok = true;
 
@@ -443,7 +439,7 @@ export async function notifyInvoiceOverdue(invoice: InvoiceLike): Promise<boolea
     const periodLabel = formatPeriod(period);
     const amount = formatKES(amountDue);
     const data = { invoiceId, period, amountDue };
-    const base = appUrl();
+    const base = getAppUrl();
 
     let ok = true;
     const staffTitle = "Invoice overdue";
@@ -553,7 +549,7 @@ export interface LeaseLike {
 export async function notifyLeaseExpiry(lease: LeaseLike, daysUntil: number): Promise<boolean> {
   try {
     const data = { leaseId: String(lease._id), propertyId: lease.propertyId };
-    const base = appUrl();
+    const base = getAppUrl();
     const unit = daysUntil === 1 ? "day" : "days";
     const title = "Lease expiring soon";
     const tenantBody = `Your lease ends in ${daysUntil} ${unit}.`;
@@ -710,7 +706,7 @@ export async function notifyComplaintStatusChange(complaint: ComplaintLike): Pro
         subjectPrefix: `Complaint "${sanitizeHeader(subject)}" ${status} - ${BRAND.name}`,
         content: createComplaintStatusContent({ subject, status }),
         text: `Your complaint "${subject}" is now ${status}.`,
-        linkUrl: `${appUrl()}/dashboard/tenant/home`,
+        linkUrl: `${getAppUrl()}/dashboard/tenant/home`,
         preheader: "Your complaint status has changed",
       },
     });
