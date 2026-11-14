@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { getAppUrl } from "@/lib/brand";
 import { encryptField } from "@/lib/crypto";
 import { isEmailConfigured, sendPasswordResetEmail, sendVerificationEmail } from "@/lib/email";
 import { getJwtSecret } from "@/lib/jwt";
@@ -215,7 +216,7 @@ export async function POST(request: Request) {
           existing.verificationTokenExpiry = verificationTokenExpiry;
           await existing.save();
 
-          const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+          const appBaseUrl = getAppUrl();
           const verifyUrl = `${appBaseUrl}/auth/verify?token=${verificationToken}`;
 
           const emailSent = isEmailConfigured()
@@ -257,7 +258,7 @@ export async function POST(request: Request) {
         verificationTokenExpiry,
       });
 
-      const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+      const appBaseUrl = getAppUrl();
       const verifyUrl = `${appBaseUrl}/auth/verify?token=${verificationToken}`;
 
       const emailSent = isEmailConfigured()
@@ -358,7 +359,7 @@ export async function POST(request: Request) {
       user.verificationTokenExpiry = verificationTokenExpiry;
       await user.save();
 
-      const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+      const appBaseUrl = getAppUrl();
       const verifyUrl = `${appBaseUrl}/auth/verify?token=${verificationToken}`;
 
       const emailSent = isEmailConfigured()
@@ -404,7 +405,7 @@ export async function POST(request: Request) {
       user.verificationTokenExpiry = resetTokenExpiry;
       await user.save();
 
-      const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/reset-password?token=${resetToken}`;
+      const resetUrl = `${getAppUrl()}/auth/reset-password?token=${resetToken}`;
       const emailSent = isEmailConfigured()
         ? await sendPasswordResetEmail(user.email, resetToken, user.name || "User")
         : false;

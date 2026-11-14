@@ -24,3 +24,21 @@ export const BRAND_TITLE = `${BRAND.name} — ${BRAND.tagline}`;
 
 /** `New page | Custodian Homes` metadata template. */
 export const BRAND_TITLE_TEMPLATE = `%s | ${BRAND.name}`;
+
+/**
+ * Canonical deployment origin, without a trailing slash.
+ *
+ * Read at call time, not import time, so tests and scripts that set the
+ * environment variable late still see it.
+ *
+ * Every URL the app hands out has to agree with the origin the browser sends
+ * in the `Origin` header: verification and reset links, payment callbacks,
+ * sitemap entries, and the CSRF origin check itself. A single trailing slash in
+ * `NEXT_PUBLIC_APP_URL` produces `https://host//auth/verify` links and 403s
+ * every mutation, so normalise the environment value here instead of trusting
+ * the deployment to spell it correctly.
+ */
+export function getAppUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_APP_URL || BRAND.url;
+  return configured.replace(/\/+$/, "");
+}
