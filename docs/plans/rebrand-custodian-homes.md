@@ -14,7 +14,7 @@ current domain; Phase 4 is the domain cutover and is the only irreversible step.
 |---|---|---|---|
 | 0 | Brand constants + regression guard | ✅ Done (`d316b84`) | No |
 | 1 | Dashboards | ✅ Done (`e8dffd1`) | No |
-| 2 | Auth screens + transactional email | Planned | No |
+| 2 | Auth screens + transactional email | ✅ Done (`597ca59`) | No |
 | 3 | Public pages + SEO/OG/manifest | Planned | No |
 | 4 | Infrastructure, DNS, mailboxes | Planned | **Yes** |
 | 5 | Docs, package, repo cleanup | Planned | No |
@@ -115,10 +115,9 @@ unreadable), and the production MongoDB database name.
 - Add a regression test (`src/lib/brand.test.ts`) that walks `src/**` and fails
   on legacy brand literals: `Keja`, `keja-yangu.com`, `d8tatechsolutions`.
   Allowlist: `src/test/**`, `*.test.*`, `src/lib/brand.ts`, and an explicit
-  `PENDING_REBRAND` set of files still awaiting their phase (currently
-  `app/layout.tsx`, `app/page.tsx`, `app/auth/page.tsx`, `app/sitemap.ts`,
-  `components/AuthLayout.tsx`, `lib/email.ts`, `lib/notifications.ts`). The set
-  must end up empty.
+  `PENDING_REBRAND` set of files still awaiting their phase (now only
+  `app/layout.tsx`, `app/page.tsx`, `app/sitemap.ts`). The set must end up
+  empty.
 - No UI change in this phase; ships safely on the current domain.
 
 **Verification:** `npx tsc --noEmit`, `npx biome check`, `npx vitest run`.

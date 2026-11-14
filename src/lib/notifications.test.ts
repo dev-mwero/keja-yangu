@@ -1,5 +1,6 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { BRAND } from "@/lib/brand";
 import {
   createComplaintStatusContent,
   createInvoicePaidContent,
@@ -599,7 +600,7 @@ describe("complaint, message and announcement seams", () => {
     expect(ok).toBe(true);
     expect(sendNotificationEmailMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        subjectPrefix: 'Complaint "Leak  X-Injected: yes" resolved - Keja Yangu',
+        subjectPrefix: `Complaint "Leak  X-Injected: yes" resolved - ${BRAND.name}`,
       }),
     );
   });

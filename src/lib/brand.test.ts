@@ -10,17 +10,9 @@ const SRC = join(process.cwd(), "src");
  * Files that still carry the previous brand while the rebrand rolls out.
  * Shrink this set as each phase lands; it must end up empty.
  *
- * Phase 2 removes email.ts and notifications.ts; phase 3 removes the rest.
+ * Phase 3 removes the remaining three.
  */
-const PENDING_REBRAND = new Set([
-  "app/auth/page.tsx",
-  "app/layout.tsx",
-  "app/page.tsx",
-  "app/sitemap.ts",
-  "components/AuthLayout.tsx",
-  "lib/email.ts",
-  "lib/notifications.ts",
-]);
+const PENDING_REBRAND = new Set(["app/layout.tsx", "app/page.tsx", "app/sitemap.ts"]);
 
 /**
  * Brand literals that must never reappear. `keja-` identifiers (session
