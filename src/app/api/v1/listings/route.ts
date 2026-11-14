@@ -64,10 +64,7 @@ export async function GET(request: NextRequest) {
   const user = await User.findById(auth.userId).select("role isActive").lean();
   if (
     !user?.isActive ||
-    (user.role !== "admin" &&
-      user.role !== "owner" &&
-      user.role !== "system-admin" &&
-      user.role !== "caretaker")
+    (user.role !== "admin" && user.role !== "system-admin" && user.role !== "caretaker")
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -127,10 +124,7 @@ export async function POST(request: NextRequest) {
   const user = await User.findById(auth.userId).select("role isActive").lean();
   if (
     !user?.isActive ||
-    (user.role !== "admin" &&
-      user.role !== "owner" &&
-      user.role !== "system-admin" &&
-      user.role !== "caretaker")
+    (user.role !== "admin" && user.role !== "system-admin" && user.role !== "caretaker")
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

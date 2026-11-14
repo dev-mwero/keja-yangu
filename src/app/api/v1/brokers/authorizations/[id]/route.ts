@@ -19,10 +19,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   await connectToDatabase();
   const user = await User.findById(auth.userId).select("role isActive").lean();
-  if (
-    !user?.isActive ||
-    (user.role !== "admin" && user.role !== "owner" && user.role !== "system-admin")
-  ) {
+  if (!user?.isActive || (user.role !== "admin" && user.role !== "system-admin")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

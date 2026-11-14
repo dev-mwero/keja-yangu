@@ -97,8 +97,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
   const includeUnits = request.nextUrl.searchParams.get("includeUnits");
   const canViewAllUnits =
-    actor !== null &&
-    ["owner", "caretaker", "custodian", "system-admin", "admin"].includes(actor.role);
+    actor !== null && ["caretaker", "custodian", "system-admin", "admin"].includes(actor.role);
   const includeAllUnits = includeUnits === "all" && canViewAllUnits;
   const units =
     includeUnits === "0"

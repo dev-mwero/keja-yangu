@@ -37,7 +37,6 @@ export async function GET(request: NextRequest) {
   const forPropertyAssignment =
     request.nextUrl.searchParams.get("forPropertyAssignment") === "true";
   if (
-    user.role !== "owner" &&
     user.role !== "system-admin" &&
     user.role !== "admin" &&
     !(user.role === "custodian" && forPropertyAssignment)

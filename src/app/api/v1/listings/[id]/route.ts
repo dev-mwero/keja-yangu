@@ -68,10 +68,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   const user = await User.findById(auth.userId).select("role isActive").lean();
   if (
     !user?.isActive ||
-    (user.role !== "admin" &&
-      user.role !== "owner" &&
-      user.role !== "system-admin" &&
-      user.role !== "caretaker")
+    (user.role !== "admin" && user.role !== "system-admin" && user.role !== "caretaker")
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -111,10 +108,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   const user = await User.findById(auth.userId).select("role isActive").lean();
   if (
     !user?.isActive ||
-    (user.role !== "admin" &&
-      user.role !== "owner" &&
-      user.role !== "system-admin" &&
-      user.role !== "caretaker")
+    (user.role !== "admin" && user.role !== "system-admin" && user.role !== "caretaker")
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -304,10 +298,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   const user = await User.findById(auth.userId).select("role isActive").lean();
   if (
     !user?.isActive ||
-    (user.role !== "admin" &&
-      user.role !== "owner" &&
-      user.role !== "system-admin" &&
-      user.role !== "caretaker")
+    (user.role !== "admin" && user.role !== "system-admin" && user.role !== "caretaker")
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
