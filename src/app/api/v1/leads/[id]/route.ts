@@ -38,9 +38,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       : "";
 
   const filter: Record<string, unknown> = { _id: id };
-  if (user.role === "owner") {
-    filter.ownerId = authUser.userId;
-  } else if (user.role === "custodian") {
+  if (user.role === "custodian") {
     if (!managedOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -107,9 +105,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       : "";
 
   const filter: Record<string, unknown> = { _id: id };
-  if (user.role === "owner") {
-    filter.ownerId = authUser.userId;
-  } else if (user.role === "custodian") {
+  if (user.role === "custodian") {
     if (!managedOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

@@ -44,7 +44,6 @@ export async function GET(request: NextRequest) {
   }
   if (
     requestedRole &&
-    actor.role !== "owner" &&
     actor.role !== "custodian" &&
     actor.role !== "admin" &&
     actor.role !== "system-admin"

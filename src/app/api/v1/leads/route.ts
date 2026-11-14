@@ -36,9 +36,7 @@ export async function GET(request: NextRequest) {
       : "";
 
   const filter: Record<string, unknown> = {};
-  if (user.role === "owner") {
-    filter.ownerId = authUser.userId;
-  } else if (user.role === "custodian") {
+  if (user.role === "custodian") {
     if (!managedOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -106,9 +104,7 @@ export async function POST(request: NextRequest) {
       : "";
 
   let ownerId: string;
-  if (user.role === "owner") {
-    ownerId = authUser.userId;
-  } else if (user.role === "system-admin") {
+  if (user.role === "system-admin") {
     ownerId = authUser.userId;
   } else if (user.role === "custodian") {
     if (!managedOwnerId) {
