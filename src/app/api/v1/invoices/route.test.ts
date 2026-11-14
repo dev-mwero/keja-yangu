@@ -354,8 +354,8 @@ describe("GET /api/v1/invoices", () => {
     expect(body.error).toBe("Forbidden");
   });
 
-  it("derives the overdue filter as pending-and-dueDate-past and sweeps the owner scope", async () => {
-    mockScopedAdmin();
+  it("derives the overdue filter as pending-and-dueDate-past and sweeps globally for a system-admin", async () => {
+    user.findById.mockReturnValue(buildQuery(adminDoc()));
     invoiceStub.find.mockReturnValue(buildQuery([]).sort({ issuedAt: -1 }).skip(0).limit(10));
     invoiceStub.countDocuments.mockResolvedValue(0);
 
@@ -386,6 +386,31 @@ describe("GET /api/v1/invoices", () => {
     expect(notifyOverdueInvoicesMock).toHaveBeenCalledWith(expect.any(Date), {
       propertyId: { $in: [PROPERTY_ID] },
     });
+  });
+
+  it("sweeps an admin's assigned portfolio instead of the whole platform", async () => {
+    mockScopedAdmin();
+    invoiceStub.find.mockReturnValue(buildQuery([]).sort({ issuedAt: -1 }).skip(0).limit(10));
+    invoiceStub.countDocuments.mockResolvedValue(0);
+
+    const res = await GET(
+      buildRequest("/api/v1/invoices?status=overdue", { token: signToken(ADMIN_ID) }),
+    );
+    expect(res.status).toBe(200);
+    expect(notifyOverdueInvoicesMock).toHaveBeenCalledWith(expect.any(Date), {
+      $or: [{ propertyId: { $in: [PROPERTY_ID] } }],
+    });
+  });
+
+  it("gates an admin without assignments before any overdue sweep", async () => {
+    user.findById.mockReturnValue(buildQuery(scopedAdminDoc()));
+    managementAssignment.find.mockReturnValue(buildQuery([]));
+
+    const res = await GET(
+      buildRequest("/api/v1/invoices?status=overdue", { token: signToken(ADMIN_ID) }),
+    );
+    expect(res.status).toBe(403);
+    expect(notifyOverdueInvoicesMock).not.toHaveBeenCalled();
   });
 
   it("appends period, tenantId, propertyId and leaseId filters", async () => {

@@ -119,7 +119,7 @@ export async function GET(request: NextRequest) {
   if (status === "overdue") {
     // Lazy catch-up sweep: scope follows the actor (not the query filters, so
     // a staff actor's `tenantId=` read can't sweep outside their portfolio).
-    let sweepScope: Record<string, unknown> = {};
+    let sweepScope: Record<string, unknown> | null = {};
     if (actor.role === "caretaker") {
       sweepScope = actor.staffAssignmentBacked
         ? { propertyId: { $in: actor.assignedPropertyIds } }
@@ -131,8 +131,22 @@ export async function GET(request: NextRequest) {
       sweepScope = actor.staffAssignmentBacked
         ? { propertyId: { $in: actor.propertyScopeIds } }
         : { ownerId: actor.managedByOwnerId };
+    } else if (actor.role === "admin") {
+      // An admin reads only their assigned portfolio, so the sweep must match
+      // it — otherwise a single read marks and notifies invoices platform-wide.
+      const scopes: Record<string, unknown>[] = [];
+      if (actor.propertyScopeIds.length > 0) {
+        scopes.push({ propertyId: { $in: actor.propertyScopeIds } });
+      }
+      if (actor.assignedUnitIds.length > 0) {
+        scopes.push({ unitId: { $in: actor.assignedUnitIds } });
+      }
+      if (actor.assignedTenantIds.length > 0) {
+        scopes.push({ tenantId: { $in: actor.assignedTenantIds } });
+      }
+      sweepScope = scopes.length > 0 ? { $or: scopes } : null;
     }
-    await notifyOverdueInvoices(now, sweepScope);
+    if (sweepScope) await notifyOverdueInvoices(now, sweepScope);
   }
 
   const [invoices, total] = await Promise.all([
