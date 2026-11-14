@@ -7,14 +7,6 @@ import { BRAND, BRAND_TITLE, BRAND_TITLE_TEMPLATE } from "@/lib/brand";
 const SRC = join(process.cwd(), "src");
 
 /**
- * Files that still carry the previous brand while the rebrand rolls out.
- * Shrink this set as each phase lands; it must end up empty.
- *
- * Phase 3 removes the remaining three.
- */
-const PENDING_REBRAND = new Set(["app/layout.tsx", "app/page.tsx", "app/sitemap.ts"]);
-
-/**
  * Brand literals that must never reappear. `keja-` identifiers (session
  * cookie, storage keys, field-encryption salt) are deliberately not matched —
  * they are internal and renaming them would log users out or corrupt data.
@@ -66,7 +58,6 @@ describe("brand identity", () => {
       if (rel.startsWith("test/")) continue;
       if (/\.test\.tsx?$/.test(rel)) continue;
       if (rel === "lib/brand.ts") continue;
-      if (PENDING_REBRAND.has(rel)) continue;
 
       const source = readFileSync(file, "utf8");
       for (const { label, pattern } of LEGACY_PATTERNS) {
