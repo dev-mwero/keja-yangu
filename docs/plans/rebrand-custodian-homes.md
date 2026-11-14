@@ -12,8 +12,8 @@ current domain; Phase 4 is the domain cutover and is the only irreversible step.
 
 | Phase | Area | Status | Blocking cutover? |
 |---|---|---|---|
-| 0 | Brand constants + regression guard | Planned | No |
-| 1 | Dashboards | Planned | No |
+| 0 | Brand constants + regression guard | ✅ Done (`d316b84`) | No |
+| 1 | Dashboards | ✅ Done (`e8dffd1`) | No |
 | 2 | Auth screens + transactional email | Planned | No |
 | 3 | Public pages + SEO/OG/manifest | Planned | No |
 | 4 | Infrastructure, DNS, mailboxes | Planned | **Yes** |
@@ -35,24 +35,19 @@ current domain; Phase 4 is the domain cutover and is the only irreversible step.
 | Tagline (unchanged) | `Property Rentals & Tenant Management` |
 | Social handle (assumed) | `@custodianhomes` |
 
-### Open decisions (needed before Phase 1)
+### Decisions (resolved)
 
-1. **Wordmark rendering.** `Logo` is an 8×8 badge plus one word. Three options:
-   - (a) badge `C`, wordmark `Custodian Homes` on one line, `Homes` in muted weight — recommended;
-   - (b) badge `C`, wordmark `Custodian` only, full name in the dashboard header instead;
-   - (c) badge `CH`, wordmark `Custodian Homes`.
-   Option (a) is longest (`Custodian Homes` ≈ 15 chars); the current `Keja` is 4.
-   Check `SiteHeader` and `MobileNav` widths before committing.
-2. **Session cookie.** `keja-token` is read in `src/lib/permissions.ts:112,223`
-   and `src/proxy.ts:22`. Renaming it logs out every active session. Recommended:
-   **keep the cookie name for now**; rename later behind a dual-read
-   (`custodian-token` ?? `keja-token`) if the name ever needs to be clean.
-3. **Test fixture emails.** `@keja.co` appears in ~120 test lines. They are
-   placeholders with no user-visible effect. Recommended: **leave them**; the
-   regression guard (Phase 0) excludes `*.test.*`.
-4. **Repo/package rename.** `package.json` `name` and the GitHub repo slug are
-   `keja-yangu`. Renaming the repo changes the remote URL and the
-   `github-sass:dev-mwero/keja-yangu` alias. Recommended: do it last, separately.
+1. **Wordmark** — option (a): badge `C`, `Custodian Homes` on one line with
+   `Homes` in a lighter weight (`font-normal opacity-60`). Implemented in
+   `src/components/Logo.tsx`, which derives both strings from `BRAND.name`.
+2. **Session cookie** — keep `keja-token`. Renaming would log out every active
+   session; revisit later behind a dual-read if the name ever needs cleaning.
+3. **Test fixture emails** — `@keja.co` fixtures stay; the guard skips
+   `src/test/**` and `*.test.*`.
+
+Still open: repo/package rename (`package.json` name and the GitHub slug change
+the remote URL and the `github-sass:dev-mwero/keja-yangu` alias) — deferred to
+Phase 5 and best done as its own PR.
 
 ---
 
@@ -119,8 +114,11 @@ unreadable), and the production MongoDB database name.
 
 - Add a regression test (`src/lib/brand.test.ts`) that walks `src/**` and fails
   on legacy brand literals: `Keja`, `keja-yangu.com`, `d8tatechsolutions`.
-  Allowlist: `*.test.*`, `src/lib/brand.ts`, and the `keja-*` storage/cookie
-  identifiers above (match `keja-` followed by `token|store|return-to|dev-field`).
+  Allowlist: `src/test/**`, `*.test.*`, `src/lib/brand.ts`, and an explicit
+  `PENDING_REBRAND` set of files still awaiting their phase (currently
+  `app/layout.tsx`, `app/page.tsx`, `app/auth/page.tsx`, `app/sitemap.ts`,
+  `components/AuthLayout.tsx`, `lib/email.ts`, `lib/notifications.ts`). The set
+  must end up empty.
 - No UI change in this phase; ships safely on the current domain.
 
 **Verification:** `npx tsc --noEmit`, `npx biome check`, `npx vitest run`.
