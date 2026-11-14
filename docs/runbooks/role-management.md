@@ -102,7 +102,7 @@ assume a disabled flag means a demotion is impossible.
 | Invite a user | yes | `POST /api/v1/admin/users` | 20 req/min; staff roles require `ownerId` |
 | Change a role | yes | `PATCH /api/v1/admin/users/[id]/role` | 30 req/min |
 | Grant/revoke `system-admin` | **no** | CLI only | see §5 |
-| Deactivate / reactivate a user | **no** | — | not implemented; `isActive` is read-only in the UI |
+| Deactivate / reactivate a user | yes | `PATCH /api/v1/admin/users/[id]` | 30 req/min; deactivation revokes assignments and kills sessions |
 
 Invariants enforced server-side (`src/app/api/v1/admin/users/[id]/role/route.ts`):
 
@@ -118,6 +118,13 @@ Invariants enforced server-side (`src/app/api/v1/admin/users/[id]/role/route.ts`
   rows** (`active`/`pending`/`suspended` → `revoked`). A demoted admin loses
   portfolio access immediately but must be re-assigned if later promoted back.
 - Broker demotion also suspends the broker profile (`status: "suspended"`).
+- **Deactivation** bumps `tokenVersion` (the account is signed out immediately)
+  and revokes `active`/`pending`/`suspended` ManagementAssignment rows. It is
+  audited as `user.status_changed`. **Reactivation restores neither** — the
+  account can sign in but has no portfolio access until assignments are
+  re-granted deliberately.
+- A system-admin account cannot be deactivated here (CLI only), and nobody can
+  deactivate themselves.
 - Invited accounts are created `isActive: false, isVerified: false` until the
   verification link is used.
 
@@ -182,20 +189,19 @@ Alert-worthy:
 | `401 Session expired` | `tokenVersion` bumped (role changed / revoked) | sign in again |
 | Invite returns 201 but no email | SMTP unset or send failed (logged, swallowed) | configure `EMAIL_*`, resend; account stays inactive until verified |
 | Invited user "can't log in" | account inactive until the verification link is used | resend invite / verify token |
+| Reactivated user signs in but sees no properties | deactivation revoked their assignments; reactivation does not restore them | re-grant the assignments (by design) |
 | Role change `500 Audit unavailable` | `audit_events` insert failed | fix audit path, then retry |
 
 ---
 
 ## 8. Known gaps
 
-- **No deactivation path.** `isActive` is filterable in the UI but not editable;
-  offboarding currently means a database write. Prefer adding an endpoint over
-  ad-hoc edits.
-- **CLI still lists `owner` as an assignable target role**
-  (`ASSIGNABLE_ROLES` in `scripts/grant-system-admin.ts`), left over from the
-  owner retirement. Granting it would set a role the app no longer recognises.
-- **Stale comment** in `src/lib/role-management.ts` claims `owner` is retained
-  in `USER_ROLES`; it is not.
 - **The CLI reads `.env.local`**, so operating on production requires
   temporarily pointing a local file at the production cluster — a footgun worth
   replacing with an explicit `--env-file`/`MONGODB_URI` override.
+- **Dead `role === "owner"` comparisons** remain in several API routes
+  (listings, leads, brokers, custodians, properties). They can never fire now
+  that `owner` is out of the `Role` type and the `User` enum, but they still
+  imply legacy support. Confirm no documents still carry `role: "owner"` before
+  deleting them — until then they are the only thing granting such a document
+  any access.

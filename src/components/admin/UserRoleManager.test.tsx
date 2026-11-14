@@ -7,12 +7,14 @@ const mocks = vi.hoisted(() => {
   const flags = { loading: false, error: null as string | null };
   const refetch = vi.fn();
   const promoteUserRole = vi.fn().mockResolvedValue({});
+  const setUserStatus = vi.fn().mockResolvedValue({});
   const toast = { success: vi.fn(), error: vi.fn() };
   return {
     users,
     flags,
     refetch,
     promoteUserRole,
+    setUserStatus,
     toast,
     currentUser: { id: "me", email: "me@keja.co" } as Record<string, unknown>,
     pagination: null as null | Record<string, unknown>,
@@ -29,6 +31,12 @@ const mocks = vi.hoisted(() => {
       pendingId: null,
       error: null,
     }),
+    useUserActivation: () => ({
+      setUserStatus,
+      pending: false,
+      pendingId: null,
+      error: null,
+    }),
     useAuth: () => ({ user: mocks.currentUser }),
   };
 });
@@ -37,6 +45,7 @@ vi.mock("sonner", () => ({ toast: mocks.toast }));
 vi.mock("@/hooks/use-users", () => ({
   useUsers: mocks.useUsers,
   useUserRolePromotion: mocks.useUserRolePromotion,
+  useUserActivation: mocks.useUserActivation,
 }));
 vi.mock("@/hooks/use-auth", () => ({ useAuth: mocks.useAuth }));
 
@@ -49,6 +58,7 @@ function resetState() {
   mocks.flags.error = null;
   mocks.refetch.mockClear();
   mocks.promoteUserRole.mockClear();
+  mocks.setUserStatus.mockClear();
   mocks.toast.success.mockClear();
   mocks.toast.error.mockClear();
   mocks.currentUser = { id: "me", email: "me@keja.co" };
@@ -159,5 +169,47 @@ describe("UserRoleManager", () => {
   it("shows an empty state when there are no users", () => {
     render(<UserRoleManager />);
     expect(screen.getByText(/no users found/i)).toBeInTheDocument();
+  });
+
+  it("deactivates an account through the confirmation dialog", async () => {
+    seedUsers();
+    render(<UserRoleManager />);
+
+    const aminaRow = screen.getByRole("row", { name: /amina otieno/i });
+    const user = userEvent.setup();
+    await user.click(within(aminaRow).getByRole("button", { name: /deactivate/i }));
+
+    expect(await screen.findByText(/deactivate this account\?/i)).toBeInTheDocument();
+    expect(screen.getByText(/portfolio assignments revoked/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Yes, deactivate" }));
+    expect(mocks.setUserStatus).toHaveBeenCalledWith("u1", false);
+    expect(mocks.refetch).toHaveBeenCalled();
+  });
+
+  it("offers reactivation for inactive accounts", async () => {
+    mocks.users.push({
+      id: "u4",
+      name: "Dormant User",
+      email: "dormant@keja.co",
+      role: "caretaker",
+      isActive: false,
+    });
+    render(<UserRoleManager />);
+
+    const row = screen.getByRole("row", { name: /dormant user/i });
+    const user = userEvent.setup();
+    await user.click(within(row).getByRole("button", { name: /reactivate/i }));
+    await user.click(screen.getByRole("button", { name: "Yes, reactivate" }));
+
+    expect(mocks.setUserStatus).toHaveBeenCalledWith("u4", true);
+  });
+
+  it("never offers a status toggle for system-admin accounts", () => {
+    seedUsers();
+    render(<UserRoleManager />);
+
+    const rootRow = screen.getByRole("row", { name: /root admin/i });
+    expect(within(rootRow).queryByRole("button", { name: /deactivate/i })).not.toBeInTheDocument();
   });
 });

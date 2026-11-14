@@ -213,3 +213,51 @@ export function useUserRolePromotion() {
 export const useUserMutations = useUserRolePromotion;
 export const useUpdateUserRole = useUserRolePromotion;
 export const usePromoteUserRole = useUserRolePromotion;
+
+/**
+ * Activates or deactivates an account. Deactivation is destructive by design:
+ * the API revokes delegated portfolio assignments and invalidates sessions, and
+ * reactivation does not restore either.
+ */
+export function useUserActivation() {
+  const [pending, setPending] = useState(false);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const setStatus = useCallback(
+    async (id: string, isActive: boolean, reason?: string): Promise<UserRow> => {
+      setPending(true);
+      setPendingId(id);
+      setError(null);
+      try {
+        const res = await fetch(`/api/v1/admin/users/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isActive, reason }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const message = json.error || "Failed to update account status";
+          setError(message);
+          throw new Error(message);
+        }
+        return normalizeUser(json.data ?? json);
+      } finally {
+        setPending(false);
+        setPendingId(null);
+      }
+    },
+    [],
+  );
+
+  return {
+    setUserStatus: setStatus,
+    setStatus,
+    updateStatus: setStatus,
+    pending,
+    pendingId,
+    error,
+  };
+}
+
+export const useUpdateUserStatus = useUserActivation;
