@@ -7,6 +7,7 @@ import { PropertyCard } from "@/components/PropertyCard";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Button } from "@/components/ui/button";
 import { properties } from "@/data/properties";
+import { BRAND } from "@/lib/brand";
 
 const Index = () => {
   const featured = properties.filter((p) => p.status === "available").slice(0, 3);
@@ -33,8 +34,8 @@ const Index = () => {
             </h1>
 
             <p className="mt-6 max-w-xl text-lg text-muted-foreground text-balance">
-              Keja brings tenants, caretakers, and owners together on one calm, modern platform.
-              Discover rooms, apartments and entire buildings — and manage them with ease.
+              {BRAND.name} brings tenants, caretakers, and owners together on one calm, modern
+              platform. Discover rooms, apartments and entire buildings — and manage them with ease.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -175,7 +176,9 @@ const Index = () => {
 
       <footer className="border-t border-border">
         <div className="container flex flex-col items-center justify-between gap-4 py-8 text-sm text-muted-foreground md:flex-row">
-          <p>&copy; {new Date().getFullYear()} Keja. Crafted with care.</p>
+          <p>
+            &copy; {new Date().getFullYear()} {BRAND.name}. Crafted with care.
+          </p>
           <p>Where home begins.</p>
         </div>
       </footer>

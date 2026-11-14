@@ -3,42 +3,50 @@ import { Toaster } from "@/components/ui/sonner";
 import "@/app/globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/hooks/use-auth";
+import { BRAND, BRAND_TITLE, BRAND_TITLE_TEMPLATE } from "@/lib/brand";
+
+const DESCRIPTION =
+  "Find homes, manage properties, and connect tenants, caretakers, and owners on one platform.";
+
+const configuredUrl = process.env.NEXT_PUBLIC_APP_URL ?? BRAND.url;
 
 export const metadata: Metadata = {
-  metadataBase: new URL("http://localhost:3000"),
+  // Without this every canonical/OG URL resolves against localhost in
+  // production. Accept a host-only value in case the env var omits the scheme.
+  metadataBase: new URL(
+    configuredUrl.startsWith("http") ? configuredUrl : `https://${configuredUrl}`,
+  ),
   title: {
-    default: "Keja Yangu — Property Rentals & Tenant Management",
-    template: "%s | Keja Yangu",
+    default: BRAND_TITLE,
+    template: BRAND_TITLE_TEMPLATE,
   },
-  description:
-    "Find homes, manage properties, and connect tenants, caretakers, and owners on one platform.",
+  description: DESCRIPTION,
+  applicationName: BRAND.name,
   keywords: ["rentals", "property", "tenant management", "Kenya", "housing"],
-  authors: [{ name: "Keja Yangu" }],
-  creator: "Keja Yangu",
-  publisher: "Keja Yangu",
+  authors: [{ name: BRAND.name }],
+  creator: BRAND.name,
+  publisher: BRAND.name,
   openGraph: {
     type: "website",
     locale: "en_KE",
-    url: "https://keja-yangu.com",
-    siteName: "Keja Yangu",
-    title: "Keja Yangu — Property Rentals & Tenant Management",
-    description:
-      "Find homes, manage properties, and connect tenants, caretakers, and owners on one platform.",
+    url: BRAND.url,
+    siteName: BRAND.name,
+    title: BRAND_TITLE,
+    description: DESCRIPTION,
     images: [
       {
         url: "/images/hero-building.jpg",
         width: 1600,
         height: 1200,
-        alt: "Keja Yangu",
+        alt: BRAND.name,
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Keja Yangu — Property Rentals & Tenant Management",
-    description:
-      "Find homes, manage properties, and connect tenants, caretakers, and owners on one platform.",
-    creator: "@kejayangu",
+    title: BRAND_TITLE,
+    description: DESCRIPTION,
+    creator: "@custodianhomes",
   },
   robots: {
     index: true,

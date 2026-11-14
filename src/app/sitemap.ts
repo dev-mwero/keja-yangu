@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
+import { BRAND } from "@/lib/brand";
 
-const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://keja-yangu.com";
+const baseUrl = process.env.NEXT_PUBLIC_APP_URL || BRAND.url;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   return [
