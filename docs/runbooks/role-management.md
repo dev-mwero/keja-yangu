@@ -199,9 +199,8 @@ Alert-worthy:
 - **The CLI reads `.env.local`**, so operating on production requires
   temporarily pointing a local file at the production cluster — a footgun worth
   replacing with an explicit `--env-file`/`MONGODB_URI` override.
-- **Dead `role === "owner"` comparisons** remain in several API routes
-  (listings, leads, brokers, custodians, properties). They can never fire now
-  that `owner` is out of the `Role` type and the `User` enum, but they still
-  imply legacy support. Confirm no documents still carry `role: "owner"` before
-  deleting them — until then they are the only thing granting such a document
-  any access.
+- **Dead `role === "owner"` comparisons removed** (2026-11-14) after an audit
+  of the production cluster returned zero `role: "owner"` users and zero
+  legacy-owner properties. `owner` now survives only as a chat/notification
+  display label and inside the `role-cutover` / `legacy-readiness-report`
+  migration tooling.

@@ -7,7 +7,7 @@ Companion to the P0 fixes (CI green, ops scripts, Playwright browser). This docu
 | # | Feature | Status | Owner |
 |---|---|---|---|
 | 1 | Broker dashboard nav dead links | ✅ Done (this pass) | — |
-| 2 | Tasks & Maintenance persistence (localStorage → API) | Planned | TBD |
+| 2 | Tasks & Maintenance persistence (localStorage → API) | ✅ Done | — |
 | 3 | Multi-unit tenancy (tenant sees/holds multiple units) | ✅ Done (`71a7cc1`) | — |
 | 4 | Legacy `owner` role retirement (Phase 9 exit criteria) | ✅ Done (`2afb68a`, `ae42be1`) | — |
 
@@ -27,7 +27,15 @@ Companion to the P0 fixes (CI green, ops scripts, Playwright browser). This docu
 
 ---
 
-## 2. Tasks & Maintenance persistence (localStorage → API)
+## 2. Tasks & Maintenance persistence (localStorage → API) — ✅ DONE
+
+Delivered: `src/models/Task.ts` (title, property, priority, status, assignee,
+creator, due/completed dates, notes; `{ownerId,status}` and property indexes),
+`GET/POST /api/v1/tasks` + `GET/PATCH/DELETE /api/v1/tasks/[id]` gated on
+`task:read-own` / `task:create` with assignment-scoped property filters,
+`useTasks` / `useTaskMutations`, and the admin + caretaker task pages on the
+API. The owner page is gone with the dashboard retirement, so the shared
+`tasksStore` is no longer referenced. Kept below for the design rationale.
 
 **Current state:** `MaintenanceTask` lives only in `localStorage` via `createLocalStore` (`src/lib/local-store.ts`), seeded from `src/data/dashboard.ts`. Three dashboards (admin/owner/caretaker) share the same `tasksStore`. No DB model, no API, no RBAC beyond client-side.
 
