@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { BRAND } from "@/lib/brand";
 import { formatKES, formatPeriod } from "./format";
 
 /**
@@ -97,7 +98,7 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
     const info = await transporter.sendMail({
       from: process.env.EMAIL_FROM
         ? unquote(process.env.EMAIL_FROM)
-        : "Keja Yangu <no-reply@keja.co>",
+        : `${BRAND.name} <${BRAND.emails.noReply}>`,
       to: options.to,
       subject: options.subject,
       html: options.html,
@@ -132,7 +133,7 @@ function createEmailTemplate(content: string, preheader?: string): string {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <title>Keja Yangu</title>
+  <title>${BRAND.name}</title>
   <!--[if mso]>
   <noscript>
     <xml>
@@ -153,9 +154,9 @@ function createEmailTemplate(content: string, preheader?: string): string {
           <tr>
             <td style="background: linear-gradient(135deg, ${BRAND_COLOR} 0%, ${BRAND_COLOR_LIGHT} 100%); padding: 32px 24px; text-align: center;">
               <div style="display: inline-block; width: 56px; height: 56px; background-color: rgba(255, 255, 255, 0.2); border-radius: 16px; text-align: center; line-height: 56px;">
-                <span style="font-size: 24px; font-weight: 700; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">KY</span>
+                <span style="font-size: 24px; font-weight: 700; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">CH</span>
               </div>
-              <h1 style="margin: 16px 0 0; color: #ffffff; font-size: 24px; font-weight: 700; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">Keja Yangu</h1>
+              <h1 style="margin: 16px 0 0; color: #ffffff; font-size: 24px; font-weight: 700; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">${BRAND.name}</h1>
               <p style="margin: 8px 0 0; color: rgba(255, 255, 255, 0.9); font-size: 14px; font-weight: 400;">Where home begins</p>
             </td>
           </tr>
@@ -180,13 +181,13 @@ function createEmailTemplate(content: string, preheader?: string): string {
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="border-top: 1px solid ${BORDER_COLOR}; padding-top: 24px;">
                 <tr>
                   <td style="text-align: center; padding-bottom: 16px;">
-                    <p style="margin: 0 0 8px; font-size: 13px; color: ${SECONDARY_COLOR}; font-weight: 500;">Keja Yangu</p>
-                    <p style="margin: 0; font-size: 12px; color: ${SECONDARY_COLOR}; line-height: 1.6;">This email was sent to <strong>{{EMAIL}}</strong>. If you didn't request this, please ignore this email or contact support.</p>
+                    <p style="margin: 0 0 8px; font-size: 13px; color: ${SECONDARY_COLOR}; font-weight: 500;">${BRAND.name}</p>
+                    <p style="margin: 0; font-size: 12px; color: ${SECONDARY_COLOR}; line-height: 1.6;">This email was sent to <strong>{{EMAIL}}</strong>. If you didn't request this, please ignore this email or contact support at ${BRAND.emails.support}.</p>
                   </td>
                 </tr>
                 <tr>
                   <td style="text-align: center;">
-                    <p style="margin: 0; font-size: 11px; color: ${SECONDARY_COLOR}; opacity: 0.7;">&copy; ${new Date().getFullYear()} Keja Yangu. All rights reserved.</p>
+                    <p style="margin: 0; font-size: 11px; color: ${SECONDARY_COLOR}; opacity: 0.7;">&copy; ${new Date().getFullYear()} ${BRAND.name}. All rights reserved.</p>
                   </td>
                 </tr>
               </table>
@@ -204,7 +205,7 @@ function createEmailTemplate(content: string, preheader?: string): string {
 function createVerificationContent(name: string): string {
   return `
     <p style="margin: 0 0 16px; font-size: 16px; color: ${TEXT_PRIMARY}; line-height: 1.6;">Hi <strong>${escapeHtml(name)}</strong>,</p>
-    <p style="margin: 0 0 24px; font-size: 15px; color: ${TEXT_SECONDARY}; line-height: 1.6;">Welcome to Keja Yangu! We're excited to have you on board. To get started, please verify your email address by clicking the button below:</p>
+    <p style="margin: 0 0 24px; font-size: 15px; color: ${TEXT_SECONDARY}; line-height: 1.6;">Welcome to ${BRAND.name}! We're excited to have you on board. To get started, please verify your email address by clicking the button below:</p>
     <div style="text-align: center; margin: 32px 0;">
       <a href="{{VERIFY_URL}}" style="display: inline-block; background: linear-gradient(135deg, ${BRAND_COLOR} 0%, ${BRAND_COLOR_LIGHT} 100%); color: #ffffff; text-decoration: none; padding: 16px 32px; border-radius: 10px; font-weight: 600; font-size: 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-shadow: 0 4px 14px 0 rgba(20, 62, 107, 0.4); transition: all 0.2s ease;">Verify Your Email</a>
     </div>
@@ -212,14 +213,14 @@ function createVerificationContent(name: string): string {
     <div style="margin-top: 32px; padding: 16px; background-color: ${BACKGROUND_COLOR}; border-radius: 8px; border: 1px solid ${BORDER_COLOR};">
       <p style="margin: 0; font-size: 13px; color: ${SECONDARY_COLOR}; line-height: 1.6;"><strong>⏱ This link expires in 24 hours.</strong> If it expires, you can request a new verification email from the app.</p>
     </div>
-    <p style="margin: 24px 0 0; font-size: 14px; color: ${SECONDARY_COLOR}; line-height: 1.6;">If you didn't create an account with Keja Yangu, you can safely ignore this email.</p>
+    <p style="margin: 24px 0 0; font-size: 14px; color: ${SECONDARY_COLOR}; line-height: 1.6;">If you didn't create an account with ${BRAND.name}, you can safely ignore this email.</p>
   `;
 }
 
 function createPasswordResetContent(name: string): string {
   return `
     <p style="margin: 0 0 16px; font-size: 16px; color: ${TEXT_PRIMARY}; line-height: 1.6;">Hi <strong>${escapeHtml(name)}</strong>,</p>
-    <p style="margin: 0 0 24px; font-size: 15px; color: ${TEXT_SECONDARY}; line-height: 1.6;">We received a request to reset your password for your Keja Yangu account. Click the button below to create a new password:</p>
+    <p style="margin: 0 0 24px; font-size: 15px; color: ${TEXT_SECONDARY}; line-height: 1.6;">We received a request to reset your password for your ${BRAND.name} account. Click the button below to create a new password:</p>
     <div style="text-align: center; margin: 32px 0;">
       <a href="{{RESET_URL}}" style="display: inline-block; background: linear-gradient(135deg, ${BRAND_COLOR} 0%, ${BRAND_COLOR_LIGHT} 100%); color: #ffffff; text-decoration: none; padding: 16px 32px; border-radius: 10px; font-weight: 600; font-size: 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-shadow: 0 4px 14px 0 rgba(20, 62, 107, 0.4);">Reset Your Password</a>
     </div>
@@ -234,7 +235,7 @@ function createWelcomeContent(name: string, role: string): string {
   const roleLabel = escapeHtml(role.charAt(0).toUpperCase() + role.slice(1));
   return `
     <p style="margin: 0 0 16px; font-size: 16px; color: ${TEXT_PRIMARY}; line-height: 1.6;">Hi <strong>${escapeHtml(name)}</strong>,</p>
-    <p style="margin: 0 0 24px; font-size: 15px; color: ${TEXT_SECONDARY}; line-height: 1.6;">Welcome to Keja Yangu! Your email has been verified and your account is now active as a <strong>${roleLabel}</strong>.</p>
+    <p style="margin: 0 0 24px; font-size: 15px; color: ${TEXT_SECONDARY}; line-height: 1.6;">Welcome to ${BRAND.name}! Your email has been verified and your account is now active as a <strong>${roleLabel}</strong>.</p>
     <p style="margin: 0 0 24px; font-size: 15px; color: ${TEXT_SECONDARY}; line-height: 1.6;">You can now access your dashboard and start managing your properties, applications, and more.</p>
     <div style="text-align: center; margin: 32px 0;">
       <a href="{{APP_URL}}/dashboard" style="display: inline-block; background: linear-gradient(135deg, ${BRAND_COLOR} 0%, ${BRAND_COLOR_LIGHT} 100%); color: #ffffff; text-decoration: none; padding: 16px 32px; border-radius: 10px; font-weight: 600; font-size: 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-shadow: 0 4px 14px 0 rgba(20, 62, 107, 0.4);">Go to Dashboard</a>
@@ -392,13 +393,13 @@ export async function sendVerificationEmail(
   const html = renderTemplate(
     content,
     verifyUrl,
-    `Verify your email to activate your Keja Yangu account`,
+    `Verify your email to activate your ${BRAND.name} account`,
   );
-  const text = `Hi ${name},\n\nWelcome to Keja Yangu! Please verify your email by clicking this link: ${verifyUrl}\n\nThis link expires in 24 hours.\n\nIf you didn't create an account, please ignore this email.`;
+  const text = `Hi ${name},\n\nWelcome to ${BRAND.name}! Please verify your email by clicking this link: ${verifyUrl}\n\nThis link expires in 24 hours.\n\nIf you didn't create an account, please ignore this email.`;
 
   return sendEmail({
     to: email,
-    subject: uniqueSubject("Verify your email - Keja Yangu"),
+    subject: uniqueSubject(`Verify your email - ${BRAND.name}`),
     html,
     text,
   });
@@ -411,12 +412,12 @@ export async function sendPasswordResetEmail(
 ): Promise<boolean> {
   const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/reset-password?token=${token}`;
   const content = createPasswordResetContent(name);
-  const html = renderTemplate(content, resetUrl, `Reset your Keja Yangu password`);
+  const html = renderTemplate(content, resetUrl, `Reset your ${BRAND.name} password`);
   const text = `Hi ${name},\n\nWe received a request to reset your password. Click this link to reset: ${resetUrl}\n\nThis link expires in 1 hour.\n\nIf you didn't request this, please ignore this email.`;
 
   return sendEmail({
     to: email,
-    subject: uniqueSubject("Reset your password - Keja Yangu"),
+    subject: uniqueSubject(`Reset your password - ${BRAND.name}`),
     html,
     text,
   });
@@ -425,10 +426,10 @@ export async function sendPasswordResetEmail(
 function createInviteContent(name: string, role: string): string {
   const roleCopy =
     role === "caretaker"
-      ? "You've been added as a caretaker on Keja Yangu. You can now help manage properties, tenants, and day-to-day operations once your account is active."
+      ? `You've been added as a caretaker at ${BRAND.name}. You can now help manage properties, tenants, and day-to-day operations once your account is active.`
       : role === "custodian"
-        ? "You've been added as a custodian on Keja Yangu. You can now help manage properties and units on behalf of an owner once your account is active."
-        : "You've been added as a tenant on Keja Yangu. You can now view your lease, invoices, and announcements once your account is active.";
+        ? `You've been added as a custodian at ${BRAND.name}. You can now help manage properties and units on behalf of an owner once your account is active.`
+        : `You've been added as a tenant at ${BRAND.name}. You can now view your lease, invoices, and announcements once your account is active.`;
   return `
     <p style="margin: 0 0 16px; font-size: 16px; color: ${TEXT_PRIMARY}; line-height: 1.6;">Hi <strong>${escapeHtml(name)}</strong>,</p>
     <p style="margin: 0 0 24px; font-size: 15px; color: ${TEXT_SECONDARY}; line-height: 1.6;">${roleCopy}</p>
@@ -453,13 +454,13 @@ export async function sendInviteEmail(
     ? `${appUrl}/auth/verify?token=${token}&invited=1`
     : `${appUrl}/auth?invited=1&email=${encodeURIComponent(email)}&role=${role}`;
   const content = createInviteContent(name, role);
-  const html = renderTemplate(content, verifyUrl, `You've been invited to Keja Yangu`);
+  const html = renderTemplate(content, verifyUrl, `You've been invited to ${BRAND.name}`);
   const roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
-  const text = `Hi ${name},\n\nYou've been invited to Keja Yangu as a ${roleLabel}. Verify your email to activate your account: ${verifyUrl}\n\nIf you weren't expecting this invitation, you can safely ignore this email.`;
+  const text = `Hi ${name},\n\nYou've been invited to ${BRAND.name} as a ${roleLabel}. Verify your email to activate your account: ${verifyUrl}\n\nIf you weren't expecting this invitation, you can safely ignore this email.`;
 
   return sendEmail({
     to: email,
-    subject: uniqueSubject("You've been invited to Keja Yangu"),
+    subject: uniqueSubject(`You've been invited to ${BRAND.name}`),
     html,
     text,
   });
@@ -475,13 +476,13 @@ export async function sendWelcomeEmail(
   const html = renderTemplate(
     content,
     `${appUrl}/dashboard`,
-    `Welcome to Keja Yangu - Your account is now active`,
+    `Welcome to ${BRAND.name} - Your account is now active`,
   );
-  const text = `Hi ${name},\n\nWelcome to Keja Yangu! Your account is now active as a ${role.charAt(0).toUpperCase() + role.slice(1)}. Access your dashboard at: ${appUrl}/dashboard`;
+  const text = `Hi ${name},\n\nWelcome to ${BRAND.name}! Your account is now active as a ${role.charAt(0).toUpperCase() + role.slice(1)}. Access your dashboard at: ${appUrl}/dashboard`;
 
   return sendEmail({
     to: email,
-    subject: uniqueSubject("Welcome to Keja Yangu - Your account is active"),
+    subject: uniqueSubject(`Welcome to ${BRAND.name} - Your account is active`),
     html,
     text,
   });

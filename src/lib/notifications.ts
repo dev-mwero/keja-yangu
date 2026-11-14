@@ -1,3 +1,4 @@
+import { BRAND } from "@/lib/brand";
 import {
   createComplaintStatusContent,
   createInvoicePaidContent,
@@ -381,7 +382,7 @@ export async function notifyInvoicePaid(invoice: InvoiceLike): Promise<boolean> 
           link: "/dashboard/tenant/payments",
           channels: ["in-app", "email"],
           email: {
-            subjectPrefix: `Invoice ${invoiceNumber} paid - Keja Yangu`,
+            subjectPrefix: `Invoice ${invoiceNumber} paid - ${BRAND.name}`,
             content: createInvoicePaidContent({ invoiceNumber, period, amountDue, amountPaid }),
             text: `Your payment of ${amount} for ${periodLabel} has been received.\n\nView your invoice: ${base}/dashboard/tenant/payments`,
             linkUrl: `${base}/dashboard/tenant/payments`,
@@ -459,7 +460,7 @@ export async function notifyInvoiceOverdue(invoice: InvoiceLike): Promise<boolea
           link: "/dashboard/tenant/payments",
           channels: ["in-app", "email"],
           email: {
-            subjectPrefix: `Invoice ${invoiceNumber} overdue - Keja Yangu`,
+            subjectPrefix: `Invoice ${invoiceNumber} overdue - ${BRAND.name}`,
             content: createOverdueContent({ invoiceNumber, period, amountDue }),
             text: `Your invoice ${invoiceNumber} for ${periodLabel} (${amount}) is now overdue.\n\nPay now: ${base}/dashboard/tenant/payments`,
             linkUrl: `${base}/dashboard/tenant/payments`,
@@ -571,7 +572,7 @@ export async function notifyLeaseExpiry(lease: LeaseLike, daysUntil: number): Pr
           link: "/dashboard/tenant/payments",
           channels: ["in-app", "email"],
           email: {
-            subjectPrefix: "Lease expiring soon - Keja Yangu",
+            subjectPrefix: `Lease expiring soon - ${BRAND.name}`,
             content: createLeaseExpiryContent({
               daysUntil,
               endDate: lease.endDate ?? undefined,
@@ -593,7 +594,7 @@ export async function notifyLeaseExpiry(lease: LeaseLike, daysUntil: number): Pr
         link: "/dashboard/admin/accounting",
         channels: ["in-app", "email"],
         email: {
-          subjectPrefix: "Lease expiring soon - Keja Yangu",
+          subjectPrefix: `Lease expiring soon - ${BRAND.name}`,
           content: createLeaseExpiryContent({
             daysUntil,
             endDate: lease.endDate ?? undefined,
@@ -706,7 +707,7 @@ export async function notifyComplaintStatusChange(complaint: ComplaintLike): Pro
       link: "/dashboard/tenant/home",
       channels: ["in-app", "email"],
       email: {
-        subjectPrefix: `Complaint "${sanitizeHeader(subject)}" ${status} - Keja Yangu`,
+        subjectPrefix: `Complaint "${sanitizeHeader(subject)}" ${status} - ${BRAND.name}`,
         content: createComplaintStatusContent({ subject, status }),
         text: `Your complaint "${subject}" is now ${status}.`,
         linkUrl: `${appUrl()}/dashboard/tenant/home`,

@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/use-auth";
+import { BRAND } from "@/lib/brand";
 import { DEFAULT_COUNTRY, isValidE164, normalizeNationalId, toE164 } from "@/lib/phone";
 import { roleRoute } from "@/lib/role-routes";
 
@@ -137,7 +138,7 @@ const AuthForm = () => {
         pendingEmail
           ? "One more step to get you home."
           : tab === "signin"
-            ? "Sign in to continue to Keja."
+            ? `Sign in to continue to ${BRAND.name}.`
             : isInvited
               ? "You've been invited — finish setting up your account."
               : "Join as a tenant, caretaker, or admin."
@@ -189,7 +190,7 @@ const AuthForm = () => {
                 <Input
                   id="si-email"
                   type="text"
-                  placeholder="you@keja.co or +254712345678"
+                  placeholder="you@example.com or +254712345678"
                   {...signInForm.register("identifier")}
                 />
                 {signInForm.formState.errors.identifier && (
@@ -242,7 +243,7 @@ const AuthForm = () => {
                 <Input
                   id="su-email"
                   type="email"
-                  placeholder="you@keja.co"
+                  placeholder="you@example.com"
                   readOnly={isInvited}
                   className={isInvited ? "opacity-70" : undefined}
                   {...signUpForm.register("email")}

@@ -212,7 +212,7 @@ EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
 EMAIL_USER=your-email@gmail.com
 EMAIL_PASS=your-app-password
-EMAIL_FROM=Keja Yangu <no-reply@keja.co>
+EMAIL_FROM=Custodian Homes <no-reply@custodianhomes.co.ke>
 
 # Paystack (test keys)
 PAYSTACK_SECRET_KEY=
