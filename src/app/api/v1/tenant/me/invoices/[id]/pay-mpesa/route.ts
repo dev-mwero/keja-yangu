@@ -7,6 +7,7 @@ import {
   resolveTenantActor,
   resolveTenantIds,
 } from "@/app/api/v1/_helpers";
+import { getAppUrl } from "@/lib/brand";
 import { canPayOnline } from "@/lib/invoicing";
 import { connectToDatabase } from "@/lib/mongoose";
 import {
@@ -22,10 +23,6 @@ import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { mpesaInitiateInput } from "@/lib/schemas";
 import { Invoice } from "@/models/Invoice";
 import { Payment } from "@/models/Payment";
-
-function appUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-}
 
 function pendingResponse(payment: { _id: unknown; providerReference: string; expiresAt: Date }) {
   return NextResponse.json({
@@ -138,7 +135,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   // can resolve the payment without relying on the legacy owner field.
   const payeeId = invoice.billingAccountId || invoice.ownerId;
   const token = buildMpesaCallbackToken(payeeId);
-  const callbackUrl = `${appUrl()}/api/v1/payments/mpesa/callback/${payeeId}/${token}`;
+  const callbackUrl = `${getAppUrl()}/api/v1/payments/mpesa/callback/${payeeId}/${token}`;
 
   let stk: StkPushResult;
   try {

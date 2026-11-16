@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import {
   DEFAULT_PROPERTY_PURPOSE,
   PROPERTY_LIFECYCLE_STATES,
@@ -17,6 +17,8 @@ const floorSchema = new Schema(
     rentOverride: { type: Number, min: 0, default: null },
     // Optional purpose override for every unit on this floor.
     purpose: { type: String, enum: [...PROPERTY_PURPOSES, null], default: null },
+    // Duplex override: null/undefined inherits from the block-level setting.
+    duplex: { type: Boolean, default: null },
   },
   { _id: true },
 );
@@ -29,6 +31,8 @@ const blockSchema = new Schema(
     rentOverride: { type: Number, min: 0, default: null },
     // Optional purpose override for every unit in this block.
     purpose: { type: String, enum: [...PROPERTY_PURPOSES, null], default: null },
+    // When true, every unit on every floor of this block spans to the floor above (duplex).
+    duplex: { type: Boolean, default: false },
     floors: { type: [floorSchema], default: [] },
   },
   { _id: true },
@@ -47,8 +51,6 @@ const propertySchema = new Schema(
     amenities: { type: [String], default: [] },
     status: { type: String, enum: ["available", "occupied", "maintenance"], default: "available" },
     ownerId: { type: String, default: "" },
-    caretakerIds: { type: [String], default: [] },
-    custodianIds: { type: [String], default: [] },
     createdById: { type: String, default: "" },
     beds: { type: Number, required: true, min: 0 },
     baths: { type: Number, required: true, min: 0 },
@@ -87,8 +89,12 @@ const propertySchema = new Schema(
 
 propertySchema.index({ status: 1, published: 1 });
 propertySchema.index({ identityHash: 1 }, { sparse: true });
+propertySchema.index({ ownerId: 1 });
+propertySchema.index({ createdById: 1 });
+propertySchema.index({ ownerId: 1, status: 1 });
 softDeletePlugin(propertySchema);
 
 export type PropertyDocument = InferSchemaType<typeof propertySchema>;
 
-export const Property = models.Property || model<PropertyDocument>("Property", propertySchema);
+export const Property =
+  mongoose.models.Property || model<PropertyDocument>("Property", propertySchema);

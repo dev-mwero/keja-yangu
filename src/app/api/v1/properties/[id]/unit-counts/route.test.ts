@@ -10,12 +10,15 @@ vi.mock("@/lib/mongoose", () => ({
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 
 import { GET } from "@/app/api/v1/properties/[id]/unit-counts/route";
 
-const { user, property, unit } = getModelStubs();
+const { user, property, unit, managementAssignment } = getModelStubs();
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
 const TENANT_ID = makeObjectId("tenant");
 const CARETAKER_ID = makeObjectId("caretaker");
@@ -79,11 +82,11 @@ describe("GET /api/v1/properties/[id]/unit-counts", () => {
     property.findById.mockReturnValue(
       buildQuery(makeProperty({ _id: PROPERTY_ID, ownerId: OWNER_ID })),
     );
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OTHER_OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OTHER_OWNER_ID, role: "admin" })));
 
     const res = await GET(
       buildRequest(`/api/v1/properties/${PROPERTY_ID}/unit-counts`, {
-        token: signToken(OTHER_OWNER_ID, { role: "owner" }),
+        token: signToken(OTHER_OWNER_ID, { role: "admin" }),
       }),
       withParams(PROPERTY_ID),
     );
@@ -94,7 +97,21 @@ describe("GET /api/v1/properties/[id]/unit-counts", () => {
     property.findById.mockReturnValue(
       buildQuery(makeProperty({ _id: PROPERTY_ID, ownerId: OWNER_ID })),
     );
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["unit:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     unit.countDocuments
       .mockResolvedValueOnce(3) // occupied
       .mockResolvedValueOnce(2) // vacant
@@ -102,7 +119,7 @@ describe("GET /api/v1/properties/[id]/unit-counts", () => {
 
     const res = await GET(
       buildRequest(`/api/v1/properties/${PROPERTY_ID}/unit-counts`, {
-        token: signToken(OWNER_ID, { role: "owner" }),
+        token: signToken(OWNER_ID, { role: "admin" }),
       }),
       withParams(PROPERTY_ID),
     );
@@ -134,7 +151,6 @@ describe("GET /api/v1/properties/[id]/unit-counts", () => {
         makeProperty({
           _id: PROPERTY_ID,
           ownerId: OWNER_ID,
-          caretakerIds: [makeObjectId("other-caretaker")],
         }),
       ),
     );
@@ -143,7 +159,6 @@ describe("GET /api/v1/properties/[id]/unit-counts", () => {
         makeUser({
           _id: CARETAKER_ID,
           role: "caretaker",
-          managedByOwnerId: OWNER_ID,
         }),
       ),
     );
@@ -165,7 +180,6 @@ describe("GET /api/v1/properties/[id]/unit-counts", () => {
         makeProperty({
           _id: PROPERTY_ID,
           ownerId: OWNER_ID,
-          caretakerIds: [CARETAKER_ID],
         }),
       ),
     );
@@ -174,9 +188,22 @@ describe("GET /api/v1/properties/[id]/unit-counts", () => {
         makeUser({
           _id: CARETAKER_ID,
           role: "caretaker",
-          managedByOwnerId: OWNER_ID,
         }),
       ),
+    );
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["unit:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
     );
     unit.countDocuments.mockResolvedValue(0);
 

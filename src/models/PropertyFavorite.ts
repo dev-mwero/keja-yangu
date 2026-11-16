@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 
 /**
  * A user's favourited (loved/saved) property. One row per (user, property);
@@ -22,5 +22,5 @@ propertyFavoriteSchema.index({ userId: 1, createdAt: -1 });
 export type PropertyFavoriteDocument = InferSchemaType<typeof propertyFavoriteSchema>;
 
 export const PropertyFavorite =
-  models.PropertyFavorite ||
+  mongoose.models.PropertyFavorite ||
   model<PropertyFavoriteDocument>("PropertyFavorite", propertyFavoriteSchema);

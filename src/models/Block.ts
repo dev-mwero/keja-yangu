@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import { PROPERTY_PURPOSES } from "@/lib/domain-enums";
 
 /**
@@ -23,6 +23,8 @@ const blockSchema = new Schema(
     rentOverride: { type: Number, min: 0, default: null },
     // Optional purpose override for every unit in this block.
     purpose: { type: String, enum: [...PROPERTY_PURPOSES, null], default: null },
+    // When true, every unit on every floor of this block spans to the floor above (duplex).
+    duplex: { type: Boolean, default: false },
     /**
      * The `_id` of the corresponding embedded subdoc in `Property.blocks[]`.
      * Used by the backfill script and sync logic to match records idempotently.
@@ -48,4 +50,4 @@ blockSchema.index(
 
 export type BlockDocument = InferSchemaType<typeof blockSchema>;
 
-export const Block = models.Block || model<BlockDocument>("Block", blockSchema);
+export const Block = mongoose.models.Block || model<BlockDocument>("Block", blockSchema);

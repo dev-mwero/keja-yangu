@@ -3,11 +3,24 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { normalizeAmenities } from "@/lib/amenities";
 import { DEFAULT_PROPERTY_PURPOSE, PROPERTY_PURPOSES } from "@/lib/domain-enums";
+import {
+  getAssignedPropertyIds,
+  getManagedOwnerId,
+  getPropertyStaffMap,
+} from "@/lib/managed-owner";
 import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
-import { authenticate, requirePermission } from "@/lib/permissions";
+import {
+  type Action,
+  authenticate,
+  getStaffAssignmentScope,
+  requirePermission,
+} from "@/lib/permissions";
 import { computeIdentityHash, findDuplicateCandidates } from "@/lib/property-identity";
-import { validatePropertyStaffAssignments } from "@/lib/property-staff";
+import {
+  syncPropertyStaffAssignments,
+  validatePropertyStaffAssignments,
+} from "@/lib/property-staff";
 import { isActivePropertyTypeKey } from "@/lib/property-type-store";
 import { blockInput, MAX_UNITS_PER_PROPERTY } from "@/lib/schemas/structure";
 import { buildUnitInserts, countRequestedUnits } from "@/lib/units";
@@ -97,7 +110,7 @@ export async function GET(request: NextRequest) {
   const publicListing = async () => {
     const available = await Promise.all([
       Property.find({ status: "available", published: true })
-        .select("-ownerId -caretakerIds -custodianIds -createdById -__v")
+        .select("-ownerId -createdById -__v")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -111,9 +124,7 @@ export async function GET(request: NextRequest) {
     return publicListing();
   }
 
-  const actorDoc = await User.findById(authUser.userId)
-    .select("role isActive managedByOwnerId")
-    .lean();
+  const actorDoc = await User.findById(authUser.userId).select("role isActive").lean();
   if (!actorDoc?.isActive) {
     return publicListing();
   }
@@ -123,11 +134,7 @@ export async function GET(request: NextRequest) {
   }
 
   const filter: Record<string, unknown> = {};
-  if (actorDoc.role === "owner") {
-    filter.ownerId = authUser.userId;
-    if (caretakerId) filter.caretakerIds = caretakerId;
-    if (status) filter.status = status;
-  } else if (actorDoc.role === "admin") {
+  if (actorDoc.role === "admin") {
     const now = new Date();
     const assignments = await ManagementAssignment.find({
       principalUserId: authUser.userId,
@@ -177,20 +184,36 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json(buildPaginationResult(scopedProperties, total, page, limit));
-  } else if (actorDoc.role === "custodian") {
-    if (!actorDoc.managedByOwnerId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const staffMap = await getPropertyStaffMap(
+      scopedProperties.map((property) => String(property._id)),
+    );
+    const withStaff = scopedProperties.map((property) => ({
+      ...property,
+      ...(staffMap.get(String(property._id)) ?? { caretakerIds: [], custodianIds: [] }),
+    }));
+    return NextResponse.json(buildPaginationResult(withStaff, total, page, limit));
+  } else if (actorDoc.role === "custodian" || actorDoc.role === "caretaker") {
+    // Assignment-only scoping: staff without an active assignment see nothing.
+    const staffScope = await getStaffAssignmentScope(
+      authUser.userId,
+      actorDoc.role,
+      "property:read" as unknown as Action,
+    );
+    filter._id = { $in: staffScope.hasAssignments ? staffScope.assignedPropertyIds : [] };
+    if (actorDoc.role === "custodian" && caretakerId) {
+      const caretakerPropertyIds = await getAssignedPropertyIds(caretakerId, "caretaker");
+      filter._id = {
+        $in: (filter._id as { $in: string[] }).$in.filter((id) =>
+          caretakerPropertyIds.includes(id),
+        ),
+      };
     }
-    filter.ownerId = actorDoc.managedByOwnerId;
-    if (caretakerId) filter.caretakerIds = caretakerId;
-    if (status) filter.status = status;
-  } else if (actorDoc.role === "caretaker") {
-    filter.caretakerIds = authUser.userId;
     if (status) filter.status = status;
   } else {
     if (ownerId) filter.ownerId = ownerId;
-    if (caretakerId) filter.caretakerIds = caretakerId;
+    if (caretakerId) {
+      filter._id = { $in: await getAssignedPropertyIds(caretakerId, "caretaker") };
+    }
     if (status) filter.status = status;
   }
 
@@ -199,7 +222,13 @@ export async function GET(request: NextRequest) {
     Property.countDocuments(filter),
   ]);
 
-  return NextResponse.json(buildPaginationResult(properties, total, page, limit));
+  const staffMap = await getPropertyStaffMap(properties.map((property) => String(property._id)));
+  const withStaff = properties.map((property) => ({
+    ...property,
+    ...(staffMap.get(String(property._id)) ?? { caretakerIds: [], custodianIds: [] }),
+  }));
+
+  return NextResponse.json(buildPaginationResult(withStaff, total, page, limit));
 }
 
 export async function POST(request: NextRequest) {
@@ -251,7 +280,7 @@ export async function POST(request: NextRequest) {
   const custodianIds = parsed.data.custodianIds ? [...parsed.data.custodianIds] : [];
   let ownerId = "";
 
-  if (user.role === "owner" || user.role === "admin") {
+  if (user.role === "admin") {
     ownerId = actorId;
   } else if (user.role === "system-admin") {
     const targetOwnerId = parsed.data.targetOwnerId;
@@ -263,7 +292,7 @@ export async function POST(request: NextRequest) {
     }
     const targetOwner = await User.findOne({
       _id: targetOwnerId,
-      role: "owner",
+      role: "admin",
       isActive: true,
     })
       .select("_id")
@@ -282,13 +311,13 @@ export async function POST(request: NextRequest) {
         { status: 403 },
       );
     }
-    const managingOwnerId = user.managedByOwnerId ?? "";
+    const managingOwnerId = await getManagedOwnerId(String(user._id));
     if (!managingOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const managingOwner = await User.findOne({
       _id: managingOwnerId,
-      role: "owner",
+      role: "admin",
       isActive: true,
     })
       .select("_id")
@@ -299,13 +328,13 @@ export async function POST(request: NextRequest) {
     ownerId = managingOwnerId;
     caretakerIds.push(actorId);
   } else if (user.role === "custodian") {
-    const managingOwnerId = user.managedByOwnerId ?? "";
+    const managingOwnerId = await getManagedOwnerId(String(user._id));
     if (!managingOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     const managingOwner = await User.findOne({
       _id: managingOwnerId,
-      role: "owner",
+      role: "admin",
       isActive: true,
     })
       .select("_id")
@@ -349,8 +378,6 @@ export async function POST(request: NextRequest) {
     ...createData,
     ownerId,
     createdById: actorId,
-    caretakerIds: uniqueCaretakerIds,
-    custodianIds: uniqueCustodianIds,
     published: false,
     identityHash,
     blocks: inputBlocks.map((block, order) => ({
@@ -358,12 +385,14 @@ export async function POST(request: NextRequest) {
       order,
       rentOverride: block.rentOverride ?? null,
       purpose: block.purpose ?? null,
+      duplex: block.duplex ?? false,
       floors: block.floors.map((floor) => ({
         level: floor.level,
         label: floor.label ?? "",
         unitsPerFloor: floor.unitsPerFloor ?? 0,
         rentOverride: floor.rentOverride ?? null,
         purpose: floor.purpose ?? null,
+        duplex: floor.duplex ?? null,
       })),
     })),
   });
@@ -385,6 +414,7 @@ export async function POST(request: NextRequest) {
       order: block.order,
       rentOverride: block.rentOverride ?? null,
       purpose: block.purpose ?? null,
+      duplex: (block as { duplex?: boolean }).duplex ?? false,
       legacyEmbeddedId: String(block._id),
     }));
     await Block.insertMany(blockDocs, { ordered: false });
@@ -404,6 +434,15 @@ export async function POST(request: NextRequest) {
       source: "system",
     });
   }
+
+  // Assignment rows are the only authorization source: mirror the staff lists
+  // the client sent (caretaker privileges derive their permissions).
+  await syncPropertyStaffAssignments({
+    propertyId,
+    caretakerIds: uniqueCaretakerIds,
+    custodianIds: uniqueCustodianIds,
+    grantedByUserId: actorId,
+  });
 
   let unitsCreated = 0;
   if (inputBlocks.length > 0) {

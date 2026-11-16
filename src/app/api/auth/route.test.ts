@@ -53,7 +53,7 @@ describe("POST /api/auth — signup merge", () => {
       role: "caretaker",
       isActive: false,
       isVerified: false,
-      managedByOwnerId: makeObjectId("owner"),
+      managedByOwnerId: makeObjectId("admin"),
       name: "Old Name",
       passwordHash: "old-hash",
       privileges: ["manage_tenants"],
@@ -250,7 +250,7 @@ describe("POST /api/auth — verify-email", () => {
   });
 
   it("does not bind tenant rows for a verified owner", async () => {
-    const doc = mutableUser({ role: "owner", email: "owner@keja.co" });
+    const doc = mutableUser({ role: "admin", email: "owner@keja.co" });
     user.findOne.mockResolvedValue(doc);
 
     const res = await POST(
@@ -320,7 +320,7 @@ describe("POST /api/auth — signin tenant binding", () => {
 
   it("does not touch tenant rows when an owner signs in", async () => {
     user.findOne.mockReturnValue(
-      buildQuery({ ...activeTenant(), role: "owner", email: "owner@keja.co" }),
+      buildQuery({ ...activeTenant(), role: "admin", email: "owner@keja.co" }),
     );
 
     const res = await POST(

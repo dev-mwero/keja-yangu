@@ -1,6 +1,7 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildRequest, signToken } from "@/test/utils/api-request";
+import { activeAssignment } from "@/test/utils/assignment-mocks";
 import { makeAnnouncement, makeObjectId, makeTenant, makeUser } from "@/test/utils/factories";
 import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-mocks";
 
@@ -25,7 +26,7 @@ import { notifyAnnouncement, resolveAnnouncementRecipients } from "@/lib/notific
 const { user, property, tenant, announcement, managementAssignment } = getModelStubs();
 
 const USER_ID = makeObjectId("user");
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const CARETAKER_ID = makeObjectId("caretaker");
 const CUSTODIAN_ID = makeObjectId("custodian");
 const AGENT_ID = makeObjectId("agent");
@@ -39,14 +40,13 @@ function tenantUser() {
 }
 
 function ownerUser() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  return makeUser({ _id: OWNER_ID, role: "admin" });
 }
 
 function caretakerUser(privileges: string[]) {
   return makeUser({
     _id: CARETAKER_ID,
     role: "caretaker",
-    managedByOwnerId: OWNER_ID,
     privileges: privileges as never,
   });
 }
@@ -55,7 +55,6 @@ function custodianUser() {
   return makeUser({
     _id: CUSTODIAN_ID,
     role: "custodian",
-    managedByOwnerId: OWNER_ID,
   });
 }
 
@@ -141,7 +140,9 @@ describe("GET /api/v1/announcements", () => {
       buildQuery([row]).sort({ pinned: -1, createdAt: -1 }).skip(0).limit(20),
     );
     announcement.countDocuments.mockResolvedValue(1);
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, title: "Sunlit Studio" }]));
+    property.find.mockReturnValue(
+      buildQuery([{ _id: PROPERTY_ID, ownerId: OWNER_ID, title: "Sunlit Studio" }]),
+    );
 
     const res = await GET(buildRequest("/api/v1/announcements", { token: signToken(USER_ID) }));
     const body = await json(res);
@@ -174,6 +175,16 @@ describe("GET /api/v1/announcements", () => {
 
   it("owner sees their own announcements plus internal audiences", async () => {
     user.findById.mockReturnValue(buildQuery(ownerUser()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          propertyId: PROPERTY_ID,
+          permissions: ["announcement:read"],
+        }),
+      ]),
+    );
     announcement.find.mockReturnValue(
       buildQuery([]).sort({ pinned: -1, createdAt: -1 }).skip(0).limit(20),
     );
@@ -183,8 +194,10 @@ describe("GET /api/v1/announcements", () => {
     const res = await GET(buildRequest("/api/v1/announcements", { token: signToken(OWNER_ID) }));
     expect(res.status).toBe(200);
     expect(announcement.find).toHaveBeenCalledWith({
-      ownerId: OWNER_ID,
-      $or: [{ audience: { $in: ["all", "staff"] } }, { authorId: OWNER_ID }],
+      $and: [
+        { $or: [{ propertyId: { $in: [PROPERTY_ID] } }] },
+        { $or: [{ audience: { $in: ["all", "staff"] } }, { authorId: OWNER_ID }] },
+      ],
     });
   });
 
@@ -193,15 +206,12 @@ describe("GET /api/v1/announcements", () => {
     user.findById.mockReturnValue(buildQuery(makeUser({ _id: ADMIN_ID, role: "admin" })));
     managementAssignment.find.mockReturnValue(
       buildQuery([
-        {
+        activeAssignment({
+          principalUserId: ADMIN_ID,
           accessRole: "admin",
-          scopeType: "property",
           propertyId: PROPERTY_ID,
           permissions: ["announcement:read"],
-          status: "active",
-          startsAt: new Date("2026-01-01T00:00:00.000Z"),
-          endsAt: null,
-        },
+        }),
       ]),
     );
     announcement.find.mockReturnValue(
@@ -214,18 +224,30 @@ describe("GET /api/v1/announcements", () => {
 
     expect(res.status).toBe(200);
     expect(announcement.find).toHaveBeenCalledWith({
-      propertyId: { $in: [PROPERTY_ID] },
-      $or: [{ audience: { $in: ["all", "staff"] } }, { authorId: ADMIN_ID }],
+      $and: [
+        { $or: [{ propertyId: { $in: [PROPERTY_ID] } }] },
+        { $or: [{ audience: { $in: ["all", "staff"] } }, { authorId: ADMIN_ID }] },
+      ],
     });
   });
 
   it("caretaker sees assigned or portfolio-wide postings for the managed owner", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerUser(["manage_announcements"])));
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, title: "Sunlit Studio" }]));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          propertyId: PROPERTY_ID,
+          permissions: ["announcement:read", "announcement:manage"],
+        }),
+      ]),
+    );
     announcement.find.mockReturnValue(
       buildQuery([]).sort({ pinned: -1, createdAt: -1 }).skip(0).limit(20),
     );
     announcement.countDocuments.mockResolvedValue(0);
+    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, ownerId: OWNER_ID }]));
 
     const res = await GET(
       buildRequest("/api/v1/announcements", { token: signToken(CARETAKER_ID) }),
@@ -242,11 +264,21 @@ describe("GET /api/v1/announcements", () => {
 
   it("custodian sees the managed owner's whole portfolio", async () => {
     user.findById.mockReturnValue(buildQuery(custodianUser()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: CUSTODIAN_ID,
+          accessRole: "custodian",
+          propertyId: PROPERTY_ID,
+          permissions: ["announcement:read"],
+        }),
+      ]),
+    );
     announcement.find.mockReturnValue(
       buildQuery([]).sort({ pinned: -1, createdAt: -1 }).skip(0).limit(20),
     );
     announcement.countDocuments.mockResolvedValue(0);
-    property.find.mockReturnValue(buildQuery([]));
+    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, ownerId: OWNER_ID }]));
 
     const res = await GET(
       buildRequest("/api/v1/announcements", { token: signToken(CUSTODIAN_ID) }),
@@ -301,6 +333,16 @@ describe("POST /api/v1/announcements", () => {
 
   it("400 for an invalid payload", async () => {
     user.findById.mockReturnValue(buildQuery(ownerUser()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          propertyId: PROPERTY_ID,
+          permissions: ["announcement:manage"],
+        }),
+      ]),
+    );
     const res = await POST(
       buildRequest("/api/v1/announcements", {
         method: "POST",
@@ -312,16 +354,24 @@ describe("POST /api/v1/announcements", () => {
   });
 
   it("owner creates an announcement for their portfolio", async () => {
-    user.findById
-      .mockReturnValueOnce(buildQuery(ownerUser()))
-      .mockReturnValueOnce(buildQuery(ownerUser()))
-      .mockReturnValueOnce(buildQuery({ _id: OWNER_ID, name: "Test Owner" }));
+    user.findById.mockReturnValue(buildQuery(ownerUser()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          propertyId: PROPERTY_ID,
+          permissions: ["announcement:manage"],
+        }),
+      ]),
+    );
+    property.findById.mockReturnValue(buildQuery({ _id: PROPERTY_ID, ownerId: OWNER_ID }));
     const created = makeAnnouncement({
       _id: ANNOUNCEMENT_ID,
       authorId: OWNER_ID,
       authorName: "Test Owner",
       ownerId: OWNER_ID,
-      propertyId: "",
+      propertyId: PROPERTY_ID,
       audience: "tenants",
       pinned: false,
     });
@@ -333,7 +383,12 @@ describe("POST /api/v1/announcements", () => {
       buildRequest("/api/v1/announcements", {
         method: "POST",
         token: signToken(OWNER_ID),
-        body: { title: "Water works", body: "Tanks cleaned Thursday.", audience: "tenants" },
+        body: {
+          title: "Water works",
+          body: "Tanks cleaned Thursday.",
+          audience: "tenants",
+          propertyId: PROPERTY_ID,
+        },
       }),
     );
     expect(res.status).toBe(201);
@@ -342,7 +397,7 @@ describe("POST /api/v1/announcements", () => {
         ownerId: OWNER_ID,
         authorId: OWNER_ID,
         authorName: "Test Owner",
-        propertyId: "",
+        propertyId: PROPERTY_ID,
         audience: "tenants",
         pinned: false,
       }),
@@ -354,9 +409,17 @@ describe("POST /api/v1/announcements", () => {
   });
 
   it("404 when an owner targets a property that does not exist", async () => {
-    user.findById
-      .mockReturnValueOnce(buildQuery(ownerUser()))
-      .mockReturnValueOnce(buildQuery(ownerUser()));
+    user.findById.mockReturnValue(buildQuery(ownerUser()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          propertyId: PROPERTY_ID,
+          permissions: ["announcement:manage"],
+        }),
+      ]),
+    );
     property.findById.mockReturnValue(buildQuery(null));
 
     const res = await POST(
@@ -374,9 +437,7 @@ describe("POST /api/v1/announcements", () => {
 
   it("403 when an owner targets another owner's property", async () => {
     const otherOwnerId = makeObjectId("other-owner");
-    user.findById
-      .mockReturnValueOnce(buildQuery(ownerUser()))
-      .mockReturnValueOnce(buildQuery(ownerUser()));
+    user.findById.mockReturnValue(buildQuery(ownerUser()));
     property.findById.mockReturnValue(buildQuery({ _id: PROPERTY_ID, ownerId: otherOwnerId }));
 
     const res = await POST(
@@ -387,16 +448,25 @@ describe("POST /api/v1/announcements", () => {
       }),
     );
     expect(res.status).toBe(403);
-    await expect(json(res)).resolves.toEqual({ error: "You do not have access to this property" });
+    await expect(json(res)).resolves.toEqual({ error: "Forbidden" });
     expect(announcement.create).not.toHaveBeenCalled();
   });
 
   it("assigned caretaker with manage_announcements posts for the managed owner", async () => {
-    user.findById
-      .mockReturnValueOnce(buildQuery(caretakerUser(["manage_announcements"])))
-      .mockReturnValueOnce(buildQuery(caretakerUser(["manage_announcements"])))
-      .mockReturnValueOnce(buildQuery({ _id: CARETAKER_ID, name: "Caretaker" }));
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, title: "Sunlit Studio" }]));
+    user.findById.mockReturnValue(buildQuery(caretakerUser(["manage_announcements"])));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          propertyId: PROPERTY_ID,
+          permissions: ["announcement:read", "announcement:manage"],
+        }),
+      ]),
+    );
+    property.find.mockReturnValue(
+      buildQuery([{ _id: PROPERTY_ID, ownerId: OWNER_ID, title: "Sunlit Studio" }]),
+    );
     const created = makeAnnouncement({
       _id: ANNOUNCEMENT_ID,
       authorId: CARETAKER_ID,
@@ -433,9 +503,7 @@ describe("POST /api/v1/announcements", () => {
   });
 
   it("403 when a caretaker lacks manage_announcements", async () => {
-    user.findById
-      .mockReturnValueOnce(buildQuery(caretakerUser([])))
-      .mockReturnValueOnce(buildQuery(caretakerUser([])));
+    user.findById.mockReturnValue(buildQuery(caretakerUser([])));
     property.find.mockReturnValue(buildQuery([]));
     const res = await POST(
       buildRequest("/api/v1/announcements", {
@@ -454,7 +522,16 @@ describe("POST /api/v1/announcements", () => {
       .mockReturnValueOnce(buildQuery(caretakerUser(["manage_announcements"])))
       .mockReturnValueOnce(buildQuery(caretakerUser(["manage_announcements"])))
       .mockReturnValueOnce(buildQuery({ _id: CARETAKER_ID, name: "Caretaker" }));
-    property.find.mockReturnValue(buildQuery([{ _id: OTHER_PROPERTY_ID }]));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          propertyId: OTHER_PROPERTY_ID,
+          permissions: ["announcement:read", "announcement:manage"],
+        }),
+      ]),
+    );
 
     const res = await POST(
       buildRequest("/api/v1/announcements", {
@@ -468,11 +545,18 @@ describe("POST /api/v1/announcements", () => {
   });
 
   it("custodian posts for the managed owner", async () => {
-    user.findById
-      .mockReturnValueOnce(buildQuery(custodianUser()))
-      .mockReturnValueOnce(buildQuery(custodianUser()))
-      .mockReturnValueOnce(buildQuery({ _id: CUSTODIAN_ID, name: "Custodian" }));
-    property.find.mockReturnValue(buildQuery([]));
+    user.findById.mockReturnValue(buildQuery(custodianUser()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: CUSTODIAN_ID,
+          accessRole: "custodian",
+          propertyId: PROPERTY_ID,
+          permissions: ["announcement:read", "announcement:manage"],
+        }),
+      ]),
+    );
+    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, ownerId: OWNER_ID }]));
     const created = makeAnnouncement({
       _id: ANNOUNCEMENT_ID,
       authorId: CUSTODIAN_ID,
@@ -500,9 +584,17 @@ describe("POST /api/v1/announcements", () => {
 
   it("403 when a custodian targets a property outside the managed portfolio", async () => {
     const otherOwnerId = makeObjectId("other-owner");
-    user.findById
-      .mockReturnValueOnce(buildQuery(custodianUser()))
-      .mockReturnValueOnce(buildQuery(custodianUser()));
+    user.findById.mockReturnValue(buildQuery(custodianUser()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: CUSTODIAN_ID,
+          accessRole: "custodian",
+          propertyId: PROPERTY_ID,
+          permissions: ["announcement:read", "announcement:manage"],
+        }),
+      ]),
+    );
     property.findById.mockReturnValue(buildQuery({ _id: PROPERTY_ID, ownerId: otherOwnerId }));
 
     const res = await POST(

@@ -15,9 +15,9 @@ export interface MyTenancy {
   notes?: string;
 }
 
-/** Fetches the signed-in tenant's own tenancy row (`GET /api/v1/tenant/me`). */
+/** Fetches the signed-in tenant's tenancy rows (`GET /api/v1/tenant/me`). */
 export function useMyTenancy() {
-  const [tenancy, setTenancy] = useState<MyTenancy | null>(null);
+  const [tenancies, setTenancies] = useState<MyTenancy[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
@@ -32,10 +32,15 @@ export function useMyTenancy() {
         const json = await res.json();
         if (cancelled) return;
         if (res.ok) {
-          setTenancy(json.data);
+          const rows = Array.isArray(json.data)
+            ? (json.data as MyTenancy[])
+            : json.data
+              ? [json.data as MyTenancy]
+              : [];
+          setTenancies(rows);
           setError(null);
         } else {
-          setTenancy(null);
+          setTenancies([]);
           // A tenant with no tenancy row is a valid (empty) state, not an error.
           setError(res.status === 404 ? null : json.error || "Failed to fetch tenancy");
         }
@@ -52,5 +57,6 @@ export function useMyTenancy() {
   }, [reload]);
 
   const refetch = useCallback(() => setReload((n) => n + 1), []);
-  return { tenancy, loading, error, refetch };
+  const tenancy = tenancies[0] ?? null;
+  return { tenancy, tenancies, loading, error, refetch };
 }

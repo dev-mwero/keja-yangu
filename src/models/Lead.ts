@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import { LEAD_STATUSES } from "@/lib/domain-enums";
 import { softDeletePlugin } from "@/lib/mongoose-soft-delete";
 
@@ -41,4 +41,4 @@ softDeletePlugin(leadSchema);
 
 export type LeadDocument = InferSchemaType<typeof leadSchema>;
 
-export const Lead = models.Lead || model<LeadDocument>("Lead", leadSchema);
+export const Lead = mongoose.models.Lead || model<LeadDocument>("Lead", leadSchema);

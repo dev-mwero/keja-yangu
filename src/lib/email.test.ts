@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { BRAND } from "@/lib/brand";
 
 import {
   createComplaintStatusContent,
@@ -57,9 +58,9 @@ describe("Email header and HTML injection protection", () => {
   });
 
   it("uniqueSubject stamps a timestamp onto a sanitized subject with no CR/LF", () => {
-    const source = 'Complaint "Leak\r\nX-Injected: yes" resolved - Keja Yangu';
+    const source = `Complaint "Leak\r\nX-Injected: yes" resolved - ${BRAND.name}`;
     const subject = uniqueSubject(source);
-    expect(subject).toMatch(/^Complaint "Leak {2}X-Injected: yes" resolved - Keja Yangu \[/);
+    expect(subject).toContain(`Complaint "Leak  X-Injected: yes" resolved - ${BRAND.name} [`);
     expect(subject).toMatch(/\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC\]$/);
     expect(subject).not.toMatch(/[\r\n]/);
   });

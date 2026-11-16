@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Logo } from "@/components/Logo";
+import { BRAND } from "@/lib/brand";
 
 export default function AuthLayout({
   title,
@@ -60,7 +61,7 @@ export default function AuthLayout({
         </div>
 
         <p className="text-center text-xs text-muted-foreground">
-          &copy; {new Date().getFullYear()} Keja
+          &copy; {new Date().getFullYear()} {BRAND.name}
         </p>
       </div>
     </div>

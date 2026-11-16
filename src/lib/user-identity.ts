@@ -36,7 +36,6 @@ export interface ResolvedContactUser {
   role?: Role;
   isActive?: boolean;
   isVerified?: boolean;
-  managedByOwnerId?: string;
   privileges?: string[];
 }
 
@@ -107,7 +106,6 @@ export interface CreatePhoneOnlyAccountInput {
   role: Role;
   name: string;
   phone: string;
-  managedByOwnerId?: string;
   privileges?: string[];
 }
 
@@ -127,7 +125,6 @@ export async function createPhoneOnlyAccount(input: CreatePhoneOnlyAccountInput)
     role: input.role,
     isActive: true,
     isVerified: true,
-    managedByOwnerId: input.managedByOwnerId ?? "",
     privileges: input.privileges ?? [],
   });
 

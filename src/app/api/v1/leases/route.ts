@@ -84,9 +84,6 @@ export async function POST(request: NextRequest) {
   if (!property) {
     return NextResponse.json({ error: "Property not found" }, { status: 404 });
   }
-  if (scope.role === "owner" && property.ownerId !== scope.userId) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
   if (scope.role === "admin" && !scope.assignedPropertyIds?.includes(parsed.data.propertyId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

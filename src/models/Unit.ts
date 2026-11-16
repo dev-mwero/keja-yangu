@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import { PROPERTY_PURPOSES, UNIT_STATUSES } from "@/lib/domain-enums";
 import { softDeletePlugin } from "@/lib/mongoose-soft-delete";
 
@@ -17,6 +17,12 @@ const unitSchema = new Schema(
     // Unit name: floor digit + letter, e.g. "3A", "GA". Unique within a block.
     name: { type: String, required: true, trim: true },
     letter: { type: String, trim: true, default: "" },
+    // Number of floors this unit spans (1 = normal, 2 = duplex).
+    spanFloors: { type: Number, min: 1, max: 2, default: 1 },
+    // ID of the secondary floor (empty if single-floor). Only set for duplex units.
+    secondaryFloorId: { type: String, default: "" },
+    // Level of the secondary floor (0 if single-floor). Only set for duplex units.
+    secondaryFloorLevel: { type: Number, default: 0 },
     status: { type: String, enum: [...UNIT_STATUSES], default: "available" },
     // Timestamp of the last status transition; used to key availability
     // notifications so each transition notifies favourites exactly once.
@@ -81,10 +87,13 @@ unitSchema.index(
   { unique: true, partialFilterExpression: { deletedAt: null } },
 );
 unitSchema.index({ propertyId: 1, status: 1 });
+unitSchema.index({ propertyId: 1, deletedAt: 1 });
 unitSchema.index({ ownerId: 1, status: 1 });
 unitSchema.index({ blockId: 1, floorLevel: 1 });
+unitSchema.index({ propertyId: 1, blockId: 1 });
+unitSchema.index({ ownerId: 1, propertyId: 1 });
 softDeletePlugin(unitSchema);
 
 export type UnitDocument = InferSchemaType<typeof unitSchema>;
 
-export const Unit = models.Unit || model("Unit", unitSchema);
+export const Unit = mongoose.models.Unit || model("Unit", unitSchema);

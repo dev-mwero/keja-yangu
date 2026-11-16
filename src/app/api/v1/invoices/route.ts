@@ -52,16 +52,42 @@ export async function GET(request: NextRequest) {
   }
 
   const filter: Record<string, unknown> = {};
-  if (actor.role === "owner") filter.ownerId = actor.userId;
-  if (actor.role === "custodian") {
+  if (actor.role === "custodian" && actor.staffAssignmentBacked) {
+    const scopes: Record<string, unknown>[] = [];
+    if (actor.propertyScopeIds.length > 0) {
+      scopes.push({ propertyId: { $in: actor.propertyScopeIds } });
+    }
+    if (actor.assignedUnitIds.length > 0) {
+      scopes.push({ unitId: { $in: actor.assignedUnitIds } });
+    }
+    if (actor.assignedTenantIds.length > 0) {
+      scopes.push({ tenantId: { $in: actor.assignedTenantIds } });
+    }
+    if (scopes.length === 0) {
+      return NextResponse.json(buildPaginationResult([], 0, page, limit));
+    }
+    filter.$or = scopes;
+  } else if (actor.role === "custodian") {
     if (!actor.managedByOwnerId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     filter.ownerId = actor.managedByOwnerId;
   }
   if (actor.role === "caretaker") {
-    filter.propertyId = { $in: actor.assignedPropertyIds };
-    filter.ownerId = actor.managedByOwnerId;
+    const scopes: Record<string, unknown>[] = [];
+    if (actor.propertyScopeIds.length > 0) {
+      scopes.push({ propertyId: { $in: actor.propertyScopeIds } });
+    }
+    if (actor.assignedUnitIds.length > 0) {
+      scopes.push({ unitId: { $in: actor.assignedUnitIds } });
+    }
+    if (actor.assignedTenantIds.length > 0) {
+      scopes.push({ tenantId: { $in: actor.assignedTenantIds } });
+    }
+    if (scopes.length === 0) {
+      return NextResponse.json(buildPaginationResult([], 0, page, limit));
+    }
+    filter.$or = scopes;
   }
   if (actor.role === "admin") {
     const scopes: Record<string, unknown>[] = [];
@@ -92,19 +118,35 @@ export async function GET(request: NextRequest) {
 
   if (status === "overdue") {
     // Lazy catch-up sweep: scope follows the actor (not the query filters, so
-    // an owner's `tenantId=` read can't sweep outside their portfolio).
-    let sweepScope: Record<string, unknown> = {};
+    // a staff actor's `tenantId=` read can't sweep outside their portfolio).
+    let sweepScope: Record<string, unknown> | null = {};
     if (actor.role === "caretaker") {
-      sweepScope = {
-        propertyId: { $in: actor.assignedPropertyIds },
-        ownerId: actor.managedByOwnerId,
-      };
-    } else if (actor.role === "owner") {
-      sweepScope = { ownerId: actor.userId };
+      sweepScope = actor.staffAssignmentBacked
+        ? { propertyId: { $in: actor.assignedPropertyIds } }
+        : {
+            propertyId: { $in: actor.assignedPropertyIds },
+            ownerId: actor.managedByOwnerId,
+          };
     } else if (actor.role === "custodian") {
-      sweepScope = { ownerId: actor.managedByOwnerId };
+      sweepScope = actor.staffAssignmentBacked
+        ? { propertyId: { $in: actor.propertyScopeIds } }
+        : { ownerId: actor.managedByOwnerId };
+    } else if (actor.role === "admin") {
+      // An admin reads only their assigned portfolio, so the sweep must match
+      // it — otherwise a single read marks and notifies invoices platform-wide.
+      const scopes: Record<string, unknown>[] = [];
+      if (actor.propertyScopeIds.length > 0) {
+        scopes.push({ propertyId: { $in: actor.propertyScopeIds } });
+      }
+      if (actor.assignedUnitIds.length > 0) {
+        scopes.push({ unitId: { $in: actor.assignedUnitIds } });
+      }
+      if (actor.assignedTenantIds.length > 0) {
+        scopes.push({ tenantId: { $in: actor.assignedTenantIds } });
+      }
+      sweepScope = scopes.length > 0 ? { $or: scopes } : null;
     }
-    await notifyOverdueInvoices(now, sweepScope);
+    if (sweepScope) await notifyOverdueInvoices(now, sweepScope);
   }
 
   const [invoices, total] = await Promise.all([
@@ -171,18 +213,23 @@ export async function POST(request: NextRequest) {
     if (!lease) {
       return NextResponse.json({ error: "Lease not found" }, { status: 404 });
     }
-    if (actor.role === "owner" && lease.ownerId !== actor.userId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (actor.role === "custodian") {
+      if (actor.staffAssignmentBacked) {
+        const coversProperty = actor.propertyScopeIds.includes(lease.propertyId);
+        const coversUnit = lease.unitId && actor.assignedUnitIds.includes(String(lease.unitId));
+        if (!coversProperty && !coversUnit) {
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+      } else if (lease.ownerId !== actor.managedByOwnerId) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
-    if (actor.role === "custodian" && lease.ownerId !== actor.managedByOwnerId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-    if (
-      actor.role === "caretaker" &&
-      (lease.ownerId !== actor.managedByOwnerId ||
-        !actor.assignedPropertyIds.includes(lease.propertyId))
-    ) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (actor.role === "caretaker") {
+      const coversProperty = actor.propertyScopeIds.includes(lease.propertyId);
+      const coversUnit = lease.unitId && actor.assignedUnitIds.includes(String(lease.unitId));
+      if (!coversProperty && !coversUnit) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
     if (actor.role === "admin") {
       const coversProperty = actor.propertyScopeIds.includes(lease.propertyId);
@@ -230,17 +277,23 @@ export async function POST(request: NextRequest) {
     if (!tenant) {
       return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
     }
-    if (actor.role === "owner" && tenant.ownerId !== actor.userId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (actor.role === "custodian") {
+      if (actor.staffAssignmentBacked) {
+        const coversProperty = actor.propertyScopeIds.includes(propertyId);
+        const coversTenant = actor.assignedTenantIds.includes(tenantId);
+        if (!coversProperty && !coversTenant) {
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+      } else if (tenant.ownerId !== actor.managedByOwnerId) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
-    if (actor.role === "custodian" && tenant.ownerId !== actor.managedByOwnerId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-    if (
-      actor.role === "caretaker" &&
-      (tenant.ownerId !== actor.managedByOwnerId || !actor.assignedPropertyIds.includes(propertyId))
-    ) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (actor.role === "caretaker") {
+      const coversProperty = actor.propertyScopeIds.includes(propertyId);
+      const coversTenant = actor.assignedTenantIds.includes(tenantId);
+      if (!coversProperty && !coversTenant) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
     if (actor.role === "admin") {
       const coversProperty = actor.propertyScopeIds.includes(propertyId);

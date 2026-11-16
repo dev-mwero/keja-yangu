@@ -35,7 +35,9 @@ vi.mock("@/hooks/use-move-requests", () => ({
   }),
   useMoveRequestMutations: () => ({ create: mocks.create, pending: false }),
 }));
-vi.mock("@/hooks/use-my-tenancy", () => ({ useMyTenancy: () => ({ tenancy: mocks.tenancy }) }));
+vi.mock("@/hooks/use-my-tenancy", () => ({
+  useMyTenancy: () => ({ tenancy: mocks.tenancy, tenancies: mocks.tenancy ? [mocks.tenancy] : [] }),
+}));
 vi.mock("@/hooks/use-units", () => ({ useUnits: () => ({ units: mocks.units }) }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 

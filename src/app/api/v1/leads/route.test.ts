@@ -8,6 +8,7 @@ vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
+vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Lead", () => ({ Lead: getModelStubs().lead }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/ManagementAssignment", () => ({
@@ -18,9 +19,9 @@ vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
 
 import { GET, POST } from "@/app/api/v1/leads/route";
 
-const { user, lead, managementAssignment } = getModelStubs();
+const { user, lead, property, managementAssignment } = getModelStubs();
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const CUSTODIAN_ID = makeObjectId("custodian");
 const ADMIN_ID = makeObjectId("admin");
 const CARETAKER_ID = makeObjectId("caretaker");
@@ -59,7 +60,6 @@ describe("GET /api/v1/leads", () => {
     const caretaker = makeUser({
       _id: CARETAKER_ID,
       role: "caretaker",
-      managedByOwnerId: OWNER_ID,
       privileges: [],
     });
     user.findById.mockReturnValue(buildQuery(caretaker));
@@ -68,7 +68,22 @@ describe("GET /api/v1/leads", () => {
   });
 
   it("returns an owner's leads, newest first", async () => {
-    const owner = makeUser({ _id: OWNER_ID, role: "owner" });
+    const PROP_ID = makeObjectId("lead-property");
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          permissions: ["lead:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    const owner = makeUser({ _id: OWNER_ID, role: "admin" });
     user.findById.mockReturnValue(buildQuery(owner));
     const docs = [makeLead({ _id: makeObjectId("l1") })];
     const chain = buildQuery(docs);
@@ -77,20 +92,34 @@ describe("GET /api/v1/leads", () => {
 
     const res = await GET(buildRequest("/api/v1/leads", { token: signToken(OWNER_ID) }));
     expect(res.status).toBe(200);
-    expect(lead.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
+    expect(lead.find).toHaveBeenCalledWith({ $or: [{ propertyId: { $in: [PROP_ID] } }] });
     expect(chain.sort).toHaveBeenCalledWith({ createdAt: -1 });
-    expect(lead.countDocuments).toHaveBeenCalledWith({ ownerId: OWNER_ID });
+    expect(lead.countDocuments).toHaveBeenCalledWith({ $or: [{ propertyId: { $in: [PROP_ID] } }] });
     const body = await json(res);
     expect(body.data).toHaveLength(1);
   });
 
   it("scopes a custodian to the managing owner's leads", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CUSTODIAN_ID,
+          accessRole: "custodian",
+          scopeType: "property",
+          propertyId: makeObjectId("p1"),
+          permissions: ["lead:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     const custodian = makeUser({
       _id: CUSTODIAN_ID,
       role: "custodian",
-      managedByOwnerId: OWNER_ID,
     });
     user.findById.mockReturnValue(buildQuery(custodian));
+    property.find.mockReturnValue(buildQuery([{ _id: makeObjectId("p1"), ownerId: OWNER_ID }]));
     lead.find.mockReturnValue(buildQuery([]));
     lead.countDocuments.mockResolvedValue(0);
 
@@ -103,7 +132,6 @@ describe("GET /api/v1/leads", () => {
     const custodian = makeUser({
       _id: CUSTODIAN_ID,
       role: "custodian",
-      managedByOwnerId: "",
     });
     user.findById.mockReturnValue(buildQuery(custodian));
     const res = await GET(buildRequest("/api/v1/leads", { token: signToken(CUSTODIAN_ID) }));
@@ -128,6 +156,7 @@ describe("GET /api/v1/leads", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: SCOPED_ADMIN_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROP_ID,
@@ -149,7 +178,22 @@ describe("GET /api/v1/leads", () => {
   });
 
   it("applies a status filter", async () => {
-    const owner = makeUser({ _id: OWNER_ID, role: "owner" });
+    const PROP_ID = makeObjectId("lead-property-2");
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          permissions: ["lead:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    const owner = makeUser({ _id: OWNER_ID, role: "admin" });
     user.findById.mockReturnValue(buildQuery(owner));
     lead.find.mockReturnValue(buildQuery([]));
     lead.countDocuments.mockResolvedValue(0);
@@ -159,7 +203,10 @@ describe("GET /api/v1/leads", () => {
         token: signToken(OWNER_ID),
       }),
     );
-    expect(lead.find).toHaveBeenCalledWith({ ownerId: OWNER_ID, status: "contacted" });
+    expect(lead.find).toHaveBeenCalledWith({
+      $or: [{ propertyId: { $in: [PROP_ID] } }],
+      status: "contacted",
+    });
   });
 });
 
@@ -190,7 +237,6 @@ describe("POST /api/v1/leads", () => {
     const caretaker = makeUser({
       _id: CARETAKER_ID,
       role: "caretaker",
-      managedByOwnerId: OWNER_ID,
       privileges: [],
     });
     user.findById.mockReturnValue(buildQuery(caretaker));
@@ -205,7 +251,21 @@ describe("POST /api/v1/leads", () => {
   });
 
   it("400 for an invalid payload", async () => {
-    const owner = makeUser({ _id: OWNER_ID, role: "owner" });
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: makeObjectId("p1"),
+          permissions: ["lead:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    const owner = makeUser({ _id: OWNER_ID, role: "admin" });
     user.findById.mockReturnValue(buildQuery(owner));
     const res = await POST(
       buildRequest("/api/v1/leads", {
@@ -219,7 +279,21 @@ describe("POST /api/v1/leads", () => {
   });
 
   it("owner create attributes ownerId and createdBy to the actor", async () => {
-    const owner = makeUser({ _id: OWNER_ID, role: "owner" });
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: makeObjectId("p1"),
+          permissions: ["lead:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    const owner = makeUser({ _id: OWNER_ID, role: "admin" });
     user.findById.mockReturnValue(buildQuery(owner));
     lead.create.mockResolvedValue(createdLead);
 
@@ -246,13 +320,27 @@ describe("POST /api/v1/leads", () => {
   });
 
   it("caretaker with manage_tenants can create a lead in the managing owner's portfolio", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: makeObjectId("p1"),
+          permissions: ["lead:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     const caretaker = makeUser({
       _id: CARETAKER_ID,
       role: "caretaker",
-      managedByOwnerId: OWNER_ID,
       privileges: ["manage_tenants"],
     });
     user.findById.mockReturnValue(buildQuery(caretaker));
+    property.find.mockReturnValue(buildQuery([{ _id: makeObjectId("p1"), ownerId: OWNER_ID }]));
     lead.create.mockResolvedValue(createdLead);
 
     const res = await POST(
@@ -275,6 +363,7 @@ describe("POST /api/v1/leads", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: SCOPED_ADMIN_ID,
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROP_ID,

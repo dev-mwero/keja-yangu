@@ -14,13 +14,23 @@ import { ChatThread } from "@/models/ChatThread";
 import { Tenant } from "@/models/Tenant";
 import { User } from "@/models/User";
 
-type ThreadRow = { tenantId: string; ownerId: string; agentUserId: string };
+type ThreadRow = { tenantId: string; ownerId: string; agentUserId: string; propertyId: string };
 
 function isParticipant(thread: ThreadRow, actor: DashboardActor): boolean {
   if (actor.role === "system-admin") return true;
+  if (actor.role === "admin") {
+    return (
+      actor.assignedPropertyIds.includes(thread.propertyId) ||
+      actor.assignedTenantIds.includes(thread.tenantId)
+    );
+  }
   if (actor.role === "tenant") return actor.tenantIds.includes(thread.tenantId);
-  if (actor.role === "owner") return thread.ownerId === actor.userId;
-  if (actor.role === "custodian") return thread.ownerId === actor.managedByOwnerId;
+  if (actor.role === "custodian") {
+    return (
+      actor.propertyScopeIds.includes(thread.propertyId) ||
+      actor.assignedTenantIds.includes(thread.tenantId)
+    );
+  }
   return thread.agentUserId === actor.userId; // caretaker
 }
 
@@ -120,7 +130,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     recipientUserId = thread.agentUserId;
     link =
       thread.agentRole === "owner"
-        ? "/dashboard/owner/communications"
+        ? "/dashboard/admin/communications"
         : "/dashboard/caretaker/communications";
   } else {
     try {

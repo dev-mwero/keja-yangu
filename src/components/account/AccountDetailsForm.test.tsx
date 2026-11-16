@@ -2,9 +2,9 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { AccountDetailsForm } from "@/components/account/AccountDetailsForm";
-import type { KejaUser } from "@/hooks/use-auth";
+import type { AuthUser } from "@/hooks/use-auth";
 
-const baseUser: KejaUser = {
+const baseUser: AuthUser = {
   id: "u1",
   email: "amina@keja.co",
   name: "Amina Otieno",
@@ -14,7 +14,7 @@ const baseUser: KejaUser = {
   nationalId: "12345678",
 };
 
-const setup = (overrides: Partial<KejaUser> = {}, onSave = vi.fn().mockResolvedValue(true)) => {
+const setup = (overrides: Partial<AuthUser> = {}, onSave = vi.fn().mockResolvedValue(true)) => {
   const onSignOut = vi.fn();
   render(
     <AccountDetailsForm

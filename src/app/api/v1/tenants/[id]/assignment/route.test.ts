@@ -16,12 +16,22 @@ vi.mock("@/models/Tenant", () => ({
 }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 
 import { DELETE, POST } from "@/app/api/v1/tenants/[id]/assignment/route";
 
-const { user, property, tenant: tenantStub, unit: unitStub, lease } = getModelStubs();
+const {
+  user,
+  property,
+  tenant: tenantStub,
+  unit: unitStub,
+  lease,
+  managementAssignment,
+} = getModelStubs();
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
 const TENANT_ID = makeObjectId("tenant");
 const UNIT_ID = makeObjectId("unit");
@@ -29,7 +39,22 @@ const PROPERTY_ID = makeObjectId("prop");
 const OCCUPANT_USER_ID = makeObjectId("occupant");
 
 function ownerDoc() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  return makeUser({ _id: OWNER_ID, role: "admin" });
+}
+
+function adminAssignment() {
+  return [
+    {
+      principalUserId: OWNER_ID,
+      accessRole: "admin",
+      scopeType: "property",
+      propertyId: PROPERTY_ID,
+      permissions: ["unit:manage"],
+      status: "active",
+      startsAt: new Date("2026-01-01T00:00:00.000Z"),
+      endsAt: null,
+    },
+  ];
 }
 
 function tenantDoc(overrides: Record<string, unknown> = {}) {
@@ -68,6 +93,7 @@ function assignRequest() {
 describe("POST /api/v1/tenants/[id]/assignment", () => {
   beforeEach(() => {
     resetModelStubs();
+    managementAssignment.find.mockReturnValue(buildQuery(adminAssignment()));
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     user.findOne.mockReturnValue(buildQuery(null));
   });
@@ -84,7 +110,9 @@ describe("POST /api/v1/tenants/[id]/assignment", () => {
   });
 
   it("404 when the tenant is outside the caller's scope", async () => {
-    tenantStub.findById.mockReturnValue(buildQuery(tenantDoc({ ownerId: OTHER_OWNER_ID })));
+    tenantStub.findById.mockReturnValue(
+      buildQuery(tenantDoc({ ownerId: OTHER_OWNER_ID, propertyId: makeObjectId("other-prop") })),
+    );
     const res = await POST(assignRequest(), withParams(TENANT_ID));
     expect(res.status).toBe(404);
   });
@@ -160,6 +188,7 @@ describe("POST /api/v1/tenants/[id]/assignment", () => {
 describe("DELETE /api/v1/tenants/[id]/assignment", () => {
   beforeEach(() => {
     resetModelStubs();
+    managementAssignment.find.mockReturnValue(buildQuery(adminAssignment()));
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     user.findOne.mockReturnValue(buildQuery(null));
   });

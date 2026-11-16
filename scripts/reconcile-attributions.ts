@@ -1,5 +1,8 @@
+import dotenv from "dotenv";
 import { reconcileAttributions } from "@/lib/attribution-reconciliation";
 import { connectToDatabase } from "@/lib/mongoose";
+
+dotenv.config({ path: ".env.local" });
 
 async function main() {
   await connectToDatabase();

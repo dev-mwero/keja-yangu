@@ -8,25 +8,29 @@ vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
+vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 
 import { GET } from "@/app/api/v1/users/search/route";
 
-const { user } = getModelStubs();
+const { user, property, managementAssignment } = getModelStubs();
+const PROP_ID = makeObjectId("prop");
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const ADMIN_ID = makeObjectId("admin");
 const CARE_ID = makeObjectId("care");
 const TENANT_USER_ID = makeObjectId("tenant-user");
 
 function ownerDoc() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  return makeUser({ _id: OWNER_ID, role: "admin" });
 }
 
 function caretakerDoc(privileges: string[]) {
   return makeUser({
     _id: CARE_ID,
     role: "caretaker",
-    managedByOwnerId: OWNER_ID,
     privileges: privileges as ReturnType<typeof makeUser>["privileges"],
   });
 }
@@ -121,19 +125,29 @@ describe("GET /api/v1/users/search", () => {
     const custodian = makeUser({
       _id: makeObjectId("custodian"),
       role: "custodian",
-      managedByOwnerId: OWNER_ID,
     });
     const found = makeUser({
       _id: makeObjectId("found-caretaker"),
       name: "Existing Caretaker",
       email: "care@keja.co",
       role: "caretaker",
-      managedByOwnerId: OWNER_ID,
       isActive: true,
       isVerified: true,
     });
     user.findById.mockReturnValue(buildQuery(custodian));
     user.findOne.mockReturnValue(buildQuery(found));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: custodian._id,
+          accessRole: "custodian",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          status: "active",
+        },
+      ]),
+    );
+    property.find.mockReturnValue(buildQuery([{ _id: PROP_ID, ownerId: OWNER_ID }]));
 
     const res = await GET(
       buildRequest("/api/v1/users/search", {
@@ -199,9 +213,20 @@ describe("GET /api/v1/users/search", () => {
     const custodian = makeUser({
       _id: makeObjectId("custodian"),
       role: "custodian",
-      managedByOwnerId: OWNER_ID,
     });
     user.findById.mockReturnValue(buildQuery(custodian));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: custodian._id,
+          accessRole: "custodian",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          status: "active",
+        },
+      ]),
+    );
+    property.find.mockReturnValue(buildQuery([{ _id: PROP_ID, ownerId: OWNER_ID }]));
 
     const res = await GET(
       buildRequest("/api/v1/users/search", {

@@ -1,6 +1,7 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildRequest, signToken, withParams } from "@/test/utils/api-request";
+import { activeAssignment } from "@/test/utils/assignment-mocks";
 import { makeChatThread, makeObjectId, makeTenant, makeUser } from "@/test/utils/factories";
 import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-mocks";
 
@@ -10,13 +11,16 @@ vi.mock("@/lib/mongoose", () => ({
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/ChatThread", () => ({ ChatThread: getModelStubs().chatthread }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 
 import { POST } from "@/app/api/v1/chat/threads/[id]/read/route";
 
-const { user, tenant, chatthread } = getModelStubs();
+const { user, tenant, chatthread, managementAssignment } = getModelStubs();
 
 const USER_ID = makeObjectId("user");
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const AGENT_ID = makeObjectId("agent");
 const TENANT_ID = makeObjectId("tenant");
 const PROPERTY_ID = makeObjectId("p1");
@@ -28,7 +32,7 @@ function tenantUser() {
 }
 
 function ownerUser() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  return makeUser({ _id: OWNER_ID, role: "admin" });
 }
 
 function threadRow() {
@@ -96,7 +100,17 @@ describe("POST /api/v1/chat/threads/[id]/read", () => {
   });
 
   it("owner marks their side read", async () => {
-    user.findById.mockReturnValue(buildQuery(ownerUser()));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          propertyId: PROPERTY_ID,
+          permissions: ["chat:read-own", "chat:send"],
+        }),
+      ]),
+    );
     chatthread.findById.mockReturnValue(buildQuery(threadRow()));
     chatthread.updateOne.mockResolvedValue({ acknowledged: true });
 
@@ -115,6 +129,16 @@ describe("POST /api/v1/chat/threads/[id]/read", () => {
 
   it("404 for a thread outside the participant set", async () => {
     user.findById.mockReturnValue(buildQuery(ownerUser()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          propertyId: PROPERTY_ID,
+          permissions: ["chat:read-own", "chat:send"],
+        }),
+      ]),
+    );
     chatthread.findById.mockReturnValue(
       buildQuery(makeChatThread({ _id: THREAD_ID, ownerId: makeObjectId("other") })),
     );

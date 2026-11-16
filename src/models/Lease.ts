@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import { softDeletePlugin } from "@/lib/mongoose-soft-delete";
 
 export interface ILease {
@@ -43,13 +43,17 @@ leaseSchema.index({ ownerId: 1 });
 leaseSchema.index({ tenantId: 1 });
 leaseSchema.index({ propertyId: 1 });
 leaseSchema.index({ unitId: 1, status: 1 });
-// One active lease per tenant among live leases; ended/deleted leases remain as
+leaseSchema.index({ ownerId: 1, status: 1 });
+leaseSchema.index({ propertyId: 1, status: 1 });
+leaseSchema.index({ ownerId: 1, propertyId: 1 });
+// One active lease per tenant per unit among live leases; a tenant may hold
+// multiple active leases on different units. Ended/deleted leases remain as
 // history.
 leaseSchema.index(
-  { tenantId: 1 },
+  { tenantId: 1, unitId: 1 },
   {
     unique: true,
-    name: "lease_active_tenant_unique",
+    name: "lease_active_tenant_unit_unique",
     partialFilterExpression: { status: "active", deletedAt: null },
   },
 );
@@ -57,4 +61,4 @@ softDeletePlugin(leaseSchema);
 
 export type LeaseDocument = InferSchemaType<ILease>;
 
-export const Lease = models.Lease || model<ILease>("Lease", leaseSchema);
+export const Lease = mongoose.models.Lease || model<ILease>("Lease", leaseSchema);

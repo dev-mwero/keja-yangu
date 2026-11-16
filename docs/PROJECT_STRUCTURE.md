@@ -1,4 +1,4 @@
-# Keja Yangu — Project Structure & Entity Map
+# Custodian Homes — Project Structure & Entity Map
 
 This document is the high-level map of the codebase: what lives where, what each
 entity is responsible for, and how the entities relate. It is intended for new
@@ -908,7 +908,7 @@ All routes live under `src/app/api/v1` unless noted. Responses use
 
 | Role | Base | Sections |
 | --- | --- | --- |
-| Owner | `/dashboard/owner` | Overview, Portfolio, Units, Tenants, Applications, Move Requests, Team, Tasks, Accounting, Reports, Communications, Tenant Documents, Notifications, Settings |
+| Admin | `/dashboard/admin` | Overview, Portfolio, Units, Tenants, Applications, Move Requests, Team, Tasks, Commissions, Brokers, Accounting, Reports, Communications, Documents, Notifications, Settings |
 | Custodian | `/dashboard/custodian` | Overview, Portfolio, Units, Tenants, Applications, Move Requests, Team, Accounting, Communications, Notifications, Settings |
 | Caretaker | `/dashboard/caretaker` | Overview, Portfolio, Units, Move Requests, Tasks, Accounting, Reports, Communications, Tenant Documents, Notifications, Settings (+ hidden tenants/applications routes gated by privileges) |
 | System admin | `/dashboard/system-admin` | Overview, Portfolio, Tenants, Caretakers, Accounting, Notifications, Property Types, Recycle Bin |
@@ -1048,7 +1048,6 @@ One-off, idempotent migrations/backfills run with `tsx` and `.env.local`:
 - `backfill-approved-applications-to-tenants.ts`
 - `backfill-lease-unit-ids.ts`
 - `backfill-phone-e164.ts`
-- `backfill-property-createdBy.ts`
 - `backfill-rental-invoicing.ts`
 - `backfill-tenant-user-ids.ts`
 - `encrypt-national-ids.ts`

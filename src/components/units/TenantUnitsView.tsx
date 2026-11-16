@@ -34,7 +34,13 @@ interface PropertyLite {
  * lease).
  */
 export function TenantUnitsView() {
-  const { tenancy, loading: tenancyLoading } = useMyTenancy();
+  const {
+    tenancies: tenanciesRaw,
+    tenancy: primaryTenancy,
+    loading: tenancyLoading,
+  } = useMyTenancy();
+  const tenancies = tenanciesRaw ?? (primaryTenancy ? [primaryTenancy] : []);
+  const tenancy = tenancies[0] ?? primaryTenancy ?? null;
   const { units, loading, error } = useUnits({ status: "available" });
   const { moveRequests, refetch: refetchRequests } = useMoveRequests();
   const { create, pending: requestPending } = useMoveRequestMutations();
@@ -79,7 +85,7 @@ export function TenantUnitsView() {
   };
 
   const handleRequest = async (unit: Unit) => {
-    const propertyId = tenancy?.propertyId;
+    const propertyId = unit.propertyId || tenancy?.propertyId;
     if (!propertyId) {
       toast.error("You have no tenancy on record.");
       return;

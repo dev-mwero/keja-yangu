@@ -2,9 +2,8 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
-import { authenticate } from "@/lib/permissions";
+import { type Action, authenticate, getStaffAssignmentScope } from "@/lib/permissions";
 import { ManagementAssignment } from "@/models/ManagementAssignment";
-import { Property } from "@/models/Property";
 import { Tenant } from "@/models/Tenant";
 import { Unit } from "@/models/Unit";
 import { User } from "@/models/User";
@@ -16,9 +15,7 @@ export async function GET(request: NextRequest) {
   }
 
   await connectToDatabase();
-  const user = await User.findById(auth.userId)
-    .select("role isActive managedByOwnerId email")
-    .lean();
+  const user = await User.findById(auth.userId).select("role isActive email").lean();
   if (!user?.isActive) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -50,8 +47,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(buildPaginationResult([], 0, page, limit));
     }
     filter.propertyId = { $in: tenantPropertyIds };
-  } else if (role === "owner") {
-    filter.ownerId = String(user._id);
   } else if (role === "admin") {
     const now = new Date();
     const assignments = await ManagementAssignment.find({
@@ -94,24 +89,31 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(buildPaginationResult([], 0, page, limit));
     }
     filter.$or = scopeQueries;
-  } else if (role === "custodian") {
-    if (!user.managedByOwnerId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  } else if (role === "custodian" || role === "caretaker") {
+    // Assignment-only scoping: un-backfilled staff see nothing.
+    const staffScope = await getStaffAssignmentScope(
+      String(user._id),
+      role,
+      "unit:read" as unknown as Action,
+    );
+    if (!staffScope.hasAssignments) {
+      return NextResponse.json(buildPaginationResult([], 0, page, limit));
     }
-    filter.ownerId = user.managedByOwnerId;
-  } else if (role === "caretaker") {
-    if (!user.managedByOwnerId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const scopeQueries: Record<string, unknown>[] = [];
+    if (staffScope.propertyScopeIds.length > 0) {
+      scopeQueries.push({ propertyId: { $in: staffScope.propertyScopeIds } });
     }
-    const assigned = await Property.find({
-      caretakerIds: String(user._id),
-      ownerId: user.managedByOwnerId,
-    })
-      .select("_id")
-      .lean();
-    caretakerAssignedPropertyIds = assigned.map((property) => String(property._id));
-    filter.ownerId = user.managedByOwnerId;
-    filter.propertyId = { $in: caretakerAssignedPropertyIds };
+    if (staffScope.assignedBlockIds.length > 0) {
+      scopeQueries.push({ blockId: { $in: staffScope.assignedBlockIds } });
+    }
+    if (staffScope.assignedUnitIds.length > 0) {
+      scopeQueries.push({ _id: { $in: staffScope.assignedUnitIds } });
+    }
+    if (scopeQueries.length === 0) {
+      return NextResponse.json(buildPaginationResult([], 0, page, limit));
+    }
+    filter.$or = scopeQueries;
+    caretakerAssignedPropertyIds = staffScope.assignedPropertyIds;
   } else if (role !== "system-admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

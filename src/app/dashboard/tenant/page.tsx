@@ -182,7 +182,7 @@ const TenantDashboard = () => {
                   status: p.status,
                   published: p.published,
                   ownerId: p.ownerId,
-                  caretakerIds: p.caretakerIds,
+                  caretakerIds: p.caretakerIds ?? [],
                   beds: p.beds,
                   baths: p.baths,
                   area: p.area,

@@ -20,7 +20,7 @@ import { DELETE } from "@/app/api/v1/recycle-bin/[type]/[id]/route";
 const { user, tenant, unit } = getModelStubs();
 
 const ADMIN_ID = makeObjectId("admin");
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const RECORD_ID = makeObjectId("record");
 
 function params(type: string, id: string) {
@@ -43,7 +43,7 @@ describe("DELETE /api/v1/recycle-bin/:type/:id", () => {
   });
 
   it("403 for non-admins", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
     const res = await DELETE(
       buildRequest(`/api/v1/recycle-bin/tenant/${RECORD_ID}`, {
         method: "DELETE",

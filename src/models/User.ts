@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 
 export interface IUserSettings {
   emailNotifications: boolean;
@@ -13,9 +13,8 @@ export interface IUser {
   email?: string;
   name: string;
   passwordHash: string;
-  role: "tenant" | "caretaker" | "custodian" | "owner" | "admin" | "broker" | "system-admin";
+  role: "tenant" | "caretaker" | "custodian" | "admin" | "broker" | "system-admin";
   privileges: string[];
-  managedByOwnerId: string;
   isActive: boolean;
   isVerified: boolean;
   phone: string;
@@ -23,6 +22,12 @@ export interface IUser {
   nationalId: string;
   verificationToken?: string;
   verificationTokenExpiry?: Date;
+  /**
+   * Monotonic session version. Bumped whenever the account's role or security
+   * posture changes; JWTs carrying an older value are rejected so a role change
+   * takes effect without waiting for the 7-day token to expire.
+   */
+  tokenVersion: number;
   invoiceCounters: Record<string, number>;
   migratedFromOwner?: boolean;
   settings: IUserSettings;
@@ -47,7 +52,7 @@ const userSchema = new Schema<IUser>(
     passwordHash: { type: String, required: true },
     role: {
       type: String,
-      enum: ["tenant", "caretaker", "custodian", "owner", "admin", "broker", "system-admin"],
+      enum: ["tenant", "caretaker", "custodian", "admin", "broker", "system-admin"],
       required: true,
     },
     privileges: {
@@ -68,7 +73,6 @@ const userSchema = new Schema<IUser>(
       ],
       default: [],
     },
-    managedByOwnerId: { type: String, default: "" },
     isActive: { type: Boolean, default: true },
     isVerified: { type: Boolean, default: false },
     // Mobile number in E.164 form, e.g. "+254712345678" (country code included).
@@ -80,6 +84,7 @@ const userSchema = new Schema<IUser>(
     nationalId: { type: String, trim: true, default: "" },
     verificationToken: { type: String },
     verificationTokenExpiry: { type: Date },
+    tokenVersion: { type: Number, default: 0 },
     invoiceCounters: { type: Schema.Types.Map, of: Number, default: {} },
     migratedFromOwner: { type: Boolean, default: false },
     settings: { type: userSettingsSchema, default: () => ({}) },
@@ -89,10 +94,10 @@ const userSchema = new Schema<IUser>(
   },
 );
 
-userSchema.index({ role: 1, managedByOwnerId: 1 });
+userSchema.index({ role: 1, isActive: 1 });
 userSchema.index({ phone: 1 }, { unique: true, partialFilterExpression: { phone: { $gt: "" } } });
 userSchema.index({ email: 1 }, { unique: true, sparse: true });
 
 export type UserDocument = InferSchemaType<IUser>;
 
-export const User = models.User || model<IUser>("User", userSchema);
+export const User = mongoose.models.User || model<IUser>("User", userSchema);

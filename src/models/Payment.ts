@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import {
   PAYMENT_PROVIDERS,
   PAYMENT_STATUSES,
@@ -90,4 +90,4 @@ export function serializePayment<T extends { rawEvent?: unknown }>(doc: T): Omit
 
 export type PaymentDocument = InferSchemaType<IPayment>;
 
-export const Payment = models.Payment || model<IPayment>("Payment", paymentSchema);
+export const Payment = mongoose.models.Payment || model<IPayment>("Payment", paymentSchema);

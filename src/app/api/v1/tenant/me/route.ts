@@ -16,24 +16,25 @@ export async function GET(request: NextRequest) {
   }
 
   const userId = String(user._id);
-  let tenancy = await Tenant.findOne({ userId, deletedAt: null }).select(TENANT_SAFE_FIELDS).lean();
+  let tenancies = await Tenant.find({ userId, deletedAt: null }).select(TENANT_SAFE_FIELDS).lean();
 
   // Heal the link for tenancies created before the userId bind existed.
-  if (!tenancy && user.email) {
-    tenancy = await Tenant.findOne({
+  if (tenancies.length === 0 && user.email) {
+    const legacy = await Tenant.find({
       email: user.email.trim().toLowerCase(),
       deletedAt: null,
     })
       .select(TENANT_SAFE_FIELDS)
       .lean();
-    if (tenancy) {
-      await Tenant.updateOne({ _id: tenancy._id }, { $set: { userId } });
+    if (legacy.length > 0) {
+      await Tenant.updateMany({ _id: { $in: legacy.map((t) => t._id) } }, { $set: { userId } });
+      tenancies = legacy;
     }
   }
 
-  if (!tenancy) {
+  if (tenancies.length === 0) {
     return NextResponse.json({ error: "No tenancy found" }, { status: 404 });
   }
 
-  return NextResponse.json({ data: tenancy });
+  return NextResponse.json({ data: tenancies });
 }

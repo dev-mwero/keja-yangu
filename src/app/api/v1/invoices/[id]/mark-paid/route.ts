@@ -23,20 +23,36 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     return NextResponse.json({ error: "Invalid invoice id" }, { status: 400 });
   }
 
+  // Portfolio-level gate first: staff with zero active assignments are denied
+  // before the lookup so a missing id cannot be told apart from an existing one.
+  const authError = await requirePermission(request, "invoice:mark-paid");
+  if (authError) return authError;
+
   await connectToDatabase();
   const invoice = await Invoice.findById(id).lean();
   if (!invoice) {
     return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
   }
 
-  const authError = await requirePermission(request, "invoice:mark-paid", { resource: invoice });
-  if (authError) return authError;
+  // Resource-scoped policy stays after the lookup so fine-grained rules apply.
+  const resourceAuthError = await requirePermission(request, "invoice:mark-paid", {
+    resource: invoice,
+  });
+  if (resourceAuthError) return resourceAuthError;
 
   const actor = await resolveInvoiceActor(request, "invoice:mark-paid");
   if (actor instanceof NextResponse) return actor;
 
   if (actor.role === "caretaker" && !actor.assignedPropertyIds.includes(invoice.propertyId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  if (actor.role === "custodian" && actor.staffAssignmentBacked) {
+    const coversProperty = actor.propertyScopeIds.includes(invoice.propertyId);
+    const coversUnit = invoice.unitId && actor.assignedUnitIds.includes(invoice.unitId);
+    if (!coversProperty && !coversUnit) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   if (

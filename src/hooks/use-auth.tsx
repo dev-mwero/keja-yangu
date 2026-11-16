@@ -4,16 +4,9 @@ import type { ReactNode } from "react";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { toast } from "sonner";
 
-export type Role =
-  | "tenant"
-  | "caretaker"
-  | "custodian"
-  | "owner"
-  | "admin"
-  | "broker"
-  | "system-admin";
+export type Role = "tenant" | "caretaker" | "custodian" | "admin" | "broker" | "system-admin";
 
-export interface KejaUser {
+export interface AuthUser {
   id: string;
   email?: string;
   name?: string;
@@ -37,10 +30,10 @@ export interface ProfilePatch {
 }
 
 interface AuthContextValue {
-  user: KejaUser | null;
+  user: AuthUser | null;
   loading: boolean;
   refreshFailed: boolean;
-  signIn: (identifier: string, password: string) => Promise<KejaUser>;
+  signIn: (identifier: string, password: string) => Promise<AuthUser>;
   signUp: (
     name: string,
     email: string,
@@ -56,7 +49,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<KejaUser | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshFailed, setRefreshFailed] = useState(false);
 
@@ -84,7 +77,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     refresh();
   }, [refresh]);
 
-  const signIn = async (identifier: string, password: string): Promise<KejaUser> => {
+  const signIn = async (identifier: string, password: string): Promise<AuthUser> => {
     try {
       const res = await fetch("/api/auth", {
         method: "POST",
@@ -96,7 +89,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         throw new Error(data.error || "Sign in failed");
       }
       const data = await res.json();
-      const signedInUser = data.user as KejaUser;
+      const signedInUser = data.user as AuthUser;
       setUser(signedInUser);
       toast.success("Welcome back!");
       return signedInUser;
@@ -172,7 +165,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
       const data = await res.json();
       setUser((current) =>
-        current ? { ...current, ...(data.data as Partial<KejaUser>) } : data.data,
+        current ? { ...current, ...(data.data as Partial<AuthUser>) } : data.data,
       );
       toast.success("Profile updated");
       return true;

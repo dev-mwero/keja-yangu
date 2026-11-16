@@ -2,6 +2,7 @@ import { isValidObjectId } from "mongoose";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { writeAuditEvent } from "@/lib/audit";
 import { connectToDatabase } from "@/lib/mongoose";
 import { asSoftDeleteModel } from "@/lib/mongoose-soft-delete";
 import { getTenantScope, requirePermission, tenantMatchesScope } from "@/lib/permissions";
@@ -112,14 +113,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     if (!newProperty) {
       return NextResponse.json({ error: "Property not found" }, { status: 422 });
     }
-    if (scope.role === "owner" && newProperty.ownerId !== scope.userId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
     if (
       scope.role === "caretaker" &&
-      (!newProperty.caretakerIds?.includes(scope.userId) ||
+      (!scope.assignedPropertyIds?.includes(parsed.data.propertyId) ||
         newProperty.ownerId !== scope.managedByOwnerId)
     ) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (scope.role === "admin" && !scope.assignedPropertyIds?.includes(parsed.data.propertyId)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     updateData.propertyId = parsed.data.propertyId;
@@ -159,6 +160,24 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
   }
 
+  const before: Record<string, unknown> = {};
+  for (const key of Object.keys(updateData)) {
+    before[key] = (tenant as Record<string, unknown>)[key] ?? null;
+  }
+  await writeAuditEvent({
+    actor: { userId: scope.userId, role: scope.role },
+    action: "tenant.updated",
+    entityType: "tenant",
+    entityId: id,
+    scope: { propertyId: tenant.propertyId },
+    before,
+    after: updateData,
+    request: {
+      ip: request.headers.get("x-forwarded-for"),
+      userAgent: request.headers.get("user-agent"),
+    },
+  });
+
   return NextResponse.json({ data: updated });
 }
 
@@ -173,8 +192,23 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
 
   const scoped = await loadScopedTenant(request, id);
   if (scoped instanceof NextResponse) return scoped;
+  const { tenant, scope } = scoped;
 
   await asSoftDeleteModel(Tenant).softDeleteById(id);
+
+  await writeAuditEvent({
+    actor: { userId: scope.userId, role: scope.role },
+    action: "tenant.deleted",
+    entityType: "tenant",
+    entityId: id,
+    scope: { propertyId: tenant.propertyId },
+    before: { status: tenant.status },
+    after: { deleted: true },
+    request: {
+      ip: request.headers.get("x-forwarded-for"),
+      userAgent: request.headers.get("user-agent"),
+    },
+  });
 
   return NextResponse.json({ message: "Tenant deleted" });
 }

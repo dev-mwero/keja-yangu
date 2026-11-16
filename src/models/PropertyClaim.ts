@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import { PROPERTY_CLAIM_STATUSES } from "@/lib/domain-enums";
 
 export type { PropertyClaimStatus } from "@/lib/domain-enums";
@@ -23,4 +23,5 @@ propertyClaimSchema.index({ claimantUserId: 1, status: 1 });
 export type PropertyClaimDocument = InferSchemaType<typeof propertyClaimSchema>;
 
 export const PropertyClaim =
-  models.PropertyClaim || model<PropertyClaimDocument>("PropertyClaim", propertyClaimSchema);
+  mongoose.models.PropertyClaim ||
+  model<PropertyClaimDocument>("PropertyClaim", propertyClaimSchema);

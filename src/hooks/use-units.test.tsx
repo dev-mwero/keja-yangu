@@ -90,4 +90,37 @@ describe("useUnits", () => {
     expect(result.current.error).toBe("Forbidden");
     expect(result.current.units).toEqual([]);
   });
+
+  it("fetches remaining pages in parallel chunks when fetchAll is set", async () => {
+    const requestedPages: number[] = [];
+    const fetchMock = vi.fn((url: string) => {
+      const page = Number(new URL(`http://x${url}`).searchParams.get("page") ?? "1");
+      requestedPages.push(page);
+      const data = [unit(`u${page}a`), unit(`u${page}b`)];
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          data,
+          // total 250 at limit 100 → 3 pages.
+          pagination: { total: 250, page, limit: 100, hasNextPage: page < 3 },
+        }),
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { result } = renderHook(() => useUnits({ propertyId: "prop-1" }, { fetchAll: true }));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.units.map((u) => u._id)).toEqual([
+      "u1a",
+      "u1b",
+      "u2a",
+      "u2b",
+      "u3a",
+      "u3b",
+    ]);
+    expect(result.current.total).toBe(250);
+    expect(requestedPages).toEqual([1, 2, 3]);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
 });

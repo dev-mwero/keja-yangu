@@ -21,11 +21,32 @@ export interface PlannedUserRoleUpdate {
   setMigrated: boolean;
 }
 
+/**
+ * Matches the app `AuditEvent` model (src/models/AuditEvent.ts): actor +
+ * entity identity, the action, and an `after` snapshot. Fields the planner
+ * does not know (scope, request hashes) default in the script's schema.
+ */
 export interface PlannedAuditEvent {
+  actorUserId: string;
+  actorRole: string;
   action: string;
-  actorId: string;
-  targetId: string;
-  details: Record<string, unknown>;
+  entityType: string;
+  entityId: string;
+  after: Record<string, unknown>;
+}
+
+export interface UncoveredCutoverCandidate {
+  userId: string;
+  name?: string;
+  email?: string;
+}
+
+export interface CutoverPreflight {
+  /** True when every owner candidate holds at least one active assignment. */
+  ready: boolean;
+  /** Owner candidates with no active assignment — cutting them over would lock them out. */
+  uncovered: UncoveredCutoverCandidate[];
+  warnings: string[];
 }
 
 export interface RoleCutoverPlan {
@@ -67,10 +88,12 @@ export function planRoleCutover(users: CutoverCandidateUser[]): RoleCutoverPlan 
       });
 
       auditEvents.push({
+        actorUserId: "system",
+        actorRole: "system",
         action: "user.role_cutover",
-        actorId: "system",
-        targetId: userId,
-        details: {
+        entityType: "user",
+        entityId: userId,
+        after: {
           fromRole: "owner",
           toRole: "admin",
           reason: "Phase 4 multi-admin role cutover",
@@ -116,10 +139,12 @@ export function planRoleRollback(users: CutoverCandidateUser[]): RoleRollbackPla
       });
 
       auditEvents.push({
+        actorUserId: "system",
+        actorRole: "system",
         action: "user.role_rollback",
-        actorId: "system",
-        targetId: userId,
-        details: {
+        entityType: "user",
+        entityId: userId,
+        after: {
           fromRole: "admin",
           toRole: "owner",
           reason: "Rollback of Phase 4 multi-admin role cutover",
@@ -139,4 +164,35 @@ export function planRoleRollback(users: CutoverCandidateUser[]): RoleRollbackPla
     skippedCount,
     warnings,
   };
+}
+
+/**
+ * Preflight gate for the forward cutover. Admin access is assignment-scoped
+ * (`ManagementAssignment`): a user promoted from `owner` to `admin` without at
+ * least one active assignment loses every dashboard capability. Fail closed —
+ * the caller must not apply the cutover while `ready` is false; create
+ * assignments for the uncovered owners first.
+ *
+ * `activeAssignmentUserIds` is the set of principal user ids holding an active,
+ * in-window assignment (computed by the caller from `ManagementAssignment`).
+ */
+export function planCutoverPreflight(
+  users: CutoverCandidateUser[],
+  activeAssignmentUserIds: ReadonlySet<string>,
+): CutoverPreflight {
+  const uncovered: UncoveredCutoverCandidate[] = [];
+  const warnings: string[] = [];
+
+  for (const user of users) {
+    if (user.role !== "owner") continue;
+    const userId = String(user._id);
+    if (!activeAssignmentUserIds.has(userId)) {
+      uncovered.push({ userId, name: user.name, email: user.email });
+      warnings.push(
+        `Owner ${userId} has no active management assignment; promoting them to admin would lock them out of the dashboard`,
+      );
+    }
+  }
+
+  return { ready: uncovered.length === 0, uncovered, warnings };
 }

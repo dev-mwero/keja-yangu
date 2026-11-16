@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import { LISTING_STATES, LISTING_VISIBILITIES } from "@/lib/domain-enums";
 import { softDeletePlugin } from "@/lib/mongoose-soft-delete";
 
@@ -63,4 +63,4 @@ listingSchema.index({ visibility: 1, state: 1 });
 
 export type ListingDocument = InferSchemaType<typeof listingSchema>;
 
-export const Listing = models.Listing || model<ListingDocument>("Listing", listingSchema);
+export const Listing = mongoose.models.Listing || model<ListingDocument>("Listing", listingSchema);

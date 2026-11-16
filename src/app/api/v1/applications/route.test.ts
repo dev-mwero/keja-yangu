@@ -2,7 +2,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildRequest, signToken } from "@/test/utils/api-request";
 import { makeObjectId, makeUser } from "@/test/utils/factories";
-import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-mocks";
+import {
+  buildQuery,
+  getModelStubs,
+  mockStaffPortfolio,
+  resetModelStubs,
+} from "@/test/utils/model-mocks";
 
 vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
@@ -23,7 +28,7 @@ import { GET, POST } from "@/app/api/v1/applications/route";
 
 const { user, property, application, unit, managementAssignment } = getModelStubs();
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const CUSTODIAN_ID = makeObjectId("custodian");
 const CARETAKER_ID = makeObjectId("caretaker");
 const TENANT_ID = makeObjectId("tenant");
@@ -49,11 +54,27 @@ describe("GET /api/v1/applications", () => {
   });
 
   it("scopes an owner to applications against their portfolio", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          permissions: ["application:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     listResult([]);
     const res = await GET(buildRequest("/api/v1/applications", { token: signToken(OWNER_ID) }));
     expect(res.status).toBe(200);
-    expect(application.find).toHaveBeenCalledWith({ ownerId: OWNER_ID });
+    expect(application.find).toHaveBeenCalledWith({
+      $or: [{ propertyId: { $in: [PROP_ID] } }],
+    });
   });
 
   it("scopes a tenant to their own applications", async () => {
@@ -65,9 +86,13 @@ describe("GET /api/v1/applications", () => {
   });
 
   it("scopes a custodian to their managing owner", async () => {
-    user.findById.mockReturnValue(
-      buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian", managedByOwnerId: OWNER_ID })),
-    );
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian" })));
+    mockStaffPortfolio({
+      userId: CUSTODIAN_ID,
+      role: "custodian",
+      ownerId: OWNER_ID,
+      propertyIds: [PROP_ID],
+    });
     listResult([]);
     const res = await GET(buildRequest("/api/v1/applications", { token: signToken(CUSTODIAN_ID) }));
     expect(res.status).toBe(200);
@@ -75,18 +100,17 @@ describe("GET /api/v1/applications", () => {
   });
 
   it("scopes a caretaker to assigned properties of the managing owner", async () => {
-    user.findById.mockReturnValue(
-      buildQuery(makeUser({ _id: CARETAKER_ID, role: "caretaker", managedByOwnerId: OWNER_ID })),
-    );
-    property.find.mockReturnValue(buildQuery([{ _id: PROP_ID }]));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: CARETAKER_ID, role: "caretaker" })));
+    mockStaffPortfolio({
+      userId: CARETAKER_ID,
+      role: "caretaker",
+      ownerId: OWNER_ID,
+      propertyIds: [PROP_ID],
+    });
     listResult([]);
 
     const res = await GET(buildRequest("/api/v1/applications", { token: signToken(CARETAKER_ID) }));
     expect(res.status).toBe(200);
-    expect(property.find).toHaveBeenCalledWith({
-      caretakerIds: CARETAKER_ID,
-      ownerId: OWNER_ID,
-    });
     expect(application.find).toHaveBeenCalledWith({
       ownerId: OWNER_ID,
       propertyId: { $in: [PROP_ID] },
@@ -99,6 +123,7 @@ describe("GET /api/v1/applications", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: makeObjectId("admin"),
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROP_ID,
@@ -119,7 +144,21 @@ describe("GET /api/v1/applications", () => {
   });
 
   it("enriches results with property titles", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          permissions: ["application:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     listResult([
       {
         _id: makeObjectId("app"),
@@ -141,7 +180,21 @@ describe("GET /api/v1/applications", () => {
 
   it("enriches results with the requested unit name", async () => {
     const UNIT_ID = makeObjectId("unit");
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          permissions: ["application:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     listResult([
       {
         _id: makeObjectId("app"),
@@ -193,7 +246,7 @@ describe("POST /api/v1/applications", () => {
   });
 
   it("403 when a non-tenant applies", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
     const res = await POST(
       buildRequest("/api/v1/applications", {
         method: "POST",

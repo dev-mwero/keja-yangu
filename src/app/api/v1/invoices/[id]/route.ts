@@ -10,23 +10,37 @@ import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { invoiceUpdate } from "@/lib/schemas";
 import { Invoice } from "@/models/Invoice";
 
+function adminScopeMatches(
+  doc: { propertyId: string; unitId?: string; tenantId?: string },
+  actor: InvoiceActor,
+): boolean {
+  const propMatch = actor.propertyScopeIds.includes(doc.propertyId);
+  const unitMatch = doc.unitId && actor.assignedUnitIds.includes(doc.unitId);
+  const tenantMatch = doc.tenantId && actor.assignedTenantIds.includes(doc.tenantId);
+  return Boolean(propMatch || unitMatch || tenantMatch);
+}
+
 function invoiceInScope(
   doc: { ownerId: string; propertyId: string; unitId?: string; tenantId?: string },
   actor: InvoiceActor,
 ): boolean {
   if (actor.role === "system-admin") return true;
-  if (actor.role === "owner") return doc.ownerId === actor.userId;
-  if (actor.role === "custodian") return doc.ownerId === actor.managedByOwnerId;
+  if (actor.role === "custodian") {
+    if (actor.staffAssignmentBacked) {
+      return adminScopeMatches(doc, actor);
+    }
+    return doc.ownerId === actor.managedByOwnerId;
+  }
   if (actor.role === "caretaker") {
+    if (actor.staffAssignmentBacked) {
+      return adminScopeMatches(doc, actor);
+    }
     return (
       doc.ownerId === actor.managedByOwnerId && actor.assignedPropertyIds.includes(doc.propertyId)
     );
   }
   if (actor.role === "admin") {
-    const propMatch = actor.propertyScopeIds.includes(doc.propertyId);
-    const unitMatch = doc.unitId && actor.assignedUnitIds.includes(doc.unitId);
-    const tenantMatch = doc.tenantId && actor.assignedTenantIds.includes(doc.tenantId);
-    return Boolean(propMatch || unitMatch || tenantMatch);
+    return adminScopeMatches(doc, actor);
   }
   return false;
 }
@@ -67,14 +81,22 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     return NextResponse.json({ error: "Invalid invoice id" }, { status: 400 });
   }
 
+  const authError = await requirePermission(request, "invoice:manage");
+  if (authError) return authError;
+
   await connectToDatabase();
+  const actor = await resolveInvoiceActor(request, "invoice:manage");
+  if (actor instanceof NextResponse) return actor;
+
   const invoice = await Invoice.findById(id).lean();
-  if (!invoice) {
+  if (!invoice || !invoiceInScope(invoice, actor)) {
     return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
   }
 
-  const authError = await requirePermission(request, "invoice:manage", { resource: invoice });
-  if (authError) return authError;
+  const resourceAuthError = await requirePermission(request, "invoice:manage", {
+    resource: invoice,
+  });
+  if (resourceAuthError) return resourceAuthError;
 
   if (invoice.status === "paid" || invoice.status === "void") {
     return NextResponse.json({ error: "Paid or void invoices cannot be edited" }, { status: 409 });
@@ -120,14 +142,22 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     return NextResponse.json({ error: "Invalid invoice id" }, { status: 400 });
   }
 
+  const authError = await requirePermission(request, "invoice:manage");
+  if (authError) return authError;
+
   await connectToDatabase();
+  const actor = await resolveInvoiceActor(request, "invoice:manage");
+  if (actor instanceof NextResponse) return actor;
+
   const invoice = await Invoice.findById(id).lean();
-  if (!invoice) {
+  if (!invoice || !invoiceInScope(invoice, actor)) {
     return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
   }
 
-  const authError = await requirePermission(request, "invoice:manage", { resource: invoice });
-  if (authError) return authError;
+  const resourceAuthError = await requirePermission(request, "invoice:manage", {
+    resource: invoice,
+  });
+  if (resourceAuthError) return resourceAuthError;
 
   if (!canDelete(invoice.status)) {
     return NextResponse.json({ error: "Only draft invoices can be deleted" }, { status: 409 });

@@ -1,3 +1,4 @@
+import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeftRight,
   Bell,
@@ -9,7 +10,7 @@ import {
   FileText,
   Heart,
   Home,
-  type LucideIcon,
+  Mail,
   MessagesSquare,
   Search,
   Settings,
@@ -27,7 +28,7 @@ export interface DashNavItem {
   icon: LucideIcon;
 }
 
-type Role = "tenant" | "caretaker" | "custodian" | "owner" | "admin" | "broker" | "system-admin";
+type Role = "tenant" | "caretaker" | "custodian" | "admin" | "broker" | "system-admin";
 
 interface Section {
   slug: string;
@@ -84,7 +85,7 @@ const brokerSections = [
   { slug: "/listings", label: "Market Listings", icon: Building2 },
   { slug: "/authorizations", label: "Authorizations", icon: UserCog },
   { slug: "/prospects", label: "Prospects", icon: Users },
-  { slug: "#commissions", label: "Commissions", icon: Calculator },
+  { slug: "/commissions", label: "Commissions", icon: Calculator },
   { slug: "/profile", label: "Broker Profile", icon: Settings },
 ] satisfies readonly Section[];
 
@@ -109,8 +110,12 @@ export const adminNav: DashNavItem[] = [
     label: "Commissions",
     icon: Calculator,
   },
+  {
+    to: "/dashboard/admin/contact-messages",
+    label: "Contact Messages",
+    icon: Mail,
+  },
 ];
-export const ownerNav = buildDashboardNav("owner");
 export const caretakerNav = buildDashboardNav("caretaker");
 export const custodianNav = buildDashboardNav("custodian");
 export const brokerNav = buildDashboardNav("broker");
@@ -123,6 +128,11 @@ export const caretakerNavWithTenants: DashNavItem[] = [
 
 export const systemAdminNav: DashNavItem[] = [
   ...buildDashboardNav("system-admin"),
+  {
+    to: "/dashboard/system-admin/users",
+    label: "Users & Roles",
+    icon: Users,
+  },
   {
     to: "/dashboard/system-admin/property-types",
     label: "Property Types",

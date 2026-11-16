@@ -1,6 +1,7 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildRequest, signToken } from "@/test/utils/api-request";
+import { activeAssignment } from "@/test/utils/assignment-mocks";
 import { makeNotification, makeObjectId, makeUser } from "@/test/utils/factories";
 import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-mocks";
 
@@ -8,6 +9,9 @@ vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 vi.mock("@/models/Notification", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/models/Notification")>();
   return { ...actual, Notification: getModelStubs().notification };
@@ -15,13 +19,13 @@ vi.mock("@/models/Notification", async (importOriginal) => {
 
 import { GET } from "@/app/api/v1/notifications/route";
 
-const { user, notification } = getModelStubs();
+const { user, notification, managementAssignment } = getModelStubs();
 
 const USER_ID = makeObjectId("user");
 const NOTIF_ID = makeObjectId("notification");
 
 function ownerDoc() {
-  return makeUser({ _id: USER_ID, role: "owner" });
+  return makeUser({ _id: USER_ID, role: "admin" });
 }
 
 async function json(res: Response) {
@@ -31,6 +35,16 @@ async function json(res: Response) {
 describe("GET /api/v1/notifications", () => {
   beforeEach(() => {
     resetModelStubs();
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: USER_ID,
+          accessRole: "admin",
+          propertyId: makeObjectId("p1"),
+          permissions: ["notification:read-own"],
+        }),
+      ]),
+    );
   });
 
   it("401 when unauthenticated", async () => {

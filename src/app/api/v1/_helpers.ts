@@ -1,7 +1,14 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { getManagedOwnerId } from "@/lib/managed-owner";
 import { connectToDatabase } from "@/lib/mongoose";
-import { type Action, authenticate, getAdminAssignmentScope, type Role } from "@/lib/permissions";
+import {
+  type Action,
+  authenticate,
+  getAdminAssignmentScope,
+  getStaffAssignmentScope,
+  type Role,
+} from "@/lib/permissions";
 import { Property } from "@/models/Property";
 import { Tenant } from "@/models/Tenant";
 import { Unit } from "@/models/Unit";
@@ -16,6 +23,8 @@ export interface InvoiceActor {
   assignedBlockIds: string[];
   assignedUnitIds: string[];
   assignedTenantIds: string[];
+  /** Custodian/caretaker scope resolved from ManagementAssignment (not legacy fields). */
+  staffAssignmentBacked?: boolean;
 }
 
 export async function resolveInvoiceActor(
@@ -34,18 +43,25 @@ export async function resolveInvoiceActor(
   }
 
   const userId = String(user._id);
-  const managedByOwnerId = user.managedByOwnerId ?? "";
+  const managedByOwnerId =
+    user.role === "custodian" || user.role === "caretaker" ? await getManagedOwnerId(userId) : "";
   let assignedPropertyIds: string[] = [];
   let propertyScopeIds: string[] = [];
   let assignedBlockIds: string[] = [];
   let assignedUnitIds: string[] = [];
   let assignedTenantIds: string[] = [];
 
-  if (user.role === "caretaker" && managedByOwnerId) {
-    const properties = await Property.find({ caretakerIds: userId, ownerId: managedByOwnerId })
-      .select("_id")
-      .lean();
-    assignedPropertyIds = properties.map((p) => String(p._id));
+  let staffAssignmentBacked = false;
+
+  if ((user.role === "custodian" || user.role === "caretaker") && action) {
+    // Assignment-only scoping: un-backfilled staff get empty scope.
+    const staffScope = await getStaffAssignmentScope(userId, user.role, action);
+    assignedPropertyIds = staffScope.assignedPropertyIds;
+    propertyScopeIds = staffScope.propertyScopeIds;
+    assignedBlockIds = staffScope.assignedBlockIds;
+    assignedUnitIds = staffScope.assignedUnitIds;
+    assignedTenantIds = staffScope.assignedTenantIds;
+    staffAssignmentBacked = staffScope.hasAssignments;
   }
 
   if (user.role === "admin" && action) {
@@ -66,6 +82,7 @@ export async function resolveInvoiceActor(
     assignedBlockIds,
     assignedUnitIds,
     assignedTenantIds,
+    staffAssignmentBacked,
   };
 }
 
@@ -94,13 +111,15 @@ export interface DashboardActor {
   assignedBlockIds: string[];
   assignedUnitIds: string[];
   assignedTenantIds: string[];
+  /** Custodian/caretaker scope resolved from ManagementAssignment (not legacy fields). */
+  staffAssignmentBacked?: boolean;
 }
 
 /**
  * Resolves the authenticated user plus the scoping ids the communications
  * routes need. Tenants get their bound Tenant row ids, property ids and owner
- * ids; caretakers get their assigned property ids (properties of the managing
- * owner that list them in `caretakerIds`). Owners and system-admins get none.
+ * ids; staff get their assigned property ids from active assignments. Owners,
+ * admins and system-admins derive no managed owner.
  */
 export async function resolveDashboardActor(
   request: NextRequest,
@@ -118,7 +137,8 @@ export async function resolveDashboardActor(
   }
 
   const userId = String(user._id);
-  const managedByOwnerId = user.managedByOwnerId ?? "";
+  const managedByOwnerId =
+    user.role === "custodian" || user.role === "caretaker" ? await getManagedOwnerId(userId) : "";
   let assignedPropertyIds: string[] = [];
   let tenantIds: string[] = [];
   let tenantPropertyIds: string[] = [];
@@ -128,11 +148,17 @@ export async function resolveDashboardActor(
   let assignedUnitIds: string[] = [];
   let assignedTenantIds: string[] = [];
 
-  if (user.role === "caretaker" && managedByOwnerId) {
-    const properties = await Property.find({ caretakerIds: userId, ownerId: managedByOwnerId })
-      .select("_id")
-      .lean();
-    assignedPropertyIds = properties.map((p) => String(p._id));
+  let staffAssignmentBacked = false;
+
+  if ((user.role === "custodian" || user.role === "caretaker") && action) {
+    // Assignment-only scoping: un-backfilled staff get empty scope.
+    const staffScope = await getStaffAssignmentScope(userId, user.role, action);
+    assignedPropertyIds = staffScope.assignedPropertyIds;
+    propertyScopeIds = staffScope.propertyScopeIds;
+    assignedBlockIds = staffScope.assignedBlockIds;
+    assignedUnitIds = staffScope.assignedUnitIds;
+    assignedTenantIds = staffScope.assignedTenantIds;
+    staffAssignmentBacked = staffScope.hasAssignments;
   }
 
   if (user.role === "admin" && action) {
@@ -149,7 +175,9 @@ export async function resolveDashboardActor(
   // One Tenant query supplies the bound row ids, property ids and owner ids
   // (the split `resolveTenantIds` query is folded in for a single round-trip).
   if (user.role === "tenant") {
-    const rows = await Tenant.find({ userId }).select("_id propertyId ownerId").lean();
+    const rows = await Tenant.find({ userId, deletedAt: null })
+      .select("_id propertyId ownerId")
+      .lean();
     tenantIds = rows.map((t) => String(t._id));
     tenantPropertyIds = rows.map((t) => t.propertyId).filter(Boolean);
     tenantOwnerIds = rows.map((t) => t.ownerId).filter(Boolean);
@@ -167,6 +195,7 @@ export async function resolveDashboardActor(
     assignedBlockIds,
     assignedUnitIds,
     assignedTenantIds,
+    staffAssignmentBacked,
   };
 }
 
@@ -200,7 +229,7 @@ export async function unitNameMap(unitIds: string[]): Promise<Map<string, string
 
 export async function resolveTenantIds(userId: string): Promise<string[]> {
   await connectToDatabase();
-  const tenantRows = await Tenant.find({ userId }).select("_id").lean();
+  const tenantRows = await Tenant.find({ userId, deletedAt: null }).select("_id").lean();
   return tenantRows.map((t) => String(t._id));
 }
 

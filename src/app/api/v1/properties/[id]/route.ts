@@ -4,10 +4,21 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { normalizeAmenities } from "@/lib/amenities";
 import { PROPERTY_PURPOSES } from "@/lib/domain-enums";
+import { getPropertyStaffIds } from "@/lib/managed-owner";
 import { connectToDatabase } from "@/lib/mongoose";
 import { asSoftDeleteModel } from "@/lib/mongoose-soft-delete";
-import { authenticate, isFullControlRole, requirePermission } from "@/lib/permissions";
-import { validatePropertyStaffAssignments } from "@/lib/property-staff";
+import {
+  type Action,
+  authenticate,
+  getAdminAssignmentScope,
+  getStaffAssignmentScope,
+  isFullControlRole,
+  requirePermission,
+} from "@/lib/permissions";
+import {
+  syncPropertyStaffAssignments,
+  validatePropertyStaffAssignments,
+} from "@/lib/property-staff";
 import { isActivePropertyTypeKey } from "@/lib/property-type-store";
 import { Property } from "@/models/Property";
 import { Tenant } from "@/models/Tenant";
@@ -41,17 +52,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
   await connectToDatabase();
   const authUser = authenticate(request);
-  let actor: { _id: string; role: string; managedByOwnerId?: string } | null = null;
+  let actor: { _id: string; role: string } | null = null;
   if (authUser) {
-    const doc = await User.findById(authUser.userId)
-      .select("_id role isActive managedByOwnerId")
-      .lean();
-    actor = doc?.isActive
-      ? { _id: String(doc._id), role: doc.role, managedByOwnerId: doc.managedByOwnerId }
-      : null;
+    const doc = await User.findById(authUser.userId).select("_id role isActive").lean();
+    actor = doc?.isActive ? { _id: String(doc._id), role: doc.role } : null;
   }
 
-  const PUBLIC_PROJECTION = "-ownerId -caretakerIds -custodianIds -createdById -__v";
+  const PUBLIC_PROJECTION = "-ownerId -createdById -__v";
 
   let property: { status?: string; _id?: unknown } | null = null;
   if (!actor) {
@@ -60,18 +67,24 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       .lean();
   } else if (actor.role === "system-admin") {
     property = await Property.findById(id).lean();
-  } else if (actor.role === "owner") {
-    property = await Property.findOne({ _id: id, ownerId: actor._id }).lean();
-  } else if (actor.role === "custodian") {
-    if (actor.managedByOwnerId) {
-      property = await Property.findOne({ _id: id, ownerId: actor.managedByOwnerId }).lean();
+  } else if (actor.role === "custodian" || actor.role === "caretaker") {
+    // Assignment-only scoping.
+    const staffScope = await getStaffAssignmentScope(
+      actor._id,
+      actor.role,
+      "property:read" as unknown as Action,
+    );
+    if (staffScope.hasAssignments && staffScope.assignedPropertyIds.includes(id)) {
+      property = await Property.findById(id).lean();
     }
-  } else if (actor.role === "caretaker") {
-    const scope =
-      typeof actor.managedByOwnerId === "string" && actor.managedByOwnerId.length > 0
-        ? { ownerId: actor.managedByOwnerId }
-        : {};
-    property = await Property.findOne({ _id: id, caretakerIds: actor._id, ...scope }).lean();
+  } else if (actor.role === "admin") {
+    const adminScope = await getAdminAssignmentScope(
+      actor._id,
+      "property:read" as unknown as Action,
+    );
+    if (adminScope.assignedPropertyIds.includes(id)) {
+      property = await Property.findById(id).lean();
+    }
   } else {
     property = await Property.findOne({ _id: id, status: "available", published: true })
       .select(PUBLIC_PROJECTION)
@@ -84,7 +97,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
   const includeUnits = request.nextUrl.searchParams.get("includeUnits");
   const canViewAllUnits =
-    actor !== null && ["owner", "caretaker", "custodian", "system-admin"].includes(actor.role);
+    actor !== null && ["caretaker", "custodian", "system-admin", "admin"].includes(actor.role);
   const includeAllUnits = includeUnits === "all" && canViewAllUnits;
   const units =
     includeUnits === "0"
@@ -98,7 +111,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
           .sort({ floorLevel: 1, name: 1 })
           .lean();
 
-  return NextResponse.json({ data: { ...property, units } });
+  const staff = await getPropertyStaffIds(id);
+  return NextResponse.json({ data: { ...property, ...staff, units } });
 }
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -140,10 +154,17 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const actorDoc = await User.findById(actor.userId).select("role").lean();
-  const canManageStaffAssignments =
+  let canManageStaffAssignments =
     actorDoc !== null &&
     actorDoc !== undefined &&
     (isFullControlRole(actorDoc.role) || actorDoc.role === "custodian");
+  if (!canManageStaffAssignments && actorDoc?.role === "admin") {
+    const adminScope = await getAdminAssignmentScope(
+      actor.userId,
+      "property:manage" as unknown as Action,
+    );
+    canManageStaffAssignments = adminScope.assignedPropertyIds.includes(id);
+  }
 
   const updateData = { ...parsed.data };
   if (
@@ -156,16 +177,16 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     );
   }
   if (updateData.caretakerIds !== undefined || updateData.custodianIds !== undefined) {
+    // Staff already assigned to this property stay eligible even if their
+    // account has since been deactivated.
+    const retainedStaff = await getPropertyStaffIds(id);
     const assignmentError = await validatePropertyStaffAssignments(
       property.ownerId,
       {
         caretakerIds: updateData.caretakerIds,
         custodianIds: updateData.custodianIds,
       },
-      {
-        caretakerIds: property.caretakerIds ?? [],
-        custodianIds: property.custodianIds ?? [],
-      },
+      retainedStaff,
     );
     if (assignmentError) {
       return NextResponse.json({ error: assignmentError }, { status: 400 });
@@ -175,6 +196,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     updateData.amenities = normalizeAmenities(updateData.amenities);
   }
 
+  const requestedCaretakerIds = updateData.caretakerIds;
+  const requestedCustodianIds = updateData.custodianIds;
+  delete updateData.caretakerIds;
+  delete updateData.custodianIds;
+
   const updated = await Property.findOneAndUpdate({ _id: id }, updateData, {
     new: true,
     runValidators: true,
@@ -182,6 +208,16 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   if (!updated) {
     return NextResponse.json({ error: "Property not found" }, { status: 404 });
   }
+
+  if (requestedCaretakerIds !== undefined || requestedCustodianIds !== undefined) {
+    await syncPropertyStaffAssignments({
+      propertyId: id,
+      caretakerIds: requestedCaretakerIds ?? [],
+      custodianIds: requestedCustodianIds ?? [],
+      grantedByUserId: actor.userId,
+    });
+  }
+
   return NextResponse.json({ data: updated });
 }
 

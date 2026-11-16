@@ -12,12 +12,15 @@ vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Invoice", () => ({ Invoice: getModelStubs().invoice }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 
 import { GET } from "@/app/api/v1/search/route";
 
 const { user, property, unit, tenant, invoice } = getModelStubs();
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const TENANT_ID = makeObjectId("tenant");
 const TENANT_DOC_ID = makeObjectId("tenantdoc");
 
@@ -70,7 +73,7 @@ describe("GET /api/v1/search", () => {
   });
 
   it("scopes owner results to their portfolio", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
     property.find.mockReturnValue(
       buildQuery([{ _id: makeObjectId("prop"), title: "Sunset Villa", location: "Kilimani" }]),
     );
@@ -89,9 +92,7 @@ describe("GET /api/v1/search", () => {
 
   it("403 for an orphaned custodian", async () => {
     user.findById.mockReturnValue(
-      buildQuery(
-        makeUser({ _id: makeObjectId("custodian"), role: "custodian", managedByOwnerId: "" }),
-      ),
+      buildQuery(makeUser({ _id: makeObjectId("custodian"), role: "custodian" })),
     );
     const res = await GET(
       buildRequest("/api/v1/search", {

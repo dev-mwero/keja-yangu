@@ -135,7 +135,7 @@ const VerifyForm = () => {
             <Input
               id="resend-email"
               type="email"
-              placeholder="you@keja.co"
+              placeholder="you@example.com"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}

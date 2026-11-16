@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 
 export const NOTIFICATION_TYPES = [
   "invoice:paid",
@@ -89,4 +89,4 @@ export function serializeNotification<
 }
 
 export const Notification =
-  models.Notification || model<INotification>("Notification", notificationSchema);
+  mongoose.models.Notification || model<INotification>("Notification", notificationSchema);

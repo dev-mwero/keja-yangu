@@ -1,3 +1,4 @@
+import { BRAND, getAppUrl } from "@/lib/brand";
 import {
   createComplaintStatusContent,
   createInvoicePaidContent,
@@ -9,6 +10,7 @@ import {
 } from "@/lib/email";
 import { formatKES, formatPeriod } from "@/lib/format";
 import { Invoice } from "@/models/Invoice";
+import { ManagementAssignment } from "@/models/ManagementAssignment";
 import {
   Notification,
   type NotificationChannel,
@@ -29,10 +31,6 @@ function isDuplicateKeyError(error: unknown): boolean {
 }
 
 const DAY_IN_MS = 86_400_000;
-
-function appUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL ?? "";
-}
 
 /**
  * Extracts the first event id from notification `data`; the dedupe key is the
@@ -165,8 +163,14 @@ async function resolveTenantUserId(tenantId: string): Promise<string> {
 async function resolveCaretakerIds(propertyId: string): Promise<string[]> {
   if (!propertyId) return [];
   try {
-    const property = await Property.findById(propertyId).select("caretakerIds").lean();
-    return property?.caretakerIds ?? [];
+    const assignments = await ManagementAssignment.find({
+      propertyId,
+      accessRole: "caretaker",
+      status: "active",
+    })
+      .select("principalUserId")
+      .lean();
+    return [...new Set(assignments.map((a) => String(a.principalUserId)))];
   } catch (_error) {
     console.warn(`[notifications] property lookup failed propertyId=${propertyId}`);
     return [];
@@ -177,10 +181,17 @@ async function resolveCaretakerIds(propertyId: string): Promise<string[]> {
 async function resolveCustodianIds(ownerId: string): Promise<string[]> {
   if (!ownerId) return [];
   try {
-    const custodians = await User.find({ role: "custodian", managedByOwnerId: ownerId })
-      .select("_id")
+    const properties = await Property.find({ ownerId }).select("_id").lean();
+    const propertyIds = properties.map((p) => String(p._id));
+    if (propertyIds.length === 0) return [];
+    const assignments = await ManagementAssignment.find({
+      propertyId: { $in: propertyIds },
+      accessRole: "custodian",
+      status: "active",
+    })
+      .select("principalUserId")
       .lean();
-    return custodians.map((custodian) => String(custodian._id));
+    return [...new Set(assignments.map((a) => String(a.principalUserId)))];
   } catch (_error) {
     console.warn(`[notifications] custodian lookup failed ownerId=${ownerId}`);
     return [];
@@ -218,13 +229,13 @@ export async function resolveStaffRecipients(scope: {
   } else {
     try {
       if (scope.propertyId) {
-        const property = await Property.findById(scope.propertyId).select("caretakerIds").lean();
-        caretakerIds = property?.caretakerIds ?? [];
+        caretakerIds = await resolveCaretakerIds(scope.propertyId);
       } else {
-        const properties = await Property.find({ ownerId: scope.ownerId })
-          .select("caretakerIds")
-          .lean();
-        caretakerIds = properties.flatMap((property) => property.caretakerIds ?? []);
+        const properties = await Property.find({ ownerId: scope.ownerId }).select("_id").lean();
+        const perProperty = await Promise.all(
+          properties.map((property) => resolveCaretakerIds(String(property._id))),
+        );
+        caretakerIds = [...new Set(perProperty.flat())];
       }
     } catch (_error) {
       console.warn(`[notifications] caretaker lookup failed ownerId=${scope.ownerId}`);
@@ -244,13 +255,25 @@ export async function resolveStaffRecipients(scope: {
 
 /** Server-composed role-aware deep link for a notification recipient. */
 function communicationLink(role: string | undefined): string {
-  if (role === "owner" || role === "caretaker" || role === "custodian") {
+  if (role === "caretaker" || role === "custodian") {
     return `/dashboard/${role}/communications`;
   }
+  // `owner` is the retained display label for the landlord side; that account
+  // is an admin now and reads announcements under /dashboard/admin.
+  if (role === "owner" || role === "admin") return "/dashboard/admin/communications";
   if (role === "system-admin") return "/dashboard/system-admin";
   // Tenants read announcements/messages under their Messages tab; unknown or
   // missing roles fall back to the historical tenant link.
   return "/dashboard/tenant/messages";
+}
+
+/**
+ * Dashboard root for a notification recipient. Legacy `owner` recipients are
+ * admins now, so links must never point at the retired /dashboard/owner tree.
+ */
+function dashboardBase(role: string | undefined): string {
+  if (role === "owner") return "/dashboard/admin";
+  return role ? `/dashboard/${role}` : "/dashboard/tenant";
 }
 
 /** One batched role lookup so per-recipient links stay server-composed. */
@@ -340,7 +363,7 @@ export async function notifyInvoicePaid(invoice: InvoiceLike): Promise<boolean> 
     const periodLabel = formatPeriod(period);
     const amount = formatKES(amountPaid);
     const data = { invoiceId, period, amountDue, amountPaid };
-    const base = appUrl();
+    const base = getAppUrl();
 
     let ok = true;
 
@@ -355,7 +378,7 @@ export async function notifyInvoicePaid(invoice: InvoiceLike): Promise<boolean> 
           link: "/dashboard/tenant/payments",
           channels: ["in-app", "email"],
           email: {
-            subjectPrefix: `Invoice ${invoiceNumber} paid - Keja Yangu`,
+            subjectPrefix: `Invoice ${invoiceNumber} paid - ${BRAND.name}`,
             content: createInvoicePaidContent({ invoiceNumber, period, amountDue, amountPaid }),
             text: `Your payment of ${amount} for ${periodLabel} has been received.\n\nView your invoice: ${base}/dashboard/tenant/payments`,
             linkUrl: `${base}/dashboard/tenant/payments`,
@@ -370,7 +393,7 @@ export async function notifyInvoicePaid(invoice: InvoiceLike): Promise<boolean> 
         title: "Payment received",
         body: `A payment of ${amount} was recorded for invoice ${invoiceNumber} (${periodLabel})`,
         data,
-        link: "/dashboard/owner/accounting",
+        link: "/dashboard/admin/accounting",
         channels: ["in-app"],
       })) && ok;
 
@@ -416,7 +439,7 @@ export async function notifyInvoiceOverdue(invoice: InvoiceLike): Promise<boolea
     const periodLabel = formatPeriod(period);
     const amount = formatKES(amountDue);
     const data = { invoiceId, period, amountDue };
-    const base = appUrl();
+    const base = getAppUrl();
 
     let ok = true;
     const staffTitle = "Invoice overdue";
@@ -433,7 +456,7 @@ export async function notifyInvoiceOverdue(invoice: InvoiceLike): Promise<boolea
           link: "/dashboard/tenant/payments",
           channels: ["in-app", "email"],
           email: {
-            subjectPrefix: `Invoice ${invoiceNumber} overdue - Keja Yangu`,
+            subjectPrefix: `Invoice ${invoiceNumber} overdue - ${BRAND.name}`,
             content: createOverdueContent({ invoiceNumber, period, amountDue }),
             text: `Your invoice ${invoiceNumber} for ${periodLabel} (${amount}) is now overdue.\n\nPay now: ${base}/dashboard/tenant/payments`,
             linkUrl: `${base}/dashboard/tenant/payments`,
@@ -448,7 +471,7 @@ export async function notifyInvoiceOverdue(invoice: InvoiceLike): Promise<boolea
         title: staffTitle,
         body: staffBody,
         data,
-        link: "/dashboard/owner/accounting",
+        link: "/dashboard/admin/accounting",
         channels: ["in-app"],
       })) && ok;
 
@@ -526,7 +549,7 @@ export interface LeaseLike {
 export async function notifyLeaseExpiry(lease: LeaseLike, daysUntil: number): Promise<boolean> {
   try {
     const data = { leaseId: String(lease._id), propertyId: lease.propertyId };
-    const base = appUrl();
+    const base = getAppUrl();
     const unit = daysUntil === 1 ? "day" : "days";
     const title = "Lease expiring soon";
     const tenantBody = `Your lease ends in ${daysUntil} ${unit}.`;
@@ -545,7 +568,7 @@ export async function notifyLeaseExpiry(lease: LeaseLike, daysUntil: number): Pr
           link: "/dashboard/tenant/payments",
           channels: ["in-app", "email"],
           email: {
-            subjectPrefix: "Lease expiring soon - Keja Yangu",
+            subjectPrefix: `Lease expiring soon - ${BRAND.name}`,
             content: createLeaseExpiryContent({
               daysUntil,
               endDate: lease.endDate ?? undefined,
@@ -564,17 +587,17 @@ export async function notifyLeaseExpiry(lease: LeaseLike, daysUntil: number): Pr
         title,
         body: staffBody,
         data,
-        link: "/dashboard/owner/accounting",
+        link: "/dashboard/admin/accounting",
         channels: ["in-app", "email"],
         email: {
-          subjectPrefix: "Lease expiring soon - Keja Yangu",
+          subjectPrefix: `Lease expiring soon - ${BRAND.name}`,
           content: createLeaseExpiryContent({
             daysUntil,
             endDate: lease.endDate ?? undefined,
             rentAmount: lease.rentAmount,
           }),
-          text: `A lease ends in ${daysUntil} ${unit}.\n\nView your leases: ${base}/dashboard/owner/accounting`,
-          linkUrl: `${base}/dashboard/owner/accounting`,
+          text: `A lease ends in ${daysUntil} ${unit}.\n\nView your leases: ${base}/dashboard/admin/accounting`,
+          linkUrl: `${base}/dashboard/admin/accounting`,
           preheader: "A lease is ending soon",
         },
       })) && ok;
@@ -627,11 +650,9 @@ export async function notifyComplaintCreated(complaint: ComplaintLike): Promise<
     const title = "New complaint";
     const body = `New ${complaint.priority ?? "medium"} priority complaint: ${complaint.subject}`;
 
-    let property: { ownerId?: string; caretakerIds?: string[] } | null = null;
+    let property: { ownerId?: string } | null = null;
     try {
-      property = await Property.findById(complaint.propertyId)
-        .select("ownerId caretakerIds")
-        .lean();
+      property = await Property.findById(complaint.propertyId).select("ownerId").lean();
     } catch (_error) {
       console.warn(`[notifications] property lookup failed propertyId=${complaint.propertyId}`);
     }
@@ -640,7 +661,6 @@ export async function notifyComplaintCreated(complaint: ComplaintLike): Promise<
     const recipients = await resolveStaffRecipients({
       ownerId: property.ownerId,
       propertyId: complaint.propertyId,
-      caretakerIds: property.caretakerIds ?? [],
     });
 
     let ok = true;
@@ -683,10 +703,10 @@ export async function notifyComplaintStatusChange(complaint: ComplaintLike): Pro
       link: "/dashboard/tenant/home",
       channels: ["in-app", "email"],
       email: {
-        subjectPrefix: `Complaint "${sanitizeHeader(subject)}" ${status} - Keja Yangu`,
+        subjectPrefix: `Complaint "${sanitizeHeader(subject)}" ${status} - ${BRAND.name}`,
         content: createComplaintStatusContent({ subject, status }),
         text: `Your complaint "${subject}" is now ${status}.`,
-        linkUrl: `${appUrl()}/dashboard/tenant/home`,
+        linkUrl: `${getAppUrl()}/dashboard/tenant/home`,
         preheader: "Your complaint status has changed",
       },
     });
@@ -798,7 +818,7 @@ export async function notifyMoveRequestCreated(request: MoveRequestLike): Promis
           title,
           body,
           data,
-          link: `/dashboard/${recipient.role}/move-requests`,
+          link: `${dashboardBase(recipient.role)}/move-requests`,
           channels: ["in-app"],
         })) && ok;
     }
@@ -820,7 +840,7 @@ export async function notifyMoveRequestDecided(request: MoveRequestLike): Promis
     const typeLabel = moveTypeLabel(request.type);
     const role = request.requestedByRole;
     const link =
-      role === "owner" || role === "caretaker" || role === "custodian"
+      role === "caretaker" || role === "custodian"
         ? `/dashboard/${role}/move-requests`
         : role === "tenant"
           ? "/dashboard/tenant/requests"

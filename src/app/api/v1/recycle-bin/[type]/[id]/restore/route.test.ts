@@ -20,7 +20,7 @@ import { POST } from "@/app/api/v1/recycle-bin/[type]/[id]/restore/route";
 const { user, property, unit } = getModelStubs();
 
 const ADMIN_ID = makeObjectId("admin");
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const RECORD_ID = makeObjectId("record");
 
 function params(type: string, id: string) {
@@ -43,7 +43,7 @@ describe("POST /api/v1/recycle-bin/:type/:id/restore", () => {
   });
 
   it("403 for non-admins", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
     const res = await POST(
       buildRequest(`/api/v1/recycle-bin/tenant/${RECORD_ID}/restore`, {
         method: "POST",

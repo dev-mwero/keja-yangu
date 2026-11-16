@@ -1,9 +1,9 @@
 import { render } from "@testing-library/react";
 import type { ReactElement } from "react";
-import type { KejaUser, Role } from "@/hooks/use-auth";
+import type { AuthUser, Role } from "@/hooks/use-auth";
 
 export interface AuthMockValue {
-  user: KejaUser | null;
+  user: AuthUser | null;
   loading: boolean;
   signUp: (
     name: string,
@@ -12,7 +12,7 @@ export interface AuthMockValue {
     role: Role,
     details: { phone: string; nationalId: string },
   ) => Promise<void>;
-  signIn: (email: string, password: string) => Promise<KejaUser>;
+  signIn: (email: string, password: string) => Promise<AuthUser>;
   resendVerification: (email: string) => Promise<void>;
   updateProfile: (patch: unknown) => Promise<boolean>;
   signOut: () => void;
@@ -39,7 +39,7 @@ export const createAuthMock = (overrides: Partial<AuthMockValue> = {}): AuthMock
  */
 export const authMock = createAuthMock();
 
-export function mockUseAuth(user: KejaUser | null): AuthMockValue {
+export function mockUseAuth(user: AuthUser | null): AuthMockValue {
   authMock.user = user;
   authMock.loading = false;
   return authMock;

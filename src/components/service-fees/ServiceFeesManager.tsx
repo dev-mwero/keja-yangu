@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -289,10 +289,14 @@ function ServiceFeeForm({
   });
   const appliesTo = watch("appliesTo");
   const selectedIds = watch("unitIds");
-  const matchingUnits = units.filter((unit) =>
-    `${unit.name} ${unit.blockName} ${unit.floorLabel}`
-      .toLocaleLowerCase()
-      .includes(unitQuery.trim().toLocaleLowerCase()),
+  const matchingUnits = useMemo(
+    () =>
+      units.filter((unit) =>
+        `${unit.name} ${unit.blockName} ${unit.floorLabel}`
+          .toLocaleLowerCase()
+          .includes(unitQuery.trim().toLocaleLowerCase()),
+      ),
+    [units, unitQuery],
   );
 
   const toggleUnit = (unitId: string) => {

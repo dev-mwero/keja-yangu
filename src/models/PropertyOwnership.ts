@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import { OWNERSHIP_HOLDER_TYPES, OWNERSHIP_STATUSES } from "@/lib/domain-enums";
 
 export type { OwnershipHolderType, OwnershipStatus } from "@/lib/domain-enums";
@@ -28,5 +28,5 @@ propertyOwnershipSchema.index({ holderUserId: 1, status: 1 });
 export type PropertyOwnershipDocument = InferSchemaType<typeof propertyOwnershipSchema>;
 
 export const PropertyOwnership =
-  models.PropertyOwnership ||
+  mongoose.models.PropertyOwnership ||
   model<PropertyOwnershipDocument>("PropertyOwnership", propertyOwnershipSchema);

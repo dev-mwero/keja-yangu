@@ -11,6 +11,9 @@ vi.mock("@/lib/notifications", () => ({
   notifyInvoicePaid: vi.fn().mockResolvedValue(true),
 }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Invoice", () => ({ Invoice: getModelStubs().invoice }));
 // serializePayment is real; only the model constructor is stubbed.
@@ -59,7 +62,7 @@ function tenantDoc() {
 }
 
 function ownerDoc() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  return makeUser({ _id: OWNER_ID, role: "admin" });
 }
 
 function pendingPayment() {

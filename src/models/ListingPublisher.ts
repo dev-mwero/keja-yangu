@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import { LISTING_PUBLISHER_ROLES, LISTING_PUBLISHER_STATES } from "@/lib/domain-enums";
 
 export type {
@@ -48,5 +48,5 @@ listingPublisherSchema.index({ publisherUserId: 1, state: 1 });
 export type ListingPublisherDocument = InferSchemaType<typeof listingPublisherSchema>;
 
 export const ListingPublisher =
-  models.ListingPublisher ||
+  mongoose.models.ListingPublisher ||
   model<ListingPublisherDocument>("ListingPublisher", listingPublisherSchema);

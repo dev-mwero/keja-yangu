@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 
+import { getAppUrl } from "@/lib/brand";
+
 interface RateLimitEntry {
   count: number;
   resetAt: number;
@@ -61,8 +63,8 @@ export function rateLimitHeaders(response: NextResponse, remaining: number, rese
 }
 
 export function checkSameOrigin(request: NextRequest): NextResponse | null {
-  const origin = request.headers.get("origin");
-  const appOrigin = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const origin = request.headers.get("origin")?.replace(/\/+$/, "");
+  const appOrigin = getAppUrl();
   if (origin && origin !== appOrigin) {
     return NextResponse.json({ error: "Invalid origin" }, { status: 403 });
   }

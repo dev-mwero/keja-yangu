@@ -3,11 +3,14 @@ import bcrypt from "bcryptjs";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { writeAuditEvent } from "@/lib/audit";
 import { sendInviteEmail } from "@/lib/email";
+import { getManagedOwnerId, getStaffIdsForOwner } from "@/lib/managed-owner";
 import { connectToDatabase } from "@/lib/mongoose";
-import { authenticate, CARETAKER_PRIVILEGES } from "@/lib/permissions";
+import { authenticate, CARETAKER_PRIVILEGES, getAdminAssignmentScope } from "@/lib/permissions";
 import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { createPhoneOnlyAccount, resolveUserByContact } from "@/lib/user-identity";
+import { ManagementAssignment } from "@/models/ManagementAssignment";
 import { Property } from "@/models/Property";
 import { User } from "@/models/User";
 
@@ -37,7 +40,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const ownerId = request.nextUrl.searchParams.get("ownerId");
+  const ownerIdParam = request.nextUrl.searchParams.get("ownerId");
   const forPropertyAssignment =
     request.nextUrl.searchParams.get("forPropertyAssignment") === "true";
   const filter: Record<string, unknown> = {
@@ -45,37 +48,55 @@ export async function GET(request: NextRequest) {
     ...(forPropertyAssignment ? { isActive: { $ne: false }, isVerified: { $ne: false } } : {}),
   };
 
+  // Determine the owner scope the caller may see.
+  let allowedOwnerIds: string[] = [];
   if (user.role === "system-admin") {
-    if (ownerId) filter.managedByOwnerId = ownerId;
+    if (ownerIdParam) allowedOwnerIds = [ownerIdParam];
   } else if (user.role === "custodian") {
-    const managedByOwnerId = user.managedByOwnerId ?? "";
-    if (ownerId && ownerId !== managedByOwnerId) {
+    const managed = await getManagedOwnerId(String(user._id));
+    if (ownerIdParam && ownerIdParam !== managed) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    filter.managedByOwnerId = managedByOwnerId;
+    allowedOwnerIds = managed ? [managed] : [];
   } else {
-    if (ownerId && ownerId !== String(user._id)) {
+    // owner / admin / caretaker acting on their own portfolio
+    if (ownerIdParam && ownerIdParam !== String(user._id)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    filter.managedByOwnerId = String(user._id);
+    allowedOwnerIds = [String(user._id)];
+  }
+
+  // Derive the caretaker ids bound to the allowed owners via assignments.
+  let allowedCaretakerIds: string[] | null = null;
+  if (allowedOwnerIds.length > 0) {
+    const ids = await Promise.all(allowedOwnerIds.map((o) => getStaffIdsForOwner(o, "caretaker")));
+    allowedCaretakerIds = [...new Set(ids.flat())];
+    if (allowedCaretakerIds.length > 0) {
+      filter._id = { $in: allowedCaretakerIds };
+    } else if (allowedOwnerIds.length > 0) {
+      // No assignments yet -> empty result (assignment-only).
+      filter._id = { $in: [] };
+    }
   }
 
   const caretakers = await User.find(filter)
-    .select(
-      forPropertyAssignment
-        ? "name managedByOwnerId"
-        : "name email phone managedByOwnerId privileges",
-    )
+    .select(forPropertyAssignment ? "name" : "name email phone privileges")
     .sort({ name: 1 })
     .lean();
 
-  const ids = caretakers.map((c) => String(c._id));
+  // Property counts derived from active assignments.
+  const caretakerIds = caretakers.map((c) => String(c._id));
   let counts: Array<{ _id: string; count: number }> = [];
-  if (ids.length > 0) {
-    counts = await Property.aggregate<{ _id: string; count: number }>([
-      { $unwind: "$caretakerIds" },
-      { $match: { caretakerIds: { $in: ids } } },
-      { $group: { _id: "$caretakerIds", count: { $sum: 1 } } },
+  if (caretakerIds.length > 0) {
+    counts = await ManagementAssignment.aggregate<{ _id: string; count: number }>([
+      {
+        $match: {
+          principalUserId: { $in: caretakerIds },
+          accessRole: "caretaker",
+          status: "active",
+        },
+      },
+      { $group: { _id: "$principalUserId", count: { $sum: 1 } } },
     ]);
   }
 
@@ -85,7 +106,7 @@ export async function GET(request: NextRequest) {
     name: c.name,
     email: forPropertyAssignment ? undefined : c.email,
     phone: forPropertyAssignment ? "" : (c.phone ?? ""),
-    managedByOwnerId: forPropertyAssignment ? "" : (c.managedByOwnerId ?? ""),
+    managedByOwnerId: forPropertyAssignment ? "" : (allowedOwnerIds[0] ?? ""),
     privileges: forPropertyAssignment ? [] : (c.privileges ?? []),
     propertyCount: countByCaretaker.get(String(c._id)) ?? 0,
   }));
@@ -110,7 +131,7 @@ export async function POST(request: NextRequest) {
   if (!actor?.isActive) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (actor.role !== "owner" && actor.role !== "custodian" && actor.role !== "system-admin") {
+  if (actor.role !== "custodian" && actor.role !== "system-admin" && actor.role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -124,10 +145,8 @@ export async function POST(request: NextRequest) {
   }
 
   let boundOwnerId = "";
-  if (actor.role === "owner") {
-    boundOwnerId = String(actor._id);
-  } else if (actor.role === "custodian") {
-    boundOwnerId = actor.managedByOwnerId ?? "";
+  if (actor.role === "custodian") {
+    boundOwnerId = (await getManagedOwnerId(String(actor._id))) ?? "";
     if (!boundOwnerId) {
       return NextResponse.json({ error: "Custodian is not assigned to an owner" }, { status: 403 });
     }
@@ -139,14 +158,26 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
-    const owner = await User.findOne({ _id: boundOwnerId, role: "owner", isActive: true })
+    const owner = await User.findOne({ _id: boundOwnerId, role: "admin", isActive: true })
       .select("_id")
       .lean();
     if (!owner) {
       return NextResponse.json(
-        { error: "ownerId must reference an active owner" },
+        { error: "ownerId must reference an active admin" },
         { status: 400 },
       );
+    }
+    if (actor.role === "admin") {
+      const scope = await getAdminAssignmentScope(String(actor._id), "property:read" as never);
+      const assignedProperties = scope.assignedPropertyIds.length
+        ? await Property.find({ _id: { $in: scope.assignedPropertyIds } })
+            .select("ownerId")
+            .lean()
+        : [];
+      const allowedOwners = new Set(assignedProperties.map((property) => String(property.ownerId)));
+      if (!allowedOwners.has(boundOwnerId)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
   }
 
@@ -165,6 +196,19 @@ export async function POST(request: NextRequest) {
   const privileges = [...new Set(parsed.data.privileges ?? [])];
   const displayName = parsed.data.name ?? existing?.name ?? email ?? phone;
 
+  const audit = (action: string, entityId: string, after: Record<string, unknown>) =>
+    writeAuditEvent({
+      actor: { userId: String(actor._id), role: actor.role },
+      action,
+      entityType: "user",
+      entityId,
+      after,
+      request: {
+        ip: request.headers.get("x-forwarded-for"),
+        userAgent: request.headers.get("user-agent"),
+      },
+    });
+
   if (existing) {
     if (existing.role !== "caretaker") {
       return NextResponse.json(
@@ -172,7 +216,7 @@ export async function POST(request: NextRequest) {
         { status: 409 },
       );
     }
-    const boundOwner = existing.managedByOwnerId ?? "";
+    const boundOwner = (await getManagedOwnerId(String(existing._id))) ?? "";
     if (boundOwner !== "" && boundOwner !== boundOwnerId) {
       return NextResponse.json({ error: "Caretaker is bound to another owner" }, { status: 409 });
     }
@@ -187,12 +231,16 @@ export async function POST(request: NextRequest) {
 
     if (active) {
       const update = {
-        managedByOwnerId: boundOwnerId,
         privileges,
         ...(parsed.data.name ? { name: parsed.data.name } : {}),
         ...(phone && existing.phone !== phone ? { phone } : {}),
       };
       await User.updateOne({ _id: existing._id }, { $set: update });
+      await audit("caretaker.linked", String(existing._id), {
+        managedByOwnerId: boundOwnerId,
+        name: update.name ?? existing.name,
+        privileges,
+      });
       return NextResponse.json({
         linked: true,
         data: {
@@ -215,7 +263,6 @@ export async function POST(request: NextRequest) {
           email,
           name: displayName,
           phone,
-          managedByOwnerId: boundOwnerId,
           privileges,
           verificationToken,
           verificationTokenExpiry,
@@ -223,6 +270,11 @@ export async function POST(request: NextRequest) {
       },
     );
     await sendInviteEmail(email, displayName, "caretaker", verificationToken);
+    await audit("caretaker.invited", String(existing._id), {
+      managedByOwnerId: boundOwnerId,
+      name: displayName,
+      privileges,
+    });
 
     return NextResponse.json(
       {
@@ -245,8 +297,12 @@ export async function POST(request: NextRequest) {
       role: "caretaker",
       name: displayName,
       phone,
-      managedByOwnerId: boundOwnerId,
       privileges,
+    });
+    await audit("caretaker.created", String(created._id), {
+      managedByOwnerId: boundOwnerId,
+      name: created.name,
+      privileges: created.privileges ?? privileges,
     });
 
     return NextResponse.json(
@@ -258,7 +314,7 @@ export async function POST(request: NextRequest) {
           name: created.name,
           email: created.email,
           phone: created.phone,
-          managedByOwnerId: created.managedByOwnerId,
+          managedByOwnerId: boundOwnerId,
           privileges: created.privileges,
         },
       },
@@ -278,7 +334,6 @@ export async function POST(request: NextRequest) {
     passwordHash,
     role: "caretaker",
     privileges,
-    managedByOwnerId: boundOwnerId,
     isActive: false,
     isVerified: false,
     verificationToken,
@@ -286,6 +341,11 @@ export async function POST(request: NextRequest) {
   });
 
   await sendInviteEmail(email, created.name, "caretaker", verificationToken);
+  await audit("caretaker.invited", String(created._id), {
+    managedByOwnerId: boundOwnerId,
+    name: created.name,
+    privileges: created.privileges ?? privileges,
+  });
 
   return NextResponse.json(
     {
@@ -295,7 +355,7 @@ export async function POST(request: NextRequest) {
         name: created.name,
         email: created.email,
         phone: created.phone ?? "",
-        managedByOwnerId: created.managedByOwnerId,
+        managedByOwnerId: boundOwnerId,
         privileges: created.privileges,
       },
     },

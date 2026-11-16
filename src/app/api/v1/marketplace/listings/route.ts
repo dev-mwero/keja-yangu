@@ -8,6 +8,20 @@ import { ListingPublisher } from "@/models/ListingPublisher";
 import { Property } from "@/models/Property";
 import { Unit } from "@/models/Unit";
 
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function emptyResponse(page: number, limit: number) {
+  return NextResponse.json({
+    listings: [],
+    total: 0,
+    page,
+    limit,
+    totalPages: 0,
+  });
+}
+
 export async function GET(request: NextRequest) {
   await connectToDatabase();
 
@@ -34,16 +48,48 @@ export async function GET(request: NextRequest) {
 
   if (minRent || maxRent) {
     const rentQuery: Record<string, number> = {};
-    if (minRent) rentQuery.$gte = Number(minRent);
-    if (maxRent) rentQuery.$lte = Number(maxRent);
-    query.askingRent = rentQuery;
+    if (minRent && !Number.isNaN(Number(minRent))) rentQuery.$gte = Number(minRent);
+    if (maxRent && !Number.isNaN(Number(maxRent))) rentQuery.$lte = Number(maxRent);
+    if (Object.keys(rentQuery).length > 0) query.askingRent = rentQuery;
   }
 
   if (search) {
     query.$or = [
-      { headline: { $regex: search, $options: "i" } },
-      { description: { $regex: search, $options: "i" } },
+      { headline: { $regex: escapeRegex(search), $options: "i" } },
+      { description: { $regex: escapeRegex(search), $options: "i" } },
     ];
+  }
+
+  // Push county/propertyType filters into the DB query via Property lookup.
+  if (county || propertyType) {
+    const propertyConditions: Record<string, unknown> = { deletedAt: null };
+    if (county) {
+      propertyConditions.location = { $regex: escapeRegex(county), $options: "i" };
+    }
+    if (propertyType) {
+      propertyConditions.type = { $regex: `^${escapeRegex(propertyType)}$`, $options: "i" };
+    }
+    const matchingProperties = await Property.find(propertyConditions).select("_id").lean();
+    const propertyIds = matchingProperties.map((p) => String(p._id));
+    if (propertyIds.length === 0) {
+      return emptyResponse(page, limit);
+    }
+    query.propertyId = { $in: propertyIds };
+  }
+
+  // Push beds filter into the DB query via Unit lookup.
+  if (beds !== null && beds !== undefined && beds !== "") {
+    const bedCount = Number(beds);
+    if (!Number.isNaN(bedCount)) {
+      const matchingUnits = await Unit.find({ beds: bedCount, deletedAt: null })
+        .select("_id")
+        .lean();
+      const unitIds = matchingUnits.map((u) => String(u._id));
+      if (unitIds.length === 0) {
+        return emptyResponse(page, limit);
+      }
+      query.unitId = { $in: unitIds };
+    }
   }
 
   const [total, rawListings] = await Promise.all([
@@ -52,13 +98,7 @@ export async function GET(request: NextRequest) {
   ]);
 
   if (rawListings.length === 0) {
-    return NextResponse.json({
-      listings: [],
-      total: 0,
-      page,
-      limit,
-      totalPages: 0,
-    });
+    return emptyResponse(page, limit);
   }
 
   const propertyIds = [...new Set(rawListings.map((l) => String(l.propertyId)))];
@@ -78,28 +118,13 @@ export async function GET(request: NextRequest) {
   const unitMap = new Map(units.map((u) => [String(u._id), u]));
   const publisherMap = new Map(publishers.map((pub) => [String(pub.listingId), pub]));
 
-  let projected = rawListings.map((listing) => {
+  const projected = rawListings.map((listing) => {
     const property = propertyMap.get(String(listing.propertyId)) || {};
     const unit = unitMap.get(String(listing.unitId)) || {};
     const publisher = publisherMap.get(String(listing._id)) || null;
 
     return toPublicListingProjection(listing as any, property, unit, publisher);
   });
-
-  if (county) {
-    const cLower = county.toLowerCase();
-    projected = projected.filter((item) => item.property.location.toLowerCase().includes(cLower));
-  }
-
-  if (propertyType) {
-    const tLower = propertyType.toLowerCase();
-    projected = projected.filter((item) => item.property.type.toLowerCase() === tLower);
-  }
-
-  if (beds !== null && beds !== undefined && beds !== "") {
-    const bedCount = Number(beds);
-    projected = projected.filter((item) => item.unit.beds === bedCount);
-  }
 
   const totalPages = Math.ceil(total / limit);
 

@@ -28,11 +28,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
   const authUser = authenticate(request);
   const isManager =
-    authUser && ["owner", "caretaker", "custodian", "system-admin"].includes(authUser.role);
+    authUser && ["caretaker", "custodian", "system-admin", "admin"].includes(authUser.role);
   const property = isManager
-    ? await Property.findOne({ _id: id, deletedAt: null })
-        .select("_id blocks ownerId caretakerIds")
-        .lean()
+    ? await Property.findOne({ _id: id, deletedAt: null }).select("_id blocks ownerId").lean()
     : await Property.findOne({
         _id: id,
         status: "available",

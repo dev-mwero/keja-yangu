@@ -15,7 +15,7 @@ import { PATCH } from "@/app/api/v1/property-types/[id]/route";
 const { user, propertytype } = getModelStubs();
 
 const ADMIN_ID = makeObjectId("admin");
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const TYPE_ID = makeObjectId("type");
 
 function typeDoc(overrides: Record<string, unknown> = {}) {
@@ -53,7 +53,7 @@ describe("PATCH /api/v1/property-types/:id", () => {
   });
 
   it("requires the system admin", async () => {
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
     const res = await PATCH(
       buildRequest(`/api/v1/property-types/${TYPE_ID}`, {
         method: "PATCH",

@@ -8,11 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import type { KejaUser, ProfilePatch } from "@/hooks/use-auth";
+import type { AuthUser, ProfilePatch } from "@/hooks/use-auth";
 import { DEFAULT_COUNTRY, normalizeNationalId, parsePhone, toE164 } from "@/lib/phone";
 
 interface AccountDetailsFormProps {
-  user: KejaUser | null;
+  user: AuthUser | null;
   onSave: (patch: ProfilePatch) => Promise<boolean>;
   onSignOut: () => void;
   /** When true (first-run / invited account), show the set-password field. */

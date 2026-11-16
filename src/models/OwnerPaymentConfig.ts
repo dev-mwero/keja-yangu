@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import { DARAJA_ENVIRONMENTS, type DarajaEnvironment } from "@/lib/payments/methods";
 
 /**
@@ -63,5 +63,5 @@ ownerPaymentConfigSchema.index({ billingAccountId: 1 }, { sparse: true });
 export type OwnerPaymentConfigDocument = InferSchemaType<IOwnerPaymentConfig>;
 
 export const OwnerPaymentConfig =
-  models.OwnerPaymentConfig ||
+  mongoose.models.OwnerPaymentConfig ||
   model<IOwnerPaymentConfig>("OwnerPaymentConfig", ownerPaymentConfigSchema);

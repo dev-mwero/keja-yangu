@@ -17,12 +17,12 @@ import { GET, PUT } from "@/app/api/v1/owner/payment-config/route";
 
 const { user, ownerpaymentconfig: configStub } = getModelStubs();
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const TENANT_ID = makeObjectId("tenant");
 const URL = "/api/v1/owner/payment-config";
 
 function ownerDoc() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  return makeUser({ _id: OWNER_ID, role: "admin" });
 }
 
 function tenantDoc() {

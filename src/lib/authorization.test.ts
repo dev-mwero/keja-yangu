@@ -58,28 +58,6 @@ describe("evaluatePolicy", () => {
     expect(result.allowed).toBe(true);
   });
 
-  it("maps the legacy owner role to an admin assignment", () => {
-    const result = evaluatePolicy({
-      actor: actor({ role: "owner" }),
-      action: "unit:read",
-      resource: { propertyId: "property-1" },
-      assignments: [assignment()],
-      now: NOW,
-    });
-    expect(result.allowed).toBe(true);
-  });
-
-  it("denies an owner without an assignment", () => {
-    const result = evaluatePolicy({
-      actor: actor({ role: "owner" }),
-      action: "unit:read",
-      resource: { propertyId: "property-1" },
-      assignments: [],
-      now: NOW,
-    });
-    expect(result).toMatchObject({ allowed: false, reason: "no-matching-assignment" });
-  });
-
   it("denies a different property", () => {
     const result = evaluatePolicy({
       actor: actor(),
@@ -227,7 +205,7 @@ describe("evaluatePolicy", () => {
         assignments: [],
         now: NOW,
       }).allowed,
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("uses the union of active assignments", () => {
@@ -343,7 +321,7 @@ describe("getCapabilities", () => {
     const capabilities = await getCapabilities("user-1");
     expect(capabilities?.global).toBe(false);
     expect(capabilities?.actions).toContain("invoice:read-own");
-    expect(capabilities?.actions).not.toContain("unit:read");
+    expect(capabilities?.actions).toContain("unit:read");
     expect(capabilities?.actions).not.toContain("tenant:manage");
   });
 
@@ -469,6 +447,7 @@ describe("policy action matrix", () => {
       "chat:send",
       "announcement:read",
       "document:read-own",
+      "unit:read",
       "move-request:create",
     ]);
     for (const action of POLICY_ACTIONS) {

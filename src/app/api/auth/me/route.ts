@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import { NextResponse } from "next/server";
 import { decryptField } from "@/lib/crypto";
 import { getJwtSecret } from "@/lib/jwt";
+import { getManagedOwnerId } from "@/lib/managed-owner";
 import { connectToDatabase } from "@/lib/mongoose";
 import { User } from "@/models/User";
 
@@ -32,7 +33,10 @@ export async function GET(request: Request) {
         name: user.name,
         role: user.role,
         privileges: user.privileges ?? [],
-        managedByOwnerId: user.managedByOwnerId ?? "",
+        managedByOwnerId:
+          user.role === "custodian" || user.role === "caretaker"
+            ? ((await getManagedOwnerId(String(user._id))) ?? "")
+            : "",
         phone: user.phone ?? "",
         whatsapp: user.whatsapp ?? "",
         nationalId: decryptField(user.nationalId ?? ""),

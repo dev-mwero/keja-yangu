@@ -36,7 +36,7 @@ const CaretakerDashboard = () => {
 
   const { properties: allProperties, loading } = useProperties();
   const myProperties = useMemo(
-    () => allProperties.filter((p) => p.caretakerIds.includes(caretakerId)),
+    () => allProperties.filter((p) => (p.caretakerIds ?? []).includes(caretakerId)),
     [allProperties, caretakerId],
   );
 

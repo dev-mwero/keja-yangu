@@ -11,6 +11,9 @@ vi.mock("@/lib/notifications", () => ({
   notifyInvoicePaid: vi.fn().mockResolvedValue(true),
 }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Invoice", () => ({ Invoice: getModelStubs().invoice }));
 
@@ -21,7 +24,7 @@ const { user, tenant: tenantStub, invoice: invoiceStub } = getModelStubs();
 const notifyInvoicePaidMock = vi.mocked(notifyInvoicePaid);
 
 const TENANT_USER_ID = makeObjectId("tenant-user");
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const TENANT_A = makeObjectId("tenant-a");
 const INVOICE_ID = makeObjectId("invoice");
 const INVALID_ID = "not-an-objectid";
@@ -31,7 +34,7 @@ function tenantDoc() {
 }
 
 function ownerDoc() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  return makeUser({ _id: OWNER_ID, role: "admin" });
 }
 
 function pendingInvoice() {

@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { getAssignedPropertyIds, getManagedOwnerId } from "@/lib/managed-owner";
 import { connectToDatabase } from "@/lib/mongoose";
 import { authenticate } from "@/lib/permissions";
 import { Invoice } from "@/models/Invoice";
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest) {
   }
 
   await connectToDatabase();
-  const user = await User.findById(auth.userId).select("role isActive managedByOwnerId").lean();
+  const user = await User.findById(auth.userId).select("role isActive").lean();
   if (!user?.isActive) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -48,18 +49,17 @@ export async function GET(request: NextRequest) {
   let scopeOwnerId: string | null = null;
   let assignedPropertyIds: string[] | null = null;
 
-  if (role === "owner") {
+  if (role === "admin") {
     scopeOwnerId = String(user._id);
   } else if (role === "custodian") {
-    if (!user.managedByOwnerId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    scopeOwnerId = user.managedByOwnerId;
+    const managedOwnerId = await getManagedOwnerId(String(user._id));
+    if (!managedOwnerId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    scopeOwnerId = managedOwnerId;
   } else if (role === "caretaker") {
-    if (!user.managedByOwnerId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    scopeOwnerId = user.managedByOwnerId;
-    const assigned = await Property.find({ caretakerIds: String(user._id) })
-      .select("_id")
-      .lean();
-    assignedPropertyIds = assigned.map((p) => String(p._id));
+    const managedOwnerId = await getManagedOwnerId(String(user._id));
+    if (!managedOwnerId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    scopeOwnerId = managedOwnerId;
+    assignedPropertyIds = await getAssignedPropertyIds(String(user._id), "caretaker");
   } else if (role === "tenant") {
     const tenantDoc = await Tenant.findOne({ userId: String(user._id) })
       .select("_id")
@@ -141,7 +141,7 @@ export async function GET(request: NextRequest) {
       href:
         role === "system-admin"
           ? "/dashboard/system-admin/portfolio"
-          : "/dashboard/owner/portfolio",
+          : "/dashboard/admin/portfolio",
     });
   }
   for (const u of units) {
@@ -150,7 +150,7 @@ export async function GET(request: NextRequest) {
       type: "unit",
       title: `Unit ${u.name}`,
       subtitle: u.blockName,
-      href: role === "caretaker" ? "/dashboard/caretaker/units" : "/dashboard/owner/units",
+      href: role === "caretaker" ? "/dashboard/caretaker/units" : "/dashboard/admin/units",
     });
   }
   for (const t of tenants) {
@@ -159,7 +159,7 @@ export async function GET(request: NextRequest) {
       type: "tenant",
       title: t.name,
       subtitle: t.email,
-      href: role === "caretaker" ? "/dashboard/caretaker/tenants" : "/dashboard/owner/tenants",
+      href: role === "caretaker" ? "/dashboard/caretaker/tenants" : "/dashboard/admin/tenants",
     });
   }
   for (const inv of invoices) {
@@ -169,7 +169,7 @@ export async function GET(request: NextRequest) {
       title: inv.invoiceNumber,
       subtitle: `Invoice · ${inv.period}`,
       href:
-        role === "caretaker" ? "/dashboard/caretaker/accounting" : "/dashboard/owner/accounting",
+        role === "caretaker" ? "/dashboard/caretaker/accounting" : "/dashboard/admin/accounting",
     });
   }
   for (const s of staff) {

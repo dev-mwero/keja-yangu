@@ -55,6 +55,12 @@ export const DEFAULT_PROPERTY_PURPOSE: PropertyPurpose = "residential";
 export const LEAD_STATUSES = ["new", "contacted", "approved", "rejected", "converted"] as const;
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
 
+export const TASK_STATUSES = ["open", "in-progress", "done"] as const;
+export type TaskStatus = (typeof TASK_STATUSES)[number];
+
+export const TASK_PRIORITIES = ["low", "medium", "high"] as const;
+export type TaskPriority = (typeof TASK_PRIORITIES)[number];
+
 export const ASSIGNMENT_ACCESS_ROLES = ["admin", "custodian", "caretaker"] as const;
 export type AssignmentAccessRole = (typeof ASSIGNMENT_ACCESS_ROLES)[number];
 

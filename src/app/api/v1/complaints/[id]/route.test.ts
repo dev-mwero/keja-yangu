@@ -8,6 +8,9 @@ vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Complaint", () => ({ Complaint: getModelStubs().complaint }));
 vi.mock("@/lib/notifications", () => ({
@@ -17,10 +20,10 @@ vi.mock("@/lib/notifications", () => ({
 import { PATCH } from "@/app/api/v1/complaints/[id]/route";
 import { notifyComplaintStatusChange } from "@/lib/notifications";
 
-const { user, property, complaint } = getModelStubs();
+const { user, property, complaint, managementAssignment } = getModelStubs();
 const notifyComplaintStatusChangeMock = vi.mocked(notifyComplaintStatusChange);
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const CARETAKER_ID = makeObjectId("caretaker");
 const PROPERTY_ID = makeObjectId("p1");
 const OTHER_PROPERTY_ID = makeObjectId("p2");
@@ -28,14 +31,13 @@ const COMPLAINT_ID = makeObjectId("complaint");
 const INVALID_ID = "not-an-objectid";
 
 function ownerUser() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  return makeUser({ _id: OWNER_ID, role: "admin" });
 }
 
 function caretakerUser(privileges: string[]) {
   return makeUser({
     _id: CARETAKER_ID,
     role: "caretaker",
-    managedByOwnerId: OWNER_ID,
     privileges: privileges as never,
   });
 }
@@ -98,7 +100,7 @@ describe("PATCH /api/v1/complaints/[id]", () => {
   });
 
   it("403 for a foreign owner updating another owner's complaint", async () => {
-    const foreignUser = makeUser({ _id: makeObjectId("other-owner"), role: "owner" });
+    const foreignUser = makeUser({ _id: makeObjectId("other-owner"), role: "admin" });
     user.findById.mockReturnValue(buildQuery(foreignUser));
     complaint.findById.mockReturnValue(buildQuery(openComplaint()));
     const res = await PATCH(
@@ -115,6 +117,20 @@ describe("PATCH /api/v1/complaints/[id]", () => {
   });
 
   it("400 for an invalid payload", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["complaint:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerUser()));
     complaint.findById.mockReturnValue(buildQuery(openComplaint()));
     const res = await PATCH(
@@ -130,6 +146,20 @@ describe("PATCH /api/v1/complaints/[id]", () => {
   });
 
   it("owner updates a complaint status with audit stamps", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["complaint:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerUser()));
     complaint.findById.mockReturnValue(buildQuery(openComplaint()));
     const updated = { ...openComplaint(), status: "resolved" };
@@ -149,12 +179,26 @@ describe("PATCH /api/v1/complaints/[id]", () => {
     expect(updateData.status).toBe("resolved");
     expect(updateData.resolution).toBe("Fixed the tap.");
     expect(updateData.updatedById).toBe(OWNER_ID);
-    expect(updateData.updatedByRole).toBe("owner");
+    expect(updateData.updatedByRole).toBe("admin");
     expect(notifyComplaintStatusChangeMock).toHaveBeenCalledTimes(1);
     expect(notifyComplaintStatusChangeMock).toHaveBeenCalledWith(updated);
   });
 
   it("re-scopes the atomic update with the permission-checked complaint fields", async () => {
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["complaint:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     user.findById.mockReturnValue(buildQuery(ownerUser()));
     const complaintRow = openComplaint();
     const updated = { ...complaintRow, status: "resolved" };
@@ -184,7 +228,7 @@ describe("PATCH /api/v1/complaints/[id]", () => {
       expect.objectContaining({
         status: "resolved",
         updatedById: OWNER_ID,
-        updatedByRole: "owner",
+        updatedByRole: "admin",
       }),
       expect.objectContaining({ new: true }),
     );
@@ -192,6 +236,20 @@ describe("PATCH /api/v1/complaints/[id]", () => {
 
   it("an assigned caretaker with manage_complaints updates an in-scope complaint", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerUser(["manage_complaints"])));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["complaint:read-own", "complaint:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, title: "Sunlit Studio" }]));
     complaint.findById.mockReturnValue(buildQuery(openComplaint()));
     const updated = { ...openComplaint(), status: "in-progress" };

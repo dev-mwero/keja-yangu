@@ -1,6 +1,7 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildRequest, signToken, withParams } from "@/test/utils/api-request";
+import { activeAssignment } from "@/test/utils/assignment-mocks";
 import { makeAnnouncement, makeObjectId, makeUser } from "@/test/utils/factories";
 import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-mocks";
 
@@ -8,15 +9,18 @@ vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Announcement", () => ({ Announcement: getModelStubs().announcement }));
 
 import { DELETE } from "@/app/api/v1/announcements/[id]/route";
 
-const { user, property, announcement } = getModelStubs();
+const { user, property, announcement, managementAssignment } = getModelStubs();
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const CARETAKER_ID = makeObjectId("caretaker");
 const OTHER_OWNER_ID = makeObjectId("owner2");
 const PROPERTY_ID = makeObjectId("p1");
@@ -24,14 +28,13 @@ const OTHER_PROPERTY_ID = makeObjectId("p2");
 const ANNOUNCEMENT_ID = makeObjectId("announcement");
 
 function ownerUser() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  return makeUser({ _id: OWNER_ID, role: "admin" });
 }
 
 function caretakerUser() {
   return makeUser({
     _id: CARETAKER_ID,
     role: "caretaker",
-    managedByOwnerId: OWNER_ID,
     privileges: ["manage_announcements"] as never,
   });
 }
@@ -78,6 +81,17 @@ describe("DELETE /api/v1/announcements/[id]", () => {
 
   it("lets an owner delete their own announcement", async () => {
     user.findById.mockReturnValue(buildQuery(ownerUser()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          propertyId: PROPERTY_ID,
+          permissions: ["announcement:manage"],
+        }),
+      ]),
+    );
+    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, ownerId: OWNER_ID }]));
     announcement.findById.mockReturnValue(
       buildQuery(makeAnnouncement({ _id: ANNOUNCEMENT_ID, ownerId: OWNER_ID, propertyId: "" })),
     );
@@ -111,7 +125,17 @@ describe("DELETE /api/v1/announcements/[id]", () => {
 
   it("lets a caretaker delete an announcement they authored for their managed owner", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerUser()));
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID }]));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          propertyId: PROPERTY_ID,
+          permissions: ["announcement:read", "announcement:manage"],
+        }),
+      ]),
+    );
+    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID, ownerId: OWNER_ID }]));
     announcement.findById.mockReturnValue(
       buildQuery(
         makeAnnouncement({
@@ -137,7 +161,16 @@ describe("DELETE /api/v1/announcements/[id]", () => {
 
   it("forbids a caretaker from deleting an announcement the owner authored", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerUser()));
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID }]));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          propertyId: PROPERTY_ID,
+          permissions: ["announcement:read", "announcement:manage"],
+        }),
+      ]),
+    );
     announcement.findById.mockReturnValue(
       buildQuery(
         makeAnnouncement({
@@ -160,7 +193,16 @@ describe("DELETE /api/v1/announcements/[id]", () => {
 
   it("forbids a caretaker from deleting an announcement outside their properties", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerUser()));
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID }]));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          propertyId: PROPERTY_ID,
+          permissions: ["announcement:read", "announcement:manage"],
+        }),
+      ]),
+    );
     announcement.findById.mockReturnValue(
       buildQuery(
         makeAnnouncement({

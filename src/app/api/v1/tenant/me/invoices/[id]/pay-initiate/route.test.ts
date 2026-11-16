@@ -8,6 +8,9 @@ vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Invoice", () => ({ Invoice: getModelStubs().invoice }));
 vi.mock("@/models/Payment", () => ({ Payment: getModelStubs().payment }));
@@ -96,7 +99,7 @@ describe("POST /api/v1/tenant/me/invoices/[id]/pay-initiate", () => {
 
   it("403 for a non-tenant role", async () => {
     user.findById.mockReturnValue(
-      buildQuery(makeUser({ _id: makeObjectId("pi-owner"), role: "owner" })),
+      buildQuery(makeUser({ _id: makeObjectId("pi-owner"), role: "admin" })),
     );
     const res = await POST(
       buildRequest(`/api/v1/tenant/me/invoices/${INVOICE_ID}/pay-initiate`, {

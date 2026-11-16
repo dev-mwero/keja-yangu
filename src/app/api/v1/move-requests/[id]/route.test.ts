@@ -13,6 +13,9 @@ vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 vi.mock("@/lib/notifications", () => ({
   notifyMoveRequestDecided: vi.fn().mockResolvedValue(true),
   notifyUnitAvailable: vi.fn().mockResolvedValue(true),
@@ -24,13 +27,12 @@ vi.mock("@/lib/attributions", () => ({
 import { PATCH } from "@/app/api/v1/move-requests/[id]/route";
 import { notifyMoveRequestDecided } from "@/lib/notifications";
 
-const { user, moverrequest, unit, lease, tenant, property } = getModelStubs();
+const { user, moverrequest, unit, lease, tenant, property, managementAssignment } = getModelStubs();
 const notifyMoveRequestDecidedMock = vi.mocked(notifyMoveRequestDecided);
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const CUSTODIAN_ID = makeObjectId("custodian");
 const CARETAKER_ID = makeObjectId("caretaker");
-const OTHER_OWNER_ID = makeObjectId("other-owner");
 const TENANT_ID = makeObjectId("tenant");
 const TENANT_DOC_ID = makeObjectId("tenantdoc");
 const PROP_ID = makeObjectId("prop");
@@ -63,13 +65,31 @@ function moveRequest(overrides: Record<string, unknown> = {}) {
 // unitDoc helper no longer used with allocation-based logic.
 
 function authOwner() {
-  user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+  user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+  managementAssignment.find.mockReturnValue(
+    buildQuery([
+      {
+        principalUserId: OWNER_ID,
+        accessRole: "admin",
+        scopeType: "property",
+        propertyId: PROP_ID,
+        permissions: ["move-request:manage"],
+        status: "active",
+        startsAt: new Date("2026-01-01T00:00:00.000Z"),
+        endsAt: null,
+      },
+    ]),
+  );
 }
 
 describe("PATCH /api/v1/move-requests/[id]", () => {
   beforeEach(() => {
     resetModelStubs();
     notifyMoveRequestDecidedMock.mockReset().mockResolvedValue(true);
+    unit.findById.mockReturnValue(
+      buildQuery({ _id: UNIT_ID, propertyId: PROP_ID, blockId: makeObjectId("block") }),
+    );
+    property.findOne.mockReturnValue(buildQuery({ _id: PROP_ID, lifecycleState: "active" }));
   });
 
   it("404 when the request does not exist", async () => {
@@ -103,11 +123,7 @@ describe("PATCH /api/v1/move-requests/[id]", () => {
   });
 
   it("403 when a custodian decides a foreign owner's request", async () => {
-    user.findById.mockReturnValue(
-      buildQuery(
-        makeUser({ _id: CUSTODIAN_ID, role: "custodian", managedByOwnerId: OTHER_OWNER_ID }),
-      ),
-    );
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: CUSTODIAN_ID, role: "custodian" })));
     moverrequest.findById.mockResolvedValue(moveRequest());
     const res = await PATCH(
       buildRequest(`/api/v1/move-requests/${MR_ID}`, {
@@ -127,7 +143,6 @@ describe("PATCH /api/v1/move-requests/[id]", () => {
         makeUser({
           _id: CARETAKER_ID,
           role: "caretaker",
-          managedByOwnerId: OWNER_ID,
           privileges: ["process_move_requests"] as never,
         }),
       ),
@@ -144,11 +159,6 @@ describe("PATCH /api/v1/move-requests/[id]", () => {
       withParams(MR_ID),
     );
     expect(res.status).toBe(403);
-    expect(property.findOne).toHaveBeenCalledWith({
-      _id: PROP_ID,
-      ownerId: OWNER_ID,
-      caretakerIds: CARETAKER_ID,
-    });
     expect(notifyMoveRequestDecidedMock).not.toHaveBeenCalled();
   });
 
@@ -158,10 +168,23 @@ describe("PATCH /api/v1/move-requests/[id]", () => {
         makeUser({
           _id: CARETAKER_ID,
           role: "caretaker",
-          managedByOwnerId: OWNER_ID,
           privileges: ["process_move_requests"] as never,
         }),
       ),
+    );
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROP_ID,
+          permissions: ["move-request:manage"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
     );
     moverrequest.findById.mockResolvedValue(moveRequest());
     property.findOne.mockReturnValue(buildQuery({ _id: PROP_ID }));
@@ -237,7 +260,14 @@ describe("PATCH /api/v1/move-requests/[id]", () => {
         status: "active",
       }),
     );
-    unit.findById.mockReturnValue(buildQuery({ _id: UNIT_ID, propertyId: PROP_ID, rent: 30000 }));
+    unit.findById.mockReturnValue(
+      buildQuery({
+        _id: UNIT_ID,
+        propertyId: PROP_ID,
+        blockId: makeObjectId("block"),
+        rent: 30000,
+      }),
+    );
     unit.findOneAndUpdate.mockReturnValue(
       buildQuery({ _id: UNIT_ID, propertyId: PROP_ID, status: "occupied", tenantId: TENANT_ID }),
     );
@@ -296,7 +326,14 @@ describe("PATCH /api/v1/move-requests/[id]", () => {
         status: "active",
       }),
     );
-    unit.findById.mockReturnValue(buildQuery({ _id: UNIT_ID, propertyId: PROP_ID, rent: 30000 }));
+    unit.findById.mockReturnValue(
+      buildQuery({
+        _id: UNIT_ID,
+        propertyId: PROP_ID,
+        blockId: makeObjectId("block"),
+        rent: 30000,
+      }),
+    );
     unit.findOneAndUpdate.mockReturnValue(
       buildQuery({ _id: UNIT_ID, propertyId: PROP_ID, status: "occupied", tenantId: TENANT_ID }),
     );
@@ -342,7 +379,6 @@ describe("PATCH /api/v1/move-requests/[id]", () => {
       withParams(MR_ID),
     );
     expect(res.status).toBe(200);
-    expect(unit.findById).not.toHaveBeenCalled();
     expect(lease.updateMany).not.toHaveBeenCalled();
     expect(notifyMoveRequestDecidedMock).not.toHaveBeenCalled();
   });

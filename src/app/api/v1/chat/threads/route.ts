@@ -7,7 +7,7 @@ import {
   readJsonBody,
   resolveDashboardActor,
 } from "@/app/api/v1/_helpers";
-import { serializeThread, type ThreadEnrichment } from "@/lib/chat";
+import { countUnreadByThread, serializeThread, type ThreadEnrichment } from "@/lib/chat";
 import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
 import { requirePermission } from "@/lib/permissions";
@@ -15,6 +15,7 @@ import { checkSameOrigin, rateLimit } from "@/lib/rate-limit";
 import { chatThreadInput } from "@/lib/schemas";
 import { ChatMessage } from "@/models/ChatMessage";
 import { ChatThread } from "@/models/ChatThread";
+import { ManagementAssignment } from "@/models/ManagementAssignment";
 import { Property } from "@/models/Property";
 import { Tenant } from "@/models/Tenant";
 import { User } from "@/models/User";
@@ -39,13 +40,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(buildPaginationResult([], 0, page, limit));
     }
     filter.tenantId = { $in: actor.tenantIds };
-  } else if (actor.role === "owner") {
-    filter.ownerId = actor.userId;
   } else if (actor.role === "caretaker") {
     filter.agentUserId = actor.userId;
   } else if (actor.role === "custodian") {
-    // Owner-delegate: every thread in the managed owner's portfolio.
-    filter.ownerId = actor.managedByOwnerId;
+    const scopes: Record<string, unknown>[] = [];
+    if (actor.propertyScopeIds.length > 0) {
+      scopes.push({ propertyId: { $in: actor.propertyScopeIds } });
+    }
+    if (actor.assignedTenantIds.length > 0) {
+      scopes.push({ tenantId: { $in: actor.assignedTenantIds } });
+    }
+    if (scopes.length === 0) {
+      return NextResponse.json(buildPaginationResult([], 0, page, limit));
+    }
+    filter.$or = scopes;
   } else if (actor.role === "admin") {
     const scopes: Record<string, unknown>[] = [];
     if (actor.propertyScopeIds.length > 0) {
@@ -81,21 +89,32 @@ export async function GET(request: NextRequest) {
   );
   const titles = await propertyTitleMap(threads.map((thread) => thread.propertyId));
 
-  const data: ReturnType<typeof serializeThread>[] = [];
+  // Batched unread counts: one candidate-messages fetch replaces the old
+  // per-thread `countDocuments` loop. Candidates are other-side messages in
+  // this page's threads newer than the page's oldest read watermark;
+  // per-thread counting then applies each thread's own watermark.
+  let oldestReadAt: Date | null = null;
   for (const thread of threads) {
     const readAt = actor.role === "tenant" ? thread.tenantLastReadAt : thread.agentLastReadAt;
-    const unreadFilter: Record<string, unknown> = {
-      threadId: String(thread._id),
-      senderUserId: { $ne: actor.userId },
-    };
-    if (readAt) unreadFilter.createdAt = { $gt: readAt };
-    const unread = await ChatMessage.countDocuments(unreadFilter);
+    if (readAt && (oldestReadAt === null || readAt < oldestReadAt)) oldestReadAt = readAt;
+  }
+  const unreadFilter: Record<string, unknown> = {
+    threadId: { $in: threads.map((thread) => String(thread._id)) },
+    senderUserId: { $ne: actor.userId },
+  };
+  if (oldestReadAt) unreadFilter.createdAt = { $gt: oldestReadAt };
+  const candidateMessages = threads.length
+    ? await ChatMessage.find(unreadFilter).select("threadId createdAt").lean()
+    : [];
+  const unreadByThread = countUnreadByThread(threads, actor.role, candidateMessages);
 
+  const data: ReturnType<typeof serializeThread>[] = [];
+  for (const thread of threads) {
     const enrichment: ThreadEnrichment = {
       agentName: agentNames.get(thread.agentUserId) ?? "Property team",
       tenantName: tenantNames.get(thread.tenantId) ?? "Tenant",
       propertyTitle: titles.get(thread.propertyId) ?? "",
-      unread,
+      unread: unreadByThread.get(String(thread._id)) ?? 0,
     };
     data.push(serializeThread(thread, enrichment, actor.role));
   }
@@ -159,19 +178,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const property = await Property.findById(propertyId).select("ownerId caretakerIds").lean();
+  const property = await Property.findById(propertyId).select("ownerId").lean();
   if (!property) {
     return NextResponse.json({ error: "Property not found" }, { status: 404 });
   }
   const recipientId = parsed.data.recipientId;
-  const agentMatchesRole =
-    (parsed.data.role === "owner" && property.ownerId === recipientId) ||
-    (parsed.data.role === "caretaker" && (property.caretakerIds ?? []).includes(recipientId));
+  let agentMatchesRole = parsed.data.role === "owner" && property.ownerId === recipientId;
+  if (!agentMatchesRole && parsed.data.role === "caretaker") {
+    const caretakerAssignment = await ManagementAssignment.findOne({
+      principalUserId: recipientId,
+      propertyId,
+      accessRole: "caretaker",
+      status: "active",
+    }).lean();
+    agentMatchesRole = Boolean(caretakerAssignment);
+  }
   if (!agentMatchesRole) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const agent = await User.findById(recipientId).select("role").lean();
-  if (!agent || agent.role !== parsed.data.role) {
+  const roleMatches =
+    parsed.data.role === "owner" ? agent?.role === "admin" : agent?.role === "caretaker";
+  if (!agent || !roleMatches) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

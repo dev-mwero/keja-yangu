@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { writeAuditEvent } from "@/lib/audit";
 import { sendInviteEmail } from "@/lib/email";
 import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
@@ -132,10 +133,6 @@ export async function GET(request: NextRequest) {
   if (ownerId) {
     if (scope.role === "system-admin") {
       scope.filter.ownerId = ownerId;
-    } else if (scope.role === "owner") {
-      if (ownerId !== scope.userId) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
     } else {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -196,17 +193,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Property not found" }, { status: 422 });
   }
 
-  if (scope.role === "owner" && property.ownerId !== scope.userId) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
   if (scope.role === "admin" && !scope.propertyScopeIds?.includes(parsed.data.propertyId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (
-    scope.role === "caretaker" &&
-    (!property.caretakerIds?.includes(scope.userId) || property.ownerId !== scope.managedByOwnerId)
-  ) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (scope.role === "caretaker" || scope.role === "custodian") {
+    const covered = scope.propertyScopeIds?.includes(parsed.data.propertyId) ?? false;
+    if (!covered) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   const status = scope.role === "caretaker" ? "pending" : (parsed.data.status ?? "pending");
@@ -285,6 +279,23 @@ export async function POST(request: NextRequest) {
       userId,
     });
 
+    await writeAuditEvent({
+      actor: { userId: scope.userId, role: scope.role },
+      action: "tenant.created",
+      entityType: "tenant",
+      entityId: String(tenant._id),
+      scope: { propertyId: parsed.data.propertyId },
+      after: {
+        status: "active",
+        propertyId: parsed.data.propertyId,
+        type: parsed.data.type,
+      },
+      request: {
+        ip: request.headers.get("x-forwarded-for"),
+        userAgent: request.headers.get("user-agent"),
+      },
+    });
+
     const created = await Tenant.findById(tenant._id).select(TENANT_SAFE_FIELDS).lean();
     return NextResponse.json(
       {
@@ -332,6 +343,23 @@ export async function POST(request: NextRequest) {
     joinedAt: status === "active" ? new Date() : undefined,
     notes: parsed.data.notes,
     userId,
+  });
+
+  await writeAuditEvent({
+    actor: { userId: scope.userId, role: scope.role },
+    action: "tenant.created",
+    entityType: "tenant",
+    entityId: String(tenant._id),
+    scope: { propertyId: parsed.data.propertyId },
+    after: {
+      status,
+      propertyId: parsed.data.propertyId,
+      type: parsed.data.type,
+    },
+    request: {
+      ip: request.headers.get("x-forwarded-for"),
+      userAgent: request.headers.get("user-agent"),
+    },
   });
 
   if (!existingUser) {

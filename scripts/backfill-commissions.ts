@@ -1,9 +1,12 @@
+import dotenv from "dotenv";
 import {
   accrueCommissionForSettledInvoice,
   previewCommissionForSettledInvoice,
 } from "@/lib/commission";
 import { connectToDatabase } from "@/lib/mongoose";
 import { Invoice } from "@/models/Invoice";
+
+dotenv.config({ path: ".env.local" });
 
 async function main() {
   const apply = process.argv.includes("--apply");

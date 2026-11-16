@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 
 /**
  * Records that a user viewed a property, to power a "Recently viewed" row on
@@ -16,4 +16,4 @@ propertyViewSchema.index({ userId: 1, viewedAt: -1 });
 export type PropertyViewDocument = InferSchemaType<typeof propertyViewSchema>;
 
 export const PropertyView =
-  models.PropertyView || model<PropertyViewDocument>("PropertyView", propertyViewSchema);
+  mongoose.models.PropertyView || model<PropertyViewDocument>("PropertyView", propertyViewSchema);

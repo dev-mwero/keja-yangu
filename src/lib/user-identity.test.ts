@@ -124,7 +124,6 @@ describe("createPhoneOnlyAccount", () => {
       role: "caretaker",
       name: " New Caretaker ",
       phone: "0712345678",
-      managedByOwnerId: makeObjectId("owner"),
       privileges: ["manage_tenants"],
     });
 
@@ -138,7 +137,6 @@ describe("createPhoneOnlyAccount", () => {
       role: "caretaker",
       isActive: true,
       isVerified: true,
-      managedByOwnerId: makeObjectId("owner"),
       privileges: ["manage_tenants"],
     });
     expect(typeof payload.passwordHash).toBe("string");

@@ -4,6 +4,7 @@ import { Bell, User as UserIcon } from "lucide-react";
 import { toast } from "sonner";
 import { AccountDetailsForm } from "@/components/account/AccountDetailsForm";
 import { DashboardShell } from "@/components/DashboardShell";
+import { SupportEmailNote } from "@/components/settings/SupportEmailNote";
 import {
   Select,
   SelectContent,
@@ -130,6 +131,8 @@ const CaretakerSettingsPage = () => {
           </div>
         </section>
       </div>
+
+      <SupportEmailNote />
     </DashboardShell>
   );
 };

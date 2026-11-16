@@ -1,6 +1,7 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildRequest, signToken, withParams } from "@/test/utils/api-request";
+import { activeAssignment } from "@/test/utils/assignment-mocks";
 import {
   makeChatMessage,
   makeChatThread,
@@ -18,6 +19,9 @@ vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/ChatThread", () => ({ ChatThread: getModelStubs().chatthread }));
 vi.mock("@/models/ChatMessage", () => ({ ChatMessage: getModelStubs().chatmessage }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 vi.mock("@/lib/notifications", () => ({
   notifyMessageReply: vi.fn().mockResolvedValue(true),
 }));
@@ -25,10 +29,10 @@ vi.mock("@/lib/notifications", () => ({
 import { GET, POST } from "@/app/api/v1/chat/threads/[id]/messages/route";
 import { notifyMessageReply } from "@/lib/notifications";
 
-const { user, tenant, property, chatthread, chatmessage } = getModelStubs();
+const { user, tenant, property, chatthread, chatmessage, managementAssignment } = getModelStubs();
 
 const USER_ID = makeObjectId("user");
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const CUSTODIAN_ID = makeObjectId("custodian");
 const AGENT_ID = makeObjectId("agent");
 const TENANT_ID = makeObjectId("tenant");
@@ -41,15 +45,10 @@ function tenantUser() {
   return makeUser({ _id: USER_ID, role: "tenant" });
 }
 
-function ownerUser() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
-}
-
 function caretakerUser(privileges: string[]) {
   return makeUser({
     _id: AGENT_ID,
     role: "caretaker",
-    managedByOwnerId: OWNER_ID,
     privileges: privileges as never,
   });
 }
@@ -58,7 +57,6 @@ function custodianUser() {
   return makeUser({
     _id: CUSTODIAN_ID,
     role: "custodian",
-    managedByOwnerId: OWNER_ID,
   });
 }
 
@@ -293,16 +291,24 @@ describe("POST /api/v1/chat/threads/[id]/messages", () => {
   });
 
   it("an owner sends on their own property thread", async () => {
-    user.findById
-      .mockReturnValueOnce(buildQuery(ownerUser()))
-      .mockReturnValueOnce(buildQuery(ownerUser()));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          propertyId: PROPERTY_ID,
+          permissions: ["chat:read-own", "chat:send"],
+        }),
+      ]),
+    );
     tenant.findById.mockReturnValue(buildQuery({ _id: TENANT_ID, userId: USER_ID }));
     chatthread.findById.mockReturnValue(buildQuery(threadRow()));
     const created = makeChatMessage({
       _id: MESSAGE_ID,
       threadId: THREAD_ID,
       senderUserId: OWNER_ID,
-      senderRole: "owner",
+      senderRole: "admin" as any,
       text: "Noted",
     });
     chatmessage.create.mockResolvedValue(created);
@@ -328,9 +334,17 @@ describe("POST /api/v1/chat/threads/[id]/messages", () => {
   });
 
   it("a custodian sends on a thread in the managed portfolio", async () => {
-    user.findById
-      .mockReturnValueOnce(buildQuery(custodianUser()))
-      .mockReturnValueOnce(buildQuery(custodianUser()));
+    user.findById.mockReturnValue(buildQuery(custodianUser()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: CUSTODIAN_ID,
+          accessRole: "custodian",
+          propertyId: PROPERTY_ID,
+          permissions: ["chat:read-own", "chat:send"],
+        }),
+      ]),
+    );
     tenant.findById.mockReturnValue(buildQuery({ _id: TENANT_ID, userId: USER_ID }));
     chatthread.findById.mockReturnValue(buildQuery(threadRow()));
     const created = makeChatMessage({

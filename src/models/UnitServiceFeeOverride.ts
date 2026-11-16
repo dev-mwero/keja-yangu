@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 
 /**
  * Per-unit deviation from a property's service-fee template. A missing row
@@ -26,5 +26,5 @@ unitServiceFeeOverrideSchema.index({ propertyId: 1, unitId: 1 });
 export type UnitServiceFeeOverrideDocument = InferSchemaType<typeof unitServiceFeeOverrideSchema>;
 
 export const UnitServiceFeeOverride =
-  models.UnitServiceFeeOverride ||
+  mongoose.models.UnitServiceFeeOverride ||
   model<UnitServiceFeeOverrideDocument>("UnitServiceFeeOverride", unitServiceFeeOverrideSchema);

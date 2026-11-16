@@ -31,10 +31,18 @@ export async function GET(request: NextRequest) {
 
   if (user.role === "admin") {
     const scope = await getAdminAssignmentScope(String(user._id), "application:manage");
-    if (scope.propertyScopeIds.length === 0) {
+    const scopes: Record<string, unknown>[] = [];
+    if (scope.propertyScopeIds.length > 0) {
+      scopes.push({ propertyId: { $in: scope.propertyScopeIds } });
+    }
+    const assignedUnitIds = scope.assignedUnitIds ?? [];
+    if (assignedUnitIds.length > 0) {
+      scopes.push({ unitId: { $in: assignedUnitIds } });
+    }
+    if (scopes.length === 0) {
       return NextResponse.json(buildPaginationResult([], 0, page, limit));
     }
-    filter.propertyId = { $in: scope.propertyScopeIds };
+    filter.$or = scopes;
   }
 
   const [items, total] = await Promise.all([

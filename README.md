@@ -1,4 +1,4 @@
-# Keja Yangu
+# Custodian Homes
 
 A modern property rental and tenant management platform built with Next.js, TypeScript, and MongoDB.
 
@@ -212,7 +212,7 @@ EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
 EMAIL_USER=your-email@gmail.com
 EMAIL_PASS=your-app-password
-EMAIL_FROM=Keja Yangu <no-reply@keja.co>
+EMAIL_FROM=Custodian Homes <info@custodianhomes.co.ke>
 
 # Paystack (test keys)
 PAYSTACK_SECRET_KEY=
@@ -226,8 +226,8 @@ UPLOADTHING_TOKEN=
 
 | Role | Dashboard | Access |
 |------|-----------|--------|
-| Owner | `/dashboard/owner` | Portfolio, accounting, reports; manages custodians, caretakers and tenants |
-| Custodian | `/dashboard/custodian` | Owner-delegated portfolio management for a single owner; cannot manage other owners |
+| Admin | `/dashboard/admin` | Portfolio, accounting, reports; manages custodians, caretakers and tenants |
+| Custodian | `/dashboard/custodian` | Admin-delegated portfolio management for a single portfolio; cannot manage other portfolios |
 | Caretaker | `/dashboard/caretaker` | Assigned properties, tenant requests; read-only unless granted privileges |
 | Tenant | `/dashboard/tenant` | Applications, payments, complaints, move-out requests |
 | system-admin | `/dashboard/system-admin` | Full control over properties, tenants, and caretaker privileges |

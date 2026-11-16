@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import { softDeletePlugin } from "@/lib/mongoose-soft-delete";
 
 /**
@@ -29,4 +29,4 @@ softDeletePlugin(propertyTypeSchema);
 export type PropertyTypeDocument = InferSchemaType<typeof propertyTypeSchema>;
 
 export const PropertyTypeModel =
-  models.PropertyType || model<PropertyTypeDocument>("PropertyType", propertyTypeSchema);
+  mongoose.models.PropertyType || model<PropertyTypeDocument>("PropertyType", propertyTypeSchema);

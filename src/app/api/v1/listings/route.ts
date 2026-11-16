@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { generateListingShareCode } from "@/lib/listings";
+import { getManagedOwnerId } from "@/lib/managed-owner";
 import { connectToDatabase } from "@/lib/mongoose";
 import { buildPaginationResult, parsePagination } from "@/lib/pagination";
 import { authenticate } from "@/lib/permissions";
@@ -35,6 +36,21 @@ async function getAuthorizedPropertyIds(user: {
     }
   }
 
+  if (role === "caretaker") {
+    const managedByOwnerId = await getManagedOwnerId(userId);
+    if (!managedByOwnerId) return [];
+    const caretakerAssignments = await ManagementAssignment.find({
+      principalUserId: userId,
+      accessRole: "caretaker",
+      status: "active",
+    })
+      .select("propertyId")
+      .lean();
+    for (const a of caretakerAssignments) {
+      if (a.propertyId) propIds.add(String(a.propertyId));
+    }
+  }
+
   return [...propIds];
 }
 
@@ -48,7 +64,7 @@ export async function GET(request: NextRequest) {
   const user = await User.findById(auth.userId).select("role isActive").lean();
   if (
     !user?.isActive ||
-    (user.role !== "admin" && user.role !== "owner" && user.role !== "system-admin")
+    (user.role !== "admin" && user.role !== "system-admin" && user.role !== "caretaker")
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -108,7 +124,7 @@ export async function POST(request: NextRequest) {
   const user = await User.findById(auth.userId).select("role isActive").lean();
   if (
     !user?.isActive ||
-    (user.role !== "admin" && user.role !== "owner" && user.role !== "system-admin")
+    (user.role !== "admin" && user.role !== "system-admin" && user.role !== "caretaker")
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

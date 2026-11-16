@@ -11,6 +11,9 @@ vi.mock("@/lib/notifications", () => ({
   notifyOverdueInvoices: vi.fn().mockResolvedValue(true),
 }));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 vi.mock("@/models/Tenant", () => ({ Tenant: getModelStubs().tenant }));
 vi.mock("@/models/Invoice", () => ({ Invoice: getModelStubs().invoice }));
 vi.mock("@/models/OwnerPaymentConfig", () => ({
@@ -29,7 +32,7 @@ const {
 const notifyOverdueInvoicesMock = vi.mocked(notifyOverdueInvoices);
 
 const TENANT_USER_ID = makeObjectId("tenant-user");
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const TENANT_A = makeObjectId("tenant-a");
 const TENANT_B = makeObjectId("tenant-b");
 
@@ -38,7 +41,7 @@ function tenantDoc() {
 }
 
 function ownerDoc() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  return makeUser({ _id: OWNER_ID, role: "admin" });
 }
 
 async function json(res: Response) {
@@ -95,7 +98,7 @@ describe("GET /api/v1/tenant/me/invoices", () => {
       buildRequest("/api/v1/tenant/me/invoices", { token: signToken(TENANT_USER_ID) }),
     );
     expect(res.status).toBe(200);
-    expect(tenantStub.find).toHaveBeenCalledWith({ userId: TENANT_USER_ID });
+    expect(tenantStub.find).toHaveBeenCalledWith({ userId: TENANT_USER_ID, deletedAt: null });
     expect(invoiceStub.find).toHaveBeenCalledWith({ tenantId: { $in: [TENANT_A, TENANT_B] } });
   });
 

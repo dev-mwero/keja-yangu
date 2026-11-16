@@ -16,7 +16,7 @@ const runMiddleware = (ourFileRouter.propertyImages as unknown as { middleware: 
   .middleware;
 
 function reqWithToken(): Request {
-  const token = signToken("user-1", { role: "owner", name: "Ada" });
+  const token = signToken("user-1", { role: "admin", name: "Ada" });
   return new Request("http://localhost:3000/api/uploadthing", {
     method: "POST",
     headers: { cookie: `keja-token=${token}` },
@@ -54,13 +54,13 @@ describe("uploadthing propertyImages middleware", () => {
   });
 
   it("rejects a deactivated user even with a valid token", async () => {
-    getModelStubs().user.findById.mockReturnValue(buildQuery({ isActive: false, role: "owner" }));
+    getModelStubs().user.findById.mockReturnValue(buildQuery({ isActive: false, role: "admin" }));
     await expect(runMiddleware({ req: reqWithToken() })).rejects.toThrow();
   });
 
   it("allows an active user and returns the uploader identity", async () => {
-    getModelStubs().user.findById.mockReturnValue(buildQuery({ isActive: true, role: "owner" }));
+    getModelStubs().user.findById.mockReturnValue(buildQuery({ isActive: true, role: "admin" }));
     const result = await runMiddleware({ req: reqWithToken() });
-    expect(result).toMatchObject({ uploadedBy: "user-1", role: "owner" });
+    expect(result).toMatchObject({ uploadedBy: "user-1", role: "admin" });
   });
 });

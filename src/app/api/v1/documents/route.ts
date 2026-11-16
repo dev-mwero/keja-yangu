@@ -37,8 +37,6 @@ export async function GET(request: NextRequest) {
       { scope: "tenant", tenantId: { $in: actor.tenantIds } },
       { scope: "property", propertyId: { $in: actor.tenantPropertyIds } },
     ];
-  } else if (actor.role === "owner") {
-    filter.ownerId = actor.userId;
   } else if (actor.role === "custodian") {
     filter.ownerId = actor.managedByOwnerId;
   } else if (actor.role === "caretaker") {
@@ -130,6 +128,9 @@ export async function POST(request: NextRequest) {
   if (actor.role === "caretaker" && propertyId && !actor.assignedPropertyIds.includes(propertyId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (actor.role === "admin" && propertyId && !actor.assignedPropertyIds.includes(propertyId)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   let ownerId = portfolioOwnerId;
   if (propertyId) {
@@ -137,7 +138,7 @@ export async function POST(request: NextRequest) {
     if (!property) {
       return NextResponse.json({ error: "Property not found" }, { status: 404 });
     }
-    if (actor.role === "system-admin") {
+    if (actor.role === "system-admin" || actor.role === "admin") {
       ownerId = property.ownerId;
     } else if (property.ownerId !== portfolioOwnerId) {
       return NextResponse.json(
@@ -153,11 +154,15 @@ export async function POST(request: NextRequest) {
     if (!tenant) {
       return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
     }
-    if (actor.role !== "system-admin" && tenant.ownerId !== portfolioOwnerId) {
+    if (
+      actor.role !== "system-admin" &&
+      actor.role !== "admin" &&
+      tenant.ownerId !== portfolioOwnerId
+    ) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     if (
-      actor.role === "caretaker" &&
+      (actor.role === "caretaker" || actor.role === "admin") &&
       tenant.propertyId &&
       !actor.assignedPropertyIds.includes(tenant.propertyId)
     ) {

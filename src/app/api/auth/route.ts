@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { getAppUrl } from "@/lib/brand";
 import { encryptField } from "@/lib/crypto";
 import { isEmailConfigured, sendPasswordResetEmail, sendVerificationEmail } from "@/lib/email";
 import { getJwtSecret } from "@/lib/jwt";
@@ -26,7 +27,7 @@ const signUpSchema = z.object({
   name: z.string().min(2, "Tell us your name"),
   email: z.string().email("Enter a valid email"),
   password: z.string().min(8, "At least 8 characters"),
-  role: z.enum(["tenant", "caretaker", "owner"]),
+  role: z.enum(["tenant", "caretaker", "admin"]),
   phone: z
     .string()
     .trim()
@@ -65,11 +66,24 @@ async function generateVerificationToken(): Promise<string> {
 
 function issueSession(
   response: NextResponse,
-  user: { _id?: unknown; id?: string; email: string; role: string; name?: string },
+  user: {
+    _id?: unknown;
+    id?: string;
+    email: string;
+    role: string;
+    name?: string;
+    tokenVersion?: number;
+  },
 ): NextResponse {
   const userId = user._id ? String(user._id) : (user.id ?? "");
   const token = jwt.sign(
-    { userId, email: user.email, role: user.role, name: user.name },
+    {
+      userId,
+      email: user.email,
+      role: user.role,
+      name: user.name,
+      tokenVersion: user.tokenVersion ?? 0,
+    },
     getJwtSecret(),
     { expiresIn: "7d" },
   );
@@ -182,10 +196,11 @@ export async function POST(request: Request) {
         const adoptable =
           !existing.isActive &&
           !existing.isVerified &&
-          existing.managedByOwnerId &&
           (existing.role === "caretaker" ||
             existing.role === "tenant" ||
-            existing.role === "custodian");
+            existing.role === "custodian" ||
+            existing.role === "admin" ||
+            existing.role === "broker");
         if (adoptable) {
           const passwordHash = await bcrypt.hash(parsed.data.password, 12);
           const verificationToken = await generateVerificationToken();
@@ -201,7 +216,7 @@ export async function POST(request: Request) {
           existing.verificationTokenExpiry = verificationTokenExpiry;
           await existing.save();
 
-          const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+          const appBaseUrl = getAppUrl();
           const verifyUrl = `${appBaseUrl}/auth/verify?token=${verificationToken}`;
 
           const emailSent = isEmailConfigured()
@@ -243,7 +258,7 @@ export async function POST(request: Request) {
         verificationTokenExpiry,
       });
 
-      const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+      const appBaseUrl = getAppUrl();
       const verifyUrl = `${appBaseUrl}/auth/verify?token=${verificationToken}`;
 
       const emailSent = isEmailConfigured()
@@ -286,7 +301,7 @@ export async function POST(request: Request) {
       }
 
       // Activate pending invited accounts (created inactive)
-      const isPendingInvite = !user.isActive || Boolean(user.managedByOwnerId);
+      const isPendingInvite = !user.isActive;
       if (isPendingInvite) {
         user.isActive = true;
       }
@@ -344,7 +359,7 @@ export async function POST(request: Request) {
       user.verificationTokenExpiry = verificationTokenExpiry;
       await user.save();
 
-      const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+      const appBaseUrl = getAppUrl();
       const verifyUrl = `${appBaseUrl}/auth/verify?token=${verificationToken}`;
 
       const emailSent = isEmailConfigured()
@@ -390,7 +405,7 @@ export async function POST(request: Request) {
       user.verificationTokenExpiry = resetTokenExpiry;
       await user.save();
 
-      const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/reset-password?token=${resetToken}`;
+      const resetUrl = `${getAppUrl()}/auth/reset-password?token=${resetToken}`;
       const emailSent = isEmailConfigured()
         ? await sendPasswordResetEmail(user.email, resetToken, user.name || "User")
         : false;

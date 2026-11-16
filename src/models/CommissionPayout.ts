@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import { COMMISSION_PAYOUT_STATUSES } from "@/lib/domain-enums";
 
 export type { CommissionPayoutStatus } from "@/lib/domain-enums";
@@ -36,5 +36,5 @@ commissionPayoutSchema.index({ status: 1, createdAt: 1 });
 export type CommissionPayoutDocument = InferSchemaType<typeof commissionPayoutSchema>;
 
 export const CommissionPayout =
-  models.CommissionPayout ||
+  mongoose.models.CommissionPayout ||
   model<CommissionPayoutDocument>("CommissionPayout", commissionPayoutSchema);

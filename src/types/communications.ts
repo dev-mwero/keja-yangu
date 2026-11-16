@@ -6,6 +6,8 @@ import type {
   DocumentCategory,
   DocumentScope,
   MessageSenderRole,
+  TaskPriority,
+  TaskStatus,
 } from "@/lib/domain-enums";
 
 /**
@@ -30,6 +32,26 @@ export interface Complaint {
   updatedByRole?: string;
   property: string;
   unitName: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** Serialized task from `/api/v1/tasks`. */
+export interface Task {
+  _id: string;
+  title: string;
+  propertyId: string;
+  property: string;
+  priority: TaskPriority;
+  status: TaskStatus;
+  assignedTo?: string;
+  assignedToName?: string;
+  createdBy: string;
+  createdByRole: string;
+  createdByName?: string;
+  dueDate: string;
+  completedAt?: string;
+  notes?: string;
   createdAt?: string;
   updatedAt?: string;
 }

@@ -52,6 +52,27 @@ Keep the four outputs for the release-cycle evidence pack.
 - Duplicate accruals per invoice must be zero. Never delete rows; append a
   reversal or correction.
 
+### Scoped authorization (assignment-only)
+
+Authorization is assignment-only. There is no legacy fallback and no shadow
+mode: `requirePermission` denies any staff actor without an active
+`ManagementAssignment` granting the action.
+
+- Staff (`admin`, `custodian`, `caretaker`) act only through active assignments
+  (in window, role-matching, permission-matching, scope-covering).
+- Routes without a concrete resource (list endpoints, collection creates) are
+  decided at portfolio level: any active assignment granting the action passes,
+  and the route narrows the data to the assignment scope.
+- Platform actions (`property-type:manage`, `recycle-bin:manage`) remain
+  system-admin only.
+- Caretaker `property:create` / `property:delete` stay privilege-gated
+  (`create_property` / `delete_assigned_property`) — assignment permissions
+  alone do not grant them.
+- The retired `owner` role is unsupported and receives 403.
+
+Rollback is a redeploy of the previous application version; there is no env
+switch to restore legacy scoping.
+
 ## Escalation
 
 | Signal | Owner | Action |

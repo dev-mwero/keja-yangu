@@ -1,6 +1,7 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildRequest, signToken, withParams } from "@/test/utils/api-request";
+import { activeAssignment } from "@/test/utils/assignment-mocks";
 import { makeInvoice, makeObjectId, makeUser } from "@/test/utils/factories";
 import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-mocks";
 
@@ -21,7 +22,7 @@ import { POST } from "@/app/api/v1/invoices/[id]/void/route";
 
 const { user, property, invoice: invoiceStub, managementAssignment } = getModelStubs();
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const CARETAKER_ID = makeObjectId("caretaker");
 const ADMIN_ID = makeObjectId("admin");
 const PROPERTY_ID = makeObjectId("p1");
@@ -30,14 +31,24 @@ const INVOICE_ID = makeObjectId("invoice");
 const INVALID_ID = "not-an-objectid";
 
 function ownerDoc() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  const doc = makeUser({ _id: OWNER_ID, role: "admin" });
+  managementAssignment.find.mockReturnValue(
+    buildQuery([
+      activeAssignment({
+        principalUserId: OWNER_ID,
+        accessRole: "admin",
+        propertyId: PROPERTY_ID,
+        permissions: ["invoice:manage"],
+      }),
+    ]),
+  );
+  return doc;
 }
 
 function caretakerDoc() {
   return makeUser({
     _id: CARETAKER_ID,
     role: "caretaker",
-    managedByOwnerId: OWNER_ID,
     privileges: ["manage_invoices"],
   });
 }
@@ -109,10 +120,49 @@ describe("POST /api/v1/invoices/[id]/void", () => {
     expect(res.status).toBe(404);
   });
 
+  it("403 for a caretaker with no active assignments", async () => {
+    user.findById.mockReturnValue(buildQuery(caretakerDoc()));
+    invoiceStub.findById.mockReturnValue(buildQuery(pendingInvoice()));
+    const res = await POST(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}/void`, {
+        method: "POST",
+        token: signToken(CARETAKER_ID),
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(403);
+    const body = await json(res);
+    expect(body.error).toBe("Forbidden");
+    expect(invoiceStub.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it("403 for staff with no active assignments even when the invoice does not exist", async () => {
+    user.findById.mockReturnValue(buildQuery(caretakerDoc()));
+    invoiceStub.findById.mockReturnValue(buildQuery(null));
+    const res = await POST(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}/void`, {
+        method: "POST",
+        token: signToken(CARETAKER_ID),
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(403);
+    const body = await json(res);
+    expect(body.error).toBe("Forbidden");
+    expect(invoiceStub.findById).not.toHaveBeenCalled();
+  });
+
   it("409 when the invoice is already paid", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     invoiceStub.findById.mockReturnValue(
-      buildQuery(makeInvoice({ _id: INVOICE_ID, ownerId: OWNER_ID, status: "paid" })),
+      buildQuery(
+        makeInvoice({
+          _id: INVOICE_ID,
+          ownerId: OWNER_ID,
+          propertyId: PROPERTY_ID,
+          status: "paid",
+        }),
+      ),
     );
     const res = await POST(
       buildRequest(`/api/v1/invoices/${INVOICE_ID}/void`, {
@@ -156,10 +206,24 @@ describe("POST /api/v1/invoices/[id]/void", () => {
   it("voids a draft invoice", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     invoiceStub.findById.mockReturnValue(
-      buildQuery(makeInvoice({ _id: INVOICE_ID, ownerId: OWNER_ID, status: "draft" })),
+      buildQuery(
+        makeInvoice({
+          _id: INVOICE_ID,
+          ownerId: OWNER_ID,
+          propertyId: PROPERTY_ID,
+          status: "draft",
+        }),
+      ),
     );
     invoiceStub.findOneAndUpdate.mockReturnValue(
-      buildQuery(makeInvoice({ _id: INVOICE_ID, ownerId: OWNER_ID, status: "void" })),
+      buildQuery(
+        makeInvoice({
+          _id: INVOICE_ID,
+          ownerId: OWNER_ID,
+          propertyId: PROPERTY_ID,
+          status: "void",
+        }),
+      ),
     );
 
     const res = await POST(
@@ -175,10 +239,24 @@ describe("POST /api/v1/invoices/[id]/void", () => {
   it("appends the void note to existing notes", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     invoiceStub.findById.mockReturnValue(
-      buildQuery(makeInvoice({ _id: INVOICE_ID, ownerId: OWNER_ID, notes: "first note" })),
+      buildQuery(
+        makeInvoice({
+          _id: INVOICE_ID,
+          ownerId: OWNER_ID,
+          propertyId: PROPERTY_ID,
+          notes: "first note",
+        }),
+      ),
     );
     invoiceStub.findOneAndUpdate.mockReturnValue(
-      buildQuery(makeInvoice({ _id: INVOICE_ID, ownerId: OWNER_ID, status: "void" })),
+      buildQuery(
+        makeInvoice({
+          _id: INVOICE_ID,
+          ownerId: OWNER_ID,
+          propertyId: PROPERTY_ID,
+          status: "void",
+        }),
+      ),
     );
 
     const res = await POST(
@@ -195,7 +273,12 @@ describe("POST /api/v1/invoices/[id]/void", () => {
 
   it("is idempotent for an already-void invoice (no write)", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
-    const voided = makeInvoice({ _id: INVOICE_ID, ownerId: OWNER_ID, status: "void" });
+    const voided = makeInvoice({
+      _id: INVOICE_ID,
+      ownerId: OWNER_ID,
+      propertyId: PROPERTY_ID,
+      status: "void",
+    });
     invoiceStub.findById.mockReturnValue(buildQuery(voided));
     const res = await POST(
       buildRequest(`/api/v1/invoices/${INVOICE_ID}/void`, {

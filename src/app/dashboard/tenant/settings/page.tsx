@@ -1,9 +1,10 @@
 "use client";
 
-import { Bell, Mail, User as UserIcon } from "lucide-react";
+import { Bell, User as UserIcon } from "lucide-react";
 import { toast } from "sonner";
 import { AccountDetailsForm } from "@/components/account/AccountDetailsForm";
 import { DashboardShell } from "@/components/DashboardShell";
+import { SupportEmailNote } from "@/components/settings/SupportEmailNote";
 import {
   Select,
   SelectContent,
@@ -130,11 +131,7 @@ const TenantSettingsPage = () => {
         </section>
       </div>
 
-      <div className="mt-6 flex items-center gap-2 rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">
-        <Mail className="h-4 w-4" />
-        Verification and password emails come from keja.support@d8tatechsolutions.com. Check spam if
-        you don&apos;t see them.
-      </div>
+      <SupportEmailNote />
     </DashboardShell>
   );
 };

@@ -1,6 +1,7 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildRequest, signToken, withParams } from "@/test/utils/api-request";
+import { activeAssignment } from "@/test/utils/assignment-mocks";
 import { makeInvoice, makeObjectId, makeUser } from "@/test/utils/factories";
 import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-mocks";
 
@@ -18,9 +19,9 @@ vi.mock("@/models/Lease", () => ({ Lease: getModelStubs().lease }));
 
 import { DELETE, GET, PATCH } from "@/app/api/v1/invoices/[id]/route";
 
-const { user, property, invoice: invoiceStub, managementAssignment } = getModelStubs();
+const { user, invoice: invoiceStub, managementAssignment } = getModelStubs();
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const CARETAKER_ID = makeObjectId("caretaker");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
 const PROPERTY_ID = makeObjectId("p1");
@@ -28,14 +29,24 @@ const INVOICE_ID = makeObjectId("invoice");
 const INVALID_ID = "not-an-objectid";
 
 function ownerDoc() {
-  return makeUser({ _id: OWNER_ID, role: "owner" });
+  const doc = makeUser({ _id: OWNER_ID, role: "admin" });
+  managementAssignment.find.mockReturnValue(
+    buildQuery([
+      activeAssignment({
+        principalUserId: OWNER_ID,
+        accessRole: "admin",
+        propertyId: PROPERTY_ID,
+        permissions: ["invoice:read", "invoice:manage"],
+      }),
+    ]),
+  );
+  return doc;
 }
 
 function caretakerDoc() {
   return makeUser({
     _id: CARETAKER_ID,
     role: "caretaker",
-    managedByOwnerId: OWNER_ID,
     privileges: ["manage_invoices"],
   });
 }
@@ -96,7 +107,22 @@ describe("GET /api/v1/invoices/[id]", () => {
   });
 
   it("200 for an owner's own invoice", async () => {
-    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["invoice:manage", "invoice:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     invoiceStub.findById.mockReturnValue(buildQuery(draftInvoice()));
     const res = await GET(
       buildRequest(`/api/v1/invoices/${INVOICE_ID}`, { token: signToken(OWNER_ID) }),
@@ -109,7 +135,21 @@ describe("GET /api/v1/invoices/[id]", () => {
 
   it("200 for an in-scope caretaker (assigned property of the managing owner)", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerDoc()));
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID }]));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARETAKER_ID,
+
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["invoice:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     invoiceStub.findById.mockReturnValue(buildQuery(draftInvoice()));
     const res = await GET(
       buildRequest(`/api/v1/invoices/${INVOICE_ID}`, { token: signToken(CARETAKER_ID) }),
@@ -124,6 +164,8 @@ describe("GET /api/v1/invoices/[id]", () => {
     managementAssignment.find.mockReturnValue(
       buildQuery([
         {
+          principalUserId: SCOPED_ADMIN_ID,
+
           accessRole: "admin",
           scopeType: "property",
           propertyId: PROPERTY_ID,
@@ -144,10 +186,23 @@ describe("GET /api/v1/invoices/[id]", () => {
 
   it("404 for a caretaker whose managing owner does not own the invoice", async () => {
     user.findById.mockReturnValue(buildQuery(caretakerDoc()));
-    property.find.mockReturnValue(buildQuery([{ _id: PROPERTY_ID }]));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          propertyId: PROPERTY_ID,
+          permissions: ["invoice:read"],
+        }),
+      ]),
+    );
     invoiceStub.findById.mockReturnValue(
       buildQuery(
-        makeInvoice({ _id: INVOICE_ID, ownerId: OTHER_OWNER_ID, propertyId: PROPERTY_ID }),
+        makeInvoice({
+          _id: INVOICE_ID,
+          ownerId: OTHER_OWNER_ID,
+          propertyId: makeObjectId("foreign"),
+        }),
       ),
     );
     const res = await GET(
@@ -202,6 +257,59 @@ describe("PATCH /api/v1/invoices/[id]", () => {
     expect(res.status).toBe(404);
   });
 
+  it("403 when staff with no assignments PATCH an existing invoice", async () => {
+    user.findById.mockReturnValue(buildQuery(caretakerDoc()));
+    invoiceStub.findById.mockReturnValue(buildQuery(draftInvoice()));
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}`, {
+        method: "PATCH",
+        token: signToken(CARETAKER_ID),
+        body: { notes: "x" },
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(403);
+    const body = await json(res);
+    expect(body.error).toBe("Forbidden");
+    expect(invoiceStub.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it("404 when an assigned staff member PATCHes an invoice outside their scope", async () => {
+    const FOREIGN_PROPERTY_ID = makeObjectId("foreign");
+    user.findById.mockReturnValue(buildQuery(caretakerDoc()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          propertyId: PROPERTY_ID,
+          permissions: ["invoice:manage", "invoice:read"],
+        }),
+      ]),
+    );
+    invoiceStub.findById.mockReturnValue(
+      buildQuery(
+        makeInvoice({
+          _id: INVOICE_ID,
+          ownerId: OWNER_ID,
+          propertyId: FOREIGN_PROPERTY_ID,
+        }),
+      ),
+    );
+
+    const res = await PATCH(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}`, {
+        method: "PATCH",
+        token: signToken(CARETAKER_ID),
+        body: { notes: "x" },
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(404);
+    expect(invoiceStub.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
   it("403 for another owner's invoice", async () => {
     user.findById.mockReturnValue(buildQuery(ownerDoc()));
     invoiceStub.findById.mockReturnValue(
@@ -215,15 +323,29 @@ describe("PATCH /api/v1/invoices/[id]", () => {
       }),
       withParams(INVOICE_ID),
     );
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
     expect(invoiceStub.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
   it("409 when the invoice is already paid", async () => {
-    user.findById.mockReturnValue(buildQuery(ownerDoc()));
-    invoiceStub.findById.mockReturnValue(
-      buildQuery(makeInvoice({ _id: INVOICE_ID, ownerId: OWNER_ID, status: "paid" })),
+    const paidInvoice = makeInvoice({ _id: INVOICE_ID, ownerId: OWNER_ID, status: "paid" });
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: paidInvoice.propertyId,
+          permissions: ["invoice:manage", "invoice:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
     );
+    invoiceStub.findById.mockReturnValue(buildQuery(paidInvoice));
     const res = await PATCH(
       buildRequest(`/api/v1/invoices/${INVOICE_ID}`, {
         method: "PATCH",
@@ -238,10 +360,24 @@ describe("PATCH /api/v1/invoices/[id]", () => {
   });
 
   it("409 when the invoice is void", async () => {
-    user.findById.mockReturnValue(buildQuery(ownerDoc()));
-    invoiceStub.findById.mockReturnValue(
-      buildQuery(makeInvoice({ _id: INVOICE_ID, ownerId: OWNER_ID, status: "void" })),
+    const voidInvoice = makeInvoice({ _id: INVOICE_ID, ownerId: OWNER_ID, status: "void" });
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: voidInvoice.propertyId,
+          permissions: ["invoice:manage", "invoice:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
     );
+    invoiceStub.findById.mockReturnValue(buildQuery(voidInvoice));
     const res = await PATCH(
       buildRequest(`/api/v1/invoices/${INVOICE_ID}`, {
         method: "PATCH",
@@ -254,7 +390,22 @@ describe("PATCH /api/v1/invoices/[id]", () => {
   });
 
   it("400 for an invalid payload on a draft", async () => {
-    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["invoice:manage", "invoice:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     invoiceStub.findById.mockReturnValue(buildQuery(draftInvoice()));
     const res = await PATCH(
       buildRequest(`/api/v1/invoices/${INVOICE_ID}`, {
@@ -270,7 +421,22 @@ describe("PATCH /api/v1/invoices/[id]", () => {
   });
 
   it("edits a draft but strips immutable identity fields", async () => {
-    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["invoice:manage", "invoice:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     invoiceStub.findById.mockReturnValue(buildQuery(draftInvoice()));
     invoiceStub.findOneAndUpdate.mockReturnValue(
       buildQuery({ ...draftInvoice(), status: "pending", notes: "late fee" }),
@@ -332,11 +498,76 @@ describe("DELETE /api/v1/invoices/[id]", () => {
     expect(res.status).toBe(404);
   });
 
-  it("409 for a non-draft invoice", async () => {
-    user.findById.mockReturnValue(buildQuery(ownerDoc()));
-    invoiceStub.findById.mockReturnValue(
-      buildQuery(makeInvoice({ _id: INVOICE_ID, ownerId: OWNER_ID, status: "pending" })),
+  it("403 when staff with no assignments DELETE an existing invoice", async () => {
+    user.findById.mockReturnValue(buildQuery(caretakerDoc()));
+    invoiceStub.findById.mockReturnValue(buildQuery(draftInvoice()));
+
+    const res = await DELETE(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}`, {
+        method: "DELETE",
+        token: signToken(CARETAKER_ID),
+      }),
+      withParams(INVOICE_ID),
     );
+    expect(res.status).toBe(403);
+    const body = await json(res);
+    expect(body.error).toBe("Forbidden");
+    expect(invoiceStub.softDeleteById).not.toHaveBeenCalled();
+  });
+
+  it("404 when an assigned staff member DELETEs an invoice outside their scope", async () => {
+    const FOREIGN_PROPERTY_ID = makeObjectId("foreign");
+    user.findById.mockReturnValue(buildQuery(caretakerDoc()));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        activeAssignment({
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          propertyId: PROPERTY_ID,
+          permissions: ["invoice:manage", "invoice:read"],
+        }),
+      ]),
+    );
+    invoiceStub.findById.mockReturnValue(
+      buildQuery(
+        makeInvoice({
+          _id: INVOICE_ID,
+          ownerId: OWNER_ID,
+          propertyId: FOREIGN_PROPERTY_ID,
+        }),
+      ),
+    );
+
+    const res = await DELETE(
+      buildRequest(`/api/v1/invoices/${INVOICE_ID}`, {
+        method: "DELETE",
+        token: signToken(CARETAKER_ID),
+      }),
+      withParams(INVOICE_ID),
+    );
+    expect(res.status).toBe(404);
+    expect(invoiceStub.softDeleteById).not.toHaveBeenCalled();
+  });
+
+  it("409 for a non-draft invoice", async () => {
+    const nonDraftInvoice = makeInvoice({ _id: INVOICE_ID, ownerId: OWNER_ID, status: "pending" });
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: nonDraftInvoice.propertyId,
+          permissions: ["invoice:manage", "invoice:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
+    invoiceStub.findById.mockReturnValue(buildQuery(nonDraftInvoice));
     const res = await DELETE(
       buildRequest(`/api/v1/invoices/${INVOICE_ID}`, {
         method: "DELETE",
@@ -352,7 +583,22 @@ describe("DELETE /api/v1/invoices/[id]", () => {
   });
 
   it("200 and soft-deletes a draft invoice", async () => {
-    user.findById.mockReturnValue(buildQuery(ownerDoc()));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["invoice:manage", "invoice:read"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     invoiceStub.findById.mockReturnValue(buildQuery(draftInvoice()));
     invoiceStub.softDeleteById.mockResolvedValue({ acknowledged: true });
 

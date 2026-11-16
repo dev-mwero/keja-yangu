@@ -7,16 +7,22 @@ import { buildQuery, getModelStubs, resetModelStubs } from "@/test/utils/model-m
 vi.mock("@/lib/mongoose", () => ({
   connectToDatabase: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("@/lib/audit", () => ({
+  writeAuditEvent: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/models/User", () => ({ User: getModelStubs().user }));
 vi.mock("@/models/Property", () => ({ Property: getModelStubs().property }));
 vi.mock("@/models/Unit", () => ({ Unit: getModelStubs().unit }));
 vi.mock("@/models/Block", () => ({ Block: getModelStubs().block }));
+vi.mock("@/models/ManagementAssignment", () => ({
+  ManagementAssignment: getModelStubs().managementAssignment,
+}));
 
 import { PUT } from "@/app/api/v1/properties/[id]/structure/route";
 
-const { user, property, unit } = getModelStubs();
+const { user, property, unit, managementAssignment } = getModelStubs();
 
-const OWNER_ID = makeObjectId("owner");
+const OWNER_ID = makeObjectId("admin");
 const OTHER_OWNER_ID = makeObjectId("other-owner");
 const TENANT_ID = makeObjectId("tenant");
 const CARETAKER_ID = makeObjectId("caretaker");
@@ -97,7 +103,7 @@ describe("PUT /api/v1/properties/[id]/structure", () => {
 
   it("403 when an owner targets another owner's property", async () => {
     property.findById.mockReturnValue(buildQuery(ownedProperty()));
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OTHER_OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OTHER_OWNER_ID, role: "admin" })));
 
     const res = await PUT(
       buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {
@@ -112,7 +118,21 @@ describe("PUT /api/v1/properties/[id]/structure", () => {
 
   it("400 on an invalid structure payload", async () => {
     property.findById.mockReturnValue(buildQuery(ownedProperty()));
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["property:edit"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
 
     const res = await PUT(
       buildRequest(`/api/v1/properties/${PROPERTY_ID}`, {
@@ -127,7 +147,21 @@ describe("PUT /api/v1/properties/[id]/structure", () => {
 
   it("409 when removing a block that has occupied units", async () => {
     property.findById.mockReturnValue(buildQuery(ownedProperty()));
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["property:edit"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     unit.find.mockReturnValue(
       buildQuery([
         {
@@ -157,7 +191,21 @@ describe("PUT /api/v1/properties/[id]/structure", () => {
 
   it("adds a block, materialising its units", async () => {
     property.findById.mockReturnValue(buildQuery(ownedProperty()));
-    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "owner" })));
+    user.findById.mockReturnValue(buildQuery(makeUser({ _id: OWNER_ID, role: "admin" })));
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: OWNER_ID,
+          accessRole: "admin",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["property:edit"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
+    );
     unit.find.mockReturnValue(buildQuery([]));
     unit.insertMany.mockResolvedValue([]);
     property.findByIdAndUpdate.mockReturnValue(buildQuery(ownedProperty()));
@@ -191,10 +239,23 @@ describe("PUT /api/v1/properties/[id]/structure", () => {
         makeUser({
           _id: CARETAKER_ID,
           role: "caretaker",
-          managedByOwnerId: OWNER_ID,
           privileges: ["edit_property"],
         }),
       ),
+    );
+    managementAssignment.find.mockReturnValue(
+      buildQuery([
+        {
+          principalUserId: CARETAKER_ID,
+          accessRole: "caretaker",
+          scopeType: "property",
+          propertyId: PROPERTY_ID,
+          permissions: ["property:edit"],
+          status: "active",
+          startsAt: new Date("2026-01-01T00:00:00.000Z"),
+          endsAt: null,
+        },
+      ]),
     );
     unit.find.mockReturnValue(buildQuery([]));
     unit.insertMany.mockResolvedValue([]);

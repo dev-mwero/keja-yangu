@@ -1,4 +1,4 @@
-import { type InferSchemaType, model, models, Schema } from "mongoose";
+import mongoose, { type InferSchemaType, model, Schema } from "mongoose";
 import { ATTRIBUTION_SOURCES, ATTRIBUTION_STATUSES } from "@/lib/domain-enums";
 
 export type { AttributionSource, AttributionStatus } from "@/lib/domain-enums";
@@ -90,4 +90,4 @@ attributionSchema.index({ propertyId: 1, status: 1 });
 export type AttributionDocument = InferSchemaType<typeof attributionSchema>;
 
 export const Attribution =
-  models.Attribution || model<AttributionDocument>("Attribution", attributionSchema);
+  mongoose.models.Attribution || model<AttributionDocument>("Attribution", attributionSchema);

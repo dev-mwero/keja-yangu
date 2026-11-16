@@ -1,5 +1,6 @@
 "use client";
 
+import { measureElement, useVirtualizer } from "@tanstack/react-virtual";
 import {
   CheckCircle2,
   Clock,
@@ -13,7 +14,7 @@ import {
   UserPlus,
   Wrench,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { DashboardShell } from "@/components/DashboardShell";
@@ -106,18 +107,40 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
     [properties],
   );
 
-  const filtered = units.filter(
-    (u) =>
-      (statusFilter === "all" || u.status === statusFilter) &&
-      matchesQuery(query, u.name, propertyById[u.propertyId]?.title, u.blockName, u.floorLabel),
+  const filtered = useMemo(
+    () =>
+      units.filter(
+        (u) =>
+          (statusFilter === "all" || u.status === statusFilter) &&
+          matchesQuery(query, u.name, propertyById[u.propertyId]?.title, u.blockName, u.floorLabel),
+      ),
+    [units, statusFilter, query, propertyById],
   );
 
-  const statusCounts = {
-    all: units.length,
-    occupied: units.filter((u) => u.status === "occupied").length,
-    available: units.filter((u) => u.status === "available").length,
-    maintenance: units.filter((u) => u.status === "maintenance").length,
-  };
+  const statusCounts = useMemo(
+    () => ({
+      all: units.length,
+      occupied: units.filter((u) => u.status === "occupied").length,
+      available: units.filter((u) => u.status === "available").length,
+      maintenance: units.filter((u) => u.status === "maintenance").length,
+    }),
+    [units],
+  );
+
+  // Window the table body so large portfolios (up to ~2,500 units) only
+  // mount the visible rows. Rows are measured dynamically because the purpose
+  // badge makes their height variable.
+  const parentRef = useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 60,
+    overscan: 10,
+    measureElement,
+  });
+  const virtualItems = rowVirtualizer.getVirtualItems();
+  const firstVirtualItem = virtualItems[0];
+  const lastVirtualItem = virtualItems.at(-1);
 
   const openEdit = (unit: Unit) => {
     setEditing(unit);
@@ -334,114 +357,145 @@ export function UnitsView({ nav, roleName, canManage = true }: Props) {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Unit</TableHead>
-              <TableHead>Property</TableHead>
-              <TableHead>Block</TableHead>
-              <TableHead>Floor</TableHead>
-              <TableHead>Rent</TableHead>
-              <TableHead>Status</TableHead>
-              {canManage && <TableHead className="text-right">Actions</TableHead>}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
+        <div ref={parentRef} className="max-h-[600px] overflow-auto">
+          <Table className="[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-card">
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
-                  Loading units…
-                </TableCell>
+                <TableHead>Unit</TableHead>
+                <TableHead>Property</TableHead>
+                <TableHead>Block</TableHead>
+                <TableHead>Floor</TableHead>
+                <TableHead>Rent</TableHead>
+                <TableHead>Status</TableHead>
+                {canManage && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
-            ) : filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
-                  <DoorOpen className="mx-auto mb-2 h-6 w-6 opacity-50" />
-                  No units found.
-                </TableCell>
-              </TableRow>
-            ) : (
-              filtered.map((unit) => (
-                <TableRow key={unit._id}>
-                  <TableCell className="font-medium">
-                    <div>{unit.name}</div>
-                    <Badge
-                      variant="outline"
-                      className="mt-1 text-[10px] font-normal capitalize text-muted-foreground"
-                    >
-                      {unitPurpose(unit)}
-                    </Badge>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                    Loading units…
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {propertyById[unit.propertyId]?.title ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{unit.blockName}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {unit.floorLabel || (unit.floorLevel === 0 ? "Ground" : unit.floorLevel)}
-                  </TableCell>
-                  <TableCell>KES {baseRent(unit).toLocaleString()}</TableCell>
-                  <TableCell>
-                    <Badge variant={STATUS_VARIANT[unit.status]} className="capitalize">
-                      {unit.status}
-                    </Badge>
-                  </TableCell>
-                  {canManage && (
-                    <TableCell className="text-right">
-                      {unit.status === "available" && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`Assign tenant to ${unit.name}`}
-                          onClick={() => {
-                            setSelectedTenantId("");
-                            setAssigningUnit(unit);
-                          }}
-                        >
-                          <UserPlus className="h-4 w-4" />
-                        </Button>
-                      )}
-                      {unit.tenantId.length > 0 && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`Unassign tenant from ${unit.name}`}
-                          onClick={() => setVacatingUnit(unit)}
-                        >
-                          <UserMinus className="h-4 w-4" />
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Marketplace listing for ${unit.name}`}
-                        title="Marketplace Listing"
-                        onClick={() => openListingModal(unit)}
-                      >
-                        <Globe className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Edit ${unit.name}`}
-                        onClick={() => openEdit(unit)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        disabled={unit.status === "occupied"}
-                        onClick={() => remove(unit)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  )}
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ) : filtered.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                    <DoorOpen className="mx-auto mb-2 h-6 w-6 opacity-50" />
+                    No units found.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                <>
+                  {firstVirtualItem && (
+                    <tr aria-hidden>
+                      <td
+                        colSpan={7}
+                        style={{ height: firstVirtualItem.start, padding: 0, border: 0 }}
+                      />
+                    </tr>
+                  )}
+                  {virtualItems.map((virtualRow) => {
+                    const unit = filtered[virtualRow.index];
+                    return (
+                      <TableRow
+                        key={virtualRow.key}
+                        ref={rowVirtualizer.measureElement}
+                        data-index={virtualRow.index}
+                      >
+                        <TableCell className="font-medium">
+                          <div>{unit.name}</div>
+                          <Badge
+                            variant="outline"
+                            className="mt-1 text-[10px] font-normal capitalize text-muted-foreground"
+                          >
+                            {unitPurpose(unit)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {propertyById[unit.propertyId]?.title ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{unit.blockName}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {unit.floorLabel || (unit.floorLevel === 0 ? "Ground" : unit.floorLevel)}
+                        </TableCell>
+                        <TableCell>KES {baseRent(unit).toLocaleString()}</TableCell>
+                        <TableCell>
+                          <Badge variant={STATUS_VARIANT[unit.status]} className="capitalize">
+                            {unit.status}
+                          </Badge>
+                        </TableCell>
+                        {canManage && (
+                          <TableCell className="text-right">
+                            {unit.status === "available" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label={`Assign tenant to ${unit.name}`}
+                                onClick={() => {
+                                  setSelectedTenantId("");
+                                  setAssigningUnit(unit);
+                                }}
+                              >
+                                <UserPlus className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {unit.tenantId.length > 0 && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label={`Unassign tenant from ${unit.name}`}
+                                onClick={() => setVacatingUnit(unit)}
+                              >
+                                <UserMinus className="h-4 w-4" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Marketplace listing for ${unit.name}`}
+                              title="Marketplace Listing"
+                              onClick={() => openListingModal(unit)}
+                            >
+                              <Globe className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Edit ${unit.name}`}
+                              onClick={() => openEdit(unit)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              disabled={unit.status === "occupied"}
+                              onClick={() => remove(unit)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })}
+                  {lastVirtualItem && (
+                    <tr aria-hidden>
+                      <td
+                        colSpan={7}
+                        style={{
+                          height: rowVirtualizer.getTotalSize() - lastVirtualItem.end,
+                          padding: 0,
+                          border: 0,
+                        }}
+                      />
+                    </tr>
+                  )}
+                </>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
